@@ -1,0 +1,24 @@
+name: Setup
+description: Amodal monorepo setup
+
+inputs:
+  node-version:
+    description: Node.js version
+    default: "22"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10.30.2
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        cache: pnpm
+        node-version: ${{ inputs.node-version }}
+        registry-url: "https://registry.npmjs.org"
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

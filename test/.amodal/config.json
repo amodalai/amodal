@@ -1,0 +1,11 @@
+{
+  "name": "my-project",
+  "version": "1.0.0",
+  "models": {
+    "main": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "apiKey": "${ANTHROPIC_API_KEY}"
+    }
+  }
+}

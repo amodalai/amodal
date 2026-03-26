@@ -1,0 +1,86 @@
+---
+description: Define evaluation test cases in evals/ as Markdown — assertions, setup context, and LLM-judged quality scoring.
+---
+
+# Evals
+
+Evals live in `evals/` as Markdown files. Each eval defines a query, setup context, and assertions that measure agent quality.
+
+## Eval File Format
+
+```markdown
+# Eval: Revenue Drop Investigation
+
+Tests the agent's ability to investigate a revenue anomaly.
+
+## Setup
+
+Tenant: test-tenant
+Context: Revenue dropped 30% yesterday compared to the weekly average.
+
+## Query
+
+"Revenue was down 30% yesterday. What happened?"
+
+## Assertions
+
+- Should query Stripe charges for the relevant time period
+- Should compare against baseline or previous period
+- Should check for known issues (billing cycle, deployments, timezone effects)
+- Should provide specific numbers (dollar amounts, percentages)
+- Should NOT fabricate data or guess without querying
+- Should NOT blame external factors without evidence
+```
+
+## Parsed Fields
+
+| Field | Source | Description |
+|-------|--------|-------------|
+| `name` | Filename without `.md` | Eval identifier |
+| `title` | `# Eval: Title` heading | Display name |
+| `description` | Text between heading and first `##` | What the eval tests |
+| `setup.tenant` | `Tenant:` line in `## Setup` | Tenant to use |
+| `setup.context` | `Context:` line in `## Setup` | Background context |
+| `query` | Content of `## Query` (without quotes) | The user message to test |
+| `assertions` | `## Assertions` list items | Quality criteria |
+
+## Assertions
+
+Lines starting with `- Should` are **positive assertions** — things the agent must do.
+
+Lines starting with `- Should NOT` are **negated assertions** — things the agent must avoid.
+
+## Running Evals
+
+```bash
+amodal eval                              # run all evals
+amodal eval --file revenue-drop.md       # run one eval
+amodal eval --providers anthropic,openai # compare providers
+```
+
+## Evaluation Methods
+
+| Method | Description |
+|--------|-------------|
+| **LLM Judge** | A separate LLM evaluates the response against each assertion |
+| **Tool usage** | Verify expected tools were called |
+| **Cost tracking** | Token usage and cost per eval case |
+
+## Experiments
+
+Compare configurations side-by-side:
+
+```bash
+amodal experiment
+```
+
+Test different models, skills, knowledge docs, or prompts. Results include quality scores, costs, and latency.
+
+## Multi-Model Comparison
+
+```bash
+amodal eval --providers anthropic,openai,google
+```
+
+Runs the same suite against each provider for cost/quality/latency comparison.
+

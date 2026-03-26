@@ -1,0 +1,48 @@
+---
+description: The explore-plan-execute loop — the fundamental cycle behind every Amodal agent.
+---
+
+# The Core Loop
+
+Every Amodal agent runs the same fundamental loop:
+
+```
+Explore → what's going on? query systems, load context, gather data
+Plan    → what should happen? reason about findings, decide next steps
+Execute → do it. call APIs, dispatch agents, present results, learn
+```
+
+## Adaptive Depth
+
+Not every question needs the full loop. The runtime matches depth to the question automatically:
+
+| Question | Loop Behavior |
+|----------|--------------|
+| "What's the current error rate?" | Explore only — query and answer |
+| "Why did latency spike at 3 PM?" | Explore + Plan — gather data, correlate, explain |
+| "Investigate the payment failures" | Full loop — multi-agent dispatch, iterative reasoning, skill activation |
+
+## The Compounding Effect
+
+The loop compounds through the knowledge base. Every execution can feed knowledge back via `propose_knowledge`, so the next explore phase starts smarter.
+
+```
+Session 1: Explore → slow, everything is new
+           Plan    → generic reasoning
+           Execute → discover false positive, propose KB update
+
+Session 50: Explore → fast, KB has patterns and baselines
+            Plan    → informed reasoning with historical context
+            Execute → focused on novel signals, skip known patterns
+```
+
+This is the flywheel — the system learns from use. See [Knowledge Base](/guide/knowledge-base) for details.
+
+## ReAct Loop
+
+Under the hood, the core loop is implemented as a **ReAct loop** (Reason + Act). The agent alternates between reasoning about what it knows and taking actions (tool calls) to learn more.
+
+The SDK provides configurable limits:
+- **Max turns** — prevent infinite loops
+- **Timeout** — hard time limit on sessions
+- **Loop detection** — pattern matching + LLM-based detection of unproductive states

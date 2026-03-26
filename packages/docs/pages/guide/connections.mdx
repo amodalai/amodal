@@ -1,0 +1,175 @@
+---
+description: Connections give the agent API access, documentation, and security rules for external systems.
+---
+
+# Connections
+
+Each connection is a directory in `connections/` containing a spec, access rules, and optional documentation. Pre-built plugins come with everything maintained — you just provide credentials.
+
+```bash
+amodal connect slack          # install a plugin
+amodal sync --from <url>      # sync from OpenAPI/GraphQL
+```
+
+## Directory Structure
+
+```
+connections/my-api/
+├── spec.json       ← API source, auth, entities, sync config
+├── access.json     ← field restrictions, action tiers, row scoping
+├── surface.md      ← (optional) endpoint documentation
+├── entities.md     ← (optional) entity definitions
+└── rules.md        ← (optional) business rules
+```
+
+## spec.json
+
+```json
+{
+  "source": "My API",
+  "baseUrl": "https://api.example.com",
+  "format": "openapi",
+  "auth": {
+    "type": "bearer",
+    "token": "env:MY_API_TOKEN",
+    "header": "Authorization",
+    "prefix": "Bearer "
+  },
+  "sync": {
+    "auto": true,
+    "frequency": "on_push",
+    "notify_drift": true
+  },
+  "filter": {
+    "tags": ["public"],
+    "include_paths": ["/api/v2/**"],
+    "exclude_paths": ["/api/v2/internal/**"]
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `source` | API name/label |
+| `baseUrl` | API base URL |
+| `format` | `"openapi"`, `"graphql"`, or `"grpc"` |
+| `auth.type` | `"bearer"`, `"api_key"`, `"oauth2"`, `"basic"`, `"header"` |
+| `sync` | Auto-sync settings and drift notification |
+| `filter` | Include/exclude endpoints by tag or path glob |
+
+## access.json
+
+Controls what the agent can see and do:
+
+```json
+{
+  "endpoints": {
+    "GET /api/deals/{id}": {
+      "returns": ["Deal"],
+      "confirm": false
+    },
+    "POST /api/deals": {
+      "returns": ["Deal"],
+      "confirm": true,
+      "reason": "Creates a new deal",
+      "thresholds": [
+        { "field": "body.amount", "above": 10000, "escalate": "review" }
+      ]
+    },
+    "DELETE /api/deals/{id}": {
+      "returns": ["Deal"],
+      "confirm": "never",
+      "reason": "Deletion not allowed via agent"
+    }
+  },
+  "fieldRestrictions": [
+    {
+      "entity": "Contact",
+      "field": "ssn",
+      "policy": "never_retrieve",
+      "sensitivity": "pii_identifier",
+      "reason": "PII — never exposed"
+    },
+    {
+      "entity": "Contact",
+      "field": "email",
+      "policy": "retrieve_but_redact",
+      "sensitivity": "pii_name"
+    },
+    {
+      "entity": "Deal",
+      "field": "internal_notes",
+      "policy": "role_gated",
+      "sensitivity": "internal",
+      "allowedRoles": ["supervisor"]
+    }
+  ],
+  "rowScoping": {
+    "Deal": {
+      "owner_id": {
+        "type": "field_match",
+        "userContextField": "userId",
+        "label": "your deals"
+      }
+    }
+  },
+  "delegations": {
+    "enabled": true,
+    "maxDurationDays": 7,
+    "escalateConfirm": true
+  },
+  "alternativeLookups": [
+    {
+      "restrictedField": "Contact.ssn",
+      "alternativeEndpoint": "GET /api/contacts/{id}/verification-status",
+      "description": "Use verification status instead of raw SSN"
+    }
+  ]
+}
+```
+
+### Action Tiers
+
+| Tier | Behavior |
+|------|----------|
+| `false` / omitted | Allow without confirmation |
+| `true` / `"confirm"` | Ask user for approval before executing |
+| `"review"` | Show the full plan before executing |
+| `"never"` | Block the operation entirely |
+
+### Field Restriction Policies
+
+| Policy | Effect |
+|--------|--------|
+| `never_retrieve` | Field completely removed from API responses |
+| `retrieve_but_redact` | Kept in data, replaced with `[REDACTED]` in output |
+| `role_gated` | Removed if user lacks `allowedRoles`, else redactable |
+
+### Threshold Escalation
+
+Endpoints can escalate their confirmation tier based on request parameters:
+
+```json
+{ "field": "body.amount", "above": 10000, "escalate": "review" }
+```
+
+If `body.amount > 10000`, the tier escalates from `confirm` to `review`.
+
+## Drift Detection
+
+```bash
+amodal sync --check    # report drift without updating (CI-friendly)
+amodal sync            # update local specs from remote
+```
+
+## Pre-built Plugins
+
+50+ pre-built connection plugins are available for popular APIs like Slack, GitHub, Stripe, Datadog, Jira, and more. Browse and install them from the **[Amodal Marketplace](https://www.amodalai.com/marketplace)**, or install directly from the CLI:
+
+```bash
+amodal connect slack
+amodal connect stripe
+amodal connect datadog
+```
+
+For APIs not in the marketplace, create custom connections using the directory structure above with your own OpenAPI or GraphQL spec.

@@ -1,0 +1,301 @@
+---
+description: Runtime server reference — endpoints, SSE events, session lifecycle, and configuration.
+---
+
+# Runtime Server
+
+The runtime (`@amodalai/runtime`) is an HTTP server that wraps the SDK and exposes it over SSE for chat clients. It handles session management, automation scheduling, webhook ingestion, and tool execution. It is the bridge between "someone sends a message" and "the SDK reasons about it and responds."
+
+The runtime is deliberately stateless in its HTTP layer — all persistent state lives in the store backend (PGLite or Postgres). This means you can run multiple runtime instances behind a load balancer, and sessions will work correctly as long as they share the same store.
+
+## Endpoints
+
+### Chat
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/chat` | Send a message, get a complete response (non-streaming) |
+| `POST` | `/chat/stream` | Send a message, stream response via SSE |
+| `GET` | `/ai/stream` | Direct AI streaming endpoint |
+
+The `/chat/stream` endpoint is what most clients use. You POST a message and keep the connection open — the response streams back as SSE events. The non-streaming `/chat` endpoint waits for the full response before returning, which is simpler but means no real-time feedback during tool execution.
+
+### Sessions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/sessions` | List sessions (supports pagination) |
+| `GET` | `/sessions/:id` | Get session history |
+| `PUT` | `/sessions/:id` | Update session metadata |
+
+### Interactions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/ask-user-response` | Respond to a confirmation prompt |
+| `POST` | `/widget-actions` | Handle widget button/action clicks |
+
+When the agent needs confirmation for a write operation, it emits a `confirmation_required` SSE event. The client shows the confirmation UI and sends the user's response back via `/ask-user-response`. The agent's ReAct loop is paused while waiting.
+
+### System
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `POST` | `/webhooks` | Incoming webhooks for automations |
+
+## SSE Event Types
+
+When streaming via `/chat/stream`, the server emits these event types:
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `init` | `{ sessionId }` | Session created or resumed |
+| `text_delta` | `{ delta }` | Incremental text output from the LLM |
+| `tool_call_start` | `{ name, id }` | Tool execution beginning |
+| `tool_call_result` | `{ id, result }` | Tool execution complete |
+| `subagent_event` | `{ agentId, event }` | Task agent activity (dispatched work) |
+| `skill_activated` | `{ skill }` | Skill matched and loaded into context |
+| `widget` | `{ type, data }` | Widget rendered inline (entity-card, data-table, etc.) |
+| `kb_proposal` | `{ proposal }` | Knowledge base update proposed |
+| `confirmation_required` | `{ action, details }` | Waiting for user approval of a write |
+| `approved` | `{ action }` | User approved an action |
+| `credential_saved` | `{ connection }` | Connection credentials captured |
+| `error` | `{ message }` | Error occurred |
+| `done` | `{}` | Response complete |
+
+## Streaming Example
+
+Here is what a real SSE stream looks like when a user asks "What were our top 5 customers by revenue last month?" and the agent queries Stripe to answer:
+
+```
+event: init
+data: {"sessionId":"sess_k8m2x4n9"}
+
+event: text_delta
+data: {"delta":"I'll pull the revenue data from Stripe for last month."}
+
+event: text_delta
+data: {"delta":" Let me look that up."}
+
+event: tool_call_start
+data: {"name":"dispatch","id":"tc_01","args":{"task":"Query Stripe for all charges in the last month, grouped by customer. Return the top 5 by total amount with customer name and total."}}
+
+event: subagent_event
+data: {"agentId":"agent_x2k4","event":{"type":"tool_call_start","name":"request","id":"tc_sub_01"}}
+
+event: subagent_event
+data: {"agentId":"agent_x2k4","event":{"type":"tool_call_result","id":"tc_sub_01","result":"[200 OK] 847 charges retrieved"}}
+
+event: tool_call_result
+data: {"id":"tc_01","result":"Top 5 customers by revenue (March 2026):\n1. Globex Corp — $48,290\n2. Initech — $41,750\n3. Acme Inc — $38,420\n4. Wayne Enterprises — $29,100\n5. Umbrella Corp — $24,680\nTotal for top 5: $182,240 (68% of total monthly revenue)"}
+
+event: text_delta
+data: {"delta":"Here are your top 5 customers by revenue for last month:\n\n"}
+
+event: widget
+data: {"type":"data-table","data":{"columns":["Rank","Customer","Revenue","% of Total"],"rows":[["1","Globex Corp","$48,290","18.1%"],["2","Initech","$41,750","15.7%"],["3","Acme Inc","$38,420","14.4%"],["4","Wayne Enterprises","$29,100","10.9%"],["5","Umbrella Corp","$24,680","9.3%"]]}}
+
+event: text_delta
+data: {"delta":"\nThese five customers represent 68% of your total monthly revenue of $267,840. Globex Corp leads at $48,290, which is 18.1% of the total."}
+
+event: done
+data: {}
+```
+
+Notice the sequence: the agent starts with a text message explaining what it will do, dispatches a task agent to gather the data, receives the summarized result, renders a widget with structured data, and wraps up with analysis. The client receives all of this in real time — it can render the text as it arrives, show a loading indicator during tool calls, and render the table widget inline.
+
+## Building a Client
+
+Here is a minimal JavaScript example that consumes the SSE stream:
+
+```javascript
+async function chat(message, sessionId) {
+  const response = await fetch('http://localhost:3847/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, sessionId }),
+  });
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let currentSessionId = sessionId;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop(); // keep incomplete line in buffer
+
+    let eventType = null;
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        eventType = line.slice(7);
+      } else if (line.startsWith('data: ') && eventType) {
+        const data = JSON.parse(line.slice(6));
+
+        switch (eventType) {
+          case 'init':
+            currentSessionId = data.sessionId;
+            break;
+          case 'text_delta':
+            process.stdout.write(data.delta);
+            break;
+          case 'tool_call_start':
+            console.log(`\n[Calling ${data.name}...]`);
+            break;
+          case 'tool_call_result':
+            console.log(`[Result received]`);
+            break;
+          case 'widget':
+            renderWidget(data.type, data.data); // your widget renderer
+            break;
+          case 'error':
+            console.error(`Error: ${data.message}`);
+            break;
+          case 'done':
+            console.log('\n');
+            break;
+        }
+        eventType = null;
+      }
+    }
+  }
+
+  return currentSessionId;
+}
+
+// Usage: maintain session across messages
+let sessionId = null;
+sessionId = await chat('What were our top customers last month?', sessionId);
+sessionId = await chat('How does that compare to the month before?', sessionId);
+```
+
+For production use, the `@amodalai/react` package provides a `useChat` hook and `ChatProvider` that handle all of this — reconnection, event parsing, widget rendering, confirmation flows — so you do not need to build the SSE client from scratch.
+
+## Session Lifecycle
+
+### Creation
+
+The first message to `/chat/stream` without a `sessionId` creates a new session. The runtime generates a unique ID (`sess_*`), initializes the message history, compiles the initial context (system prompt, knowledge index, tool definitions), and emits the `init` event with the session ID. The client stores this ID and sends it with all subsequent messages.
+
+### Active State
+
+During an active session, messages accumulate and context grows. Each exchange adds the user's message, the agent's reasoning, tool calls, and tool results to the conversation history. The session is persisted to the store after each exchange.
+
+### Context Compaction
+
+As the conversation grows, it eventually approaches the model's context window limit. When the compiled prompt exceeds 80% of the window, the context compiler triggers **compaction**:
+
+1. **Identify compactable segments**: Older conversation turns that are not part of an active tool chain
+2. **Summarize**: The runtime sends the old turns to the explore model with a summarization prompt: "Compress this conversation history into a concise summary preserving key facts, decisions, and open threads"
+3. **Replace**: The old turns are replaced with the summary in the session history
+4. **Continue**: The next LLM call uses the compacted history, freeing up context for new turns
+
+```
+Before compaction (context at 85%):
+  [system prompt] [KB index] [tools]
+  [turn 1: user question + agent response + 3 tool calls]
+  [turn 2: user question + agent response + 5 tool calls]
+  [turn 3: user question + agent response + 2 tool calls]  ← compactable
+  [turn 4: user question + agent response]                  ← recent, kept
+  [turn 5: current message]                                  ← current
+
+After compaction (context at 52%):
+  [system prompt] [KB index] [tools]
+  [summary: "User asked about revenue trends. Agent found Q1 was up 12%.
+   User then asked about churn — agent identified 3 at-risk accounts.
+   User requested a comparison with last quarter."]
+  [turn 4: user question + agent response]                  ← kept in full
+  [turn 5: current message]                                  ← current
+```
+
+Compaction is transparent to the user. They do not see it happen. The agent retains the key facts from earlier turns and can reference them — it just loses the exact wording and tool call details of older exchanges. For most conversations, this works well. For very long investigations where exact details from early turns matter, consider loading key findings into the knowledge base (via `propose_knowledge`) so they survive compaction.
+
+### Idle and Expiry
+
+Sessions that receive no messages for the configured TTL period (`AMODAL_SESSION_TTL`, default 3600 seconds) transition to idle. After another TTL period, idle sessions expire and their context is discarded. The session metadata (ID, creation time, message count) is retained for audit purposes, but the full conversation history is cleaned up.
+
+Sessions persist across reconnects. If the client's SSE connection drops (network hiccup, browser tab backgrounded), the client can reconnect and resume by sending the same `sessionId`. The session state lives in the store, not in the SSE connection.
+
+## Automation Scheduling
+
+The runtime includes a built-in scheduler for cron automations and a webhook listener for event-triggered automations. These run alongside the HTTP server in the same process.
+
+### Cron Scheduling
+
+On startup, the runtime reads all automation definitions from the `automations/` directory. For each automation with a `schedule` field, it registers a cron job.
+
+When a cron job fires:
+
+1. The scheduler creates a fresh agent session with the `automation` role
+2. The automation's prompt is set as the initial message, with `lastRunSummary` from the previous run injected as context
+3. `lastRunTimestamp` is provided so the agent can scope queries to new data
+4. The SDK runs the explore-plan-execute loop
+5. On completion, the output is routed to the configured channel (Slack, email, webhook)
+6. The run summary is stored for the next run's continuity
+7. The session is closed and context is discarded
+
+The scheduler uses a lightweight in-process cron library. It does not depend on external job queues or message brokers. For high-availability deployments with multiple runtime instances, only one instance runs the scheduler (leader election via the store's advisory locks) to prevent duplicate runs.
+
+### Webhook Routing
+
+Each webhook automation gets a deterministic URL path derived from its name: `/webhooks/<automation_id>`. When the runtime receives a POST to a webhook URL:
+
+1. The request is matched to an automation by the URL path
+2. If signature verification is configured, the runtime validates the request signature
+3. The JSON payload is extracted and stringified
+4. The `{{event}}` placeholder in the automation's prompt is replaced with the payload
+5. A fresh agent session is created and the composed prompt is sent
+6. The response is routed to the configured output channel
+
+Webhook automations run immediately — there is no queuing. If two webhooks arrive simultaneously, two separate sessions run in parallel. Each gets its own isolated context and does not interfere with the other.
+
+### Automation Monitoring
+
+The runtime exposes automation run status through the `/sessions` API (automation sessions are tagged with their automation name and run ID) and through the health endpoint.
+
+Failed automation runs (LLM error, timeout, tool failure) are logged with full context. The runtime does not retry automatically — if a cron run fails, the next scheduled run starts fresh. For webhook automations, the runtime returns a 500 to the caller, which can retry according to its own policy.
+
+## Configuration
+
+The runtime reads from `amodal.json` and environment variables:
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3847` | Server port |
+| `AMODAL_SESSION_TTL` | `3600` | Session timeout in seconds |
+
+### Store Backend
+
+The runtime uses PGLite (in-process Postgres) by default for session and store data. This requires no setup — PGLite runs embedded in the Node.js process and stores data in a local directory. For production, configure an external PostgreSQL instance:
+
+```json
+{
+  "stores": {
+    "backend": "postgres",
+    "connectionString": "env:DATABASE_URL"
+  }
+}
+```
+
+Using external Postgres is recommended for production because it enables multiple runtime instances to share session state (required for load balancing) and provides proper backup and recovery.
+
+## Starting the Server
+
+```bash
+# Development (repo mode with hot reload)
+amodal dev
+
+# Production (standalone)
+amodal serve
+
+# Docker
+amodal docker build
+docker run -p 3847:3847 amodal-runtime
+```

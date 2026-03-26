@@ -1,0 +1,44 @@
+{
+  "name": "@amodalai/core",
+  "version": "0.1.0",
+  "description": "Amodal agent runtime core",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/amodalai/amodal.git", "directory": "packages/core" },
+  "homepage": "https://github.com/amodalai/amodal",
+  "bugs": { "url": "https://github.com/amodalai/amodal/issues" },
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "node ../../scripts/build_package.js",
+    "test": "vitest run",
+    "test:ci": "vitest run",
+    "typecheck": "tsc --emitDeclarationOnly"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@google/gemini-cli-core": "^0.34.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "js-yaml": "^4.1.1",
+    "zod": "^3.25.76"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.700.0",
+    "@google/genai": "1.30.0",
+    "openai": "^4.80.0"
+  },
+  "devDependencies": {
+    "@amodalai/test-utils": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
+    "@types/mock-fs": "^4.13.4",
+    "mock-fs": "^5.5.0",
+    "typescript": "^5.3.3",
+    "vitest": "^3.1.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

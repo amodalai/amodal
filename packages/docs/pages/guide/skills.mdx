@@ -1,0 +1,432 @@
+---
+description: Skills are Markdown reasoning frameworks in skills/name/SKILL.md that tell the agent how to think.
+---
+
+# Skills
+
+Every LLM can answer questions. The difference between a generic chatbot and a domain expert is *how it reasons* about a problem. Skills encode that reasoning — they are step-by-step methodologies, written in Markdown, that teach the agent how to investigate, assess, and respond to specific situations.
+
+Think of skills as the institutional knowledge that lives in the heads of your best people. The security engineer who knows exactly which logs to check first when an alert fires. The sales ops analyst who can assess a deal's health in five minutes by pulling the right CRM fields. The SRE who has a mental checklist for verifying a deployment. Skills capture those workflows and make them available to every conversation.
+
+Without skills, the agent is smart but generic. With skills, it becomes a specialist.
+
+```
+skills/
+├── triage/
+│   └── SKILL.md
+├── deal-review/
+│   └── SKILL.md
+├── deployment-verification/
+│   └── SKILL.md
+└── incident-response/
+    └── SKILL.md
+```
+
+## SKILL.md Format
+
+Two formats are supported:
+
+### Heading-based (recommended)
+
+```markdown
+# Skill: Incident Response
+
+Gather context, assess impact, and coordinate response for active incidents.
+Trigger: When the user reports an outage, service degradation, or active incident.
+
+## Behavior
+
+1. Identify the affected service and symptoms
+2. Assess blast radius — which systems and users are impacted?
+3. Gather context:
+   - Recent deployments or config changes
+   - Monitoring metrics (error rates, latency)
+   - Dependent service health
+4. Correlate: what changed right before the incident?
+5. Recommend immediate mitigation and investigation path
+
+## Constraints
+
+- Do not restart services without explicit user confirmation
+- Do not dismiss alerts as false positives without evidence
+```
+
+### Frontmatter-based
+
+```markdown
+---
+name: incident-response
+description: Gather context, assess impact, coordinate response
+trigger: When the user reports an outage or active incident
+---
+
+## Methodology
+
+...body content...
+```
+
+## Parsed Fields
+
+| Field | Source | Description |
+|-------|--------|-------------|
+| `name` | `# Skill: Name` or frontmatter `name` | Skill identifier |
+| `description` | First paragraph or frontmatter `description` | What the skill does |
+| `trigger` | `Trigger:` line or frontmatter `trigger` | When to activate |
+| `body` | Everything after name/description | The methodology |
+
+## Skill Activation
+
+The agent sees all installed skill names and triggers at the start of every session. When a user's message matches a skill's trigger, the agent activates it — pulling the full methodology into its reasoning context. The agent can also activate skills mid-conversation when findings suggest a different approach is needed. This happens naturally: the agent does not need explicit instructions to transition between skills.
+
+## Realistic Skill Examples
+
+The following are complete, production-grade skills that demonstrate how to encode real domain expertise into Markdown.
+
+### Example 1: Security Alert Triage
+
+This skill teaches the agent to systematically investigate a security alert rather than jumping to conclusions. Notice how each step specifies what to query, what to look for, and what the findings mean.
+
+```markdown
+# Skill: Security Alert Triage
+
+Investigate and classify security alerts by gathering context from detection
+systems, correlating with known patterns, and assessing real risk.
+Trigger: When the user shares a security alert, detection finding, suspicious
+activity, or asks about a potential threat.
+
+## Behavior
+
+### Step 1: Parse the Alert
+
+Extract the core facts from the alert before doing anything else:
+- **What** was detected (signature, rule name, detection logic)
+- **Where** it happened (host, IP, user, service)
+- **When** it occurred (timestamp, timezone, duration)
+- **Severity** as reported by the detection system
+
+Dispatch a task agent to pull the raw alert details from the detection
+platform (Datadog, CrowdStrike, Splunk, etc.) and return a structured summary.
+
+### Step 2: Enrich with Context
+
+For each entity in the alert, gather surrounding context:
+- **User context:** Role, department, login history, recent access patterns.
+  Dispatch a task agent to query the identity provider (Okta, Azure AD).
+- **Host context:** OS, installed software, patch level, recent changes.
+  Dispatch a task agent to query the asset inventory.
+- **Network context:** Source/destination IPs, geo-location, reputation scores.
+  Dispatch a task agent to query threat intel feeds.
+
+Do NOT attempt to correlate yet — just gather.
+
+### Step 3: Check Against Known Patterns
+
+Load knowledge tagged `patterns` and `false_positives`. Compare the alert
+against:
+- Known false positives (e.g., vulnerability scanners, pen-test IPs, CI/CD
+  service accounts that trigger brute-force rules)
+- Known attack patterns (e.g., credential stuffing followed by lateral movement)
+- Recent similar alerts (query the detection platform for the same rule
+  firing in the last 7 days)
+
+If the alert matches a known false positive with >90% confidence, classify
+it and explain why. Do not dismiss without evidence.
+
+### Step 4: Assess Real Risk
+
+Based on gathered context, evaluate:
+- **Is this expected behavior?** A deploy service account pulling container
+  images at 3 AM is normal. A marketing intern doing the same is not.
+- **What is the blast radius?** A compromised service account with read-only
+  access to a staging bucket is different from one with admin access to prod
+  databases.
+- **Is there evidence of progression?** A single failed login is noise. Ten
+  failed logins followed by a successful one followed by a role change is a
+  kill chain.
+
+Assign a confidence-weighted severity:
+- **Critical:** Active compromise with evidence of data access or lateral
+  movement. Confidence > 80%.
+- **High:** Strong indicators of compromise, but no evidence of progression
+  yet. Confidence > 70%.
+- **Medium:** Suspicious activity that warrants investigation but has benign
+  explanations. Confidence 40-70%.
+- **Low/False Positive:** Matches a known pattern or has a clear benign
+  explanation. Confidence > 85% it is benign.
+
+### Step 5: Recommend Response
+
+Based on severity:
+- **Critical/High:** Present findings immediately. Recommend containment
+  actions (disable account, isolate host, revoke tokens). List what the user
+  should confirm before the agent takes action.
+- **Medium:** Present findings with recommended next investigation steps.
+  Suggest what additional data would increase confidence.
+- **Low/FP:** Summarize findings. If this is a new false positive pattern
+  not already in the KB, propose a knowledge update.
+
+## Constraints
+
+- Never dismiss an alert as a false positive without loading and checking
+  the false_positives knowledge category
+- Never recommend containment actions without presenting evidence first
+- Always state confidence level alongside severity assessment
+- If confidence is below 40% on any assessment, report as inconclusive
+  and recommend manual review
+```
+
+### Example 2: Deal Health Review
+
+This skill is for a sales ops use case. The agent pulls CRM data, evaluates a deal against known healthy deal patterns, and surfaces risks. Notice how it specifies which fields to pull and what "good" vs "bad" looks like.
+
+```markdown
+# Skill: Deal Health Review
+
+Assess the health of an active deal by pulling CRM data, evaluating engagement
+signals, and comparing against historical win patterns.
+Trigger: When the user asks about a deal, opportunity, or pipeline item — or
+asks to review pipeline health.
+
+## Behavior
+
+### Step 1: Pull Deal Data
+
+Dispatch a task agent to query the CRM (Salesforce, HubSpot) for the deal:
+- Deal stage, amount, close date, days in current stage
+- Contact roles: who is the champion, economic buyer, technical evaluator?
+- Activity history: last 30 days of emails, calls, meetings
+- Competitor mentions in notes or call transcripts
+- Stage history: how long in each previous stage?
+
+If the user asks about multiple deals or "the pipeline," dispatch parallel
+task agents — one per deal.
+
+### Step 2: Evaluate Engagement Signals
+
+Score engagement on a simple framework:
+- **Champion engagement:** Has the identified champion had a meaningful
+  interaction (call, meeting, email reply) in the last 10 days? If not,
+  flag as "champion gone quiet."
+- **Multi-threading:** Are there at least 2 contacts engaged from
+  different departments? Single-threaded deals above $50K are high risk.
+- **Meeting cadence:** Has there been at least one meeting in the last
+  14 days for deals in stages 3+? A stalled meeting cadence in late stages
+  is the #1 predictor of a slip.
+- **Next steps:** Is there a concrete next step with a date? "They'll get
+  back to us" is not a next step.
+
+### Step 3: Compare to Historical Patterns
+
+Load knowledge tagged `patterns` and `baselines`. Compare:
+- **Stage velocity:** How does time-in-stage compare to won deals of
+  similar size? Deals that take 2x the median time in a stage close at
+  less than half the rate.
+- **Close date movement:** Has the close date been pushed more than once?
+  Two pushes correlates with a 70% drop in win rate based on typical
+  historical data.
+- **Deal size changes:** A significant discount (>20%) in late stages
+  often indicates the champion lost internal sponsorship and is trying
+  to reduce risk for the buyer.
+
+### Step 4: Present Assessment
+
+Use the present tool to render a deal health card:
+- Overall health: Healthy / At Risk / Critical
+- Key metrics: days in stage, engagement score, next step status
+- Risk flags: specific, actionable items (not vague warnings)
+- Recommended actions: what the rep should do this week
+
+For pipeline reviews, present a summary table sorted by risk level,
+then drill into the top 3 at-risk deals.
+
+## Constraints
+
+- Never fabricate activity data — if the CRM has no recent activities,
+  say so clearly
+- Always distinguish between "no data" and "negative signal" — a missing
+  champion contact is different from a champion who stopped responding
+- Do not predict win probability as a precise number — use the health
+  categories (Healthy / At Risk / Critical) with supporting evidence
+```
+
+### Example 3: Deployment Verification
+
+This skill runs a post-deploy checklist. It is a good example of a linear, checklist-style skill where each step has clear pass/fail criteria.
+
+```markdown
+# Skill: Deployment Verification
+
+Verify that a deployment is healthy by checking key metrics, error rates,
+and functional indicators against pre-deploy baselines.
+Trigger: When the user mentions a recent deploy, release, rollout, or asks
+to verify a deployment.
+
+## Behavior
+
+### Step 1: Identify the Deployment
+
+Determine what was deployed:
+- Service name and version
+- When it was deployed (timestamp)
+- What changed (commit range, PR numbers, changelog)
+- Deploy method (rolling, blue-green, canary)
+
+If the user doesn't provide this, dispatch a task agent to query the
+deployment system (GitHub Actions, ArgoCD, Spinnaker) for recent deploys.
+
+### Step 2: Establish Baseline
+
+Load knowledge tagged `baselines` for the deployed service. Determine
+the pre-deploy baseline for each key metric:
+- Error rate (p50, p95, p99 for the last hour before deploy)
+- Latency (p50, p95, p99)
+- Request rate (to detect traffic drops)
+- CPU and memory utilization
+- Queue depths / consumer lag (if applicable)
+
+Dispatch a task agent to pull pre-deploy metrics from the monitoring
+system (Datadog, Prometheus, CloudWatch) for the 1-hour window before
+the deploy timestamp.
+
+### Step 3: Check Post-Deploy Metrics
+
+Dispatch a task agent to pull the same metrics for the post-deploy window
+(deploy timestamp + 15 minutes through now). Compare:
+
+- **Error rate:** Any increase above 2x the baseline p99 is a red flag.
+  A sustained increase above 1.5x for more than 10 minutes warrants
+  investigation.
+- **Latency:** p50 increase > 20% is notable. p99 increase > 50% is
+  a red flag.
+- **Request rate:** A drop of more than 10% may indicate failed health
+  checks or load balancer issues — the service might be up but not
+  receiving traffic.
+- **Resources:** CPU > 80% sustained or memory trending upward without
+  plateau suggests a resource leak.
+
+### Step 4: Check Functional Health
+
+Dispatch a task agent to check:
+- Health check endpoints (if defined in the connection config)
+- Recent errors in application logs (new error types not seen before
+  the deploy)
+- Downstream dependency errors (did the deploy break a consumer?)
+
+### Step 5: Render Verdict
+
+Present a deployment health card:
+- **Healthy:** All metrics within acceptable ranges. No new error types.
+  Recommend: continue monitoring for 1 hour.
+- **Degraded:** One or more metrics outside range but not critical.
+  Recommend: investigate the specific metric, prepare to rollback.
+- **Unhealthy:** Multiple red flags or critical metric breach.
+  Recommend: rollback immediately. List the evidence.
+
+Include a comparison table: metric name, baseline value, current value,
+status (pass/warn/fail).
+
+## Constraints
+
+- Always compare to baseline, never to absolute thresholds — what is
+  "normal" varies wildly between services
+- A 15-minute post-deploy window is the minimum for comparison. If the
+  deploy happened less than 15 minutes ago, say so and recommend waiting
+- Do not recommend rollback without presenting the evidence — the user
+  needs to make an informed decision
+- If baseline knowledge is missing, report that the verification is
+  incomplete and recommend the user add baseline docs to the KB
+```
+
+## Skill Chaining
+
+Skills are not isolated — they chain naturally as the agent's understanding of a situation evolves. The agent does not need explicit instructions to transition between skills. It recognizes when its findings point toward a different methodology and activates the appropriate skill.
+
+Here is a realistic example of skill chaining in practice:
+
+**The user asks:** "We got an alert about elevated 5xx errors on the payments service."
+
+1. **Security Alert Triage activates.** The trigger matches — the user shared an alert. The agent begins its triage methodology: parse the alert, enrich with context, check against known patterns.
+
+2. **During Step 2 (Enrich with Context),** a task agent queries the deployment system and discovers that a new version of the payments service was deployed 22 minutes ago. The error rate increase started 18 minutes ago — 4 minutes after the deploy.
+
+3. **The agent transitions to Deployment Verification.** The findings strongly suggest this is a deployment issue, not a security incident. The agent does not abandon its security findings — it carries forward the relevant context (timestamps, error patterns) but now follows the deployment verification methodology.
+
+4. **Deployment Verification Step 3 confirms the correlation.** Post-deploy error rates are 8x the baseline. Latency p99 increased by 300%. The new version introduced a regression.
+
+5. **The agent presents a unified finding:** "The elevated 5xx errors on payments-service correlate with deploy v2.14.3 (deployed 22 minutes ago). Error rate is 8x baseline, latency p99 is 4x baseline. This appears to be a deployment regression, not a security incident. Recommend immediate rollback."
+
+The user saw one seamless investigation. Behind the scenes, the agent used two skills, dispatched five task agents, and processed data from three different systems — all while keeping its primary context clean.
+
+## Common Patterns
+
+### Decision Trees in Skills
+
+Many real-world investigations have branching logic. Encode this explicitly in your skills rather than hoping the agent figures it out:
+
+```markdown
+### Step 3: Determine Root Cause Category
+
+Based on findings so far, branch:
+
+- **If a deployment was found within the anomaly window:**
+  Follow deployment correlation path (Step 4a)
+- **If no deployment but a config change was detected:**
+  Follow config change path (Step 4b)
+- **If no changes found but the pattern matches a known scaling issue:**
+  Follow capacity path (Step 4c)
+- **If none of the above:**
+  Expand the investigation window to 24 hours and repeat Step 2
+```
+
+This is much more effective than a vague "investigate the root cause." The agent follows the branch that matches its findings, and each branch can have its own detailed methodology.
+
+### When to Dispatch Task Agents
+
+Use `dispatch` in your skill instructions whenever the agent needs to process raw data from an external system. The rule of thumb: if a step involves querying an API and interpreting the response, that is task agent work. The primary agent should reason about clean summaries, not parse JSON payloads.
+
+Good skill instruction:
+```markdown
+Dispatch a task agent to query Datadog for error rate metrics on the
+affected service for the last 2 hours. The task agent should return:
+service name, current error rate, baseline error rate, and whether the
+rate exceeds the 2x threshold.
+```
+
+Bad skill instruction:
+```markdown
+Query the metrics system for error data and analyze it.
+```
+
+The first version tells the agent exactly what to delegate, what data to ask for, and what shape the summary should take. The second leaves everything ambiguous.
+
+### Confidence Thresholds
+
+Investigations rarely produce certainty. Encode confidence expectations directly in the skill so the agent knows when to commit to a conclusion and when to hedge:
+
+```markdown
+## Confidence Framework
+
+- **> 85% confidence:** State the finding as a conclusion. "This is caused
+  by the v2.14 deployment."
+- **60-85% confidence:** State the finding as a strong hypothesis. "This is
+  most likely caused by the v2.14 deployment, based on the timing correlation
+  and error signature match."
+- **40-60% confidence:** Present as one of several possibilities. "The timing
+  suggests a possible correlation with the v2.14 deployment, but other factors
+  may be involved."
+- **< 40% confidence:** Report as inconclusive. "There is insufficient
+  evidence to determine the root cause. Recommended next steps: [specific
+  additional data to gather]."
+```
+
+This prevents the agent from being either overconfident (stating guesses as facts) or underconfident (hedging on everything and providing no value).
+
+## Best Practices
+
+- **Be specific about reasoning steps.** Not "investigate the issue" but "query deployment logs for changes within 30 minutes of the anomaly."
+- **Include decision points.** "If no deployments found, check for scaling events."
+- **Specify dispatching.** "Dispatch a task agent to query Datadog" uses context isolation.
+- **Define when to stop.** "If confidence is below 60%, report as inconclusive."
+- **Name your steps.** "Step 1: Parse the Alert" is easier for the agent to follow than an unnumbered wall of text.
+- **Separate gathering from reasoning.** Steps that query systems should be distinct from steps that interpret results. This maps naturally to the task agent model — gathering is delegated, reasoning stays in the primary agent.
+- **Write for a smart colleague, not a machine.** The best skills read like runbooks written by a senior engineer. If a human could follow the skill and reach a good conclusion, the agent can too.

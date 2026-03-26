@@ -1,0 +1,60 @@
+---
+description: What is Amodal — a git-repo-centric agent runtime with multi-provider LLM support, security, and evaluation infrastructure.
+---
+
+# Introduction
+
+Amodal is a **git-repo-centric agent runtime**. Your agent's configuration — connections, skills, knowledge, tools, automations — lives as files in your repository. The runtime reads these files, compiles them into an optimized context, and runs a reasoning loop against any supported LLM provider.
+
+## How It Works
+
+```
+Your Repo
+  ├── amodal.json          ← agent identity, provider config
+  ├── connections/          ← API credentials + docs (or plugins)
+  ├── skills/              ← Markdown reasoning frameworks
+  ├── knowledge/           ← Domain knowledge documents
+  ├── tools/               ← Custom HTTP/chain/function tools
+  ├── automations/         ← Scheduled or trigger-based runs
+  └── evals/               ← Test cases for agent quality
+
+       ↓ amodal dev
+
+Runtime Server (localhost:3847)
+  ├── Context Compiler     ← builds optimized prompts
+  ├── Token Allocator      ← manages context window budget
+  ├── Security Layer       ← field scrubbing, output guards, action gates
+  ├── Provider Adapter     ← Anthropic / OpenAI / Gemini / Bedrock / Azure
+  └── Session Manager      ← TTL-based sessions with hot reload
+```
+
+## The Core Loop
+
+Every agent runs the same fundamental cycle:
+
+```
+Explore → query connected systems, load knowledge, gather context
+Plan    → reason about findings, decide next steps
+Execute → call APIs, dispatch sub-agents, present results, learn
+```
+
+Simple questions skip planning. Complex questions get the full loop with multi-agent dispatch and skill activation. The runtime matches depth to the question automatically.
+
+## Key Capabilities
+
+| Capability | What It Does |
+|-----------|-------------|
+| **Multi-provider** | Anthropic Claude, OpenAI, Google Gemini, AWS Bedrock, Azure OpenAI — with failover |
+| **Git-native config** | Everything is a file. Version, diff, review, and deploy your agent like code |
+| **20+ connection plugins** | Slack, GitHub, Stripe, Datadog, Jira, PagerDuty, Salesforce, and more |
+| **Security infrastructure** | Field scrubbing, output guards, action gates, scope checking, leak detection |
+| **Evaluation framework** | LLM-judged evals, experiments, cost tracking, multi-model comparison |
+| **Hot reload** | File watcher on your repo — edit config, agent updates instantly |
+| **React SDK** | `@amodalai/react` components and `@amodalai/chat-widget` for embedding |
+| **Snapshot deployment** | Build → snapshot → deploy and self-host |
+
+## Next Steps
+
+- **[Quick Start](/quickstart/create-agent)** — Build your first agent
+- **[Project Structure](/quickstart/project-structure)** — What goes where in your repo
+- **[CLI Overview](/cli)** — All available commands

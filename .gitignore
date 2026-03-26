@@ -1,0 +1,13 @@
+.DS_Store
+node_modules/
+dist/
+.next/
+bundle/
+*.tsbuildinfo
+.eslintcache
+.env
+.dev-seed.json
+.dev-seed-admin.json
+junit.xml
+coverage/
+.typecheck/

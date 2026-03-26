@@ -1,0 +1,75 @@
+---
+description: Primary agents, task agents, and context isolation — how Amodal coordinates multi-agent work while keeping context clean.
+---
+
+# Agent Architecture
+
+Amodal uses a multi-agent architecture where a **primary agent** delegates data-intensive work to ephemeral **task agents**, keeping its own context clean for reasoning.
+
+## Agent Types
+
+### Primary Agent
+
+One per chat session. Handles the conversation, reasons about findings, decides next steps, and presents results. Never loads API docs or parses raw JSON directly.
+
+### Task Agents
+
+Ephemeral workers dispatched by the primary agent (or by other task agents). Each gets its own fresh context, loads KB docs, queries systems, interprets raw responses, and returns a clean summary (~200-500 tokens). Context is discarded after.
+
+### Automations
+
+Scheduled or triggered agent runs from installed marketplace automations plus custom automations. Admin configures parameters (frequency, channels), not logic.
+
+## Context Isolation
+
+This is the key architectural insight. Without task agents, raw data accumulates in the primary agent's context and never leaves:
+
+```
+Without task agents:                 With task agents:
+
+[System prompt: 2K]                 [System prompt: 2K]
+[User: "Why is cash flow negative?"][User: "Why is cash flow negative?"]
+[API docs: 8K]     ← stuck forever  [Task result: 200 tokens]
+[Raw JSON: 3K]     ← stuck forever  [Task result: 250 tokens]
+[Pattern docs: 4K] ← stuck forever  [Task result: 150 tokens]
+Context: 28K+ and growing           Context: 3K — clean, focused
+```
+
+Task agents can dispatch sub-task agents (depth 2). Depth 3 is rare. Depth 4+ is blocked.
+
+## Task Agent Capabilities
+
+Task agents get a focused set of tools:
+
+| Tool | Available |
+|------|-----------|
+| `request` (read-only) | Yes |
+| `shell_exec` | Yes |
+| `load_knowledge` | Yes |
+| `dispatch` (sub-tasks) | Yes (depth limited) |
+| `present` (widgets) | No |
+| `propose_knowledge` | No |
+| Skills | No |
+
+Task agents produce **200-500 token summaries** from 8-15K of processed data. The primary agent reasons about these summaries, not the raw data.
+
+## Dispatch Example
+
+```
+User: "What happened to the payment service in the last hour?"
+
+Primary Agent dispatches 3 task agents in parallel:
+  1. "Query Datadog for payment-service metrics (error rate, latency, throughput)"
+  2. "Check PagerDuty for alerts on payment-service in the last hour"
+  3. "Query deployment logs for payment-service changes"
+
+Each task agent:
+  - Loads relevant KB docs (API documentation)
+  - Makes API calls via `request`
+  - Processes raw JSON responses
+  - Returns a clean summary
+
+Primary Agent receives 3 summaries (~600 tokens total)
+  → Correlates: deployment at 2:15 PM matches error spike at 2:17 PM
+  → Presents findings with timeline widget
+```

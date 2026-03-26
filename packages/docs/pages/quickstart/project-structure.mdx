@@ -1,0 +1,70 @@
+---
+description: The complete repo layout — amodal.json, connections, skills, tools, knowledge, stores, automations, evals, agents, and MCP.
+---
+
+# Project Structure
+
+Everything that defines your agent lives in your repo root. The runtime reads these files at startup and watches for changes during development.
+
+```
+my-agent/
+├── amodal.json                  ← root config: name, models, sandbox, MCP
+├── connections/                 ← API connections (plugins or custom)
+│   ├── slack/
+│   │   ├── spec.json            ← API source, auth, entities, sync config
+│   │   ├── access.json          ← field restrictions, action tiers, scoping
+│   │   ├── surface.md           ← (optional) endpoint documentation
+│   │   ├── entities.md          ← (optional) entity definitions
+│   │   └── rules.md             ← (optional) business rules
+│   └── internal-api/
+│       ├── spec.json
+│       └── access.json
+├── skills/                      ← Markdown reasoning frameworks
+│   └── triage/
+│       └── SKILL.md
+├── knowledge/                   ← Domain knowledge documents
+│   ├── environment.md
+│   └── baselines.md
+├── tools/                       ← Custom tool handlers
+│   └── create_ticket/
+│       ├── tool.json            ← (optional) metadata, parameters, confirmation
+│       └── handler.ts           ← handler code
+├── stores/                      ← Persistent data store schemas
+│   └── active-alerts.json
+├── pages/                       ← React UI views (dashboards, briefs)
+│   ├── ops-dashboard.tsx
+│   └── morning-brief.tsx
+├── automations/                 ← Scheduled or trigger-based runs
+│   └── daily-digest.json
+├── evals/                       ← Test cases for agent quality
+│   └── triage-accuracy.md
+├── agents/                      ← subagents + built-in overrides
+│   ├── explore/                 ← override: replaces default explore agent
+│   │   └── AGENT.md
+│   ├── compliance-checker/      ← custom subagent
+│   │   └── AGENT.md
+│   └── vendor-lookup/           ← custom subagent
+│       └── AGENT.md
+└── .amodal/
+    └── store-data/              ← PGLite data directory (gitignored)
+```
+
+## Config Reference
+
+| File/Directory | What It Does | Docs |
+|---------------|-------------|------|
+| `amodal.json` | Agent identity, models, sandbox, MCP servers | [amodal.json](/guide/config) |
+| `connections/` | API credentials + docs + access rules | [Connections](/guide/connections) |
+| `skills/` | Expert reasoning frameworks | [Skills](/guide/skills) |
+| `knowledge/` | Domain knowledge documents | [Knowledge Base](/guide/knowledge-base) |
+| `tools/` | Custom tool handlers with code | [Tools](/guide/tools) |
+| `stores/` | Persistent data store schemas | [Stores](/guide/stores) |
+| `pages/` | React UI views (dashboards, briefs, detail screens) | [Pages](/guide/pages) |
+| `automations/` | Scheduled/triggered agent runs | [Automations](/guide/automations) |
+| `evals/` | Test cases and assertions | [Evals](/guide/evals) |
+| `agents/` | Custom subagents + built-in agent overrides | [Agents](/guide/agents) |
+| MCP in `amodal.json` | External tool servers via Model Context Protocol | [MCP Servers](/guide/mcp) |
+
+## Hot Reload
+
+During `amodal dev`, the runtime watches all config files for changes with 300ms debounce. Edit any file and the agent picks up changes instantly — no restart needed.

@@ -1,0 +1,68 @@
+---
+description: Multi-provider LLM support — Anthropic, OpenAI, Google Gemini, AWS Bedrock, Azure OpenAI with automatic failover.
+---
+
+# Providers
+
+Amodal supports multiple LLM providers with a unified interface. Switch providers by changing an environment variable — no code changes needed.
+
+## Supported Providers
+
+| Provider | Models | Auth |
+|----------|--------|------|
+| **Anthropic** | Claude Opus, Sonnet, Haiku | `ANTHROPIC_API_KEY` |
+| **OpenAI** | GPT-4o, GPT-4, GPT-3.5 | `OPENAI_API_KEY` |
+| **Google** | Gemini Pro, Flash | `GOOGLE_API_KEY` |
+| **AWS Bedrock** | Claude, Titan, Llama | AWS credentials |
+| **Azure OpenAI** | GPT-4o, GPT-4 | `AZURE_OPENAI_API_KEY` + endpoint |
+
+## Configuration
+
+### Auto-detection
+
+Set the relevant environment variable and Amodal auto-detects the provider:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+amodal dev   # uses Anthropic automatically
+```
+
+### Explicit config
+
+Specify in `amodal.json`:
+
+```json
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-20250514"
+}
+```
+
+## Failover
+
+The `FailoverProvider` cascades between providers with retry logic and linear backoff:
+
+```json
+{
+  "provider": "failover",
+  "providers": ["anthropic", "openai"],
+  "retries": 2,
+  "backoffMs": 1000
+}
+```
+
+If the primary provider fails, the runtime automatically tries the next one.
+
+## Streaming
+
+All providers support SSE streaming via `chatStream()`. The streaming interface is unified — your client code works identically regardless of which provider is active.
+
+## Multi-Model Comparison
+
+Use `amodal eval` or `amodal experiment` to compare providers:
+
+```bash
+amodal eval --providers anthropic,openai,google
+```
+
+This runs the same eval suite against each provider and reports quality, latency, and cost differences.

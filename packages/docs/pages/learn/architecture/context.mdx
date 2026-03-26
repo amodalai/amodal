@@ -1,0 +1,58 @@
+---
+description: How Amodal manages context — smart compaction, tool output masking, and staying under limits.
+---
+
+# Context Management
+
+The SDK provides several mechanisms to keep agent context clean and within limits, even during complex multi-step investigations.
+
+## Smart Compaction
+
+When context approaches the limit, the SDK performs **structured state snapshots** that preserve key findings while discarding intermediate reasoning and raw data.
+
+What's preserved:
+- Key findings and conclusions
+- Active hypotheses
+- Entities and relationships discovered
+- User preferences from the session
+
+What's discarded:
+- Intermediate reasoning chains
+- Raw tool outputs already summarized
+- Superseded hypotheses
+
+## Tool Output Masking
+
+A **backward-scan FIFO** mechanism prunes bulky tool outputs while protecting recent context. Older tool responses are truncated or removed when newer, more relevant data arrives.
+
+The mask operates on a priority system:
+1. Recent tool outputs are protected
+2. Older outputs with summaries already incorporated are candidates for removal
+3. Large raw JSON responses are first to be pruned
+
+## On-Demand Knowledge Loading
+
+The agent starts with a **compact KB index** (~400 tokens for ~20 docs) rather than loading all knowledge upfront. Full documents are loaded via `load_knowledge` only when needed.
+
+```
+Prompt: [KB Index — 400 tokens]
+  - system_docs/datadog: "Datadog API endpoints and authentication"
+  - methodology/error-rates: "Error rate interpretation thresholds"
+  - patterns/maintenance-windows: "Known maintenance window schedules"
+  ...
+
+Agent: "I need the Datadog API docs"
+→ load_knowledge("system_docs/datadog")
+→ Full document loaded into context (2K tokens)
+```
+
+Task agents load their own KB docs independently — the primary agent's context is unaffected.
+
+## Loop Detection
+
+The SDK detects when an agent enters unproductive loops:
+
+- **Pattern matching** — repeated identical tool calls or reasoning patterns
+- **LLM-based detection** — the model evaluates whether it's making progress
+
+When a loop is detected, the agent is nudged to try a different approach or escalate to the user.

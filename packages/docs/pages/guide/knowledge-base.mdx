@@ -1,0 +1,396 @@
+---
+description: Knowledge documents in knowledge/ teach the agent about your domain — loaded on demand, refined over time.
+---
+
+# Knowledge Base
+
+The knowledge base is what turns a general-purpose reasoning engine into *your* agent. Without knowledge, the agent is smart but uninformed — it can follow methodologies and call APIs, but it does not know that your payments service spikes every Friday at payroll time, or that the `svc-deploy` service account triggers brute-force alerts every time CI runs, or that your team prefers Slack over email for P1 escalations.
+
+Knowledge documents live in `knowledge/` as Markdown files. They encode everything the agent needs to know about your specific environment, your baselines, your team, and the patterns you have learned from past experience. And because the agent can propose knowledge updates through `propose_knowledge`, the knowledge base grows smarter with every investigation. This is the compounding asset — the flywheel that makes the agent more valuable the longer you use it.
+
+```
+knowledge/
+├── environment.md
+├── baselines.md
+├── patterns.md
+├── false-positives.md
+├── team.md
+└── response-procedures.md
+```
+
+## Document Format
+
+```markdown
+# Knowledge: Normal Traffic Patterns
+
+- Weekday: 2,000-4,000 RPS (peak 12-2 PM EST)
+- Weekend: 800-1,500 RPS
+- Error rate: < 0.05% on api-gateway
+- Deployment windows: 10-11 AM, 3-4 PM (brief spikes expected)
+- Black Friday: 15,000-25,000 RPS (sustained 12 hours)
+```
+
+The first `# Heading` becomes the title. The filename (without `.md`) becomes the document name/ID. Everything after the heading is the body.
+
+## Categories
+
+Knowledge documents cover these categories:
+
+| Category | What | Typical Source |
+|----------|------|----------------|
+| **system_docs** | API endpoints, auth, response formats | Auto from connections |
+| **methodology** | What the data means, how to interpret it | Author writes |
+| **patterns** | Known patterns worth detecting | Author seeds, agent discovers |
+| **false_positives** | Known benign anomalies | Agent discovers, author approves |
+| **response_procedures** | SOPs, escalation paths | Author writes |
+| **environment** | Infrastructure layout, inventory | Author writes |
+| **baselines** | What "normal" looks like | Author seeds, agent refines |
+| **team** | Contacts, preferences, escalation paths | Author maintains |
+| **incident_history** | Past sessions, resolutions | Agent proposes |
+| **working_memory** | Agent's persistent context | Agent maintains |
+
+## Realistic Knowledge Document Examples
+
+The following examples show what production knowledge documents look like. They are detailed enough to be genuinely useful to the agent, not just placeholders.
+
+### Example 1: Environment Document
+
+This document gives the agent a mental map of your infrastructure. When the agent investigates an alert on `payments-api`, it can immediately understand what depends on it, where it runs, and who owns it.
+
+```markdown
+# Knowledge: Production Environment
+
+## Service Architecture
+
+### Core Services
+- **api-gateway** — Kong. Entry point for all client traffic. Runs on EKS
+  cluster `prod-us-east-1`. 12 pods, autoscales to 40. Owned by Platform
+  team (#platform-eng).
+- **auth-service** — Internal. Handles JWT issuance and validation. Backed
+  by Redis cluster `auth-sessions` (ElastiCache, r6g.xlarge, 3-node).
+  Owned by Identity team (#identity-eng).
+- **payments-api** — Internal. Processes transactions, manages payment
+  methods, handles refunds. Backed by Postgres RDS `payments-prod`
+  (db.r6g.2xlarge, Multi-AZ). Integrates with Stripe (connection:
+  `stripe-prod`) and Plaid (connection: `plaid-prod`). Owned by Payments
+  team (#payments-eng, on-call: @payments-oncall in PagerDuty).
+- **notifications-service** — Internal. Sends emails (SendGrid), SMS
+  (Twilio), push (Firebase). Queue-based: reads from SQS
+  `notifications-prod`. Owned by Platform team.
+
+### Data Stores
+- **Primary database:** Postgres RDS `main-prod` (db.r6g.4xlarge, Multi-AZ,
+  read replicas: 2). Contains users, organizations, billing tables.
+- **Payments database:** Postgres RDS `payments-prod`. Isolated for PCI
+  compliance. Only payments-api has access.
+- **Cache:** Redis ElastiCache `cache-prod` (r6g.xlarge, 3-node cluster).
+  Used by api-gateway for rate limiting and auth-service for sessions.
+- **Search:** OpenSearch `search-prod` (3 data nodes, r6g.2xlarge). Powers
+  product search and audit log queries.
+- **Queue:** SQS queues — `notifications-prod`, `analytics-events`,
+  `payment-webhooks`. DLQ configured on all queues.
+
+### Infrastructure
+- **Cloud:** AWS us-east-1 (primary), us-west-2 (DR, warm standby)
+- **Orchestration:** EKS 1.28, managed node groups
+- **CI/CD:** GitHub Actions → ArgoCD (connection: `argocd-prod`)
+- **Monitoring:** Datadog (connection: `datadog-prod`), PagerDuty
+  (connection: `pagerduty-prod`)
+- **Secrets:** AWS Secrets Manager. Rotated quarterly.
+
+### External Dependencies
+- **Stripe:** Payment processing. Webhook endpoint:
+  api-gateway/webhooks/stripe. Average latency: 200-400ms.
+- **Plaid:** Bank account linking. Rate limit: 100 req/min per client.
+  Latency: 500ms-2s (external, variable).
+- **SendGrid:** Email delivery. Rate limit: 100k/day on current plan.
+- **Twilio:** SMS. Rate limit: 500 msg/sec.
+
+## Deployment Windows
+- Standard deploys: 10-11 AM ET or 3-4 PM ET, weekdays only
+- Hotfixes: any time, but require on-call approval
+- Frozen periods: last week of each quarter (finance close),
+  Black Friday through Cyber Monday
+```
+
+### Example 2: Baselines Document
+
+Baselines tell the agent what "normal" looks like. Without this, the agent has no way to assess whether a metric value is healthy or alarming. Notice that baselines include time-of-day and day-of-week variation — flat thresholds miss too much.
+
+```markdown
+# Knowledge: Service Baselines
+
+## api-gateway
+- **Request rate:** Weekday 2,000-4,000 RPS (peak 12-2 PM ET), weekend
+  800-1,500 RPS. Below 500 RPS on a weekday is abnormal and may indicate
+  a DNS or load balancer issue.
+- **Error rate (5xx):** < 0.05% sustained. Brief spikes to 0.2% during
+  deployments are normal (rolling restarts cause 1-2 seconds of 503s).
+  Anything above 0.1% sustained for more than 5 minutes outside a deploy
+  window warrants investigation.
+- **Latency p50:** 45-80ms. **p95:** 150-250ms. **p99:** 400-800ms.
+  p99 above 1.5s is a red flag — usually indicates database contention
+  or a slow upstream dependency.
+- **CPU utilization:** 30-50% steady state. Autoscaler triggers at 70%.
+  If CPU is above 70% and pods haven't scaled, check the HPA config.
+
+## payments-api
+- **Request rate:** Weekday 200-600 RPS. Significant spikes on the 1st
+  and 15th of each month (subscription renewals). Friday afternoons see
+  a 40% bump from payroll-related transactions.
+- **Error rate (5xx):** < 0.02%. This service has a lower tolerance than
+  the gateway because errors mean failed transactions. Above 0.05% is a
+  P1 investigation.
+- **Latency p50:** 120-200ms (includes Stripe round-trip). **p99:**
+  800ms-1.2s. Latency increases when Stripe is slow — check Stripe
+  status page before investigating internally.
+- **Database connections:** Pool max is 100. Steady state: 20-40 active.
+  Above 60 active connections, query performance degrades. Above 80 is
+  an emergency — connection leak or missing connection release.
+- **Queue depth (payment-webhooks):** 0-50 messages. Above 200 means
+  the consumer is falling behind. Above 1,000 check if the consumer
+  is running at all.
+
+## notifications-service
+- **Queue depth (notifications-prod):** 0-200 messages during steady
+  state. Spikes to 5,000-10,000 during marketing campaign sends
+  (usually Tuesday/Thursday mornings). These clear within 30 minutes
+  and are expected.
+- **Email send rate:** 50-200/minute steady state. Campaign bursts:
+  1,000-2,000/minute. Above 3,000/minute risks SendGrid rate limiting.
+- **SMS send rate:** 5-20/minute. Spikes during 2FA waves (Monday
+  mornings when everyone logs in).
+
+## General Patterns
+- **Monday mornings (9-10 AM ET):** 15-20% traffic increase as users
+  log in. Auth-service sees 3-5x normal request rate. This is normal.
+- **Monthly subscription renewals (1st and 15th):** payments-api
+  handles 3-4x normal volume. Pre-warm expectations: jobs start at
+  midnight ET, complete by 6 AM ET.
+- **End of quarter:** Slightly elevated API traffic from reporting
+  integrations pulling data. Not an issue unless it coincides with
+  a deploy.
+```
+
+### Example 3: Patterns Document
+
+Patterns document the recurring situations the agent should recognize. This is institutional knowledge — the kind of thing a senior engineer knows from experience but that does not exist in any runbook.
+
+```markdown
+# Knowledge: Known Patterns
+
+## Deployment-Induced Error Spikes
+**What it looks like:** 5xx error rate spikes to 0.1-0.5% for 30-90
+seconds, then returns to baseline.
+**Root cause:** Rolling deployment restarts pods. During restart, some
+requests hit terminating pods. Kong retries but a small percentage fail.
+**How to identify:** Check deploy timestamps in ArgoCD. If the spike
+start time is within 60 seconds of a deploy and the spike duration is
+under 2 minutes, this is almost certainly deployment noise.
+**Action:** No action needed. If the spike lasts longer than 3 minutes,
+the new version may be failing health checks — escalate to deployment
+verification.
+
+## Stripe Latency Propagation
+**What it looks like:** payments-api latency p99 increases by 2-5x.
+Error rate may or may not increase (depends on timeout configuration).
+**Root cause:** Stripe is experiencing elevated latency. Since
+payments-api calls Stripe synchronously for transaction processing,
+Stripe latency directly impacts payments-api latency.
+**How to identify:** Compare payments-api latency increase with Stripe
+API latency (available via Datadog integration or Stripe status page).
+If both increase at the same time, the root cause is Stripe.
+**Action:** Check status.stripe.com. If Stripe has an active incident,
+there is nothing to fix on our side. Notify the payments team so they
+can monitor. If no Stripe incident is reported, investigate the specific
+Stripe API endpoints being called.
+
+## Monday Morning Auth Storm
+**What it looks like:** auth-service CPU spikes to 70-90%, Redis
+connections spike, latency increases by 2-3x. Usually between 9-10 AM ET.
+**Root cause:** Thousands of users logging in simultaneously after the
+weekend. JWT tokens issued Friday afternoon expire Monday morning,
+causing a burst of re-authentication.
+**How to identify:** Timing (Monday 9-10 AM ET) and the fact that the
+spike is concentrated in auth-service with no corresponding anomaly in
+other services.
+**Action:** No action needed. The spike is self-limiting (clears by
+10:30 AM). If it does NOT clear by 11 AM, investigate — the auth-service
+may have an issue exacerbated by load.
+
+## Database Connection Pool Exhaustion
+**What it looks like:** Service latency increases dramatically (5-10x),
+error rate climbs steadily (not a spike but a ramp), database CPU is
+low but connection count is at or near the pool maximum.
+**Root cause:** A code path is acquiring database connections but not
+releasing them, usually due to an unhandled exception in a transaction
+block. Often introduced in a recent deployment.
+**How to identify:** If connection count is above 80% of pool max AND
+database CPU is below 50%, the problem is almost certainly connection
+leaks rather than query load. Check for recent deployments to the
+affected service.
+**Action:** This is a P2 that becomes P1 quickly. The connection pool
+will fill up completely within minutes to hours. Short-term: restart
+the affected service pods to release connections. Medium-term: identify
+and fix the leaking code path.
+
+## CI/CD Service Account Alerts
+**What it looks like:** Security alert for brute-force or anomalous
+login from service account `svc-deploy` or `svc-ci`.
+**Root cause:** CI/CD pipelines authenticate to internal services via
+service accounts. Rapid successive authentication attempts during a
+deploy pipeline trigger brute-force detection rules.
+**How to identify:** Check if the alert source is a known CI/CD service
+account (svc-deploy, svc-ci, svc-argocd) and whether the timing
+correlates with a pipeline run in GitHub Actions.
+**Action:** False positive. No action needed. If the service account
+is NOT in the known list, investigate normally.
+```
+
+## Loading Strategy
+
+The agent does not load every knowledge document into context at the start of a session. That would waste context window space on documents that may never be relevant. Instead, the agent uses a two-phase loading strategy.
+
+### Phase 1: The KB Index
+
+At session start, the agent receives a compact index of all available knowledge documents. For a deployment with 20 documents, this index is roughly 400 tokens — a tiny fraction of the context window. The index looks like this:
+
+```
+Available knowledge documents:
+- environment: Production Environment — service architecture, data stores,
+  infrastructure, external dependencies, deployment windows
+- baselines: Service Baselines — request rates, error rates, latency,
+  resource utilization by service with time-of-day patterns
+- patterns: Known Patterns — deployment-induced spikes, Stripe latency
+  propagation, Monday auth storms, connection pool exhaustion, CI/CD
+  false positives
+- false-positives: Known False Positives — CI/CD service accounts,
+  vulnerability scanner IPs, scheduled maintenance windows
+- team: Team Directory — contacts, on-call rotations, escalation
+  preferences, timezone coverage
+- response-procedures: Incident Response SOPs — severity classification,
+  escalation paths, communication templates, post-mortem process
+```
+
+This index gives the agent enough information to know *which* documents to load, without consuming context on the full content.
+
+### Phase 2: On-Demand Loading
+
+When the agent needs specific knowledge, it calls `load_knowledge` to pull the full document into context. This happens naturally during investigation:
+
+1. User asks about elevated error rates on payments-api.
+2. Agent loads `baselines` to understand what "normal" looks like for payments-api.
+3. Baselines show the error rate threshold is 0.05%. Current rate is 0.3% — clearly elevated.
+4. Agent loads `patterns` to check if this matches a known pattern.
+5. The timing correlates with a deploy. Pattern match: "Deployment-Induced Error Spikes."
+6. But the spike has lasted 8 minutes, well beyond the 2-3 minute window for deployment noise. The pattern doc says to escalate to deployment verification.
+
+The agent loaded 2 out of 6 documents — only the ones it needed. The environment doc, team directory, false positives doc, and response procedures stayed out of context entirely. For a complex investigation, the agent might load 4-5 documents. It almost never needs all of them.
+
+### Task Agent Loading
+
+Task agents load knowledge independently. When the primary agent dispatches a task agent to "check if this matches a known false positive," the task agent loads the `false-positives` document into its own context, does the comparison, and returns a summary. The primary agent never sees the full false positives list — it just gets "this matches the CI/CD service account pattern" or "no match found." This is context isolation in action.
+
+## Learning Flywheel in Practice
+
+The knowledge base is not static. The agent proposes updates through `propose_knowledge`, and those updates go through an approval process before being committed. Over time, the knowledge base grows to reflect the real patterns and context of your environment — things that no one would think to document upfront but that become obvious through daily operations.
+
+Here is a concrete example of the flywheel in action:
+
+### Week 1: Initial Investigation
+
+A user asks the agent to investigate elevated 5xx errors on the auth-service. The agent loads baselines, checks patterns, and finds no match. After dispatching task agents to gather metrics and logs, it determines that the errors are caused by a third-party SSO provider (Okta) experiencing intermittent timeouts. The errors are real but not caused by anything on the company's side.
+
+The agent resolves the investigation and proposes a knowledge update:
+
+```
+propose_knowledge({
+  action: "create",
+  category: "patterns",
+  title: "Okta Timeout Propagation",
+  content: `
+    **What it looks like:** auth-service 5xx error rate increases by 2-5x.
+    Errors are concentrated in the /sso/callback endpoint.
+    **Root cause:** Okta is experiencing elevated latency or intermittent
+    failures. auth-service has a 5-second timeout on Okta calls; when Okta
+    responds slowly, these timeout and return 503 to the client.
+    **How to identify:** Check if the error spike is isolated to SSO-related
+    endpoints. Query Okta status (status.okta.com) or check Okta admin
+    dashboard for system health.
+    **Action:** If Okta has an active incident, no action on our side.
+    Notify the Identity team. Consider temporarily increasing the Okta
+    timeout if the errors are causing user-facing impact.
+  `,
+  reason: "Discovered during investigation on 2026-03-15. Auth-service errors
+    were caused by Okta timeouts. This pattern was not previously documented."
+})
+```
+
+### Week 1: Admin Review
+
+The admin receives the proposal and reviews the content, makes a small edit (adding the specific Okta endpoint that was slow), and approves it. The pattern is now part of the knowledge base.
+
+### Week 3: Faster Resolution
+
+The same pattern recurs — auth-service 5xx errors spike. This time, the agent loads the patterns document and immediately finds the "Okta Timeout Propagation" match. Instead of a 15-minute investigation with multiple task agent dispatches, the agent identifies the pattern in under a minute:
+
+*"The auth-service error spike matches the Okta Timeout Propagation pattern. Errors are concentrated in /sso/callback, consistent with Okta latency issues. Checking Okta status... Okta is reporting degraded performance on their authentication endpoints. No action needed on our side. I've notified the Identity team in #identity-eng."*
+
+What took 15 minutes the first time now takes 60 seconds. That is the flywheel.
+
+## Approval Policies
+
+Not all knowledge updates carry the same risk. A new entry in `working_memory` (the agent's own notes) is low-stakes. A change to `methodology` (how the agent reasons about problems) is high-stakes. Approval policies let you match the review level to the risk.
+
+### Auto-Approve
+
+Categories where the agent should be free to update without human review:
+
+- **working_memory** — The agent's own persistent context. Notes about ongoing investigations, user preferences it has learned, bookmarks for later. Low risk: if the agent writes something wrong, it only affects itself.
+- **incident_history** — Session summaries and resolution records. The agent documents what happened and how it was resolved. Low risk: these are records of fact, not instructions.
+
+### Manual Review
+
+Categories where a human should verify before the update takes effect:
+
+- **patterns** — New patterns affect how the agent classifies future alerts. A bad pattern (e.g., marking a real attack signature as a false positive) could cause the agent to dismiss genuine threats. Medium-high risk.
+- **baselines** — Baseline changes affect the agent's definition of "normal." If the agent incorrectly updates a baseline (e.g., deciding that a 1% error rate is normal when it is actually a slow-burning issue), it will fail to flag real problems. Medium-high risk.
+- **methodology** — Changes to how the agent interprets data or reasons about findings. High risk: a methodology change affects every future investigation.
+- **response_procedures** — SOPs and escalation paths. High risk: a bad change could route incidents to the wrong team or skip critical steps.
+
+### Configuration
+
+Approval policies are configured per deployment. A typical configuration:
+
+```json
+{
+  "approvalPolicies": {
+    "working_memory": "auto",
+    "incident_history": "auto",
+    "false_positives": "review",
+    "patterns": "review",
+    "baselines": "review",
+    "methodology": "review",
+    "response_procedures": "review",
+    "environment": "review",
+    "team": "review"
+  }
+}
+```
+
+When a category is set to `"review"`, proposals enter a review queue. Admins can approve, edit and approve, or reject each proposal. Rejected proposals include a reason that feeds back to the agent so it can learn what kind of updates are and are not appropriate.
+
+## On-Demand Loading
+
+The agent starts each session with a **compact KB index** (~400 tokens for ~20 docs). Full documents are loaded via `load_knowledge` only when needed. Task agents load their own docs independently.
+
+## Learning Flywheel
+
+The agent proposes knowledge updates via `propose_knowledge`:
+
+1. Agent discovers something the KB doesn't know
+2. Proposes an update (new doc or edit)
+3. Goes through approval policy (manual review or auto-approve per category)
+4. Next session starts smarter
+
+Configure approval policies in your deployment configuration.

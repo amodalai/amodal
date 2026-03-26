@@ -1,0 +1,151 @@
+---
+description: "Define custom subagents and override built-in agents in the agents/ directory."
+---
+
+# Agents
+
+The `agents/` directory defines **custom subagents** and lets you **override built-in agents**. Each subdirectory is an agent with an `AGENT.md` file.
+
+```
+agents/
+├── explore/              ← override: replaces default explore agent
+│   └── AGENT.md
+├── plan/                 ← override: replaces default plan agent
+│   └── AGENT.md
+├── compliance-checker/   ← subagent: custom task agent
+│   └── AGENT.md
+└── vendor-lookup/        ← subagent: custom task agent
+    └── AGENT.md
+```
+
+## Reserved Names (Overrides)
+
+These directory names override built-in agents:
+
+| Name | What It Overrides |
+|------|-------------------|
+| `explore` | The explore sub-agent that gathers data from connected systems |
+| `plan` | The plan agent that reasons before executing |
+| `main` | The primary agent prompt (backward compat: `agents/main.md` flat file also works) |
+
+Override agents use the raw `AGENT.md` content as the system prompt.
+
+## Custom Subagents
+
+Any directory that isn't a reserved name defines a **custom subagent** — a reusable task agent the primary agent can dispatch by name for specialized work.
+
+### AGENT.md Format (heading-based)
+
+```markdown
+# Agent: Compliance Checker
+
+Checks regulatory compliance across transactions and flags violations.
+
+## Config
+
+tools: [shell_exec, load_knowledge, dispatch]
+maxDepth: 2
+maxToolCalls: 15
+timeout: 60
+modelTier: advanced
+targetOutputMin: 200
+targetOutputMax: 500
+
+## Prompt
+
+You are a compliance specialist. When dispatched:
+
+1. Load the relevant compliance KB documents for the regulation in question
+2. Query the transaction system for the entities specified
+3. Check each entity against the compliance rules
+4. Return a structured report:
+   - Compliant items (brief)
+   - Violations (detailed, with rule references)
+   - Recommendations
+```
+
+### AGENT.md Format (frontmatter)
+
+```markdown
+---
+displayName: Vendor Lookup
+description: Enriches vendor profiles from CRM and public data
+tools: [shell_exec, load_knowledge]
+maxDepth: 1
+maxToolCalls: 10
+timeout: 30
+modelTier: simple
+---
+
+Query the vendor management system for the requested vendor.
+Cross-reference with public data sources.
+Return a standardized vendor profile with:
+- Company info, industry, size
+- Contract history
+- Risk indicators
+```
+
+## Configuration Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `displayName` | string | directory name | Human-readable name |
+| `description` | string | displayName | Short description |
+| `tools` | string[] | `[shell_exec, load_knowledge]` | Tools this agent can use |
+| `maxDepth` | number (1-4) | `1` | Dispatch depth (1 = no sub-agents) |
+| `maxToolCalls` | number (1-100) | `10` | Max tool calls per execution |
+| `timeout` | number (5-600) | `20` | Timeout in seconds |
+| `targetOutputMin` | number (50-2000) | `200` | Min output tokens |
+| `targetOutputMax` | number (50-2000) | `400` | Max output tokens |
+| `modelTier` | `simple \| default \| advanced` | — | Model selection tier |
+
+### Model Tiers
+
+| Tier | Use Case |
+|------|----------|
+| `simple` | Data gathering, API queries, structured extraction |
+| `default` | Standard reasoning |
+| `advanced` | Complex analysis, multi-step reasoning |
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `shell_exec` | Run scripts and commands |
+| `load_knowledge` | Pull KB documents into context |
+| `dispatch` | Delegate to sub-task agents (increases depth) |
+
+## How Subagents Are Dispatched
+
+The primary agent uses the `dispatch` tool to invoke subagents by name:
+
+```
+Primary Agent: "I need to check compliance for these transactions"
+
+dispatch({
+  agent: "compliance-checker",
+  query: "Check SOX compliance for transactions TXN-001 through TXN-050"
+})
+
+→ Compliance checker agent runs in isolated context
+→ Returns 200-500 token summary
+→ Primary agent continues reasoning with the result
+```
+
+Each subagent gets its own context window. Results are returned as clean summaries, keeping the primary agent's context focused on reasoning.
+
+## Context Isolation
+
+```
+Without subagents:                    With subagents:
+
+[System prompt: 2K]                   [System prompt: 2K]
+[User: "Check compliance"]           [User: "Check compliance"]
+[Compliance rules: 8K]  ← stuck      [Subagent result: 300 tokens]
+[Raw transactions: 5K]  ← stuck      [Subagent result: 250 tokens]
+Context: 20K+ and growing            Context: 3K — clean, focused
+```
+
+## Backward Compatibility
+
+Flat files `agents/main.md` and `agents/explore.md` still work as override files. If both a flat file and a subdirectory exist, the subdirectory takes precedence.

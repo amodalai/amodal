@@ -1,0 +1,552 @@
+---
+description: Custom tools with handler code — define parameters, confirmation rules, and business logic in tools/.
+---
+
+# Tools
+
+Tools are how the agent interacts with the world beyond conversation. They make API calls, run scripts, create tickets, send messages, and perform any action your product needs. The tool system has two layers: built-in tools that ship with every Amodal agent, and custom tools that you define for your specific business logic.
+
+Built-in tools handle the universal operations — making authenticated HTTP requests, loading knowledge, dispatching task agents, rendering widgets. You never define these; they are always available. Custom tools are where you encode your business-specific actions: creating a Jira ticket with your project's fields, calculating a weighted pipeline score with your formula, triggering a deploy through your CI system. The split is intentional. Built-in tools give the agent its core capabilities. Custom tools give it *your* capabilities.
+
+```
+tools/
+└── create_ticket/
+    ├── tool.json       ← (optional) metadata, parameters, confirmation
+    ├── handler.ts      ← handler code
+    ├── package.json    ← (optional) npm dependencies
+    └── requirements.txt ← (optional) Python dependencies
+```
+
+## Built-in Tools
+
+These are always available — you don't define them:
+
+| Tool | What It Does |
+|------|-------------|
+| **request** | HTTP calls to connected systems with automatic auth. Declares `intent: 'read' \| 'write'`. |
+| **shell_exec** | Run scripts in the configured sandbox environment. |
+| **load_knowledge** | Pull KB documents into context on demand. |
+| **propose_knowledge** | Propose knowledge base updates. |
+| **present** | Render widgets: entity-card, timeline, data-table, score-breakdown, metric, info-card, etc. |
+| **dispatch** | Delegate work to task agents with isolated context. |
+| **explore** | Query connected systems and gather context. |
+| **store_\*** | Auto-generated from [store definitions](/guide/stores). |
+
+Built-in tools are marked with `isBuiltin: true` and `source: 'built-in'`. They appear in the agent's tool list automatically.
+
+## An End-to-End Example
+
+To make tools concrete, let's walk through a realistic scenario: your agent discovers an issue during an investigation and needs to create a Jira ticket to track it.
+
+### The tool definition
+
+```
+tools/
+└── create_ops_ticket/
+    ├── tool.json
+    └── handler.ts
+```
+
+**tool.json:**
+
+```json
+{
+  "name": "create_ops_ticket",
+  "description": "Create a Jira issue in the OPS project. Use this when an investigation reveals an issue that needs tracking — infrastructure problems, security findings that need remediation, or follow-up tasks from incident response.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "summary": {
+        "type": "string",
+        "description": "A concise title for the issue (under 100 characters)"
+      },
+      "description": {
+        "type": "string",
+        "description": "Detailed description including context from the investigation"
+      },
+      "priority": {
+        "type": "string",
+        "enum": ["P1", "P2", "P3", "P4"],
+        "description": "P1 = outage/security incident, P2 = degraded service, P3 = needs attention this sprint, P4 = backlog"
+      },
+      "labels": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Labels to categorize the issue (e.g., 'security', 'deployment', 'performance')"
+      }
+    },
+    "required": ["summary", "priority"]
+  },
+  "confirm": "review",
+  "timeout": 30000,
+  "env": ["JIRA_API_TOKEN"]
+}
+```
+
+**handler.ts:**
+
+```typescript
+export default async (params, ctx) => {
+  // Build the Jira issue payload
+  const fields = {
+    project: { key: 'OPS' },
+    summary: params.summary,
+    priority: { name: params.priority },
+    issuetype: { name: 'Task' },
+    labels: params.labels || [],
+  }
+
+  // Add description if provided
+  if (params.description) {
+    fields.description = {
+      type: 'doc',
+      version: 1,
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'text', text: params.description }],
+      }],
+    }
+  }
+
+  // Create the issue via the Jira connection
+  const result = await ctx.request('jira', '/rest/api/3/issue', {
+    method: 'POST',
+    data: { fields },
+  })
+
+  // Return a clean summary — the agent doesn't need the full Jira response
+  return {
+    ticketId: result.key,
+    url: `https://yourcompany.atlassian.net/browse/${result.key}`,
+    summary: params.summary,
+    priority: params.priority,
+  }
+}
+```
+
+### What happens at runtime
+
+1. The agent is investigating an alert and discovers a misconfigured security group.
+2. It decides to create a tracking ticket. Because `create_ops_ticket` has `"confirm": "review"`, the agent presents the proposed action to the user: *"I'd like to create a P2 Jira ticket: 'Security group sg-0a1b2c3d allows unrestricted SSH access from 0.0.0.0/0'. Approve?"*
+3. The user approves. The runtime calls the handler, which makes the authenticated API call to Jira via the `jira` connection.
+4. The handler returns the ticket ID and URL. The agent reports: *"Created OPS-1847: Security group sg-0a1b2c3d allows unrestricted SSH access. [View in Jira](https://yourcompany.atlassian.net/browse/OPS-1847)"*
+
+The tool description is critical here — it tells the agent *when* to use the tool, not just what it does. "Use this when an investigation reveals an issue that needs tracking" gives the agent judgment about when ticket creation is appropriate.
+
+## Tool Types
+
+### HTTP Tool (Simple API Call)
+
+For straightforward API calls that don't need custom logic, you can define a tool with just `tool.json` and no handler. The runtime makes the request directly.
+
+```json
+{
+  "name": "get_deploy_status",
+  "description": "Check the status of a deployment in ArgoCD. Use this to verify whether a recent deploy succeeded, is still rolling out, or failed.",
+  "type": "http",
+  "connection": "argocd",
+  "endpoint": "/api/v1/applications/{{app_name}}",
+  "method": "GET",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "app_name": {
+        "type": "string",
+        "description": "The ArgoCD application name (e.g., 'payments-prod', 'auth-staging')"
+      }
+    },
+    "required": ["app_name"]
+  },
+  "confirm": false,
+  "responseShaping": {
+    "pick": ["status.sync.status", "status.health.status", "status.operationState.phase", "status.operationState.message"],
+    "rename": {
+      "status.sync.status": "syncStatus",
+      "status.health.status": "healthStatus",
+      "status.operationState.phase": "phase",
+      "status.operationState.message": "message"
+    }
+  }
+}
+```
+
+No handler code needed. The runtime substitutes `{{app_name}}` into the endpoint, makes the GET request via the `argocd` connection (which handles auth), and applies the response shaping to return a clean summary instead of the full ArgoCD response object.
+
+### Chain Tool (Multi-System)
+
+Chain tools call multiple systems in parallel and combine the results. Useful when a single logical action requires data from several places.
+
+```json
+{
+  "name": "get_service_overview",
+  "description": "Pull a complete overview of a service: deployment status, error metrics, and recent incidents. Use this when starting an investigation or when the user asks about a service's current state.",
+  "type": "chain",
+  "steps": [
+    {
+      "name": "deploy",
+      "connection": "argocd",
+      "endpoint": "/api/v1/applications/{{service_name}}",
+      "method": "GET"
+    },
+    {
+      "name": "metrics",
+      "connection": "datadog",
+      "endpoint": "/api/v1/query",
+      "method": "GET",
+      "params": {
+        "query": "avg:http.error_rate{service:{{service_name}}}",
+        "from": "{{now_minus_1h}}",
+        "to": "{{now}}"
+      }
+    },
+    {
+      "name": "incidents",
+      "connection": "pagerduty",
+      "endpoint": "/incidents",
+      "method": "GET",
+      "params": {
+        "service_ids[]": "{{pagerduty_service_id}}",
+        "since": "{{now_minus_24h}}",
+        "statuses[]": ["triggered", "acknowledged"]
+      }
+    }
+  ],
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "service_name": { "type": "string" },
+      "pagerduty_service_id": { "type": "string" }
+    },
+    "required": ["service_name"]
+  },
+  "confirm": false
+}
+```
+
+All three steps execute in parallel. The agent gets a single combined result with `deploy`, `metrics`, and `incidents` keys.
+
+### Function Tool (Custom Logic)
+
+Function tools have a handler that runs custom code. This is for anything that requires logic beyond a simple API call: calculations, data transformation, conditional workflows, or calls to systems that don't have a clean REST API.
+
+```typescript
+import { defineToolHandler } from '@amodalai/core'
+
+export default defineToolHandler({
+  description: 'Calculate the weighted pipeline value for a set of deals based on stage probability and engagement score. Use this for pipeline reviews or forecasting.',
+  parameters: {
+    type: 'object',
+    properties: {
+      deal_ids: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Salesforce opportunity IDs to include',
+      },
+      include_at_risk: {
+        type: 'boolean',
+        description: 'Whether to include deals flagged as at-risk (default: true)',
+      },
+    },
+    required: ['deal_ids'],
+  },
+  confirm: 'review',
+  timeout: 60000,
+  handler: async (params, ctx) => {
+    // Pull deal data from Salesforce
+    const query = `SELECT Id, Name, Amount, StageName, Probability, LastActivityDate
+                   FROM Opportunity
+                   WHERE Id IN ('${params.deal_ids.join("','")}')`
+
+    const result = await ctx.request('salesforce', '/services/data/v59.0/query', {
+      params: { q: query },
+    })
+
+    const deals = result.records.map((deal) => {
+      const daysSinceActivity = deal.LastActivityDate
+        ? Math.floor((Date.now() - new Date(deal.LastActivityDate).getTime()) / 86400000)
+        : 999
+
+      // Engagement decay: reduce probability if the deal has gone quiet
+      const engagementMultiplier = daysSinceActivity <= 7 ? 1.0
+        : daysSinceActivity <= 14 ? 0.85
+        : daysSinceActivity <= 30 ? 0.6
+        : 0.3
+
+      const adjustedProbability = (deal.Probability / 100) * engagementMultiplier
+      const weightedValue = deal.Amount * adjustedProbability
+
+      return {
+        id: deal.Id,
+        name: deal.Name,
+        amount: deal.Amount,
+        stage: deal.StageName,
+        rawProbability: deal.Probability,
+        daysSinceActivity,
+        engagementMultiplier,
+        adjustedProbability: Math.round(adjustedProbability * 100),
+        weightedValue: Math.round(weightedValue),
+        atRisk: daysSinceActivity > 14 || deal.Probability < 30,
+      }
+    })
+
+    const included = params.include_at_risk !== false
+      ? deals
+      : deals.filter((d) => !d.atRisk)
+
+    return {
+      totalWeightedValue: included.reduce((sum, d) => sum + d.weightedValue, 0),
+      dealCount: included.length,
+      atRiskCount: deals.filter((d) => d.atRisk).length,
+      deals: included,
+    }
+  },
+})
+```
+
+The handler does real computation — engagement decay scoring, probability adjustments — that would be unreliable if left to the LLM. Domain computation belongs in tool code, not in the agent's reasoning.
+
+## Custom Tool Definition
+
+### Option A: tool.json + handler.ts
+
+**tool.json:**
+
+```json
+{
+  "name": "create_ticket",
+  "description": "Create a Jira issue in the ops project",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "summary": { "type": "string" },
+      "priority": { "type": "string", "enum": ["P1", "P2", "P3", "P4"] }
+    },
+    "required": ["summary"]
+  },
+  "confirm": "review",
+  "timeout": 30000,
+  "env": ["JIRA_API_TOKEN"]
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | directory name | Tool name (snake_case) |
+| `description` | string | **required** | Shown to the LLM |
+| `parameters` | JSON Schema | `{}` | Input parameters |
+| `confirm` | `false \| true \| "review" \| "never"` | `false` | Confirmation tier |
+| `timeout` | number | `30000` | Timeout in ms |
+| `env` | string[] | `[]` | Allowed env var names |
+| `responseShaping` | object | — | Transform response before returning |
+| `sandbox.language` | string | `"typescript"` | Handler language |
+
+**handler.ts:**
+
+```typescript
+export default async (params, ctx) => {
+  const result = await ctx.request('jira', '/rest/api/3/issue', {
+    method: 'POST',
+    data: {
+      fields: {
+        project: { key: 'OPS' },
+        summary: params.summary,
+        priority: { name: params.priority },
+        issuetype: { name: 'Task' },
+      },
+    },
+  })
+  return { ticketId: result.key, url: result.self }
+}
+```
+
+### Option B: defineToolHandler (single file)
+
+```typescript
+import { defineToolHandler } from '@amodalai/core'
+
+export default defineToolHandler({
+  description: 'Calculate weighted pipeline value',
+  parameters: {
+    type: 'object',
+    properties: {
+      deal_ids: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['deal_ids'],
+  },
+  confirm: 'review',
+  timeout: 60000,
+  env: ['STRIPE_API_KEY'],
+  handler: async (params, ctx) => {
+    const deals = await ctx.request('crm', '/deals', {
+      params: { ids: params.deal_ids.join(',') },
+    })
+    return { total: deals.reduce((sum, d) => sum + d.amount, 0) }
+  },
+})
+```
+
+## Response Shaping
+
+API responses are often verbose — hundreds of fields when the agent only needs five. Response shaping transforms the raw response before it reaches the agent, keeping context clean and token usage low.
+
+Define response shaping in `tool.json`:
+
+```json
+{
+  "name": "get_user_details",
+  "description": "Look up a user's profile, role, and recent login activity from Okta.",
+  "type": "http",
+  "connection": "okta",
+  "endpoint": "/api/v1/users/{{user_id}}",
+  "method": "GET",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "user_id": { "type": "string" }
+    },
+    "required": ["user_id"]
+  },
+  "confirm": false,
+  "responseShaping": {
+    "pick": [
+      "profile.firstName",
+      "profile.lastName",
+      "profile.email",
+      "profile.department",
+      "status",
+      "lastLogin",
+      "created"
+    ],
+    "rename": {
+      "profile.firstName": "firstName",
+      "profile.lastName": "lastName",
+      "profile.email": "email",
+      "profile.department": "department"
+    },
+    "template": "User: {{firstName}} {{lastName}} ({{email}})\nDepartment: {{department}}\nStatus: {{status}}\nLast Login: {{lastLogin}}\nAccount Created: {{created}}"
+  }
+}
+```
+
+Without shaping, the Okta user response might be 2,000+ tokens of nested JSON including password policies, MFA factors, embedded links, and internal metadata. With shaping, the agent gets a clean 50-token summary with exactly the fields it needs for investigation.
+
+The `pick` field selects specific paths from the response. The `rename` field flattens nested keys. The optional `template` field formats the output as a string instead of JSON — useful when the agent just needs to read the data, not process it programmatically.
+
+## Confirmation Tiers in Practice
+
+Every tool has a confirmation level that determines whether the agent can call it freely or needs user approval. This is the safety model for write operations.
+
+| Tier | Value | Behavior |
+|------|-------|----------|
+| **Auto-approve** | `false` | Agent calls freely. No user interaction. |
+| **Confirm** | `true` | Agent shows what it will do and waits for user approval. |
+| **Review** | `"review"` | Agent shows full parameters and waits for explicit review. |
+| **Never** | `"never"` | Tool is blocked from agent use (only callable by other tools). |
+
+Here is how this plays out in a realistic investigation:
+
+**Scenario:** The agent is investigating elevated error rates on the payments service.
+
+1. **Read operations auto-approve.** The agent queries Datadog for metrics (`request` with `intent: 'read'`), pulls deploy history from ArgoCD, checks PagerDuty for related incidents. All of these are reads — they happen instantly with no user interaction. The investigation flows smoothly.
+
+2. **Single writes confirm.** The agent determines that a rollback is warranted and wants to trigger it via ArgoCD. The rollback tool has `"confirm": true`. The agent presents: *"I'd like to trigger a rollback of payments-service from v2.14.3 to v2.14.2 via ArgoCD. This will start a rolling deployment. Approve?"* The user reviews and confirms.
+
+3. **Sensitive writes require review.** After the rollback, the agent wants to create a Jira ticket and post a summary to the #incidents Slack channel. Both tools have `"confirm": "review"`. The agent shows the full ticket payload and Slack message content for the user to review before sending.
+
+4. **Bulk operations get extra scrutiny.** If the agent needed to update 12 Jira tickets (adding a label to all tickets related to the incident), the runtime requires itemized confirmation for bulk writes (more than 5 items). The user sees each ticket that will be modified and approves the batch.
+
+5. **Dangerous operations are blocked.** A `delete_deployment` tool might have `"confirm": "never"` — the agent cannot call it at all during interactive sessions. It exists only for use by other tools in controlled workflows.
+
+The progression is natural: reads are fast, writes are confirmed, bulk writes are reviewed individually, and destructive operations are gated. The user stays in control without being interrupted for every API call.
+
+## Handler Context
+
+The `ctx` object available in every handler:
+
+| Method | Description |
+|--------|-------------|
+| `ctx.request(connection, endpoint, options?)` | Make an authenticated API call |
+| `ctx.exec(command, options?)` | Run a shell command |
+| `ctx.env(name)` | Read an allowed env var |
+| `ctx.log(message)` | Log a message |
+| `ctx.user` | User info: `{ roles: string[] }` |
+| `ctx.signal` | AbortSignal for cancellation |
+
+### ctx.request in practice
+
+The `request` method handles authentication automatically based on the connection config. You specify the connection name and the endpoint path — the runtime resolves the base URL, attaches credentials, and handles retries.
+
+```typescript
+export default async (params, ctx) => {
+  // Simple GET — auth is handled by the 'datadog' connection config
+  const metrics = await ctx.request('datadog', '/api/v1/query', {
+    params: {
+      query: `avg:system.cpu.user{host:${params.hostname}}`,
+      from: params.startTime,
+      to: params.endTime,
+    },
+  })
+
+  // POST with a body
+  const incident = await ctx.request('pagerduty', '/incidents', {
+    method: 'POST',
+    data: {
+      incident: {
+        type: 'incident',
+        title: params.title,
+        service: { id: params.serviceId, type: 'service_reference' },
+        urgency: params.urgency,
+      },
+    },
+  })
+
+  return {
+    cpuAverage: metrics.series[0]?.pointlist?.map(([ts, val]) => val) || [],
+    incidentId: incident.incident.id,
+  }
+}
+```
+
+### ctx.exec for shell commands
+
+Use `ctx.exec` for operations that don't map to a REST API — data processing, file manipulation, or calling CLI tools.
+
+```typescript
+export default async (params, ctx) => {
+  // Run a database query via CLI
+  const result = await ctx.exec(
+    `psql "${ctx.env('DATABASE_URL')}" -c "SELECT count(*) as failed_jobs FROM jobs WHERE status = 'failed' AND created_at > now() - interval '1 hour'" --json`,
+    { timeout: 10000 }
+  )
+
+  const parsed = JSON.parse(result.stdout)
+  return { failedJobsLastHour: parsed[0].failed_jobs }
+}
+```
+
+### ctx.env for secrets
+
+Only environment variables listed in the tool's `env` array are accessible. This prevents tools from reading secrets they should not have access to.
+
+```typescript
+// tool.json has: "env": ["SLACK_WEBHOOK_URL"]
+export default async (params, ctx) => {
+  const webhookUrl = ctx.env('SLACK_WEBHOOK_URL')
+
+  // Use the webhook directly (not through a connection)
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: params.message,
+      channel: params.channel,
+    }),
+  })
+
+  return { sent: response.ok }
+}
+```
+
+## Naming Convention
+
+Tool names must be **snake_case**: lowercase letters, digits, and underscores, starting with a letter. Example: `create_ticket`, `fetch_deals`, `calculate_risk`.
