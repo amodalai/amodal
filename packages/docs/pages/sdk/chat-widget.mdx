@@ -1,0 +1,87 @@
+---
+description: "@amodalai/chat-widget — standalone embeddable chat widget with SSE streaming and theming."
+---
+
+# @amodalai/chat-widget
+
+A standalone, embeddable chat widget for adding agent-powered chat to any web application. Lighter than `@amodalai/react` — just the chat interface with no extra components.
+
+## Installation
+
+```bash
+npm install @amodalai/chat-widget
+```
+
+## Quick Start
+
+```tsx
+import { ChatWidget } from '@amodalai/chat-widget'
+import '@amodalai/chat-widget/style.css'
+
+function App() {
+  return (
+    <ChatWidget
+      apiUrl="http://localhost:3847"
+      tenantId="tenant_123"
+      position="floating"
+    />
+  )
+}
+```
+
+## Positions
+
+| Position | Behavior |
+|----------|----------|
+| `inline` | Renders in-place within your layout |
+| `floating` | Floating button that expands into a chat panel |
+| `right` | Fixed panel on the right side |
+| `bottom` | Fixed panel at the bottom |
+
+## Callbacks
+
+```tsx
+<ChatWidget
+  apiUrl="http://localhost:3847"
+  onToolCall={(tool, args) => {
+    console.log(`Agent called: ${tool}`, args)
+  }}
+  onKBProposal={(proposal) => {
+    console.log('Knowledge proposal:', proposal)
+  }}
+/>
+```
+
+## SSE Events
+
+The widget handles these event types from the runtime:
+
+| Event | Description |
+|-------|-------------|
+| `text` | Streaming text output |
+| `tool_call` | Tool invocation |
+| `skill_activated` | Skill activation |
+| `kb_proposal` | Knowledge base update proposal |
+| `ConfirmationRequired` | Write operation needs approval |
+
+## Theming
+
+CSS custom properties — no Tailwind dependency:
+
+```css
+.pcw-widget {
+  --pcw-primary: #6e56cf;
+  --pcw-background: #ffffff;
+  --pcw-text: #1a1a1a;
+  --pcw-border: #e5e5e5;
+  --pcw-radius: 12px;
+}
+```
+
+## Bundle Size
+
+| Format | Size |
+|--------|------|
+| ESM | ~18KB |
+| UMD | ~13KB |
+| CSS | ~6KB |

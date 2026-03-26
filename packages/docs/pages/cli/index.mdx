@@ -1,0 +1,56 @@
+---
+description: The amodal CLI — commands for initializing, developing, and testing AI agents.
+---
+
+# CLI
+
+The `amodal` CLI is the primary interface for building, running, and testing agents. Install it globally or use via `npx`:
+
+```bash
+npm install -g @amodalai/cli
+# or
+npx amodal <command>
+```
+
+## Commands
+
+### Project
+
+| Command | Description |
+|---------|-------------|
+| [`init`](/cli/init) | Scaffold a new agent project |
+| [`dev`](/cli/dev) | Start local dev server with hot reload |
+| `validate` | Check config for errors |
+| `inspect` | Show compiled context with token counts |
+| `build-manifest-types` | Generate TypeScript types from manifest |
+
+### Connections & Packages
+
+| Command | Description |
+|---------|-------------|
+| [`connect`](/cli/connect) | Add a connection (plugin or custom) |
+| [`sync`](/cli/connect) | Sync API specs from remote sources |
+| `install` | Install marketplace packages |
+| `uninstall` | Remove packages |
+| `list` | List installed items |
+| `update` | Update packages |
+| `diff` | Show package changes |
+| `search` | Search the marketplace |
+| `publish` | Publish to the registry |
+
+### Runtime
+
+| Command | Description |
+|---------|-------------|
+| [`chat`](/cli/chat) | Interactive terminal chat with your agent |
+| `serve` | Run from a snapshot file |
+| `test-query` | Fire a one-off query against the agent |
+
+### Testing & Evaluation
+
+| Command | Description |
+|---------|-------------|
+| [`eval`](/cli/eval) | Run evaluation suites |
+| `experiment` | Compare models, prompts, or configs |
+| `test-query` | Test a single query |
+

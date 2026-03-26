@@ -1,0 +1,59 @@
+---
+description: amodal chat — interactive terminal chat UI for talking to your agent.
+---
+
+# amodal chat
+
+Open an interactive terminal chat with your agent. The chat UI is a React-based TUI built with Ink.
+
+```bash
+amodal chat
+```
+
+## Modes
+
+### Local mode (default)
+
+Boots a local runtime server from your repo and connects to it:
+
+```bash
+amodal chat
+```
+
+### Remote mode
+
+Connect to an already-running server:
+
+```bash
+amodal chat --url http://localhost:3847
+amodal chat --url https://my-agent.amodal.ai
+```
+
+### Snapshot mode
+
+Load from a snapshot file (built with `amodal build`):
+
+```bash
+amodal chat --config snapshot.json
+```
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--url <remote>` | Connect to remote server |
+| `--config <file>` | Load from snapshot |
+| `--tenant-id <id>` | Tenant identifier |
+| `--port <number>` | Local server port |
+| `--resume <id\|latest>` | Resume a previous session |
+| `--fullscreen` | Use alternate terminal buffer |
+
+## Features
+
+- **Streaming responses** — see the agent think in real-time
+- **Tool call display** — watch tool invocations as they happen
+- **Skill activation** — see which reasoning framework is active
+- **Session resume** — pick up where you left off
+- **Session browser** — navigate previous conversations
+- **Markdown rendering** — formatted output in the terminal
+- **Responsive layout** — adapts to terminal size

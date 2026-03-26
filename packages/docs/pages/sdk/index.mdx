@@ -1,0 +1,58 @@
+---
+description: React SDK for embedding Amodal agents — @amodalai/react components and @amodalai/chat-widget.
+---
+
+# React SDK
+
+Embed Amodal agents in your product with two React packages:
+
+- **[@amodalai/react](/sdk/react)** — High-level components: `AmodalProvider`, `AmodalChat`, `AmodalAction`, and hooks for common agent interactions.
+- **[@amodalai/chat-widget](/sdk/chat-widget)** — Standalone chat widget with SSE streaming, theming, and callbacks.
+
+## Quick Start
+
+```bash
+npm install @amodalai/react
+```
+
+```tsx
+import { AmodalProvider, AmodalChat } from '@amodalai/react'
+
+function App() {
+  return (
+    <AmodalProvider apiUrl="http://localhost:3847">
+      <AmodalChat />
+    </AmodalProvider>
+  )
+}
+```
+
+## Core SDK
+
+For server-side or non-React usage, the `@amodalai/core` package provides the full runtime:
+
+```typescript
+import { AgentSDK } from '@amodalai/core'
+
+const sdk = new AgentSDK({
+  repoPath: './my-agent',
+})
+
+await sdk.initialize()
+const config = sdk.getConfig()
+```
+
+### Runtime Capabilities
+
+The SDK provides out of the box:
+
+- **ReAct loop** with configurable max turns and timeout
+- **Smart compaction** — structured state snapshots across context compression
+- **Loop detection** — pattern matching + LLM-based detection
+- **Tool output masking** — backward-scan FIFO that prunes bulky outputs
+- **Task dispatch** — parallel sub-agent execution with depth limiting
+- **Knowledge loading** — on-demand KB documents
+- **Role-based filtering** — tools and skills scoped by role
+- **Audit logging** — every tool call and session logged
+- **SSE streaming** — real-time events for web clients
+- **MCP support** — Model Context Protocol client

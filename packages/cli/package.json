@@ -1,0 +1,55 @@
+{
+  "name": "@amodalai/cli",
+  "version": "0.1.0",
+  "description": "Amodal CLI",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/amodalai/amodal.git", "directory": "packages/cli" },
+  "homepage": "https://github.com/amodalai/amodal",
+  "bugs": { "url": "https://github.com/amodalai/amodal/issues" },
+  "type": "module",
+  "main": "dist/src/main.js",
+  "bin": {
+    "amodal": "dist/src/main.js"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@amodalai/core": "workspace:*",
+    "@amodalai/runtime": "workspace:*",
+    "@google/gemini-cli": "0.34.0",
+    "chalk": "^5.6.2",
+    "ink": "^6.8.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "marked": "^17.0.4",
+    "marked-terminal": "^7.3.0",
+    "open": "^10.1.0",
+    "prompts": "^2.4.2",
+    "react": "^19.2.4",
+    "semver": "^7.6.0",
+    "yargs": "^17.7.2",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "@amodalai/runtime-app": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@amodalai/runtime-app": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/prompts": "^2.4.9",
+    "@types/react": "^19.2.14",
+    "@types/semver": "^7.7.0",
+    "@types/yargs": "^17.0.32",
+    "stripe": "^20.4.0",
+    "typescript": "^5.3.3",
+    "vitest": "^3.1.1"
+  }
+}

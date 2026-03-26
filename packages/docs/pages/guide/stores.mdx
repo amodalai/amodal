@@ -1,0 +1,139 @@
+---
+description: Stores provide persistent, typed data storage for agents — define schemas in stores/ and the runtime auto-generates tools.
+---
+
+# Stores
+
+Stores give your agent persistent, typed data storage. Define a schema in `stores/` and the runtime auto-generates CRUD tools the agent can use.
+
+## Store Definition
+
+Each store is a JSON file in `stores/`:
+
+```json
+{
+  "name": "active-alerts",
+  "entity": {
+    "name": "ClassifiedAlert",
+    "key": "{event_id}",
+    "schema": {
+      "event_id": { "type": "string" },
+      "title": { "type": "string" },
+      "severity": {
+        "type": "enum",
+        "values": ["P1", "P2", "P3", "P4"]
+      },
+      "confidence": {
+        "type": "number",
+        "min": 0,
+        "max": 1
+      },
+      "timestamp": { "type": "datetime" },
+      "metadata": {
+        "type": "object",
+        "fields": {
+          "category": { "type": "string" },
+          "tags": { "type": "array", "item": { "type": "string" } }
+        }
+      },
+      "relatedAlert": {
+        "type": "ref",
+        "store": "active-alerts"
+      },
+      "notes": {
+        "type": "string",
+        "nullable": true
+      }
+    }
+  },
+  "ttl": 86400,
+  "ttl_conditional": {
+    "default": 86400,
+    "override": [
+      { "condition": "severity IN ['P1', 'P2']", "ttl": 300 }
+    ]
+  },
+  "failure": {
+    "mode": "partial",
+    "retries": 3,
+    "backoff": "exponential",
+    "deadLetter": true
+  },
+  "history": { "versions": 3 },
+  "trace": true
+}
+```
+
+## Field Types
+
+| Type | Description | Extra Fields |
+|------|-------------|-------------|
+| `string` | Text | — |
+| `number` | Numeric | `min`, `max` |
+| `boolean` | True/false | — |
+| `datetime` | ISO 8601 timestamp | — |
+| `enum` | One of predefined values | `values: string[]` |
+| `array` | List of items | `item: FieldDefinition` |
+| `object` | Nested structure | `fields: Record<string, FieldDefinition>` |
+| `ref` | Reference to another store | `store: string` |
+
+Any field can set `nullable: true`.
+
+## TTL
+
+Simple TTL (seconds):
+```json
+{ "ttl": 86400 }
+```
+
+Conditional TTL:
+```json
+{
+  "ttl_conditional": {
+    "default": 86400,
+    "override": [
+      { "condition": "severity IN ['P1', 'P2']", "ttl": 300 }
+    ]
+  }
+}
+```
+
+## Failure Handling
+
+| Mode | Behavior |
+|------|----------|
+| `partial` | Continue on individual write failures |
+| `all-or-nothing` | Rollback entire batch on first failure |
+| `skip` | Skip failed writes silently |
+
+## Auto-Generated Tools
+
+Store names (kebab-case) become tool names (snake_case with `store_` prefix):
+
+- `active-alerts` → `store_active_alerts`
+- `deal-health` → `store_deal_health`
+
+The agent uses these tools to get, put, list, delete, and query history on store documents.
+
+## Storage Backend
+
+Configured in `amodal.json`:
+
+```json
+{
+  "stores": {
+    "backend": "pglite",
+    "dataDir": ".amodal/store-data"
+  }
+}
+```
+
+| Backend | Description |
+|---------|-------------|
+| `pglite` | SQLite-compatible, in-memory or file-backed (default) |
+| `postgres` | PostgreSQL via `postgresUrl` |
+
+## History & Tracing
+
+- `"history": { "versions": 3 }` — retain 3 previous versions of each document
+- `"trace": true` — store reasoning traces alongside documents

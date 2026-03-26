@@ -1,0 +1,60 @@
+---
+description: amodal dev — start a local development server with hot reload and file watching.
+---
+
+# amodal dev
+
+Start a local runtime server for development. The server watches your repo config files and hot-reloads on every change.
+
+```bash
+amodal dev
+```
+
+## Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port` | `3847` | Server port |
+| `--host` | `localhost` | Server host |
+
+## What It Does
+
+1. Loads your repo configuration from the project root
+2. Starts an Express server with SSE streaming
+3. Watches all config files with 300ms debounce
+4. Manages sessions with TTL-based cleanup
+
+## Endpoints
+
+The dev server exposes:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/chat` | Send a message, receive SSE stream |
+| `POST` | `/task` | Start a background task |
+| `GET` | `/task/:id` | Get task status |
+| `GET` | `/task/:id/stream` | Stream task output |
+| `GET` | `/inspect/context` | View compiled context with token counts |
+| `GET` | `/health` | Health check |
+
+## SSE Events
+
+The chat endpoint returns a Server-Sent Events stream with these event types:
+
+| Event | Description |
+|-------|-------------|
+| `text` | Assistant text output |
+| `tool_call` | Tool invocation |
+| `ExploreStart` / `ExploreEnd` | System exploration phase |
+| `PlanMode` | Planning phase |
+| `skill_activated` | Skill activation |
+| `FieldScrub` | Sensitive field redaction |
+| `ConfirmationRequired` | Write operation needs approval |
+| `kb_proposal` | Knowledge base update proposal |
+
+## Hot Reload
+
+Edit any config file and the runtime picks up changes immediately:
+- Connection specs, skills, knowledge, tools, automations
+- Config changes (provider, model, etc.)
+- No server restart needed

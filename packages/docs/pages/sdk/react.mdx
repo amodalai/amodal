@@ -1,0 +1,69 @@
+---
+description: "@amodalai/react — high-level React components and hooks for embedding agent interactions."
+---
+
+# @amodalai/react
+
+High-level React components for embedding Amodal agents in your product. Provides a provider, chat UI, action components, and hooks.
+
+## Installation
+
+```bash
+npm install @amodalai/react
+```
+
+## Components
+
+### AmodalProvider
+
+Wraps your app with agent context:
+
+```tsx
+import { AmodalProvider } from '@amodalai/react'
+
+<AmodalProvider
+  apiUrl="http://localhost:3847"
+  tenantId="tenant_123"
+>
+  {children}
+</AmodalProvider>
+```
+
+### AmodalChat
+
+Full chat interface:
+
+```tsx
+import { AmodalChat } from '@amodalai/react'
+
+<AmodalChat />
+```
+
+### AmodalAction
+
+Trigger agent actions from buttons or other UI elements:
+
+```tsx
+import { AmodalAction } from '@amodalai/react'
+
+<AmodalAction prompt="Summarize today's alerts">
+  Get Summary
+</AmodalAction>
+```
+
+## Hooks
+
+| Hook | Description |
+|------|-------------|
+| `useAmodalBrief` | Get a quick agent summary on a topic |
+| `useAmodalInsight` | Request a detailed analysis |
+| `useAmodalTask` | Start and track background tasks |
+| `useAmodalQuery` | Run a query and get structured results |
+
+## Confirmation & Review
+
+Built-in confirmation and review UIs for write operations. When the agent needs user approval, these components render automatically within the chat flow.
+
+## Bundle Size
+
+~26.7KB ESM

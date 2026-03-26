@@ -1,0 +1,45 @@
+---
+description: Amodal — build domain-specific AI agents from your repo. Define connections, skills, knowledge, and tools as code.
+---
+
+# Amodal [Agent Runtime Platform]
+
+## Build agents from your repo
+
+### What is Amodal?
+
+Amodal is an open-source agent runtime configured by a git repo of markdown and JSON. Rather than building agent infrastructure from scratch, SaaS products connect their APIs, add domain knowledge, and define skills — and the platform provides the reasoning engine, context management, and learning infrastructure underneath. The core loop is **explore → plan → execute**: the agent gathers data, reasons about it, and takes action, compounding knowledge with every interaction. You write configuration files. Amodal turns them into a production-grade AI agent.
+
+### How it works
+
+An Amodal project is a folder of plain files that describe what your agent knows, what it can access, and how it should think:
+
+- **Connections** define API access. Each connection is a directory with a spec, auth config, and natural-language documentation that teaches the agent what endpoints exist and when to use them.
+- **Skills** are markdown files that encode expert reasoning — investigation methodologies, triage procedures, escalation logic. They activate automatically based on the user's question.
+- **Knowledge** is persistent domain context: environment details, team structures, historical patterns, baseline metrics. The agent loads it on demand and proposes updates as it learns.
+- **Tools** are custom actions beyond the built-in set — HTTP calls, multi-system chains, or arbitrary function handlers with confirmation rules and rate limits.
+
+When you run `amodal dev`, the runtime compiles all of these into an optimized context window and starts a ReAct loop against any supported LLM (Anthropic, OpenAI, Google, Bedrock). The agent reasons about user questions, dispatches task agents for data gathering (keeping its own context clean), and returns structured answers. Every interaction can feed knowledge back into the system, so the agent gets smarter over time.
+
+```bash
+npx amodal init                          # scaffold a project
+amodal connect slack                     # add Slack API access
+echo "# Triage\n..." > skills/triage.md  # define a reasoning skill
+amodal dev                               # start the runtime
+amodal chat                              # talk to your agent
+```
+
+### Build
+
+- **[Quick Start](/quickstart/create-agent)** — Initialize a project, connect an API, and chat with your agent in 5 minutes.
+- **[CLI Reference](/cli)** — `init`, `dev`, `chat`, `eval`, `sync`, and 30+ more commands.
+- **[Connections](/guide/connections)** — 20+ pre-built plugins for Slack, GitHub, Stripe, Datadog, Jira, and more.
+- **[Skills](/guide/skills)** — Author expert reasoning frameworks in Markdown.
+- **[Tools](/guide/tools)** — Define custom HTTP, chain, and function tools.
+- **[Knowledge](/guide/knowledge-base)** — Persistent domain context that grows with use.
+
+### Run & Embed
+
+- **[Providers](/guide/providers)** — Anthropic, OpenAI, Google Gemini, AWS Bedrock, Azure OpenAI with automatic failover.
+- **[React SDK](/sdk)** — Embed agents in your product with `@amodalai/react` and `@amodalai/chat-widget`.
+- **[Architecture](/learn/architecture/core-loop)** — The explore-plan-execute loop, context isolation, and multi-agent dispatch.

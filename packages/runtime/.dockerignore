@@ -1,0 +1,8 @@
+node_modules
+dist
+*.test.ts
+*.test.js
+test-setup.ts
+vitest.config.ts
+tsconfig.json
+.env*

@@ -1,0 +1,70 @@
+---
+description: amodal connect & sync — add API connections and keep specs in sync.
+---
+
+# amodal connect & sync
+
+## connect
+
+Add a connection to your agent. Connections give the agent API access and documentation for external systems.
+
+```bash
+# Install a pre-built plugin
+amodal connect slack
+amodal connect datadog
+amodal connect github
+
+# List available plugins
+amodal search --type connection
+```
+
+This creates a directory in `connections/` with the plugin's spec and access configuration.
+
+## sync
+
+Sync API specifications from remote sources. Useful for custom APIs or keeping specs up to date.
+
+```bash
+# Sync from an OpenAPI spec
+amodal sync --from https://api.example.com/openapi.json
+
+# Sync from a GraphQL schema
+amodal sync --from https://api.example.com/graphql
+
+# Check for drift without updating (useful in CI)
+amodal sync --check
+```
+
+### Drift Detection
+
+The `--check` flag compares your local specs against the remote source and reports differences without making changes. This is useful in CI pipelines to catch API changes early.
+
+## Connection Structure
+
+Each connection directory contains:
+
+```
+connections/slack/
+├── spec.json       ← endpoints, auth config, entity list
+├── access.json     ← field restrictions, action tiers, scoping rules
+└── credentials     ← (gitignored) API keys, tokens
+```
+
+### spec.json
+
+Machine-readable configuration:
+- **source** — API base URL and type
+- **auth** — Authentication method (bearer, OAuth, API key)
+- **entities** — Available API entities and endpoints
+- **sync** — Sync configuration and filters
+
+### access.json
+
+Security rules:
+- **Field restrictions** — which fields are readable/writable
+- **Action tiers** — confirm/review/never for different operations
+- **Scoping rules** — tenant-level access control
+
+## Available Plugins
+
+50+ pre-built connection plugins are available. Browse them in the [Amodal Marketplace](https://www.amodalai.com/marketplace) or see [Connections](/guide/connections) for setup details.

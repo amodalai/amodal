@@ -1,0 +1,165 @@
+---
+description: "Pages are React components in pages/ that render custom UI views — dashboards, briefs, and investigation screens powered by store data."
+---
+
+# Pages
+
+Pages are **React components** that render custom UI views in the runtime app. They live in `pages/` and use SDK hooks to read from stores, invoke skills, and display structured data. This is how you build dashboards, morning briefs, investigation views, and other composed screens.
+
+```
+pages/
+├── ops-dashboard.tsx
+├── morning-brief.tsx
+└── deal-detail.tsx
+```
+
+## Page Format
+
+Each page file exports a `page` config object and a default React component:
+
+```tsx
+import { useStoreList } from '@amodalai/react'
+
+export const page = {
+  name: 'ops-dashboard',
+  icon: 'shield',
+  description: 'Facility overview — zones, alerts, and device status',
+}
+
+export default function OpsDashboard() {
+  const { data: alerts } = useStoreList('classified-alerts', {
+    sort: { field: 'timestamp', order: 'desc' },
+    limit: 20,
+  })
+
+  const { data: zones } = useStoreList('zone-status')
+
+  return (
+    <div>
+      <h1>Operations Dashboard</h1>
+      <AlertsTable alerts={alerts} />
+      <ZoneMap zones={zones} />
+    </div>
+  )
+}
+```
+
+## Page Config
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | filename | Page identifier and URL slug |
+| `icon` | string | — | Lucide icon name (e.g., `'shield'`, `'monitor'`, `'bar-chart'`) |
+| `description` | string | — | Shown in sidebar tooltip |
+| `context` | `Record<string, string>` | — | Route params (e.g., `{ dealId: 'string' }`) |
+| `hidden` | boolean | `false` | If true, excluded from sidebar |
+
+## SDK Hooks
+
+Pages use hooks from `@amodalai/react` to access agent data:
+
+| Hook | Description |
+|------|-------------|
+| `useStoreList(store, options)` | Fetch multiple documents with filtering, sorting, and pagination |
+| `useStore(store, key)` | Fetch a single document by key |
+| `useSkillAction(skill, options)` | Invoke a skill from the page |
+
+### useStoreList
+
+```tsx
+const { data, loading, error, refresh } = useStoreList('classified-alerts', {
+  filter: { severity: 'P1' },
+  sort: { field: 'timestamp', order: 'desc' },
+  limit: 50,
+  refreshInterval: 10000,  // auto-refresh every 10s
+})
+```
+
+### useStore
+
+```tsx
+const { data: alert } = useStore('classified-alerts', alertId)
+```
+
+### useSkillAction
+
+```tsx
+const { invoke, loading } = useSkillAction('triage')
+
+const handleTriage = () => {
+  invoke({ query: 'Triage the latest alerts' })
+}
+```
+
+## Sidebar Integration
+
+Pages appear in the runtime app sidebar under a **Pages** section. The name is auto-formatted from the filename (`ops-dashboard` → "Ops Dashboard"). Click a page to navigate to `/pages/{pageName}`.
+
+Hidden pages (`hidden: true`) are excluded from the sidebar but still accessible via direct URL — useful for detail pages navigated to from other pages.
+
+## Context Pages
+
+Pages with `context` params are detail views that receive route parameters:
+
+```tsx
+export const page = {
+  name: 'deal-detail',
+  icon: 'file-text',
+  context: { dealId: 'string' },
+  hidden: true,  // navigated to, not shown in sidebar
+}
+
+export default function DealDetail({ dealId }: { dealId: string }) {
+  const { data: deal } = useStore('deals', dealId)
+  // ...
+}
+```
+
+## Entity Pages vs. Composed Pages
+
+- **Entity pages** are auto-generated from store definitions — list and detail views come for free without writing page files
+- **Composed pages** are what you define in `pages/` — custom views that combine data from multiple stores with custom layout and logic
+
+Only composed pages need explicit page files. If you just need a list/detail view of a single store, the runtime generates that automatically.
+
+## Hot Reload
+
+During `amodal dev`, changes to page files trigger hot module replacement (HMR) via the Vite plugin. Edit a page and see changes instantly in the browser.
+
+## Example: Surveillance Dashboard
+
+```tsx
+import { useStoreList } from '@amodalai/react'
+
+export const page = {
+  name: 'ops-dashboard',
+  icon: 'shield',
+  description: 'Facility surveillance overview',
+}
+
+export default function OpsDashboard() {
+  const { data: alerts } = useStoreList('classified-alerts', {
+    sort: { field: 'confidence', order: 'desc' },
+    limit: 10,
+  })
+  const { data: zones } = useStoreList('zone-status')
+  const { data: devices } = useStoreList('device-profiles')
+
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <section>
+        <h2>Active Alerts</h2>
+        {alerts?.map((a) => (
+          <AlertCard key={a.key} alert={a.payload} />
+        ))}
+      </section>
+      <section>
+        <h2>Zone Status</h2>
+        {zones?.map((z) => (
+          <ZoneCard key={z.key} zone={z.payload} />
+        ))}
+      </section>
+    </div>
+  )
+}
+```

@@ -1,0 +1,41 @@
+---
+description: amodal init — scaffold a new agent project.
+---
+
+# amodal init
+
+Initialize a new Amodal agent project. Creates the config file, directory structure, and starter files.
+
+```bash
+amodal init
+```
+
+## What It Creates
+
+```
+my-agent/
+├── amodal.json         ← agent name, provider, model
+├── skills/             ← starter skill template
+├── knowledge/          ← sample knowledge document
+├── connections/        ← empty, ready for connections
+├── automations/        ← empty, ready for automations
+└── evals/              ← empty, ready for test cases
+```
+
+## Options
+
+```bash
+amodal init --name "My Agent"         # set project name (defaults to directory name)
+amodal init --provider openai         # use OpenAI instead of Anthropic (default)
+amodal init --provider google         # use Google Gemini
+```
+
+## Next Steps
+
+After init, add a connection and start the dev server:
+
+```bash
+amodal connect stripe          # install a registry connection
+amodal validate                # check config is valid
+amodal dev                     # start the agent
+```

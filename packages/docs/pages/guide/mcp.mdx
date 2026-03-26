@@ -1,0 +1,93 @@
+---
+description: Connect external tool servers via Model Context Protocol (MCP) — stdio, SSE, and HTTP transports.
+---
+
+# MCP Servers
+
+Amodal supports the [Model Context Protocol](https://modelcontextprotocol.io) for connecting external tool servers. MCP tools appear alongside your custom tools and built-in tools — the agent uses them transparently.
+
+## Configuration
+
+Define MCP servers in `amodal.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "github": {
+        "transport": "stdio",
+        "command": "uvx",
+        "args": ["mcp-server-github"],
+        "env": { "GITHUB_TOKEN": "env:GITHUB_TOKEN" }
+      },
+      "filesystem": {
+        "transport": "sse",
+        "url": "http://localhost:8001"
+      },
+      "docs": {
+        "transport": "http",
+        "url": "https://docs.example.com/api/mcp",
+        "trust": true
+      }
+    }
+  }
+}
+```
+
+## Transports
+
+| Transport | Config | Use Case |
+|-----------|--------|----------|
+| `stdio` | `command`, `args`, `env` | Local tools via child process |
+| `sse` | `url` | Server-Sent Events over HTTP |
+| `http` | `url`, `trust` | Streamable HTTP transport |
+
+## Tool Discovery
+
+MCP tools are automatically discovered when servers connect. Tools are namespaced with the server name to avoid collisions:
+
+```
+github__create_issue
+github__list_repos
+filesystem__read_file
+```
+
+The separator is `__` (double underscore).
+
+## CLI
+
+```bash
+# MCP servers start automatically with amodal dev
+amodal dev
+
+# The agent sees MCP tools alongside custom and built-in tools
+amodal inspect   # shows all discovered tools including MCP
+```
+
+## Behavior
+
+- **Non-fatal startup** — if an MCP server fails to connect, other servers and the agent still work
+- **Auto-discovery** — tools are discovered after connection, no manual registration needed
+- **Graceful shutdown** — servers are cleaned up when the runtime stops
+- **Environment variables** — use `env:VAR_NAME` pattern for credentials
+
+## Example: GitHub MCP
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "github": {
+        "transport": "stdio",
+        "command": "uvx",
+        "args": ["mcp-server-github"],
+        "env": {
+          "GITHUB_TOKEN": "env:GITHUB_TOKEN"
+        }
+      }
+    }
+  }
+}
+```
+
+This gives the agent access to GitHub tools (create issues, list PRs, read files, etc.) via the GitHub MCP server.

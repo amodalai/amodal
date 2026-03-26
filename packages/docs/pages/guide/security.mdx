@@ -1,0 +1,115 @@
+---
+description: Security infrastructure — field scrubbing, output guards, action gates, pattern scanning, leak detection, and scope checking.
+---
+
+# Security & Guardrails
+
+Security is built into the runtime at every layer. Six components work together to protect sensitive data and control agent behavior.
+
+## Security Pipeline
+
+```
+API Response
+  → Field Scrubber    (strip restricted fields)
+  → Agent processes data
+  → Output Guard      (4-stage filtering before user sees output)
+      1. Field Redaction   (replace scrubbed values with [REDACTED])
+      2. Pattern Scanner   (detect SSN, credit cards, bank accounts)
+      3. Leak Detector     (compare output against tracked scrubbed values)
+      4. Scope Checker     (flag unqualified aggregate claims)
+  → Action Gate       (confirm/review/block write operations)
+```
+
+## Field Scrubber
+
+Strips restricted fields from API responses before the LLM sees them. Configured per connection in `access.json`:
+
+| Policy | Effect |
+|--------|--------|
+| `never_retrieve` | Field completely removed from response |
+| `retrieve_but_redact` | Kept in data, replaced with `[REDACTED]` in output |
+| `role_gated` | Removed if user lacks `allowedRoles`, else redactable |
+
+## Output Guard
+
+Four-stage filter on every agent response:
+
+**1. Field Redaction** — replaces `retrieve_but_redact` and denied `role_gated` values with `[REDACTED]`.
+
+**2. Pattern Scanner** — regex detection of:
+- SSN (`XXX-XX-XXXX`)
+- Credit cards (13-19 digits, Luhn-validated)
+- Bank accounts (8-17 digits near keywords like "account", "routing")
+
+**3. Leak Detector** — compares agent output against all scrubbed values tracked in the session. `pii_identifier` values are always flagged. `pii_name` values only if entity context is nearby.
+
+**4. Scope Checker** — detects unqualified aggregate claims ("all devices", "every contact") about scoped entities. Flags when the agent says "all X" but only has access to a subset.
+
+Critical findings block output entirely.
+
+## Action Gate
+
+Controls write operation confirmations based on `access.json`:
+
+| Tier | Behavior |
+|------|----------|
+| `allow` | Execute without confirmation |
+| `confirm` | Ask user for approval |
+| `review` | Show full plan before executing |
+| `never` | Block entirely |
+
+**Threshold escalation**: endpoint tiers can escalate based on request parameters:
+```json
+{ "field": "body.amount", "above": 10000, "escalate": "review" }
+```
+
+**Delegation escalation**: if `isDelegated` (sub-agent acting on behalf), `confirm` escalates to `review`.
+
+## Role-Based Access Control
+
+Roles filter tools and skills **at the SDK layer** — the LLM never sees tools it doesn't have access to:
+
+```json
+{
+  "name": "analyst",
+  "tools": ["request", "load_knowledge", "dispatch"],
+  "skills": ["triage", "deep-dive"],
+  "automations": { "can_view": true, "can_create": false },
+  "constraints": {}
+}
+```
+
+Use `"*"` as wildcard to allow all tools/skills.
+
+## Plan Mode
+
+When active, all writes are blocked until the user approves a plan:
+
+1. Agent enters plan mode (triggered by security rules or manually)
+2. Agent proposes a plan
+3. User approves → plan is injected into context, writes re-enabled
+4. Agent executes the approved plan
+
+## Session Limits
+
+| Limit | Default | Description |
+|-------|---------|-------------|
+| Max turns | 15 | Prevents infinite loops |
+| Timeout | configurable | Hard time limit |
+| Loop detection | always on | Pattern matching + LLM-based |
+
+## Audit Logging
+
+Every action is logged with immutable hash chains:
+
+| Event | Logged |
+|-------|--------|
+| `tool_call` | Tool name, params, duration |
+| `write_op` | Write operations specifically |
+| `session_start` / `session_end` | Session lifecycle |
+| `version_load` | Config version loaded |
+| `kb_proposal` | Knowledge update proposals |
+
+Two sinks: Console (dev), File (JSON).
+
+Each entry includes a SHA-256 hash of the previous entry, creating a tamper-evident chain.

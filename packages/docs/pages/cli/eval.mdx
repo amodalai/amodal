@@ -1,0 +1,62 @@
+---
+description: amodal eval — run evaluation suites to measure and improve agent quality.
+---
+
+# amodal eval
+
+Run evaluation suites against your agent to measure quality, compare models, and track regressions.
+
+```bash
+amodal eval
+```
+
+## Eval Files
+
+Evals live in `evals/` as YAML files:
+
+```yaml
+name: triage-accuracy
+description: Test alert triage quality
+cases:
+  - input: "Review recent security alerts"
+    rubric:
+      - "Correctly identifies critical alerts"
+      - "Filters known false positives"
+      - "Provides severity ranking"
+    expected_tools:
+      - request
+      - load_knowledge
+```
+
+## Evaluation Methods
+
+| Method | Description |
+|--------|-------------|
+| **LLM Judge** | An LLM evaluates the agent's response against the rubric |
+| **Tool usage** | Verify expected tools were called |
+| **Cost tracking** | Track token usage and cost per eval |
+
+## Experiments
+
+Compare different configurations side-by-side:
+
+```bash
+amodal experiment
+```
+
+Experiments let you test:
+- Different LLM providers or models
+- Different skill configurations
+- Different prompt variations
+- Different knowledge documents
+
+Results include cost comparison, quality scores, and latency metrics.
+
+## Multi-Model Comparison
+
+Run the same eval suite against multiple providers to find the best model for your use case:
+
+```bash
+amodal eval --providers anthropic,openai,google
+```
+

@@ -1,0 +1,212 @@
+---
+description: Create your first Amodal agent — init, connect, dev, and chat in 5 minutes.
+---
+
+# Quick Start
+
+This guide walks you through creating an agent from scratch, connecting it to an API, and having a conversation with it. By the end you will have a working agent running locally that can query external systems and reason about the results.
+
+## 1. Initialize a project
+
+```bash
+npx amodal init
+```
+
+The init command is interactive — it asks for your product name and type, then scaffolds the full directory structure:
+
+```
+my-agent/
+├── .amodal/
+│   └── config.json            ← manifest (name, provider, model)
+├── connections/               ← API definitions (empty for now)
+├── skills/
+│   └── general.md             ← sample skill with basic reasoning
+├── knowledge/
+│   └── welcome.md             ← sample knowledge doc
+├── automations/               ← proactive triggers (empty)
+└── evals/                     ← test scenarios (empty)
+```
+
+The `.amodal/config.json` file is the project manifest. Everything else is convention-over-configuration: drop files into the right folders and the runtime picks them up automatically.
+
+## 2. Configure your provider
+
+Set your LLM provider credentials. Amodal auto-detects from environment variables:
+
+```bash
+# Pick one:
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
+export GOOGLE_API_KEY=...
+```
+
+The auto-detection order is: **Anthropic → OpenAI → Google → Bedrock → Azure**. The runtime checks for each provider's environment variable in sequence and uses the first one it finds. If no key is set, `amodal dev` will start but the agent cannot respond — you will see a clear error message telling you which environment variables to set.
+
+You can also pin a specific provider and model in `amodal.json` to override auto-detection:
+
+```json
+{
+  "name": "My Agent",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-20250514"
+}
+```
+
+This is useful when your team standardizes on a model or when you want different models in dev vs. production.
+
+## 3. Add a connection
+
+Install a pre-built plugin or create a custom connection:
+
+```bash
+# Install a plugin (e.g., Slack, GitHub, Datadog)
+amodal connect slack
+
+# Or sync from an OpenAPI spec
+amodal sync --from https://api.example.com/openapi.json
+```
+
+When you run `amodal connect slack`, the CLI installs the `@amodalai/connection-slack` plugin and scaffolds a connection directory with everything the agent needs to understand and use the Slack API:
+
+```
+connections/slack/
+├── spec.json       ← API endpoints, methods, parameters
+├── access.json     ← auth config (token reference, scopes)
+├── surface.md      ← natural-language overview of what the API can do
+├── entities.md     ← key entities (channels, users, messages, threads)
+└── rules.md        ← usage constraints (rate limits, read-only by default)
+```
+
+The `surface.md` and `entities.md` files are what make this different from a raw OpenAPI spec. They teach the agent *when* to use the API and *what the data means* — in plain English. You can edit these files to customize behavior. For example, adding a line to `rules.md` like "Never post to #general without explicit confirmation" will change how the agent behaves.
+
+You will be prompted to provide your Slack Bot Token, which is stored encrypted in `access.json` (or read from an environment variable reference).
+
+## 4. Start the dev server
+
+```bash
+amodal dev
+```
+
+The dev server compiles your entire project into an optimized context and starts serving:
+
+```
+  ✓ Compiled context (3 connections, 2 skills, 4 knowledge docs)
+  ✓ Token budget: 12,847 / 200,000 (6.4%)
+  ✓ Connected APIs: slack (42 endpoints), github (18 endpoints)
+
+  Runtime ready:
+    Chat UI     → http://localhost:3847
+    SSE API     → http://localhost:3847/api/v1/chat
+    Health      → http://localhost:3847/health
+
+  Watching for changes (300ms debounce)...
+```
+
+The key number is the token budget. Amodal tracks exactly how many tokens your connections, skills, and knowledge consume so you know how much room the agent has for reasoning. If you edit any file, the runtime recompiles and hot-reloads — no restart needed.
+
+## 5. Chat with your agent
+
+```bash
+amodal chat
+```
+
+This opens a terminal chat UI built with React and Ink. Here is what a real conversation looks like with the Slack connection active:
+
+```
+You: What happened in #incidents today?
+
+Agent: I'll check the #incidents channel for today's activity.
+
+  ► dispatch: query Slack #incidents channel for today's messages
+    → request: GET conversations.history (channel: C04INCIDENTS, oldest: 1711411200)
+    → Found 3 messages across 2 threads
+
+Here's what happened in #incidents today:
+
+┌─────────────────────────────────────────────────────────┐
+│ #incidents — March 26, 2026                             │
+├─────────────────────────────────────────────────────────┤
+│ 09:14 AM  @sarah — Database connection pool exhausted   │
+│           on prod-db-02. P1 declared. Resolved at 9:47  │
+│           by scaling pool from 50→200.                  │
+│                                                         │
+│ 11:30 AM  @mike — Elevated 5xx rates on /api/checkout.  │
+│           Traced to a bad deploy (v2.14.3). Rolled back │
+│           at 11:42. Post-mortem scheduled.              │
+│                                                         │
+│ 02:05 PM  @alex — False alarm: monitoring blip from     │
+│           Datadog agent restart. No user impact.        │
+└─────────────────────────────────────────────────────────┘
+
+Two real incidents today — a DB connection pool issue (resolved) and a
+bad deploy causing checkout errors (rolled back). The third was a false
+alarm. Want me to dig into any of these?
+```
+
+Notice the `► dispatch` line: the primary agent delegated data gathering to a task agent, which queried Slack, parsed the raw API response, and returned a clean summary. The primary agent never saw the raw JSON — it stayed focused on reasoning and presentation.
+
+You can also connect to a remote server or resume a previous session:
+
+```bash
+amodal chat --url http://localhost:3847
+amodal chat --resume latest
+```
+
+## 6. Validate and inspect
+
+Before deploying, verify that your project is well-formed and review what the agent actually sees:
+
+```bash
+amodal validate    # Check for missing connections, config issues
+amodal inspect     # Show compiled context with token counts
+```
+
+The `inspect` command shows exactly how your token budget is allocated:
+
+```
+  Context Budget Breakdown
+  ────────────────────────────────────────────
+  System prompt          1,240 tokens   (0.6%)
+  Skills (2)             2,180 tokens   (1.1%)
+    general.md             890
+    triage.md            1,290
+  Knowledge (4)          3,420 tokens   (1.7%)
+    welcome.md             310
+    environment.md       1,450
+    team.md                820
+    baselines.md           840
+  Connections (1)        6,007 tokens   (3.0%)
+    slack                6,007
+      surface.md         1,200
+      entities.md        2,340
+      rules.md             467
+      spec (42 endpoints) 2,000
+  ────────────────────────────────────────────
+  Total context         12,847 tokens   (6.4%)
+  Available for chat   187,153 tokens  (93.6%)
+```
+
+This breakdown is important. If your context grows too large (e.g., connecting 20 APIs with full specs), the agent has less room for reasoning and conversation history. The inspect command helps you find what to trim.
+
+## What just happened?
+
+Here is the full flow of what happened when you chatted with your agent:
+
+1. **Compile** — `amodal dev` read every file in your project (connections, skills, knowledge) and compiled them into a single optimized context. Connection specs became tool definitions. Skills became system instructions. Knowledge became loadable documents indexed by tag.
+
+2. **Route** — When you asked "what happened in #incidents today?", the primary agent recognized this as a data-gathering question. Instead of trying to answer from memory, it planned a retrieval step.
+
+3. **Dispatch** — The primary agent used the `dispatch` tool to spin up a task agent with a focused job: "query the Slack #incidents channel for today's messages." This task agent got its own fresh context with just the Slack connection docs loaded.
+
+4. **Execute** — The task agent called the Slack API via the `request` tool (read-only, auth handled automatically by the connection config). It received the raw JSON response, interpreted it using the entity documentation from `entities.md`, and returned a structured summary back to the primary agent.
+
+5. **Present** — The primary agent received the ~200-token summary (not the raw API response), reasoned about it, and presented the results using a formatted table. The primary agent's context stayed clean — around 4-6K tokens even though the task agent processed much more raw data.
+
+This is **context isolation** in action. The primary agent delegates data gathering to ephemeral workers, keeps its own context small for high-quality reasoning, and composes the final answer. Task agents can even dispatch sub-task agents for complex multi-system queries.
+
+## What's Next
+
+- **[Project Structure](/quickstart/project-structure)** — Understand the full repo layout and conventions
+- **[CLI Reference](/cli)** — All 30+ commands with examples
+- **[Add skills](/guide/skills)** — Author reasoning frameworks that activate automatically
+- **[Add knowledge](/guide/knowledge-base)** — Teach your agent about your domain
