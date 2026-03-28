@@ -1,11 +1,17 @@
 {
   "name": "@amodalai/runtime",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent Runtime Platform — HTTP server for repo and platform modes",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/amodalai/amodal.git", "directory": "packages/runtime" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amodalai/amodal.git",
+    "directory": "packages/runtime"
+  },
   "homepage": "https://github.com/amodalai/amodal",
-  "bugs": { "url": "https://github.com/amodalai/amodal/issues" },
+  "bugs": {
+    "url": "https://github.com/amodalai/amodal/issues"
+  },
   "type": "module",
   "main": "dist/src/index.js",
   "scripts": {

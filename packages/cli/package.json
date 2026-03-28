@@ -1,11 +1,17 @@
 {
   "name": "@amodalai/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Amodal CLI",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/amodalai/amodal.git", "directory": "packages/cli" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amodalai/amodal.git",
+    "directory": "packages/cli"
+  },
   "homepage": "https://github.com/amodalai/amodal",
-  "bugs": { "url": "https://github.com/amodalai/amodal/issues" },
+  "bugs": {
+    "url": "https://github.com/amodalai/amodal/issues"
+  },
   "type": "module",
   "main": "dist/src/main.js",
   "bin": {

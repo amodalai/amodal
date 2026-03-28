@@ -1,11 +1,17 @@
 {
   "name": "@amodalai/react",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React bindings for Amodal agent runtime",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/amodalai/amodal.git", "directory": "packages/react" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amodalai/amodal.git",
+    "directory": "packages/react"
+  },
   "homepage": "https://github.com/amodalai/amodal",
-  "bugs": { "url": "https://github.com/amodalai/amodal/issues" },
+  "bugs": {
+    "url": "https://github.com/amodalai/amodal/issues"
+  },
   "type": "module",
   "main": "dist/react.js",
   "module": "dist/react.js",
