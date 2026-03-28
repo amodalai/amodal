@@ -4,20 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
-import { afterAll, afterEach, beforeAll } from 'vitest';
-import { server } from './mocks/server';
+// Re-export from canonical location
+export {} from '../src/test/setup';
 
-beforeAll(() => {
-  server.listen({ onUnhandledRequest: 'bypass' });
-});
-
-afterEach(() => {
-  server.resetHandlers();
-  cleanup();
-});
-
-afterAll(() => {
-  server.close();
-});
+// Actually run the setup
+import '../src/test/setup';

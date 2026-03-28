@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { EntityCard } from '../components/widgets/EntityCard';
+import { EntityCard } from '../widget/widgets/EntityCard';
 
 const defaultData = {
   mac: 'AA:BB:CC:DD:EE:01',

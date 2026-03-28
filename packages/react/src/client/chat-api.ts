@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type { SSEEvent } from './types';
+import type { SSEEvent } from '../types';
+import { streamSSE } from './sse-client';
 
 export interface ChatStreamRequest {
   message: string;
@@ -20,20 +21,8 @@ export interface SessionInfo {
 }
 
 /**
- * Parse a single SSE data line into a typed event.
- * Returns null for non-data lines or empty data.
- */
-export function parseSSELine(line: string): SSEEvent | null {
-  if (!line.startsWith('data: ')) return null;
-  const json = line.slice(6).trim();
-  if (json.length === 0) return null;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE event from server
-  return JSON.parse(json) as SSEEvent;
-}
-
-/**
  * Streams chat responses from the API server's SSE endpoint.
- * Uses fetch + ReadableStream (not EventSource, which only supports GET).
+ * Delegates to the shared streamSSE utility.
  */
 export async function* streamChat(
   serverUrl: string,
@@ -43,64 +32,21 @@ export async function* streamChat(
 ): AsyncGenerator<SSEEvent> {
   const url = `${serverUrl}/chat/stream`;
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = {};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(request),
+  const body: Record<string, unknown> = { message: request.message };
+  if (request.session_id) body['session_id'] = request.session_id;
+  if (request.role) body['role'] = request.role;
+  if (request.session_type) body['session_type'] = request.session_type;
+  if (request.deploy_id) body['deploy_id'] = request.deploy_id;
+
+  yield* streamSSE(url, body, {
     signal,
+    headers,
   });
-
-  if (!response.ok) {
-    throw new Error(`Chat request failed: ${String(response.status)} ${response.statusText}`);
-  }
-
-  const body = response.body;
-  if (!body) {
-    throw new Error('Response body is null');
-  }
-
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      const lines = buffer.split('\n');
-      // Keep the last partial line in the buffer
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.length === 0) continue;
-        const event = parseSSELine(trimmed);
-        if (event) {
-          yield event;
-        }
-      }
-    }
-
-    // Process any remaining buffer
-    if (buffer.trim().length > 0) {
-      const event = parseSSELine(buffer.trim());
-      if (event) {
-        yield event;
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
 }
 
 /**

@@ -5,8 +5,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { listSessions, updateSession } from '../client';
-import type { SessionHistoryItem } from '../client';
+import { listSessions, updateSession } from '../client/chat-api';
+import type { SessionHistoryItem } from '../client/chat-api';
 
 export interface UseSessionHistoryOptions {
   serverUrl: string;

@@ -16,7 +16,7 @@ import type {
   ContentBlock,
   ChatUser,
 } from '../types';
-import { streamChat, getSessionHistory } from '../client';
+import { streamChat, getSessionHistory } from '../client/chat-api';
 import { WidgetEventBus } from '../events/event-bus';
 import type { WidgetEvent, EntityExtractor } from '../events/types';
 
@@ -50,6 +50,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         id: createMessageId(),
         text: '',
         toolCalls: [],
+        confirmations: [],
         skillActivations: [],
         kbProposals: [],
         widgets: [],
@@ -127,7 +128,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             : tc;
         const updatedCalls = last.toolCalls.map(updateCall);
         // Also update inside contentBlocks
-        const blocks = last.contentBlocks.map((block): import('../types').ContentBlock =>
+        const blocks = last.contentBlocks.map((block): ContentBlock =>
           block.type === 'tool_calls'
             ? { ...block, calls: block.calls.map(updateCall) }
             : block,
@@ -235,6 +236,44 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
+    case 'STREAM_CONFIRMATION_REQUIRED': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'confirmation',
+          confirmation: action.confirmation,
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          confirmations: [...last.confirmations, action.confirmation],
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'CONFIRMATION_RESPONDED': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const updatedConfirmations = last.confirmations.map((c) =>
+          c.correlationId === action.correlationId
+            ? { ...c, status: (action.approved ? 'approved' : 'denied') as import('../types').ConfirmationInfo['status'] }
+            : c,
+        );
+        const blocks = last.contentBlocks.map((block) =>
+          block.type === 'confirmation' && block.confirmation.correlationId === action.correlationId
+            ? { ...block, confirmation: { ...block.confirmation, status: (action.approved ? 'approved' : 'denied') as import('../types').ConfirmationInfo['status'] } }
+            : block,
+        );
+        msgs[msgs.length - 1] = { ...last, confirmations: updatedConfirmations, contentBlocks: blocks };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_CREDENTIAL_SAVED':
+    case 'STREAM_APPROVED':
+      // These events are tracked but don't modify message state currently
+      return state;
     case 'STREAM_ERROR':
       return { ...state, isStreaming: false, error: action.message, activeToolCalls: [] };
     case 'STREAM_DONE': {
@@ -656,7 +695,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           // Convert stored messages to ChatMessage format
           const chatMessages: ChatMessage[] = detail.messages.map((m) => {
             if (m.type === 'assistant_text') {
-              // Map stored tool calls to ToolCallInfo (args → parameters)
+              // Map stored tool calls to ToolCallInfo (args -> parameters)
               const toolCalls: ToolCallInfo[] = (m.toolCalls ?? []).map((tc) => ({
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored tool call from DB
                 toolId: tc['toolId'] as string ?? '',
@@ -683,7 +722,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
               const storedBlocks = m.contentBlocks;
               const contentBlocks: Array<import('../types').ContentBlock> = [];
               if (storedBlocks && storedBlocks.length > 0) {
-                // Build a lookup from toolId → ToolCallInfo
+                // Build a lookup from toolId -> ToolCallInfo
                 const toolCallById = new Map(toolCalls.map((tc) => [tc.toolId, tc]));
                 for (const block of storedBlocks) {
                   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored block from DB
@@ -733,6 +772,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 id: m.id,
                 text: m.text,
                 toolCalls,
+                confirmations: [],
                 skillActivations: m.skillActivations ?? [],
                 kbProposals: [],
                 widgets,

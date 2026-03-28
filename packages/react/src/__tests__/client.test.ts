@@ -6,9 +6,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { parseSSELine, streamChat, createSession, createChatClient } from '../client';
+import { parseSSELine } from '../client/sse-client';
+import { streamChat, createSession, createChatClient } from '../client/chat-api';
 import { server } from '../test/mocks/server';
-import { encodeSSEEvents, defaultSSEEvents, toolCallSSEEvents, skillAndKBSSEEvents } from '../test/mocks/handlers';
+import { encodeSSEEvents, defaultSSEEvents, widgetToolCallSSEEvents as toolCallSSEEvents, skillAndKBSSEEvents } from '../test/mocks/handlers';
 
 describe('parseSSELine', () => {
   it('parses a valid data line', () => {
@@ -122,7 +123,7 @@ describe('streamChat', () => {
       for await (const _event of streamChat('http://localhost:4555', { message: 'fail' })) {
         // should not reach
       }
-    }).rejects.toThrow('Chat request failed: 500 Internal Server Error');
+    }).rejects.toThrow('SSE request failed: 500 Internal Server Error');
   });
 
   it('supports abort signal', async () => {

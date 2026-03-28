@@ -14,7 +14,7 @@ import { applyTheme, mergeTheme } from '../theme';
 import { MessageList } from './MessageList';
 import { InputBar } from './InputBar';
 import { SessionHistory } from './SessionHistory';
-import '../styles.css';
+import './widget.css';
 
 function ChatIcon() {
   return (

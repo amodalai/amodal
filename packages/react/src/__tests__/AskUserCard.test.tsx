@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AskUserCard } from '../components/AskUserCard';
+import { AskUserCard } from '../widget/AskUserCard';
 import type { AskUserBlock } from '../types';
 
 function makeBlock(overrides: Partial<AskUserBlock> = {}): AskUserBlock {

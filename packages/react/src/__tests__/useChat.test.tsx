@@ -10,7 +10,7 @@ import { http, HttpResponse } from 'msw';
 import { useChat } from '../hooks/useChat';
 import { chatReducer } from '../hooks/useChat';
 import { server } from '../test/mocks/server';
-import { encodeSSEEvents, toolCallSSEEvents, skillAndKBSSEEvents, widgetSSEEvents } from '../test/mocks/handlers';
+import { encodeSSEEvents, widgetToolCallSSEEvents as toolCallSSEEvents, skillAndKBSSEEvents, widgetSSEEvents } from '../test/mocks/handlers';
 import type { ChatState, ChatAction } from '../types';
 import type { WidgetEvent } from '../events/types';
 
