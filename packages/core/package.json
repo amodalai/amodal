@@ -1,11 +1,17 @@
 {
   "name": "@amodalai/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Amodal agent runtime core",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/amodalai/amodal.git", "directory": "packages/core" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amodalai/amodal.git",
+    "directory": "packages/core"
+  },
   "homepage": "https://github.com/amodalai/amodal",
-  "bugs": { "url": "https://github.com/amodalai/amodal/issues" },
+  "bugs": {
+    "url": "https://github.com/amodalai/amodal/issues"
+  },
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
