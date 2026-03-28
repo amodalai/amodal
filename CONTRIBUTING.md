@@ -62,15 +62,37 @@ This is a monorepo managed with pnpm workspaces:
 
 ## Changesets
 
-We use [Changesets](https://github.com/changesets/changesets) to manage versioning and changelogs.
+We use [Changesets](https://github.com/changesets/changesets) to manage versioning and changelogs. All published packages share a single version number.
 
-If your change affects any published package (`core`, `runtime`, `cli`, `react`, `chat-widget`), add a changeset:
+### When to add a changeset
+
+Add one if your PR changes any published package (`core`, `runtime`, `react`, `chat-widget`). Skip it for changes that only touch docs, CI, tests, or internal tooling.
+
+### How to add a changeset
 
 ```bash
 pnpm changeset
 ```
 
-This will prompt you to select which packages are affected and whether the change is a patch, minor, or major update. Write a short summary of the change.
+This prompts you to pick which packages changed and the bump level:
+
+- **patch** — bug fixes, typos, internal changes
+- **minor** — new features, non-breaking additions
+- **major** — breaking changes (rare pre-1.0)
+
+Write a short summary of the change. This creates a file in `.changeset/` that gets committed with your PR.
+
+### What happens after your PR merges
+
+A bot keeps a running "chore: version packages" PR updated with all pending changesets. When a maintainer merges that PR, all packages are published together at the new version and a GitHub Release is created.
+
+### If you forget
+
+The changesets bot will comment on your PR if it's missing a changeset. If the change doesn't need one, that's fine — just note it in the PR.
+
+### If a maintainer disagrees with the bump level
+
+They'll leave a comment asking you to update the changeset file (it's just markdown). If you've enabled "Allow edits from maintainers" on your PR (the default), they may update it directly.
 
 ## License Headers
 

@@ -45,12 +45,19 @@ function makeResponse(overrides?: Partial<LLMChatResponse>): LLMChatResponse {
 }
 
 describe('FailoverProvider', () => {
+  // Suppress unhandled rejections from retry timer cleanup when using fake timers
+  const noop = () => {};
+
   beforeEach(() => {
+    vi.useFakeTimers();
     mockAnthropicChat.mockReset();
     mockOpenAIChat.mockReset();
+    process.on('unhandledRejection', noop);
   });
 
   afterEach(() => {
+    process.removeListener('unhandledRejection', noop);
+    vi.useRealTimers();
     vi.unstubAllEnvs();
   });
 
@@ -73,7 +80,9 @@ describe('FailoverProvider', () => {
       {provider: 'anthropic', model: 'test'},
       {maxRetries: 2},
     );
-    const response = await provider.chat(makeRequest());
+    const responsePromise = provider.chat(makeRequest());
+    await vi.advanceTimersByTimeAsync(2000);
+    const response = await responsePromise;
 
     expect(response.content[0]).toEqual({type: 'text', text: 'Hello!'});
     expect(mockAnthropicChat).toHaveBeenCalledTimes(2);
@@ -90,7 +99,9 @@ describe('FailoverProvider', () => {
       {provider: 'anthropic', model: 'test'},
       {maxRetries: 2},
     );
-    const response = await provider.chat(makeRequest());
+    const responsePromise = provider.chat(makeRequest());
+    await vi.advanceTimersByTimeAsync(2000);
+    const response = await responsePromise;
 
     expect(response.stopReason).toBe('end_turn');
     expect(mockAnthropicChat).toHaveBeenCalledTimes(2);
@@ -126,7 +137,9 @@ describe('FailoverProvider', () => {
       },
       {maxRetries: 1},
     );
-    const response = await provider.chat(makeRequest());
+    const responsePromise = provider.chat(makeRequest());
+    await vi.advanceTimersByTimeAsync(5000);
+    const response = await responsePromise;
 
     expect(response.content[0]).toEqual({type: 'text', text: 'From fallback'});
     // 1 initial + 1 retry = 2 attempts on primary
@@ -211,7 +224,9 @@ describe('FailoverProvider', () => {
       .mockResolvedValue(makeResponse());
 
     const provider = new FailoverProvider({provider: 'anthropic', model: 'test'});
-    const response = await provider.chat(makeRequest());
+    const responsePromise = provider.chat(makeRequest());
+    await vi.advanceTimersByTimeAsync(10000);
+    const response = await responsePromise;
 
     expect(response.stopReason).toBe('end_turn');
     // 1 initial + 2 retries = 3 attempts
@@ -228,7 +243,10 @@ describe('FailoverProvider', () => {
       {maxRetries: 1},
     );
 
-    await expect(provider.chat(makeRequest())).rejects.toThrow('Rate limited');
+    const responsePromise = provider.chat(makeRequest());
+    // Flush all pending timers so retries complete
+    await vi.runAllTimersAsync();
+    await expect(responsePromise).rejects.toThrow('Rate limited');
     // 1 initial + 1 retry = 2 total
     expect(mockAnthropicChat).toHaveBeenCalledTimes(2);
   });
