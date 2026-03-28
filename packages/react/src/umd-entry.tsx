@@ -6,7 +6,7 @@
 
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
-import { ChatWidget } from './components/ChatWidget';
+import { ChatWidget } from './widget/ChatWidget';
 import type { WidgetConfig } from './types';
 import { ChatClient } from './client/ChatClient';
 

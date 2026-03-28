@@ -22,7 +22,7 @@ export type { ConfirmCardProps } from './components/ConfirmCard';
 export { ReviewCard } from './components/ReviewCard';
 export type { ReviewCardProps } from './components/ReviewCard';
 
-// Hooks
+// Hooks — provider-based (runtime API)
 export { useAmodalChat } from './hooks/useAmodalChat';
 export type { UseAmodalChatOptions, UseAmodalChatReturn } from './hooks/useAmodalChat';
 export { useAmodalBrief } from './hooks/useAmodalBrief';
@@ -44,11 +44,52 @@ export type { UseSkillActionOptions, UseSkillActionReturn } from './hooks/useSki
 export { useNavigate, NavigateContext } from './hooks/useNavigate';
 export type { NavigateFn } from './hooks/useNavigate';
 
-// Client
+// Hooks — widget-oriented (chat API)
+export { useChat } from './hooks/useChat';
+export type { UseChatOptions, UseChatReturn } from './hooks/useChat';
+export { useWidgetEvents } from './hooks/useWidgetEvents';
+export type { UseWidgetEventsReturn } from './hooks/useWidgetEvents';
+export { useSessionHistory } from './hooks/useSessionHistory';
+export type { UseSessionHistoryOptions, UseSessionHistoryReturn } from './hooks/useSessionHistory';
+
+// Client — SSE utilities
 export { RuntimeClient } from './client/runtime-client';
 export type { RuntimeClientOptions } from './client/runtime-client';
 export { parseSSELine, streamSSE, streamSSEGet } from './client/sse-client';
 export type { StreamSSEOptions } from './client/sse-client';
+
+// Client — chat API
+export { streamChat, createSession, createChatClient, listSessions, getSessionHistory, updateSession } from './client/chat-api';
+export type { ChatStreamRequest, SessionInfo, SessionHistoryItem, SessionDetail } from './client/chat-api';
+
+// Headless client
+export { ChatClient } from './client/ChatClient';
+export type { ChatClientConfig, ClientEvents } from './client/ChatClient';
+export { ChatStream } from './client/ChatStream';
+export type { ChatResponse } from './client/ChatStream';
+export { TypedEventEmitter } from './client/EventEmitter';
+
+// Events
+export { WidgetEventBus, defaultEntityExtractor } from './events';
+export type {
+  WidgetEvent,
+  WidgetEventMap,
+  EntityReference,
+  EntityExtractor,
+  AgentDrivenEvent,
+  InteractionEvent,
+  ToolExecutedEvent,
+  SkillActivatedEvent,
+  WidgetRenderedEvent,
+  KBProposalEvent,
+  EntityReferencedEvent,
+  EntityHoveredEvent,
+  EntityUnhoveredEvent,
+  EntityClickedEvent,
+} from './events';
+
+// Theme
+export { defaultTheme, applyTheme, mergeTheme } from './theme';
 
 // Types
 export type {
@@ -63,8 +104,19 @@ export type {
   SSEWidgetEvent,
   SSEKBProposalEvent,
   SSEConfirmationRequiredEvent,
+  SSECredentialSavedEvent,
+  SSEApprovedEvent,
+  SSEAskUserEvent,
+  SSEExploreStartEvent,
+  SSEExploreEndEvent,
+  SSEPlanModeEvent,
+  SSEFieldScrubEvent,
   SSEErrorEvent,
   SSEDoneEvent,
+  AskUserQuestion,
+  AskUserQuestionOption,
+  AskUserStatus,
+  AskUserBlock,
   ChatMessage,
   UserMessage,
   AssistantTextMessage,
@@ -72,10 +124,16 @@ export type {
   ToolCallInfo,
   ToolCallStatus,
   ConfirmationInfo,
+  KBProposalInfo,
+  WidgetInfo,
   ContentBlock,
   SubagentEventInfo,
   ChatState,
   ChatAction,
+  ChatUser,
+  ChatTheme,
+  WidgetConfig,
+  WidgetPosition,
   TaskStatus,
   TaskStatusValue,
   BriefResult,

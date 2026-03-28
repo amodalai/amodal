@@ -7,7 +7,7 @@
 import { TypedEventEmitter } from './EventEmitter';
 import { ChatStream } from './ChatStream';
 import type { ChatResponse } from './ChatStream';
-import { createSession, streamChat } from '../client';
+import { createSession, streamChat } from './chat-api';
 import type { ChatUser, ChatMessage, AssistantTextMessage, ToolCallInfo, KBProposalInfo } from '../types';
 import { WidgetEventBus } from '../events/event-bus';
 import type { WidgetEvent, EntityExtractor, ToolExecutedEvent, SkillActivatedEvent, WidgetRenderedEvent, KBProposalEvent } from '../events/types';
@@ -157,6 +157,7 @@ export class ChatClient extends TypedEventEmitter<ClientEvents> {
       id: makeId(),
       text: '',
       toolCalls: [],
+      confirmations: [],
       skillActivations: [],
       kbProposals: [],
       widgets: [],
@@ -215,6 +216,7 @@ export class ChatClient extends TypedEventEmitter<ClientEvents> {
         id: makeId(),
         text: response.text,
         toolCalls: response.toolCalls,
+        confirmations: [],
         skillActivations: response.skillsUsed,
         kbProposals: response.kbProposals,
         widgets: [],

@@ -22,6 +22,7 @@ const initialState: ChatState = {
   isStreaming: false,
   error: null,
   activeToolCalls: [],
+  isHistorical: false,
 };
 
 let messageCounter = 0;
@@ -46,6 +47,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         text: '',
         toolCalls: [],
         confirmations: [],
+        skillActivations: [],
+        kbProposals: [],
+        widgets: [],
         contentBlocks: [],
         timestamp: new Date().toISOString(),
       };

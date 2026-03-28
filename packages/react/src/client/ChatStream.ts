@@ -10,8 +10,8 @@ import type {
   KBProposalInfo,
   AskUserQuestion,
 } from '../types';
-import type { ChatStreamRequest } from '../client';
-import { streamChat } from '../client';
+import type { ChatStreamRequest } from './chat-api';
+import { streamChat } from './chat-api';
 
 /**
  * Full response from a completed chat stream.
@@ -188,6 +188,11 @@ export class ChatStream {
           handler({ askId: event.ask_id, questions: event.questions });
         }
         break;
+      case 'widget':
+        for (const handler of this.handlers.widget) {
+          handler({ widgetType: event.widget_type, data: event.data });
+        }
+        break;
       case 'error':
         for (const handler of this.handlers.error) {
           handler({ message: event.message });
@@ -197,17 +202,8 @@ export class ChatStream {
       case 'done':
         // Init handled by ChatClient, done triggers after loop
         break;
-      default: {
-        // Handle widget events from extended SSE
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- checking extended SSE event type
-        const extEvent = event as unknown as { type: string; widget_type?: string; data?: Record<string, unknown> };
-        if (extEvent.type === 'widget' && extEvent.widget_type && extEvent.data) {
-          for (const handler of this.handlers.widget) {
-            handler({ widgetType: extEvent.widget_type, data: extEvent.data });
-          }
-        }
+      default:
         break;
-      }
     }
   }
 }

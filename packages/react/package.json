@@ -21,6 +21,12 @@
       "import": "./dist/client.js",
       "default": "./dist/client.js"
     },
+    "./widget": {
+      "types": "./dist/widget/index.d.ts",
+      "import": "./dist/widget.js",
+      "default": "./dist/widget.js"
+    },
+    "./widget/style.css": "./dist/react.css",
     "./style.css": "./dist/react.css"
   },
   "files": [
@@ -31,6 +37,7 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:ci": "vitest run",
     "lint": "eslint src/"
   },
   "peerDependencies": {

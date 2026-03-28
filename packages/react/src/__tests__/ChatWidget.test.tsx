@@ -8,9 +8,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { ChatWidget } from '../components/ChatWidget';
+import { ChatWidget } from '../widget/ChatWidget';
 import { server } from '../test/mocks/server';
-import { encodeSSEEvents, toolCallSSEEvents, skillAndKBSSEEvents, widgetSSEEvents } from '../test/mocks/handlers';
+import { encodeSSEEvents, widgetToolCallSSEEvents as toolCallSSEEvents, skillAndKBSSEEvents, widgetSSEEvents } from '../test/mocks/handlers';
 import type { WidgetEvent } from '../events/types';
 
 const defaultProps = {

@@ -34,6 +34,7 @@ describe('chatReducer', () => {
     isStreaming: false,
     error: null,
     activeToolCalls: [],
+    isHistorical: false,
   };
 
   it('handles SEND_MESSAGE', () => {

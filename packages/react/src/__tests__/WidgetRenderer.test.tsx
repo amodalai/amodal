@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { WidgetRenderer } from '../components/widgets/WidgetRenderer';
+import { WidgetRenderer } from '../widget/widgets/WidgetRenderer';
 
 const sendMessage = vi.fn();
 

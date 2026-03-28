@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useState } from 'react';
-import type { SessionHistoryItem } from '../client';
+import type { SessionHistoryItem } from '../client/chat-api';
 import { TagEditor } from './TagEditor';
 
 export interface SessionHistoryProps {

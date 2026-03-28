@@ -91,8 +91,7 @@ pnpm build
 | [`@amodalai/core`](./packages/core) | Agent SDK — ReAct loop, tools, skills, knowledge, providers |
 | [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores |
 | [`@amodalai/cli`](./packages/cli) | CLI — chat, deploy, init, connect, eval |
-| [`@amodalai/react`](./packages/react) | React hooks and components for embedding agents |
-| [`@amodalai/chat-widget`](./packages/chat-widget) | Embeddable chat widget |
+| [`@amodalai/react`](./packages/react) | React hooks, components, and embeddable chat widget |
 
 ## CLI Commands
 
