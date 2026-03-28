@@ -28,6 +28,9 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
 
+      - name: Configure npm auth
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
+
       - id: changesets
         uses: changesets/action@v1
         with:

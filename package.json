@@ -18,7 +18,7 @@
     "clean": "pnpm -r exec rm -rf dist",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:release": "changeset publish",
+    "changeset:release": "changeset publish --no-git-tag",
     "prepare": "husky"
   },
   "lint-staged": {
