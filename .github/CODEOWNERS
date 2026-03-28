@@ -1,0 +1,13 @@
+# Default owners for everything
+* @amodalai/core-team
+
+# Release and CI config requires explicit review
+.github/ @amodalai/core-team
+.changeset/ @amodalai/core-team
+package.json @amodalai/core-team
+pnpm-workspace.yaml @amodalai/core-team
+
+# Security-sensitive paths
+packages/core/src/security/ @amodalai/core-team
+SECURITY.md @amodalai/core-team
+.npmrc @amodalai/core-team
