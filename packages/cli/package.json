@@ -33,11 +33,11 @@
     "ink-text-input": "^6.0.0",
     "marked": "^17.0.4",
     "marked-terminal": "^7.3.0",
-    "open": "^10.1.0",
+    "open": "^11.0.0",
     "prompts": "^2.4.2",
     "react": "^19.2.4",
     "semver": "^7.6.0",
-    "yargs": "^17.7.2",
+    "yargs": "^18.0.0",
     "zod": "^4.3.6"
   },
   "peerDependencies": {
@@ -49,12 +49,12 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^20.11.24",
+    "@types/node": "^25.5.0",
     "@types/prompts": "^2.4.9",
     "@types/react": "^19.2.14",
     "@types/semver": "^7.7.0",
     "@types/yargs": "^17.0.32",
-    "typescript": "^5.3.3",
-    "vitest": "^3.1.1"
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
   }
 }
