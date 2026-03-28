@@ -14,7 +14,7 @@ This separation is deliberate. The SDK can run embedded in a CLI, behind an HTTP
 Chat Interfaces
   ├── CLI (amodal chat)
   ├── React SDK (@amodalai/react)
-  └── Chat Widget (@amodalai/chat-widget)
+  └── Chat Widget (@amodalai/react/widget)
         │
         ▼
 Runtime (@amodalai/runtime)
@@ -40,8 +40,7 @@ LLM Providers
 | **SDK** | `@amodalai/core` | Reasoning engine. ReAct loop, tool orchestration, knowledge loading, context management, security, audit, multi-provider LLM support. |
 | **Runtime** | `@amodalai/runtime` | HTTP server. SSE streaming, session management, automation scheduling. Reads config from your local git repo. |
 | **CLI** | `@amodalai/cli` | Terminal interface. 30+ commands for project management, chat, eval, and package management. Built with Ink (React terminal renderer). |
-| **React SDK** | `@amodalai/react` | Shared React components and SSE chat client for embedding agents in web apps. |
-| **Chat Widget** | `@amodalai/chat-widget` | Standalone embeddable chat widget with CSS custom property theming. |
+| **React SDK** | `@amodalai/react` | React components, SSE chat client, and embeddable chat widget for web apps. |
 
 ## Data Flow: What Happens When a User Sends a Message
 

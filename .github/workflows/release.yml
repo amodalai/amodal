@@ -3,11 +3,18 @@ name: Release
 on:
   push:
     branches: [main]
+    tags: ["v*.*.*"]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  # On push to main: create/update the "Version Packages" PR via changesets.
+  # When that PR merges, changesets publishes to npm and we create a GitHub Release.
   release:
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     name: Release
     runs-on: ubuntu-latest
     permissions:
@@ -20,6 +27,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup
       - run: pnpm build
+
       - id: changesets
         uses: changesets/action@v1
         with:
@@ -31,6 +39,36 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # When changesets publishes, create a GitHub Release from CHANGELOG.md
+      - name: Create GitHub Release
+        if: steps.changesets.outputs.published == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const packages = JSON.parse('${{ steps.changesets.outputs.publishedPackages }}');
+            const corePkg = packages.find(p => p.name === '@amodalai/core');
+            if (!corePkg) return;
+
+            const tag = `v${corePkg.version}`;
+
+            // Create the tag
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/${tag}`,
+              sha: context.sha,
+            });
+
+            // Create the release
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              generate_release_notes: true,
+            });
+
+  # Manual snapshot releases for testing pre-release builds
   snapshot:
     if: github.event_name == 'workflow_dispatch'
     name: Release snapshot

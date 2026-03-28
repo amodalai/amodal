@@ -14,7 +14,7 @@ export default defineConfig({
     react(),
     dts({
       include: ['src'],
-      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'test/**'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/test/**', 'test/**'],
     }),
   ],
   build: {
@@ -22,6 +22,7 @@ export default defineConfig({
       entry: {
         react: path.resolve(__dirname, 'src/index.ts'),
         client: path.resolve(__dirname, 'src/client/index.ts'),
+        widget: path.resolve(__dirname, 'src/widget/index.ts'),
       },
       formats: ['es'],
     },
@@ -32,6 +33,11 @@ export default defineConfig({
           react: 'React',
           'react-dom': 'ReactDOM',
           'react/jsx-runtime': 'jsxRuntime',
+        },
+        assetFileNames: (info) => {
+          // Route widget CSS to widget.css, main CSS to react.css
+          if (info.name === 'widget.css') return 'widget.css';
+          return 'react.css';
         },
       },
     },

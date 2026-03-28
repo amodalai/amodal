@@ -1,5 +1,9 @@
 # Amodal
 
+[![CI](https://github.com/amodalai/amodal/actions/workflows/ci.yml/badge.svg)](https://github.com/amodalai/amodal/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@amodalai/core)](https://www.npmjs.com/package/@amodalai/core)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
 Open-source agent runtime platform. Define AI agents with markdown and JSON — no application code required.
 
 [Docs](https://docs.amodalai.com) | [Getting Started](#getting-started) | [Architecture](#architecture) | [Contributing](./CONTRIBUTING.md) | [Discord](https://discord.gg/amodalai)
@@ -86,13 +90,16 @@ pnpm build
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| [`@amodalai/core`](./packages/core) | Agent SDK — ReAct loop, tools, skills, knowledge, providers |
-| [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores |
-| [`@amodalai/cli`](./packages/cli) | CLI — chat, deploy, init, connect, eval |
-| [`@amodalai/react`](./packages/react) | React hooks and components for embedding agents |
-| [`@amodalai/chat-widget`](./packages/chat-widget) | Embeddable chat widget |
+These four packages are published to npm and versioned together:
+
+| Package | What it does | Who uses it |
+|---------|-------------|-------------|
+| [`@amodalai/core`](./packages/core) | Agent SDK — ReAct loop, tools, skills, knowledge, providers | Anyone building on or extending the runtime |
+| [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores | Anyone self-hosting the agent server |
+| [`@amodalai/cli`](./packages/cli) | CLI — chat, deploy, init, connect, eval | Every developer using the platform |
+| [`@amodalai/react`](./packages/react) | React hooks, components, and embeddable chat widget | ISVs embedding the agent in their product |
+
+Internal packages (not published to npm): `runtime-app` (Vite dev UI), `docs`, `test-utils`.
 
 ## CLI Commands
 

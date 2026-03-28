@@ -18,7 +18,12 @@
     "clean": "pnpm -r exec rm -rf dist",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:release": "changeset publish"
+    "changeset:release": "changeset publish",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": "eslint --cache --fix",
+    "*.{json,yml,yaml,md}": "prettier --write"
   },
   "overrides": {
     "ink": "npm:@jrichman/ink@6.4.10",
@@ -30,6 +35,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.6.0",
     "@changesets/cli": "^2.27.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^20.11.24",
@@ -46,7 +52,8 @@
     "prettier": "^3.5.3",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.30.1",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.2.0",
     "vitest": "^3.2.4"
-  },
-  "dependencies": {}
+  }
 }

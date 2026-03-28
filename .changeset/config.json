@@ -1,11 +1,11 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
-  "changelog": "@changesets/cli/changelog",
+  "changelog": ["@changesets/changelog-github", { "repo": "amodalai/amodal" }],
   "commit": false,
-  "fixed": [],
+  "fixed": [["@amodalai/core", "@amodalai/runtime", "@amodalai/react", "@amodalai/cli", "@amodalai/runtime-app"]],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@amodalai/cli", "@amodalai/runtime-app", "@amodalai/docs", "@amodalai/test-utils"]
+  "ignore": ["@amodalai/docs", "@amodalai/test-utils"]
 }

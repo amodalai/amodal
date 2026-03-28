@@ -1,22 +1,22 @@
 ---
-description: "@amodalai/chat-widget — standalone embeddable chat widget with SSE streaming and theming."
+description: "@amodalai/react/widget — embeddable chat widget with SSE streaming and theming."
 ---
 
-# @amodalai/chat-widget
+# Chat Widget
 
-A standalone, embeddable chat widget for adding agent-powered chat to any web application. Lighter than `@amodalai/react` — just the chat interface with no extra components.
+A standalone, embeddable chat widget for adding agent-powered chat to any web application. Available as a sub-export of `@amodalai/react`.
 
 ## Installation
 
 ```bash
-npm install @amodalai/chat-widget
+npm install @amodalai/react
 ```
 
 ## Quick Start
 
 ```tsx
-import { ChatWidget } from '@amodalai/chat-widget'
-import '@amodalai/chat-widget/style.css'
+import { ChatWidget } from '@amodalai/react/widget'
+import '@amodalai/react/widget/style.css'
 
 function App() {
   return (
@@ -83,5 +83,4 @@ CSS custom properties — no Tailwind dependency:
 | Format | Size |
 |--------|------|
 | ESM | ~18KB |
-| UMD | ~13KB |
 | CSS | ~6KB |

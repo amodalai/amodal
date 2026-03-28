@@ -4,7 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { setupServer } from 'msw/node';
-import { chatHandlers } from './handlers';
-
-export const server = setupServer(...chatHandlers);
+export { server } from '../../src/test/mocks/server';

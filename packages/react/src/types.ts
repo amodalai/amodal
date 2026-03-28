@@ -53,7 +53,7 @@ export interface SSEToolCallResultEvent {
   type: 'tool_call_result';
   tool_id: string;
   status: 'success' | 'error';
-  result?: string;
+  result?: unknown;
   duration_ms?: number;
   error?: string;
   timestamp: string;
@@ -74,7 +74,7 @@ export interface SSESubagentEvent {
 
 export interface SSESkillActivatedEvent {
   type: 'skill_activated';
-  skill_name: string;
+  skill: string;
   timestamp: string;
 }
 
@@ -87,11 +87,11 @@ export interface SSEWidgetEvent {
 
 export interface SSEKBProposalEvent {
   type: 'kb_proposal';
-  proposal_id: string;
-  scope: string;
+  proposal_id?: string;
+  scope: 'org' | 'segment';
   title: string;
   reasoning: string;
-  status: string;
+  status?: string;
   timestamp: string;
 }
 
@@ -226,7 +226,7 @@ export interface ToolCallInfo {
   toolName: string;
   parameters: Record<string, unknown>;
   status: ToolCallStatus;
-  result?: string;
+  result?: unknown;
   duration_ms?: number;
   error?: string;
   subagentEvents?: SubagentEventInfo[];
@@ -243,6 +243,27 @@ export interface ConfirmationInfo {
   status: 'pending' | 'approved' | 'denied';
 }
 
+export interface KBProposalInfo {
+  scope: 'org' | 'segment';
+  title: string;
+  reasoning: string;
+}
+
+export interface WidgetInfo {
+  widgetType: string;
+  data: Record<string, unknown>;
+}
+
+export type AskUserStatus = 'pending' | 'submitted';
+
+export interface AskUserBlock {
+  type: 'ask_user';
+  askId: string;
+  questions: AskUserQuestion[];
+  status: AskUserStatus;
+  answers?: Record<string, string>;
+}
+
 export interface UserMessage {
   type: 'user';
   id: string;
@@ -256,6 +277,9 @@ export interface AssistantTextMessage {
   text: string;
   toolCalls: ToolCallInfo[];
   confirmations: ConfirmationInfo[];
+  skillActivations: string[];
+  kbProposals: KBProposalInfo[];
+  widgets: WidgetInfo[];
   contentBlocks: ContentBlock[];
   timestamp: string;
 }
@@ -273,7 +297,65 @@ export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'widget'; widgetType: string; data: Record<string, unknown> }
   | { type: 'tool_calls'; calls: ToolCallInfo[] }
-  | { type: 'confirmation'; confirmation: ConfirmationInfo };
+  | { type: 'confirmation'; confirmation: ConfirmationInfo }
+  | AskUserBlock;
+
+// ---------------------------------------------------------------------------
+// Widget configuration
+// ---------------------------------------------------------------------------
+
+export interface ChatUser {
+  id: string;
+  role?: string;
+}
+
+export interface ChatTheme {
+  primaryColor?: string;
+  backgroundColor?: string;
+  fontFamily?: string;
+  fontSize?: string;
+  borderRadius?: string;
+  userBubbleColor?: string;
+  agentBubbleColor?: string;
+  toolCallColor?: string;
+  headerText?: string;
+  placeholder?: string;
+  emptyStateText?: string;
+}
+
+export type WidgetPosition = 'right' | 'bottom' | 'floating' | 'inline';
+
+export interface WidgetConfig {
+  serverUrl: string;
+  user: ChatUser;
+  /** Return a Bearer token (API key or JWT) for authenticated requests. */
+  getToken?: () => string | null | undefined;
+  theme?: ChatTheme;
+  position?: WidgetPosition;
+  defaultOpen?: boolean;
+  onToolCall?: (call: ToolCallInfo) => void;
+  onKBProposal?: (proposal: KBProposalInfo) => void;
+  /** Callback for all widget events (agent-driven + interaction). */
+  onEvent?: (event: import('./events/types').WidgetEvent) => void;
+  /** Custom entity extractors. If provided, replaces the default extractor. */
+  entityExtractors?: Array<import('./events/types').EntityExtractor>;
+  /** Enable session history drawer. */
+  historyEnabled?: boolean;
+  /** Show the message input bar. Defaults to true. */
+  showInput?: boolean;
+  /** Session type — controls which skills, tools, KB docs load into this session. */
+  sessionType?: string;
+  /** Specific deployment ID to load instead of the active deployment. */
+  deployId?: string;
+  /** Auto-send this message when the widget mounts. Sent exactly once. */
+  initialMessage?: string;
+  /** Load an existing session on mount (read-only history view). Takes precedence over initialMessage. */
+  resumeSessionId?: string;
+  /** Called when the SSE stream ends (agent finishes responding). */
+  onStreamEnd?: () => void;
+  /** Called when a session ID is received from the server (first stream init). */
+  onSessionCreated?: (sessionId: string) => void;
+}
 
 // ---------------------------------------------------------------------------
 // Chat state
@@ -285,6 +367,8 @@ export interface ChatState {
   isStreaming: boolean;
   error: string | null;
   activeToolCalls: ToolCallInfo[];
+  /** True when viewing a loaded historical session (read-only) */
+  isHistorical: boolean;
 }
 
 export type ChatAction =
@@ -292,13 +376,20 @@ export type ChatAction =
   | { type: 'STREAM_INIT'; sessionId: string }
   | { type: 'STREAM_TEXT_DELTA'; content: string }
   | { type: 'STREAM_TOOL_CALL_START'; toolId: string; toolName: string; parameters: Record<string, unknown> }
-  | { type: 'STREAM_TOOL_CALL_RESULT'; toolId: string; status: 'success' | 'error'; result?: string; duration_ms?: number; error?: string }
+  | { type: 'STREAM_TOOL_CALL_RESULT'; toolId: string; status: 'success' | 'error'; result?: unknown; duration_ms?: number; error?: string }
   | { type: 'STREAM_SUBAGENT_EVENT'; parentToolId: string; event: SubagentEventInfo }
+  | { type: 'STREAM_SKILL_ACTIVATED'; skill: string }
+  | { type: 'STREAM_KB_PROPOSAL'; scope: 'org' | 'segment'; title: string; reasoning: string }
   | { type: 'STREAM_WIDGET'; widgetType: string; data: Record<string, unknown> }
+  | { type: 'STREAM_CREDENTIAL_SAVED'; connectionName: string }
+  | { type: 'STREAM_APPROVED'; resourceType: string; previewId: string }
+  | { type: 'STREAM_ASK_USER'; askId: string; questions: AskUserQuestion[] }
+  | { type: 'ASK_USER_SUBMITTED'; askId: string; answers: Record<string, string> }
   | { type: 'STREAM_CONFIRMATION_REQUIRED'; confirmation: ConfirmationInfo }
   | { type: 'CONFIRMATION_RESPONDED'; correlationId: string; approved: boolean }
   | { type: 'STREAM_ERROR'; message: string }
   | { type: 'STREAM_DONE' }
+  | { type: 'LOAD_HISTORY'; sessionId: string; messages: ChatMessage[] }
   | { type: 'RESET' };
 
 // ---------------------------------------------------------------------------
