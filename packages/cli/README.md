@@ -18,18 +18,34 @@ amodal dev
 
 ## Commands
 
-| Command          | Description                            |
+<<<<<<< HEAD
+| Command | Description |
 | ---------------- | -------------------------------------- |
-| `amodal init`    | Scaffold a new agent project           |
-| `amodal dev`     | Start local dev server with hot reload |
-| `amodal chat`    | Interactive chat session               |
-| `amodal connect` | Manage external service connections    |
-| `amodal eval`    | Run evaluation suites                  |
-| `amodal build`   | Build agent snapshot                   |
-| `amodal deploy`  | Deploy to platform                     |
-| `amodal install` | Install a plugin package               |
-| `amodal publish` | Publish plugins to marketplace         |
-| `amodal search`  | Search repo contents                   |
+| `amodal init` | Scaffold a new agent project |
+| `amodal dev` | Start local dev server with hot reload |
+| `amodal chat` | Interactive chat session |
+| `amodal connect` | Manage external service connections |
+| `amodal eval` | Run evaluation suites |
+| `amodal build` | Build agent snapshot |
+| `amodal deploy` | Deploy to platform |
+| `amodal install` | Install a plugin package |
+| `amodal publish` | Publish plugins to marketplace |
+| `amodal search` | Search repo contents |
+=======
+| Command | Description |
+|---------|-------------|
+| `amodal init` | Scaffold a new agent project |
+| `amodal dev` | Start local dev server with hot reload |
+| `amodal chat` | Interactive chat session |
+| `amodal connect` | Manage external service connections |
+| `amodal eval` | Run evaluation suites |
+| `amodal build` | Build agent snapshot |
+| `amodal deploy` | Deploy to platform |
+| `amodal install` | Install a plugin package |
+| `amodal publish` | Publish plugins to marketplace |
+| `amodal search` | Search repo contents |
+
+> > > > > > > origin/dependabot/npm_and_yarn/production-dependencies-f37ffb3055
 
 See `amodal --help` for the full command list.
 

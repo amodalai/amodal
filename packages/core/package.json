@@ -25,16 +25,16 @@
     "dist"
   ],
   "dependencies": {
-    "@google/gemini-cli-core": "^0.34.0",
+    "@google/gemini-cli-core": "^0.35.3",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "js-yaml": "^4.1.1",
-    "zod": "^3.25.76"
+    "zod": "^4.3.6"
   },
   "optionalDependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.700.0",
-    "@google/genai": "1.30.0",
-    "openai": "^4.80.0"
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1019.0",
+    "@google/genai": "1.47.0",
+    "openai": "^6.33.0"
   },
   "devDependencies": {
     "@amodalai/test-utils": "workspace:*",
@@ -42,7 +42,7 @@
     "@types/mock-fs": "^4.13.4",
     "mock-fs": "^5.5.0",
     "typescript": "^5.3.3",
-    "vitest": "^3.1.1"
+    "vitest": "^4.1.2"
   },
   "engines": {
     "node": ">=20"

@@ -11,8 +11,13 @@ npm install @amodalai/react
 ## Quick start
 
 ```tsx
+<<<<<<< HEAD
 import { ChatWidget } from "@amodalai/react/widget";
 import "@amodalai/react/widget/style.css";
+=======
+import { ChatWidget } from '@amodalai/react/widget'
+import '@amodalai/react/widget/style.css'
+>>>>>>> origin/dependabot/npm_and_yarn/production-dependencies-f37ffb3055
 
 function App() {
   return (
@@ -20,7 +25,11 @@ function App() {
       endpoint="https://your-runtime.example.com"
       tenantId="your-tenant-id"
     />
+<<<<<<< HEAD
   );
+=======
+  )
+>>>>>>> origin/dependabot/npm_and_yarn/production-dependencies-f37ffb3055
 }
 ```
 
