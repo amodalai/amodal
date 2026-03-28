@@ -18,7 +18,12 @@
     "clean": "pnpm -r exec rm -rf dist",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:release": "changeset publish"
+    "changeset:release": "changeset publish",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": "eslint --cache --fix",
+    "*.{json,yml,yaml,md}": "prettier --write"
   },
   "overrides": {
     "ink": "npm:@jrichman/ink@6.4.10",
@@ -47,6 +52,8 @@
     "prettier": "^3.5.3",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.30.1",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.2.0",
     "vitest": "^3.2.4"
   }
 }

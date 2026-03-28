@@ -46,10 +46,10 @@ jobs:
         with:
           script: |
             const packages = JSON.parse('${{ steps.changesets.outputs.publishedPackages }}');
-            const core = packages.find(p => p.name === '@amodalai/core');
-            if (!core) return;
+            const corePkg = packages.find(p => p.name === '@amodalai/core');
+            if (!corePkg) return;
 
-            const tag = `v${core.version}`;
+            const tag = `v${corePkg.version}`;
 
             // Create the tag
             await github.rest.git.createRef({
