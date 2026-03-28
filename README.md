@@ -90,12 +90,16 @@ pnpm build
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| [`@amodalai/core`](./packages/core) | Agent SDK — ReAct loop, tools, skills, knowledge, providers |
-| [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores |
-| [`@amodalai/cli`](./packages/cli) | CLI — chat, deploy, init, connect, eval |
-| [`@amodalai/react`](./packages/react) | React hooks, components, and embeddable chat widget |
+These four packages are published to npm and versioned together:
+
+| Package | What it does | Who uses it |
+|---------|-------------|-------------|
+| [`@amodalai/core`](./packages/core) | Agent SDK — ReAct loop, tools, skills, knowledge, providers | Anyone building on or extending the runtime |
+| [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores | Anyone self-hosting the agent server |
+| [`@amodalai/cli`](./packages/cli) | CLI — chat, deploy, init, connect, eval | Every developer using the platform |
+| [`@amodalai/react`](./packages/react) | React hooks, components, and embeddable chat widget | ISVs embedding the agent in their product |
+
+Internal packages (not published to npm): `runtime-app` (Vite dev UI), `docs`, `test-utils`.
 
 ## CLI Commands
 
