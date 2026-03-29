@@ -40,7 +40,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
-      - run: pnpm --filter @amodalai/core --filter @amodalai/runtime --filter @amodalai/react --filter @amodalai/cli --filter @amodalai/runtime-app run build
+      - run: pnpm --filter @amodalai/core --filter @amodalai/runtime --filter @amodalai/react --filter @amodalai/amodal --filter @amodalai/runtime-app run build
       - run: pnpm test:ci
 
   build:

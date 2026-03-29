@@ -29,7 +29,7 @@ my-agent/
 ### Install
 
 ```bash
-npm install -g @amodalai/cli
+npm install -g @amodalai/amodal
 ```
 
 ### Create an agent
@@ -92,35 +92,35 @@ pnpm build
 
 These four packages are published to npm and versioned together:
 
-| Package | What it does | Who uses it |
-|---------|-------------|-------------|
-| [`@amodalai/core`](./packages/core) | Agent SDK — ReAct loop, tools, skills, knowledge, providers | Anyone building on or extending the runtime |
-| [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores | Anyone self-hosting the agent server |
-| [`@amodalai/cli`](./packages/cli) | CLI — chat, deploy, init, connect, eval | Every developer using the platform |
-| [`@amodalai/react`](./packages/react) | React hooks, components, and embeddable chat widget | ISVs embedding the agent in their product |
+| Package                                   | What it does                                                | Who uses it                                 |
+| ----------------------------------------- | ----------------------------------------------------------- | ------------------------------------------- |
+| [`@amodalai/core`](./packages/core)       | Agent SDK — ReAct loop, tools, skills, knowledge, providers | Anyone building on or extending the runtime |
+| [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores     | Anyone self-hosting the agent server        |
+| [`@amodalai/amodal`](./packages/cli)      | CLI — chat, deploy, init, connect, eval                     | Every developer using the platform          |
+| [`@amodalai/react`](./packages/react)     | React hooks, components, and embeddable chat widget         | ISVs embedding the agent in their product   |
 
 Internal packages (not published to npm): `runtime-app` (Vite dev UI), `docs`, `test-utils`.
 
 ## CLI Commands
 
-| Command | Description |
-|---------|-------------|
-| `amodal init` | Scaffold a new agent project |
-| `amodal dev` | Start local dev server with hot reload |
-| `amodal chat` | Interactive chat session |
-| `amodal connect` | Manage external service connections |
-| `amodal eval` | Run evaluation suites |
-| `amodal validate` | Validate agent configuration |
-| `amodal build` | Build agent snapshot |
-| `amodal inspect` | Inspect agent config, tools, and skills |
-| `amodal install` | Install a plugin package |
-| `amodal uninstall` | Remove a plugin package |
-| `amodal publish` | Publish plugins to marketplace |
-| `amodal search` | Search repo contents |
-| `amodal diff` | Compare configurations |
-| `amodal audit` | Review agent audit logs |
-| `amodal docker` | Generate Docker deployment files |
-| `amodal serve` | Start the runtime server |
+| Command            | Description                             |
+| ------------------ | --------------------------------------- |
+| `amodal init`      | Scaffold a new agent project            |
+| `amodal dev`       | Start local dev server with hot reload  |
+| `amodal chat`      | Interactive chat session                |
+| `amodal connect`   | Manage external service connections     |
+| `amodal eval`      | Run evaluation suites                   |
+| `amodal validate`  | Validate agent configuration            |
+| `amodal build`     | Build agent snapshot                    |
+| `amodal inspect`   | Inspect agent config, tools, and skills |
+| `amodal install`   | Install a plugin package                |
+| `amodal uninstall` | Remove a plugin package                 |
+| `amodal publish`   | Publish plugins to marketplace          |
+| `amodal search`    | Search repo contents                    |
+| `amodal diff`      | Compare configurations                  |
+| `amodal audit`     | Review agent audit logs                 |
+| `amodal docker`    | Generate Docker deployment files        |
+| `amodal serve`     | Start the runtime server                |
 
 See the [full CLI reference](https://docs.amodalai.com/cli) for cloud and platform commands (`deploy`, `login`, `secrets`, `promote`, `rollback`, and more).
 

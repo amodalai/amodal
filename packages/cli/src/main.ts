@@ -5,9 +5,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {readFileSync} from 'node:fs';
 import yargs from 'yargs';
 import {hideBin} from 'yargs/helpers';
 import {amodalCommands} from './commands/index.js';
+
+const raw: unknown = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
+if (typeof raw !== 'object' || raw === null || !('version' in raw) || typeof raw.version !== 'string') {
+  throw new Error('Failed to read version from package.json');
+}
+const pkgVersion = raw.version;
 
 const cli = yargs(hideBin(process.argv))
   .scriptName('amodal')
@@ -22,7 +29,7 @@ cli
   .strict()
   .help()
   .alias('h', 'help')
-  .version(process.env['CLI_VERSION'] ?? '0.0.0')
+  .version(process.env['CLI_VERSION'] ?? pkgVersion)
   .alias('v', 'version');
 
 void cli.parse();
