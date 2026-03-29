@@ -246,8 +246,8 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          name: '@amodalai/cli',
-          message: 'Please use relative imports within the @amodalai/cli package.',
+          name: '@amodalai/amodal',
+          message: 'Please use relative imports within the @amodalai/amodal package.',
         },
       ],
     },

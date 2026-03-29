@@ -1,4 +1,4 @@
-# @amodalai/cli
+# @amodalai/amodal
 
 ## 0.1.1
 

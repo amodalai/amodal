@@ -1,11 +1,11 @@
-# @amodalai/cli
+# @amodalai/amodal
 
 The developer CLI for building, testing, and deploying Amodal agents.
 
 ## Install
 
 ```bash
-npm install -g @amodalai/cli
+npm install -g @amodalai/amodal
 ```
 
 ## Quick start
