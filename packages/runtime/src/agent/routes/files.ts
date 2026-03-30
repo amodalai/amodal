@@ -8,6 +8,7 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import {readdir, readFile, writeFile, stat, mkdir} from 'node:fs/promises';
 import path from 'node:path';
+import rateLimit from 'express-rate-limit';
 
 export interface FilesRouterOptions {
   repoPath: string;
@@ -79,8 +80,15 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
   const router = Router();
   const {repoPath} = options;
 
+  const filesRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs for file operations
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   /** Get the repo file tree (convention directories + config). */
-  router.get('/api/files', async (_req: Request, res: Response) => {
+  router.get('/api/files', filesRateLimiter, async (_req: Request, res: Response) => {
     try {
       const tree: FileTreeEntry[] = [];
 
@@ -115,7 +123,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
   });
 
   /** Read a file's contents. */
-  router.get('/api/files/*', async (req: Request, res: Response) => {
+  router.get('/api/files/*', filesRateLimiter, async (req: Request, res: Response) => {
     try {
       // Extract path after /api/files/
       const filePath = req.params[0] ?? '';
