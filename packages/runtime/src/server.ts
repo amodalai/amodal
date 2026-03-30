@@ -41,6 +41,8 @@ export interface CreateServerOptions {
   platformApiUrl?: string;
   /** JWKS URL for JWT verification (defaults to platformApiUrl/.well-known/jwks.json) */
   jwksUrl?: string;
+  /** Middleware to mount before the error handler (e.g., static file serving) */
+  fallbackMiddleware?: express.RequestHandler;
 }
 
 /**
@@ -133,6 +135,11 @@ export function createServer(options: CreateServerOptions): ServerInstance {
       runAutomation,
     }),
   );
+
+  // Fallback middleware (e.g., static file serving for custom domains)
+  if (options.fallbackMiddleware) {
+    app.use(options.fallbackMiddleware);
+  }
 
   // Error handler (must be last)
   app.use(errorHandler);
