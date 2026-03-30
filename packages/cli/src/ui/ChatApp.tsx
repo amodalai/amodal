@@ -83,16 +83,17 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     }
   }, [resume.messages, resumeSessionId, dispatch]);
 
-  // Keyboard navigation for scrolling
-  const canScroll = !state.isStreaming && !state.pendingQuestion && !state.pendingConfirmation && !state.showSessionBrowser;
+  // Ctrl+C always active — exits the app
   useInput((_input, key) => {
     if (key.ctrl && _input === 'c') {
       exit();
-      return;
     }
+  });
 
-    if (!canScroll) return;
-
+  // Scroll keybindings — only active when input bar is NOT showing
+  // (i.e., during streaming, prompts, or session browser)
+  const isInputBarVisible = !state.isStreaming && !state.pendingQuestion && !state.pendingConfirmation && !state.showSessionBrowser;
+  useInput((_input, key) => {
     // j/k line scroll
     if (_input === 'j') {
       scroll.scrollBy(1);
@@ -107,13 +108,13 @@ export const ChatApp: React.FC<ChatAppProps> = ({
       scroll.scrollBy(viewportHeight);
     }
 
-    // Home/End (map to Meta+< and Meta+>)
+    // Home/End
     if (key.home) {
       scroll.scrollToTop();
     } else if (key.end) {
       scroll.scrollToBottom();
     }
-  });
+  }, {isActive: !isInputBarVisible});
 
   // Slash command handler
   const handleSlashCommand = useCallback(
