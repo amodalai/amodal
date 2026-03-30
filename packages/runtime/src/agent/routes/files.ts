@@ -8,6 +8,7 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import rateLimit from 'express-rate-limit';
 import {readdir, readFile, writeFile, stat, mkdir} from 'node:fs/promises';
+import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import rateLimit from 'express-rate-limit';
 
@@ -79,6 +80,13 @@ function validateFilePath(repoPath: string, filePath: string): string | null {
 
 export function createFilesRouter(options: FilesRouterOptions): Router {
   const router = Router();
+  const writeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   const {repoPath} = options;
   const filesLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -145,7 +153,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
         res.status(403).json({error: {code: 'FORBIDDEN', message: 'Path outside repo'}});
         return;
       }
-
+  router.put('/api/files/*', writeLimiter, async (req: Request, res: Response) => {
       const content = await readFile(resolved, 'utf-8');
       const ext = path.extname(filePath).slice(1);
 
