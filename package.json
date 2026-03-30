@@ -9,7 +9,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "pnpm -r run build",
+    "build": "pnpm -r --filter '!@amodalai/docs' run build",
     "test": "pnpm -r run test",
     "test:ci": "pnpm -r run test:ci",
     "lint": "eslint . --cache",
