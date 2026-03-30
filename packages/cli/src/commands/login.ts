@@ -143,12 +143,34 @@ export async function runLogin(options: LoginOptions = {}): Promise<number> {
   const platformUrl = options.platformUrl ?? process.env['PLATFORM_API_URL'] ?? DEFAULT_PLATFORM_URL;
   const adminUrl = options.adminUrl ?? process.env['ADMIN_UI_URL'] ?? DEFAULT_ADMIN_UI_URL;
 
-  // Check if already logged in
+  // Check if already logged in — try refreshing the token first
   const rc = await readRcFile();
   if (rc.platform?.url === platformUrl && rc.platform.token) {
-    process.stderr.write(`[login] Already logged in to ${platformUrl}\n`);
-    process.stderr.write('[login] Run `amodal logout` first, or use --platform-url for a different instance.\n');
-    return 0;
+    // Try the existing token
+    const meRes = await fetch(`${platformUrl}/api/me`, {
+      headers: {Authorization: `Bearer ${rc.platform.token}`},
+    }).catch(() => null);
+
+    if (meRes?.ok) {
+      process.stderr.write(`[login] Already logged in to ${platformUrl}\n`);
+      return 0;
+    }
+
+    // Token expired — try refresh
+    if (rc.platform.refreshToken) {
+      process.stderr.write('[login] Token expired, refreshing...\n');
+      const refreshed = await refreshAccessToken(platformUrl, rc.platform.refreshToken);
+      if (refreshed) {
+        rc.platform.token = refreshed.token;
+        rc.platform.refreshToken = refreshed.refreshToken;
+        await writeRcFile(rc);
+        process.stderr.write('[login] Token refreshed successfully.\n');
+        return 0;
+      }
+    }
+
+    // Refresh failed — proceed to re-login
+    process.stderr.write('[login] Session expired. Re-authenticating...\n');
   }
 
   // Start local callback server
@@ -233,6 +255,56 @@ export async function runLogin(options: LoginOptions = {}): Promise<number> {
     }
   }
 }
+
+/**
+ * Refresh an expired Supabase access token using the refresh token.
+ */
+async function refreshAccessToken(
+  platformUrl: string,
+  refreshToken: string,
+): Promise<{token: string; refreshToken: string} | null> {
+  try {
+    const res = await fetch(`${platformUrl}/api/auth/refresh`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({refresh_token: refreshToken}),
+    });
+    if (!res.ok) return null;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const data = (await res.json()) as {access_token?: string; refresh_token?: string};
+    if (!data.access_token) return null;
+    return {
+      token: data.access_token,
+      refreshToken: data.refresh_token ?? refreshToken,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Log out by removing saved credentials.
+ */
+export async function runLogout(): Promise<number> {
+  const rc = await readRcFile();
+  if (!rc.platform) {
+    process.stderr.write('[logout] Not logged in.\n');
+    return 0;
+  }
+  delete rc.platform;
+  await writeRcFile(rc);
+  process.stderr.write('[logout] Logged out.\n');
+  return 0;
+}
+
+export const logoutCommand: CommandModule = {
+  command: 'logout',
+  describe: 'Log out from the amodal platform',
+  handler: async () => {
+    const code = await runLogout();
+    process.exit(code);
+  },
+};
 
 export const loginCommand: CommandModule = {
   command: 'login',

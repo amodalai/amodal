@@ -5,11 +5,14 @@
  */
 
 import {execSync} from 'node:child_process';
+import {createReadStream} from 'node:fs';
 import type {CommandModule} from 'yargs';
 import {loadRepo, buildSnapshot, serializeSnapshot, snapshotSizeBytes} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 import {PlatformClient} from '../shared/platform-client.js';
 import {runValidate} from './validate.js';
+import {createRepoTarball} from '../shared/tarball.js';
+import {readProjectLink} from './link.js';
 
 export interface DeployOptions {
   cwd?: string;
@@ -107,11 +110,24 @@ export async function runDeploy(options: DeployOptions = {}): Promise<number> {
   }
 
   try {
-    const result = await client.uploadSnapshot(snapshot, {environment});
+    // Create tarball of the repo for server-side runtime-app build
+    process.stderr.write('[deploy] Packaging repo...\n');
+    const tarballPath = await createRepoTarball(repoPath);
+
+    // Read appId from project link
+    const projectLink = await readProjectLink();
+    const appId = projectLink?.appId;
+
+    const result = await client.deployWithRepo(snapshot, createReadStream(tarballPath), {environment, appId});
     process.stderr.write(`[deploy] Deployed ${result.id} to ${result.environment}\n`);
     if (result.message) {
       process.stderr.write(`[deploy] Message: ${result.message}\n`);
     }
+
+    // Cleanup tarball
+    const {unlinkSync} = await import('node:fs');
+    try { unlinkSync(tarballPath); } catch { /* best-effort */ }
+
     return 0;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

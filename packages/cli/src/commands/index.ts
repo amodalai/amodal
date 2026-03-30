@@ -16,7 +16,7 @@ import {updateCommand} from './update.js';
 import {diffCommand} from './diff.js';
 import {searchCommand} from './search.js';
 import {publishCommand} from './publish.js';
-import {loginCommand} from './login.js';
+import {loginCommand, logoutCommand} from './login.js';
 import {linkCommand} from './link.js';
 import {syncCommand} from './sync.js';
 import {secretsCommand} from './secrets.js';
@@ -54,6 +54,7 @@ export const amodalCommands = [
   searchCommand,
   publishCommand,
   loginCommand,
+  logoutCommand,
   linkCommand,
   syncCommand,
   // Platform
