@@ -23,6 +23,7 @@ const initialState: ChatState = {
   error: null,
   activeToolCalls: [],
   isHistorical: false,
+  usage: {inputTokens: 0, outputTokens: 0},
 };
 
 let messageCounter = 0;
@@ -215,7 +216,10 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         );
         doneMessages[doneMessages.length - 1] = { ...lastMsg, toolCalls: stoppedCalls, contentBlocks: stoppedBlocks };
       }
-      return { ...state, messages: doneMessages, isStreaming: false, activeToolCalls: [] };
+      const newUsage = action.usage
+        ? {inputTokens: state.usage.inputTokens + action.usage.inputTokens, outputTokens: state.usage.outputTokens + action.usage.outputTokens}
+        : state.usage;
+      return { ...state, messages: doneMessages, isStreaming: false, activeToolCalls: [], usage: newUsage };
     }
     case 'RESET':
       return { ...initialState };
@@ -247,6 +251,7 @@ export interface UseAmodalChatReturn {
   activeToolCalls: ToolCallInfo[];
   sessionId: string | null;
   error: string | null;
+  usage: {inputTokens: number; outputTokens: number};
   reset: () => void;
   respondToConfirmation: (correlationId: string, approved: boolean) => void;
 }
@@ -358,7 +363,10 @@ export function useAmodalChat(options?: UseAmodalChatOptions): UseAmodalChatRetu
                 break;
               case 'done':
                 receivedDone = true;
-                dispatch({ type: 'STREAM_DONE' });
+                dispatch({
+                  type: 'STREAM_DONE',
+                  usage: event.usage ? {inputTokens: event.usage.input_tokens, outputTokens: event.usage.output_tokens} : undefined,
+                });
                 callbacksRef.current?.onStreamEnd?.();
                 break;
               default:
@@ -437,6 +445,7 @@ export function useAmodalChat(options?: UseAmodalChatOptions): UseAmodalChatRetu
     activeToolCalls: state.activeToolCalls,
     sessionId: state.sessionId,
     error: state.error,
+    usage: state.usage,
     reset,
     respondToConfirmation,
   };

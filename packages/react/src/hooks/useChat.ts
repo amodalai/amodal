@@ -26,7 +26,7 @@ const initialState: ChatState = {
   isStreaming: false,
   error: null,
   activeToolCalls: [],
-  isHistorical: false,
+  isHistorical: false, usage: {inputTokens: 0, outputTokens: 0},
 };
 
 let messageCounter = 0;
@@ -63,7 +63,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         isStreaming: true,
         error: null,
         activeToolCalls: [],
-        isHistorical: false,
+        isHistorical: false, usage: {inputTokens: 0, outputTokens: 0},
       };
     }
     case 'STREAM_INIT':

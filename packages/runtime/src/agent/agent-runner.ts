@@ -65,6 +65,8 @@ export async function* runAgentTurn(
   const systemPrompt = buildSystemPrompt(session);
 
   let turns = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
 
   while (turns < MAX_TURNS) {
     if (signal.aborted) {
@@ -87,7 +89,7 @@ export async function* runAgentTurn(
 
       // Use streaming when available for real-time text delivery
       if (provider.chatStream) {
-        const {content, hasToolUse, toolResults} = yield* processStream(
+        const {content, hasToolUse, toolResults, usage: streamUsage} = yield* processStream(
           provider.chatStream(chatRequest),
           session,
           signal,
@@ -95,6 +97,10 @@ export async function* runAgentTurn(
 
         // Store assistant message
         session.conversationHistory.push({role: 'assistant', content});
+        if (streamUsage) {
+          totalInputTokens += streamUsage.inputTokens;
+          totalOutputTokens += streamUsage.outputTokens;
+        }
 
         if (hasToolUse && toolResults.length > 0) {
           session.conversationHistory.push(...toolResults);
@@ -174,6 +180,10 @@ export async function* runAgentTurn(
       }
 
       session.conversationHistory.push({role: 'assistant', content: response.content});
+      if (response.usage) {
+        totalInputTokens += response.usage.inputTokens;
+        totalOutputTokens += response.usage.outputTokens;
+      }
 
       if (hasToolUse && toolResults.length > 0) {
         session.conversationHistory.push(...toolResults);
@@ -196,7 +206,12 @@ export async function* runAgentTurn(
     };
   }
 
-  yield {type: SSEEventType.Done, timestamp: ts()};
+  const doneEvent: SSEEvent = {
+    type: SSEEventType.Done,
+    timestamp: ts(),
+    usage: totalInputTokens > 0 ? {input_tokens: totalInputTokens, output_tokens: totalOutputTokens, cached_tokens: 0, total_tokens: totalInputTokens + totalOutputTokens} : undefined,
+  };
+  yield doneEvent;
 }
 
 // ---------------------------------------------------------------------------
@@ -939,10 +954,11 @@ async function* processStream(
   stream: AsyncGenerator<LLMStreamEvent>,
   session: AgentSession,
   signal: AbortSignal,
-): AsyncGenerator<SSEEvent, {content: LLMResponseBlock[]; hasToolUse: boolean; toolResults: LLMToolResultMessage[]}> {
+): AsyncGenerator<SSEEvent, {content: LLMResponseBlock[]; hasToolUse: boolean; toolResults: LLMToolResultMessage[]; usage?: {inputTokens: number; outputTokens: number}}> {
   const content: LLMResponseBlock[] = [];
   const toolResults: LLMToolResultMessage[] = [];
   let hasToolUse = false;
+  let turnUsage: {inputTokens: number; outputTokens: number} | undefined;
 
   // Accumulate text and tool call data from stream events
   let currentText = '';
@@ -1044,6 +1060,9 @@ async function* processStream(
           content.push({type: 'text', text: currentText});
           currentText = '';
         }
+        if (event.usage) {
+          turnUsage = event.usage;
+        }
         break;
 
       default:
@@ -1056,7 +1075,7 @@ async function* processStream(
     content.push({type: 'text', text: currentText});
   }
 
-  return {content, hasToolUse, toolResults};
+  return {content, hasToolUse, toolResults, usage: turnUsage};
 }
 
 function processTextOutput(session: AgentSession, text: string): string {
