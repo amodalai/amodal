@@ -204,6 +204,10 @@ export function Sidebar() {
 
         {automations.length > 0 && (
           <CollapsibleSection label="Automations" icon={<Zap className="h-3.5 w-3.5 shrink-0 text-purple-500/60" />} count={automations.length}>
+            <NavItem to="/automations">
+              <Zap className="h-3.5 w-3.5 shrink-0 text-purple-500/40" />
+              Manage
+            </NavItem>
             {automations.map((name) => (
               <InfoItem key={name} icon={<Zap className="h-3 w-3 shrink-0 text-purple-500/40" />} label={name} />
             ))}

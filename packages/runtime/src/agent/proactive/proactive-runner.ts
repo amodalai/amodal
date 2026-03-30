@@ -26,9 +26,14 @@ interface CronJob {
 export interface AutomationInfo {
   name: string;
   title: string;
+  prompt: string;
   schedule?: string;
+  trigger: string;
   webhookTriggered: boolean;
   running: boolean;
+  lastRun?: string;
+  lastRunStatus?: 'success' | 'error';
+  lastRunError?: string;
 }
 
 /**
@@ -42,6 +47,7 @@ export class ProactiveRunner {
   private readonly config: ProactiveRunnerConfig;
   private readonly automations: Map<string, RunnableAutomation> = new Map();
   private readonly cronJobs: Map<string, CronJob> = new Map();
+  private readonly runHistory: Map<string, {timestamp: string; status: 'success' | 'error'; error?: string}> = new Map();
 
   constructor(repo: AmodalRepo, config: ProactiveRunnerConfig) {
     this.config = config;
@@ -153,13 +159,21 @@ export class ProactiveRunner {
    * List all registered automations with their running state.
    */
   listAutomations(): AutomationInfo[] {
-    return [...this.automations.values()].map((a) => ({
-      name: a.name,
-      title: a.title,
-      schedule: a.schedule,
-      webhookTriggered: a.isWebhookTriggered,
-      running: a.isWebhookTriggered || this.cronJobs.has(a.name),
-    }));
+    return [...this.automations.values()].map((a) => {
+      const history = this.runHistory.get(a.name);
+      return {
+        name: a.name,
+        title: a.title,
+        prompt: a.prompt,
+        schedule: a.schedule,
+        trigger: a.isWebhookTriggered ? 'webhook' : a.schedule ? 'cron' : 'manual',
+        webhookTriggered: a.isWebhookTriggered,
+        running: a.isWebhookTriggered || this.cronJobs.has(a.name),
+        lastRun: history?.timestamp,
+        lastRunStatus: history?.status,
+        lastRunError: history?.error,
+      };
+    });
   }
 
   /**
@@ -218,9 +232,11 @@ export class ProactiveRunner {
         this.config.webhookSecret,
       );
 
+      this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'success'});
       process.stderr.write(`[proactive] Completed "${automation.name}"\n`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'error', error: msg});
       process.stderr.write(`[proactive] Error in "${automation.name}": ${msg}\n`);
       throw err;
     } finally {

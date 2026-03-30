@@ -56,10 +56,10 @@ export function createAutomationRouter(options: AutomationRouterOptions): Router
     try {
       const result = await options.runner.triggerAutomation(name, payload);
       if (!result.success) {
-        res.status(404).json({error: result.error});
+        res.status(result.error?.includes('not found') ? 404 : 500).json({status: 'error', automation: name, error: result.error});
         return;
       }
-      res.json({status: 'triggered', automation: name});
+      res.json({status: 'completed', automation: name});
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: msg});

@@ -4,83 +4,164 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useState } from 'react';
-import { Zap, Play, Square } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Zap, Play, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 interface AutomationInfo {
   name: string;
+  title: string;
+  prompt: string;
   schedule?: string;
+  trigger: string;
   running: boolean;
   lastRun?: string;
-  nextRun?: string;
+  lastRunStatus?: 'success' | 'error';
+  lastRunError?: string;
 }
 
-/**
- * Automations status page — shows registered automations and their status.
- */
+function formatRelative(ts: string): string {
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${String(mins)}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${String(hours)}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${String(days)}d ago`;
+}
+
 export function AutomationsPage() {
   const [automations, setAutomations] = useState<AutomationInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [runningNames, setRunningNames] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    async function fetchAutomations() {
-      try {
-        const res = await fetch('/automations');
-        if (res.ok) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const body = await res.json() as { automations: AutomationInfo[] };
-          setAutomations(body.automations);
-        }
-      } catch {
-        // Automations endpoint may not exist if none defined
-      } finally {
-        setIsLoading(false);
+  const fetchAutomations = useCallback(async () => {
+    try {
+      const res = await fetch('/automations');
+      if (res.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+        const body = await res.json() as { automations: AutomationInfo[] };
+        setAutomations(body.automations);
       }
+    } catch {
+      // endpoint may not exist
+    } finally {
+      setIsLoading(false);
     }
-    void fetchAutomations();
   }, []);
 
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Automations</h1>
+  useEffect(() => {
+    void fetchAutomations();
+  }, [fetchAutomations]);
 
-      {isLoading ? (
-        <div className="text-muted-foreground text-sm">Loading...</div>
-      ) : automations.length === 0 ? (
-        <div className="text-muted-foreground text-sm">
-          No automations defined. Add <code>.json</code> or <code>.md</code> files to <code>automations/</code>.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {automations.map((auto) => (
-            <div
-              key={auto.name}
-              className="border rounded-lg p-4 flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <Zap className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <div className="font-medium text-sm">{auto.name}</div>
-                  {auto.schedule && (
-                    <div className="text-xs text-muted-foreground">{auto.schedule}</div>
-                  )}
+  const handleRunNow = useCallback(async (name: string) => {
+    setRunningNames((prev) => new Set([...prev, name]));
+    try {
+      await fetch(`/automations/${encodeURIComponent(name)}/run`, { method: 'POST' });
+    } catch {
+      // error handled by server
+    } finally {
+      setRunningNames((prev) => {
+        const next = new Set(prev);
+        next.delete(name);
+        return next;
+      });
+      void fetchAutomations();
+    }
+  }, [fetchAutomations]);
+
+  return (
+    <div className="h-full bg-white dark:bg-[#0a0a0f]">
+      <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
+        <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Automations</h1>
+        <p className="text-sm text-gray-500 dark:text-zinc-500 mt-0.5">
+          {automations.length} automation{automations.length !== 1 ? 's' : ''} configured
+        </p>
+      </div>
+
+      <div className="p-6 max-w-3xl">
+        {isLoading ? (
+          <div className="text-gray-500 dark:text-zinc-500 text-sm">Loading...</div>
+        ) : automations.length === 0 ? (
+          <div className="text-center py-12">
+            <Zap className="h-8 w-8 text-gray-300 dark:text-zinc-700 mx-auto mb-3" />
+            <p className="text-sm text-gray-500 dark:text-zinc-500">
+              No automations defined. Add <code className="text-xs bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">.json</code> files to <code className="text-xs bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">automations/</code>.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {automations.map((auto) => {
+              const isRunning = runningNames.has(auto.name);
+              return (
+                <div
+                  key={auto.name}
+                  className="border border-gray-200 dark:border-zinc-800 rounded-xl p-5 bg-gray-50 dark:bg-zinc-900/50"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Zap className="h-4 w-4 text-purple-500 shrink-0" />
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-200">{auto.title}</h3>
+                      </div>
+
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 font-medium">
+                          {auto.trigger}
+                        </span>
+                        {auto.schedule && (
+                          <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
+                            <Clock className="h-3 w-3" />
+                            {auto.schedule}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs text-gray-500 dark:text-zinc-500 leading-relaxed line-clamp-2">
+                        {auto.prompt}
+                      </p>
+
+                      {auto.lastRun && (
+                        <div className="flex items-center gap-2 mt-3 text-xs">
+                          {auto.lastRunStatus === 'success' ? (
+                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                          ) : (
+                            <XCircle className="h-3 w-3 text-red-400" />
+                          )}
+                          <span className="text-gray-500 dark:text-zinc-500">
+                            Last run {formatRelative(auto.lastRun)}
+                            {auto.lastRunStatus === 'error' && auto.lastRunError && (
+                              <span className="text-red-400 ml-1">— {auto.lastRunError}</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => { void handleRunNow(auto.name); }}
+                      disabled={isRunning}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    >
+                      {isRunning ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Running...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3.5 w-3.5" />
+                          Run Now
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {auto.running ? (
-                  <span className="flex items-center gap-1 text-xs text-green-600">
-                    <Play className="h-3 w-3" /> Running
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Square className="h-3 w-3" /> Idle
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
