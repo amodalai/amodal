@@ -1,6 +1,6 @@
 {
-  "name": "@amodalai/cli",
-  "version": "0.1.1",
+  "name": "@amodalai/amodal",
+  "version": "0.1.2",
   "description": "Amodal CLI",
   "license": "MIT",
   "repository": {

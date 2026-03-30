@@ -6,6 +6,7 @@ bundle/
 *.tsbuildinfo
 .eslintcache
 .env
+.npmrc
 .dev-seed.json
 .dev-seed-admin.json
 junit.xml
