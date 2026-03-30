@@ -63,7 +63,7 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
         // esbuild bundle: bundle/app/
         path.resolve(scriptDir, 'app'),
         // global/local install: <pkg root>/node_modules/@amodalai/runtime-app/dist/
-        path.resolve(scriptDir, '..', '..', '..', 'node_modules', '@amodal', 'runtime-app', 'dist'),
+        path.resolve(scriptDir, '..', '..', '..', 'node_modules', '@amodalai', 'runtime-app', 'dist'),
       ];
       for (const dir of candidates) {
         if (existsSync(path.join(dir, 'index.html'))) {
