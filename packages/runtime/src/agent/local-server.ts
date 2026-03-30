@@ -125,6 +125,35 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     res.json({ resumeSessionId: resumeSessionId ?? null });
   });
 
+  // Full agent config for the config page
+  app.get('/api/config', (_req, res) => {
+    const repoData = sessionManager.getRepo();
+    const cfg = repoData.config;
+
+    // Collect all env:* references from connection specs
+    const envRefs: Array<{name: string; connection: string; set: boolean}> = [];
+    for (const [connName, conn] of repoData.connections) {
+      const token = conn.spec.auth?.token;
+      if (token && typeof token === 'string' && token.startsWith('env:')) {
+        const envName = token.slice(4);
+        envRefs.push({name: envName, connection: connName, set: !!process.env[envName]});
+      }
+    }
+
+    res.json({
+      name: cfg?.name ?? '',
+      version: cfg?.version ?? '',
+      description: cfg?.description ?? '',
+      models: cfg?.models ?? {},
+      stores: cfg?.stores ?? null,
+      repoPath: config.repoPath,
+      envRefs,
+      nodeVersion: process.version,
+      runtimeVersion: '0.1.10',
+      uptime: Math.floor(process.uptime()),
+    });
+  });
+
   // Sessions endpoints
   app.get('/sessions', (req, res) => {
     const automationFilter = typeof req.query?.['automation'] === 'string' ? String(req.query['automation']) : undefined;

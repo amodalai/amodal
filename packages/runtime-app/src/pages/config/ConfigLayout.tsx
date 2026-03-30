@@ -5,11 +5,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Outlet } from 'react-router-dom';
-import { Sun, Moon, Settings } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { Sidebar } from '@/sections/Sidebar';
+import { NavLink, Outlet } from 'react-router-dom';
+import { Sun, Moon, Settings, Bot, Cpu, KeyRound, FileText, Server, ArrowLeft } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
+import { cn } from '@/lib/utils';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
 
@@ -53,7 +52,26 @@ function useTheme() {
   return { dark, toggle };
 }
 
-export function AppShell() {
+function ConfigNavItem({ to, children, end }: { to: string; children: React.ReactNode; end?: boolean }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
+          isActive
+            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium'
+            : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
+        )
+      }
+    >
+      {children}
+    </NavLink>
+  );
+}
+
+export function ConfigLayout() {
   const { name, model } = useRuntimeManifest();
   const { dark, toggle } = useTheme();
   const connectionStatus = useConnectionStatus();
@@ -79,13 +97,13 @@ export function AppShell() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Link
+          <NavLink
             to="/config"
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 transition-colors"
             title="Configuration"
           >
             <Settings className="h-4 w-4" />
-          </Link>
+          </NavLink>
           <button
             onClick={toggle}
             className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
@@ -112,7 +130,45 @@ export function AppShell() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        <aside className="w-[260px] border-r border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17] flex flex-col shrink-0 overflow-hidden">
+          <nav className="flex-1 overflow-y-auto scrollbar-thin px-2 py-2">
+            <NavLink
+              to="/"
+              className="flex items-center gap-2.5 w-full px-3 py-2 mb-1 rounded-md text-[13px] text-gray-500 dark:text-white/60 hover:text-gray-800 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.04] transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4 shrink-0" />
+              Back to app
+            </NavLink>
+
+            <div className="px-3 pt-5 pb-1.5">
+              <span className="text-[10px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">Configuration</span>
+            </div>
+
+            <div className="space-y-0.5">
+              <ConfigNavItem to="/config" end>
+                <Bot className="h-4 w-4 shrink-0" />
+                Agent
+              </ConfigNavItem>
+              <ConfigNavItem to="/config/models">
+                <Cpu className="h-4 w-4 shrink-0" />
+                Models
+              </ConfigNavItem>
+              <ConfigNavItem to="/config/prompt">
+                <FileText className="h-4 w-4 shrink-0" />
+                Prompt
+              </ConfigNavItem>
+              <ConfigNavItem to="/config/secrets">
+                <KeyRound className="h-4 w-4 shrink-0" />
+                Secrets
+              </ConfigNavItem>
+              <ConfigNavItem to="/config/system">
+                <Server className="h-4 w-4 shrink-0" />
+                System
+              </ConfigNavItem>
+            </div>
+          </nav>
+        </aside>
+
         <main className="flex-1 overflow-auto bg-white dark:bg-[#0a0a0f] scrollbar-thin">
           <Outlet />
         </main>
