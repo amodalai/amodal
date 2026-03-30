@@ -155,6 +155,7 @@ export interface RepoMcpServerConfig {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
+  headers?: Record<string, string>;
   trust?: boolean;
 }
 
