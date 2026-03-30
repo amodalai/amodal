@@ -1,5 +1,11 @@
 # @amodalai/react
 
+## 0.1.9
+
+### Patch Changes
+
+- [#35](https://github.com/amodalai/amodal/pull/35) [`f9d4e5f`](https://github.com/amodalai/amodal/commit/f9d4e5fde9c623a8f93f8ab6471263824489a86a) Thanks [@gte620v](https://github.com/gte620v)! - Display token usage in the web chat UI. Tracks cumulative input/output tokens across all turns in a session. Usage data flows from LLM provider → agent runner → SSE done event → react hook → UI.
+
 ## 0.1.8
 
 ## 0.1.7

@@ -1,7 +1,10 @@
 {
   "name": "@amodalai/runtime-app",
-  "version": "0.1.8",
-  "files": ["dist", "dist-dev"],
+  "version": "0.1.9",
+  "files": [
+    "dist",
+    "dist-dev"
+  ],
   "license": "MIT",
   "type": "module",
   "scripts": {

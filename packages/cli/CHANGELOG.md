@@ -1,5 +1,24 @@
 # @amodalai/amodal
 
+## 0.1.9
+
+### Patch Changes
+
+- [#34](https://github.com/amodalai/amodal/pull/34) [`7e0bad6`](https://github.com/amodalai/amodal/commit/7e0bad6d7f53392060d00db2678de0cd8fa461c8) Thanks [@gte620v](https://github.com/gte620v)! - Add light/dark mode toggle in the web UI header. Preference persists to localStorage. Dark mode is the default.
+
+- [#36](https://github.com/amodalai/amodal/pull/36) [`992d0e0`](https://github.com/amodalai/amodal/commit/992d0e0b3655149d95854407301412e93147cec2) Thanks [@gte620v](https://github.com/gte620v)! - Publish runtime-app to npm so the web chat UI works with global CLI installs. Previously marked private, which meant `npm install -g @amodalai/amodal` couldn't resolve the runtime-app dependency.
+
+- [#33](https://github.com/amodalai/amodal/pull/33) [`fcdf153`](https://github.com/amodalai/amodal/commit/fcdf15370b5211ad0bd3ca30dc61a6ba755249d7) Thanks [@gte620v](https://github.com/gte620v)! - Add session history UI: browse past conversations, view full message replay with markdown rendering, and resume from session detail page.
+
+- [#31](https://github.com/amodalai/amodal/pull/31) [`dd9a04f`](https://github.com/amodalai/amodal/commit/dd9a04fcd732abc17188cc473a9ea4794922acfc) Thanks [@gte620v](https://github.com/gte620v)! - Persist chat sessions to disk. Sessions survive server restarts and can be resumed with `amodal chat --resume latest` or `--resume <session-id>`.
+
+- [#35](https://github.com/amodalai/amodal/pull/35) [`f9d4e5f`](https://github.com/amodalai/amodal/commit/f9d4e5fde9c623a8f93f8ab6471263824489a86a) Thanks [@gte620v](https://github.com/gte620v)! - Display token usage in the web chat UI. Tracks cumulative input/output tokens across all turns in a session. Usage data flows from LLM provider → agent runner → SSE done event → react hook → UI.
+
+- Updated dependencies [[`992d0e0`](https://github.com/amodalai/amodal/commit/992d0e0b3655149d95854407301412e93147cec2), [`dd9a04f`](https://github.com/amodalai/amodal/commit/dd9a04fcd732abc17188cc473a9ea4794922acfc), [`f9d4e5f`](https://github.com/amodalai/amodal/commit/f9d4e5fde9c623a8f93f8ab6471263824489a86a)]:
+  - @amodalai/runtime-app@0.1.9
+  - @amodalai/runtime@0.1.9
+  - @amodalai/core@0.1.9
+
 ## 0.1.8
 
 ### Patch Changes
