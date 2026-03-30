@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Play, Clock, CheckCircle2, Loader2, Zap } from 'lucide-react';
 import { CronExpressionParser } from 'cron-parser';
@@ -65,7 +65,6 @@ export function AutomationDetailPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [liveText, setLiveText] = useState('');
   const [loading, setLoading] = useState(true);
-  const liveRef = useRef<HTMLDivElement>(null);
 
   const fetchData = useCallback(async () => {
     if (!automationName) return;
