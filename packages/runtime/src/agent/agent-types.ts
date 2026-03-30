@@ -40,6 +40,8 @@ export interface LocalServerConfig {
   appMiddleware?: (req: unknown, res: unknown, next: unknown) => void;
   /** Directory containing pre-built static SPA assets (used when appMiddleware is not provided). */
   staticAppDir?: string;
+  /** Session ID to auto-resume on startup. */
+  resumeSessionId?: string;
 }
 
 // ---------------------------------------------------------------------------

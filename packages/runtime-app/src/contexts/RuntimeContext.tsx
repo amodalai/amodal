@@ -15,6 +15,7 @@ export interface RuntimeManifest {
   skills: string[];
   automations: string[];
   knowledge: string[];
+  resumeSessionId: string | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -26,6 +27,7 @@ const RuntimeContext = createContext<RuntimeManifest>({
   skills: [],
   automations: [],
   knowledge: [],
+  resumeSessionId: null,
   isLoading: true,
   error: null,
 });
@@ -43,6 +45,7 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
     skills: [],
     automations: [],
     knowledge: [],
+    resumeSessionId: null,
     isLoading: true,
     error: null,
   });
@@ -81,6 +84,17 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
           }
         } catch { /* stores endpoint may not exist */ }
 
+        // Fetch server config (resume session ID)
+        let resumeSessionId: string | null = null;
+        try {
+          const configRes = await fetch(`${runtimeUrl}/config`);
+          if (configRes.ok) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+            const configBody = await configRes.json() as { resumeSessionId?: string | null };
+            resumeSessionId = configBody.resumeSessionId ?? null;
+          }
+        } catch { /* config endpoint may not exist */ }
+
         if (!cancelled) {
           setState({
             name: '',
@@ -89,6 +103,7 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
             skills,
             automations,
             knowledge,
+            resumeSessionId,
             isLoading: false,
             error: null,
           });

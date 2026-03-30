@@ -10,6 +10,7 @@ import { Send, Loader2, CheckCircle2, XCircle, Wrench } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { useAmodalChat } from '@amodalai/react';
 import type { ToolCallInfo, ContentBlock, ConfirmationInfo } from '@amodalai/react';
+import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 
 function ToolCallBadge({ call }: { call: ToolCallInfo }) {
   const isRunning = call.status === 'running';
@@ -106,15 +107,39 @@ function MessageContent({ blocks, respondToConfirmation }: {
   );
 }
 
+interface HistoryMessage {
+  role: string;
+  text: string;
+}
+
 export function ChatPage() {
-  const { messages, send, isStreaming, activeToolCalls, respondToConfirmation } = useAmodalChat();
+  const { resumeSessionId } = useRuntimeManifest();
+  const { messages, send, isStreaming, activeToolCalls, respondToConfirmation } = useAmodalChat({
+    initialSessionId: resumeSessionId,
+  });
   const [input, setInput] = useState('');
+  const [history, setHistory] = useState<HistoryMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Load conversation history for resumed sessions
+  useEffect(() => {
+    if (!resumeSessionId) return;
+    fetch(`/session/${encodeURIComponent(resumeSessionId)}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data: unknown) => {
+        if (data && typeof data === 'object' && 'messages' in data && Array.isArray((data as Record<string, unknown>)['messages'])) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response shape
+          const msgs = (data as Record<string, unknown>)['messages'] as HistoryMessage[];
+          setHistory(msgs.filter((m) => m.role === 'user' || m.role === 'assistant'));
+        }
+      })
+      .catch(() => {});
+  }, [resumeSessionId]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, history]);
 
   useEffect(() => {
     if (!isStreaming) inputRef.current?.focus();
@@ -147,7 +172,7 @@ export function ChatPage() {
     [input, isStreaming, send],
   );
 
-  const hasMessages = messages.length > 0;
+  const hasMessages = messages.length > 0 || history.length > 0;
 
   return (
     <div className="h-full flex flex-col bg-[#0a0a0f]">
@@ -165,6 +190,26 @@ export function ChatPage() {
           </div>
         ) : (
           <div className="max-w-3xl mx-auto px-4 py-6">
+            {/* Restored history from previous session */}
+            {history.map((msg, i) => (
+              <div key={`hist-${String(i)}`} className={msg.role === 'user' ? 'mb-6 flex justify-end' : 'mb-6'}>
+                {msg.role === 'user' ? (
+                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-indigo-600/60 text-white/80 text-[14px] leading-relaxed">
+                    {msg.text}
+                  </div>
+                ) : (
+                  <div className="text-[14px] text-zinc-400 prose prose-invert prose-sm max-w-none prose-headings:text-zinc-400 prose-p:text-zinc-400 prose-strong:text-zinc-400 prose-code:text-indigo-400/60 prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-indigo-400/60">
+                    <Markdown>{msg.text}</Markdown>
+                  </div>
+                )}
+              </div>
+            ))}
+            {history.length > 0 && messages.length === 0 && (
+              <div className="text-center text-xs text-zinc-600 mb-4 py-2 border-t border-zinc-800/50">
+                Session resumed
+              </div>
+            )}
+            {/* Live messages */}
             {messages.map((msg) => {
               switch (msg.type) {
                 case 'user':

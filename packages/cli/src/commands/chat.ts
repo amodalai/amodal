@@ -100,11 +100,33 @@ export async function runChat(options: ChatOptions): Promise<void> {
     }
   }
 
+  // Resolve "latest" to an actual session ID
+  let resumeId = options.resume;
+  if (resumeId === 'latest') {
+    try {
+      const res = await fetch(`${baseUrl}/sessions`);
+      if (res.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+        const body = await res.json() as {sessions: Array<{id: string}>};
+        if (body.sessions.length > 0) {
+          resumeId = body.sessions[0].id;
+          process.stderr.write(`[chat] Resuming session ${resumeId}\n`);
+        } else {
+          process.stderr.write('[chat] No previous sessions found, starting fresh\n');
+          resumeId = undefined;
+        }
+      }
+    } catch {
+      process.stderr.write('[chat] Could not fetch sessions, starting fresh\n');
+      resumeId = undefined;
+    }
+  }
+
   const {waitUntilExit} = render(
     createElement(ChatApp, {
       baseUrl,
       tenantId,
-      resumeSessionId: options.resume,
+      resumeSessionId: resumeId,
       fullscreen: options.fullscreen,
     }),
   );
