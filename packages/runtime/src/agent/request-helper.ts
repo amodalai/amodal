@@ -27,7 +27,12 @@ export async function makeApiRequest(
   const connMap = session.runtime.connectionsMap;
   const connConfig = connMap[connectionName];
   if (!connConfig) {
-    return {error: `Unknown connection: ${connectionName}`};
+    const available = Object.keys(connMap);
+    const suggestion = available.find((n) => n.toLowerCase() === connectionName.toLowerCase())
+      ?? available.find((n) => connectionName.toLowerCase().includes(n.toLowerCase()) || n.toLowerCase().includes(connectionName.toLowerCase()));
+    return {
+      error: `Connection "${connectionName}" not found. Available connections: ${available.join(', ') || '(none)'}${suggestion ? `. Did you mean "${suggestion}"?` : ''}`,
+    };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SDK boundary
@@ -94,7 +99,10 @@ export async function makeApiRequest(
     }
 
     if (!response.ok) {
-      return {error: `HTTP ${response.status}: ${output.substring(0, 500)}`};
+      if (response.status === 401 || response.status === 403) {
+        return {error: `Authentication failed (${response.status}) for connection "${connectionName}". Check that the auth credentials in .env are correct and not expired.`};
+      }
+      return {error: `HTTP ${response.status} from "${connectionName}" ${method} ${endpoint}: ${output.substring(0, 500)}`};
     }
 
     // Truncate large responses
@@ -107,6 +115,7 @@ export async function makeApiRequest(
     if (signal?.aborted) {
       return {error: 'Request aborted'};
     }
-    return {error: err instanceof Error ? err.message : String(err)};
+    const msg = err instanceof Error ? err.message : String(err);
+    return {error: `Network error reaching "${connectionName}" at ${url}: ${msg}. Check that the service is running and the baseUrl is correct.`};
   }
 }

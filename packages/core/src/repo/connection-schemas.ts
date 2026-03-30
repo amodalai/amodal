@@ -12,6 +12,8 @@ import {z} from 'zod';
 export const ConnectionSpecSchema = z.object({
   baseUrl: z.string().min(1),
   specUrl: z.string().min(1).optional(),
+  /** Relative path to test during validate (e.g. "/me", "/v1/status"). Appended to baseUrl. */
+  testPath: z.string().optional(),
   format: z.enum(['openapi', 'graphql', 'grpc', 'rest', 'aws-api']),
   auth: z
     .object({

@@ -52,6 +52,7 @@ connections/my-api/
 |-------|-------------|
 | `baseUrl` | API base URL (required) |
 | `specUrl` | URL to the API spec document (optional) |
+| `testPath` | Relative path appended to baseUrl for `validate` health checks (optional, e.g. `"/me"`) |
 | `format` | `"openapi"`, `"graphql"`, or `"grpc"` |
 | `auth.type` | `"bearer"`, `"api_key"`, `"oauth2"`, `"basic"`, `"header"` |
 | `sync` | Auto-sync settings and drift notification |

@@ -10,6 +10,7 @@ import {render} from 'ink';
 import type {CommandModule} from 'yargs';
 import {createLocalServer, createSnapshotServer} from '@amodalai/runtime';
 import {findRepoRoot} from '../shared/repo-discovery.js';
+import {runConnectionPreflight, printPreflightTable} from '../shared/connection-preflight.js';
 import {ChatApp} from '../ui/ChatApp.js';
 
 export interface ChatOptions {
@@ -53,6 +54,7 @@ export async function runChat(options: ChatOptions): Promise<void> {
   // Mode 2 & 3: Boot a local server
   const port = options.port ?? 0;
   let serverInstance: {app: unknown; start: () => Promise<unknown>; stop: () => Promise<void>};
+  let repoPath: string | undefined;
 
   if (options.config) {
     process.stderr.write(`[chat] Loading snapshot from ${options.config}\n`);
@@ -62,7 +64,6 @@ export async function runChat(options: ChatOptions): Promise<void> {
       host: '127.0.0.1',
     });
   } else {
-    let repoPath: string;
     try {
       repoPath = findRepoRoot(options.cwd);
     } catch (err) {
@@ -85,6 +86,19 @@ export async function runChat(options: ChatOptions): Promise<void> {
   const addr = (httpServer as http.Server).address();
   const actualPort = typeof addr === 'object' && addr !== null ? addr.port : port;
   const baseUrl = `http://127.0.0.1:${actualPort}`;
+
+  // Preflight connection check (non-blocking)
+  if (repoPath) {
+    const preflight = await runConnectionPreflight(repoPath);
+    if (preflight.results.length > 0) {
+      process.stderr.write('\n');
+      printPreflightTable(preflight.results);
+      if (preflight.hasFailures) {
+        process.stderr.write('\n  WARNING: Some connections failed. The agent may not work correctly.\n');
+      }
+      process.stderr.write('\n');
+    }
+  }
 
   const {waitUntilExit} = render(
     createElement(ChatApp, {
