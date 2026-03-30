@@ -225,6 +225,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 }
 
 export interface UseAmodalChatOptions {
+  /** Pre-seed session ID for resuming a previous session. */
+  initialSessionId?: string | null;
   /** Additional context sent with each chat message. */
   context?: Record<string, unknown>;
   /** Called when the SSE stream ends. */
@@ -252,12 +254,12 @@ export interface UseAmodalChatReturn {
 export function useAmodalChat(options?: UseAmodalChatOptions): UseAmodalChatReturn {
   const { client } = useAmodalContext();
   const [state, dispatch] = useReducer(chatReducer, initialState);
-  const sessionIdRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(options?.initialSessionId ?? null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const callbacksRef = useRef(options);
   callbacksRef.current = options;
 
-  sessionIdRef.current = state.sessionId;
+  sessionIdRef.current = state.sessionId ?? sessionIdRef.current;
 
   const send = useCallback(
     (text: string) => {

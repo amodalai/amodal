@@ -23,7 +23,8 @@ import {errorHandler} from '../middleware/error-handler.js';
 import type {LocalServerConfig} from './agent-types.js';
 import type {ServerInstance} from '../server.js';
 import {createPGLiteStoreBackend} from '../stores/pglite-store-backend.js';
-import type {StoreBackend} from '@amodalai/core';
+import type {StoreBackend, LLMMessage} from '@amodalai/core';
+import {SessionStore} from './session-store.js';
 
 /**
  * Creates an Express server for repo-based agent mode.
@@ -97,8 +98,75 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     });
   });
 
+  // Session persistence
+  const sessionStore = new SessionStore(config.repoPath);
+
+  // Resolve resume session ID
+  let resumeSessionId = config.resumeSessionId;
+  if (resumeSessionId === 'latest') {
+    resumeSessionId = sessionStore.latest() ?? undefined;
+  }
+  if (resumeSessionId) {
+    process.stderr.write(`[dev] Resume session: ${resumeSessionId}\n`);
+  }
+
+  // Client config — tells the web UI which session to resume
+  app.get('/config', (_req, res) => {
+    res.json({ resumeSessionId: resumeSessionId ?? null });
+  });
+
+  // Sessions endpoints
+  app.get('/sessions', (_req, res) => {
+    res.json({sessions: sessionStore.list()});
+  });
+
+  app.get('/session/:id', (req, res) => {
+    const persisted = sessionStore.load(req.params['id'] ?? '');
+    if (!persisted) {
+      res.status(404).json({error: 'Session not found'});
+      return;
+    }
+    // Convert LLMMessage[] to the format the CLI expects
+    const messages = persisted.conversationHistory.map((msg: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted LLMMessage
+      const m = msg as {role: string; content: unknown};
+      if (m.role === 'user') {
+        return {role: 'user', text: typeof m.content === 'string' ? m.content : ''};
+      }
+      if (m.role === 'assistant') {
+        // Assistant content is LLMResponseBlock[] — extract text
+        const blocks = Array.isArray(m.content) ? m.content : [];
+        const isTextBlock = (b: unknown): b is {type: 'text'; text: string} =>
+          typeof b === 'object' && b !== null && 'type' in b && 'text' in b &&
+          (b as {type: unknown}).type === 'text' && typeof (b as {text: unknown}).text === 'string';
+        const text = blocks.filter(isTextBlock).map((b) => b.text).join('');
+        return {role: 'assistant', text};
+      }
+      return {role: m.role, text: ''};
+    });
+    res.json({session_id: persisted.id, messages});
+  });
+
   // Routes
-  app.use(createChatRouter({sessionManager}));
+  app.use(createChatRouter({
+    sessionManager,
+    sessionHydrator: async (_req, _res, sessionId, tenantId) => {
+      const persisted = sessionStore.load(sessionId);
+      if (!persisted) return null;
+
+      // Create a fresh session and replay the conversation history
+      const session = await sessionManager.create(tenantId);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted data matches LLMMessage shape
+      session.conversationHistory = persisted.conversationHistory as LLMMessage[];
+      // Re-register under the original ID so the client can keep using it
+      sessionManager.reregister(session, sessionId);
+      process.stderr.write(`[SESSION] Restored session ${sessionId} (${persisted.conversationHistory.length} messages)\n`);
+      return session;
+    },
+    onTurnComplete: (session) => {
+      sessionStore.save(session);
+    },
+  }));
   app.use(createTaskRouter({sessionManager}));
   app.use(createInspectRouter({sessionManager, repoPath: config.repoPath}));
   app.use(createAutomationRouter({runner}));

@@ -25,6 +25,7 @@ export interface DevOptions {
   cwd?: string;
   port?: number;
   host?: string;
+  resume?: string;
 }
 
 const DEFAULT_PORT = 3847;
@@ -82,6 +83,7 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
       corsOrigin: '*',
       appMiddleware,
       staticAppDir,
+      resumeSessionId: options.resume,
     });
 
     await server.start();
@@ -125,12 +127,18 @@ export const devCommand: CommandModule = {
       type: 'string',
       describe: 'Host to bind to',
     },
+    resume: {
+      type: 'string',
+      describe: 'Resume a previous session by ID or "latest"',
+    },
   },
   handler: async (argv) => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const port = argv['port'] as number | undefined;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const host = argv['host'] as string | undefined;
-    await runDev({port, host});
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const resume = argv['resume'] as string | undefined;
+    await runDev({port, host, resume});
   },
 };
