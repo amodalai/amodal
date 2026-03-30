@@ -8,9 +8,7 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import rateLimit from 'express-rate-limit';
 import {readdir, readFile, writeFile, stat, mkdir} from 'node:fs/promises';
-import rateLimit from 'express-rate-limit';
 import path from 'node:path';
-import rateLimit from 'express-rate-limit';
 
 export interface FilesRouterOptions {
   repoPath: string;
@@ -80,31 +78,17 @@ function validateFilePath(repoPath: string, filePath: string): string | null {
 
 export function createFilesRouter(options: FilesRouterOptions): Router {
   const router = Router();
-  const writeLimiter = rateLimit({
+  const {repoPath} = options;
+
+  const filesLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
   });
 
-  const {repoPath} = options;
-  const filesLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs for file operations
-  });
-
-  router.use('/api/files', filesLimiter);
-
-
-  const filesRateLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs for file operations
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-
   /** Get the repo file tree (convention directories + config). */
-  router.get('/api/files', filesRateLimiter, async (_req: Request, res: Response) => {
+  router.get('/api/files', filesLimiter, async (_req: Request, res: Response) => {
     try {
       const tree: FileTreeEntry[] = [];
 
@@ -139,9 +123,8 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
   });
 
   /** Read a file's contents. */
-  router.get('/api/files/*', filesRateLimiter, async (req: Request, res: Response) => {
+  router.get('/api/files/*', filesLimiter, async (req: Request, res: Response) => {
     try {
-      // Extract path after /api/files/
       const filePath = req.params[0] ?? '';
       if (!filePath) {
         res.status(400).json({error: {code: 'BAD_REQUEST', message: 'File path required'}});
@@ -153,7 +136,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
         res.status(403).json({error: {code: 'FORBIDDEN', message: 'Path outside repo'}});
         return;
       }
-  router.put('/api/files/*', writeLimiter, async (req: Request, res: Response) => {
+
       const content = await readFile(resolved, 'utf-8');
       const ext = path.extname(filePath).slice(1);
 
@@ -169,7 +152,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
   });
 
   /** Write a file's contents. Creates parent dirs if needed. */
-  router.put('/api/files/*', async (req: Request, res: Response) => {
+  router.put('/api/files/*', filesLimiter, async (req: Request, res: Response) => {
     try {
       const filePath = req.params[0] ?? '';
       if (!filePath) {
