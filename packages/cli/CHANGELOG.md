@@ -1,5 +1,16 @@
 # @amodalai/amodal
 
+## 0.1.3
+
+### Patch Changes
+
+- [#15](https://github.com/amodalai/amodal/pull/15) [`df201b5`](https://github.com/amodalai/amodal/commit/df201b542d943fbb887dd096f4e3e3d170c51030) Thanks [@gte620v](https://github.com/gte620v)! - Automatically load `.env` file from the project directory. No more `source .env &&` before every command.
+
+- Updated dependencies []:
+  - @amodalai/core@0.1.3
+  - @amodalai/runtime@0.1.3
+  - @amodalai/runtime-app@0.1.3
+
 ## 0.1.2
 
 ### Patch Changes
