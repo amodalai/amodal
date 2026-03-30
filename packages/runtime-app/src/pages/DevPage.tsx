@@ -4,57 +4,59 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Suspense, lazy, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 /**
  * Developer page loader.
  *
- * Two strategies:
- * 1. Pre-built bundles: loads from /pages-bundle/{name}.mjs (compiled by esbuild at startup)
- * 2. Vite virtual module: loads from virtual:amodal-pages (when Vite dev middleware is active)
- *
- * Strategy 1 is used when running outside the monorepo (npm install / npm link).
- * Strategy 2 is used when running inside the monorepo with Vite middleware.
+ * Loads pre-built page bundles from /pages-bundle/{name}.js via a script tag.
+ * The page registers itself on window.__AMODAL_PAGES__[name].
+ * React is available on window.React (set by the SPA entry point).
  */
 export function DevPage() {
   const { pageName } = useParams<{ pageName: string }>();
+  const [PageComponent, setPageComponent] = useState<React.ComponentType | null>(null);
+  const [error, setError] = useState(false);
 
-  const PageComponent = useMemo(() => {
-    if (!pageName) return null;
+  useEffect(() => {
+    if (!pageName) return;
+    setPageComponent(null);
+    setError(false);
 
-    return lazy(async () => {
-      // Strategy 1: Try loading from pre-built bundle
-      try {
-        const mod = await import(/* @vite-ignore */ `/pages-bundle/${pageName}.mjs`);
-        const Component = mod.default;
-        if (Component) return { default: Component };
-      } catch {
-        // Bundle not available — try virtual module
+    // Check if already loaded
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Global page registry
+    const registry = (window as unknown as Record<string, unknown>)['__AMODAL_PAGES__'] as Record<string, React.ComponentType> | undefined;
+    if (registry?.[pageName]) {
+      setPageComponent(() => registry[pageName]);
+      return;
+    }
+
+    // Load via script tag
+    const script = document.createElement('script');
+    script.src = `/pages-bundle/${pageName}.js`;
+    script.onload = () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Global page registry
+      const reg = (window as unknown as Record<string, unknown>)['__AMODAL_PAGES__'] as Record<string, React.ComponentType> | undefined;
+      if (reg?.[pageName]) {
+        setPageComponent(() => reg[pageName]);
+      } else {
+        setError(true);
       }
-
-      // Strategy 2: Try Vite virtual module (works inside monorepo)
-      try {
-        const pages = (await import('virtual:amodal-pages')).default;
-        const Component = pages[pageName];
-        if (Component) return { default: Component };
-      } catch {
-        // Virtual module not available
-      }
-
-      return { default: () => <PageNotFound name={pageName} /> };
-    });
+    };
+    script.onerror = () => setError(true);
+    document.head.appendChild(script);
   }, [pageName]);
 
-  if (!PageComponent) {
-    return <PageNotFound name="" />;
+  if (error) {
+    return <PageNotFound name={pageName ?? ''} />;
   }
 
-  return (
-    <Suspense fallback={<div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading page...</div>}>
-      <PageComponent />
-    </Suspense>
-  );
+  if (!PageComponent) {
+    return <div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading page...</div>;
+  }
+
+  return <PageComponent />;
 }
 
 function PageNotFound({ name }: { name: string }) {

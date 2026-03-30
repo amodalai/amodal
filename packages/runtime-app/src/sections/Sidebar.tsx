@@ -158,6 +158,21 @@ export function Sidebar() {
           </>
         )}
 
+        {/* Pages */}
+        {devPages.length > 0 && (
+          <>
+            <SectionLabel>Pages</SectionLabel>
+            <div className="space-y-0.5">
+              {devPages.map((page) => (
+                <NavItem key={page.name} to={`/pages/${page.name}`}>
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{formatPageName(page.name)}</span>
+                </NavItem>
+              ))}
+            </div>
+          </>
+        )}
+
         {/* Agent composition — collapsible */}
         {(connections.length > 0 || skills.length > 0 || knowledge.length > 0 || automations.length > 0) && (
           <SectionLabel>Agent</SectionLabel>
@@ -193,22 +208,6 @@ export function Sidebar() {
               <InfoItem key={name} icon={<Zap className="h-3 w-3 shrink-0 text-purple-500/40" />} label={name} />
             ))}
           </CollapsibleSection>
-        )}
-
-        {devPages.length > 0 && (
-          <>
-            <SectionLabel>Pages</SectionLabel>
-            <div className="space-y-0.5">
-              {devPages.map((page) => (
-                <NavItem key={page.name} to={`/pages/${page.name}`}>
-                  <FileText className="h-4 w-4 shrink-0" />
-                  <span className="truncate" title={page.description}>
-                    {formatPageName(page.name)}
-                  </span>
-                </NavItem>
-              ))}
-            </div>
-          </>
         )}
 
         {stores.length > 0 && (
