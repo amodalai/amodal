@@ -217,10 +217,10 @@ export async function resolveAutomation(
   const location = repoDir ?? packageDir!;
 
   const repoContent = repoDir
-    ? await readOptionalFile(path.join(repoDir, `${name}.md`))
+    ? (await readOptionalFile(path.join(repoDir, `${name}.json`)) ?? await readOptionalFile(path.join(repoDir, `${name}.md`)))
     : null;
   const pkgContent = packageDir
-    ? await readPackageFile(packageDir, `${name}.md`)
+    ? (await readPackageFile(packageDir, `${name}.json`).catch(() => null) ?? await readPackageFile(packageDir, `${name}.md`))
     : null;
 
   let content: string | null = null;
@@ -331,6 +331,7 @@ export async function resolveAllPackages(options: {
     const autoFiles = await readdir(autoDir);
     for (const f of autoFiles) {
       if (f.endsWith('.md')) automationNames.add(f.replace(/\.md$/, ''));
+      if (f.endsWith('.json')) automationNames.add(f.replace(/\.json$/, ''));
     }
   } catch {
     // Directory doesn't exist

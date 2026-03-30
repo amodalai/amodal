@@ -17,7 +17,7 @@ function ToolCallBadge({ call }: { call: ToolCallInfo }) {
   const isRunning = call.status === 'running';
   const isError = call.status === 'error';
   return (
-    <div className="flex items-center gap-2 px-3 py-2 my-1.5 rounded-lg bg-zinc-800/50 border border-zinc-700/50 text-xs font-mono">
+    <div className="flex items-center gap-2 px-3 py-2 my-1.5 rounded-lg bg-gray-100 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 text-xs font-mono">
       {isRunning ? (
         <Loader2 className="h-3.5 w-3.5 text-indigo-400 animate-spin shrink-0" />
       ) : isError ? (
@@ -25,7 +25,7 @@ function ToolCallBadge({ call }: { call: ToolCallInfo }) {
       ) : (
         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
       )}
-      <span className="text-indigo-300 font-semibold">{call.toolName}</span>
+      <span className="text-indigo-600 dark:text-indigo-300 font-semibold">{call.toolName}</span>
       {call.duration_ms != null && (
         <span className="text-zinc-500 ml-auto">{String(call.duration_ms)}ms</span>
       )}
@@ -79,7 +79,7 @@ function MessageContent({ blocks, respondToConfirmation }: {
         switch (block.type) {
           case 'text':
             return (
-              <div key={`t-${String(i)}`} className="prose prose-invert prose-sm max-w-none prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-strong:text-zinc-200 prose-code:text-indigo-300 prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-zinc-800/80 prose-pre:border prose-pre:border-zinc-700/50 prose-a:text-indigo-400 prose-li:text-zinc-300">
+              <div key={`t-${String(i)}`} className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-900 dark:prose-headings:text-zinc-200 prose-p:text-gray-900 dark:prose-p:text-zinc-300 prose-strong:text-gray-900 dark:prose-strong:text-zinc-200 prose-code:text-indigo-700 dark:prose-code:text-indigo-300 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-100 dark:prose-pre:bg-zinc-800/80 prose-pre:border prose-pre:border-gray-200 dark:prose-pre:border-zinc-700/50 prose-a:text-indigo-700 dark:prose-a:text-indigo-400 prose-li:text-gray-900 dark:prose-li:text-zinc-300">
                 <Markdown>{block.text}</Markdown>
               </div>
             );
@@ -180,7 +180,7 @@ export function ChatPage() {
   const hasMessages = messages.length > 0 || history.length > 0;
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0f]">
+    <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {!hasMessages ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-4">
@@ -190,8 +190,8 @@ export function ChatPage() {
               <circle cx="22" cy="11" r="10" fill="#60A5FA" fillOpacity="0.85" />
               <circle cx="22" cy="11" r="10" fill="#3B82F6" clipPath="url(#empty-sq)" />
             </svg>
-            <h2 className="text-lg font-medium text-zinc-400 mb-1">What can I help with?</h2>
-            <p className="text-sm text-zinc-600 max-w-sm">Ask me anything. I can search, analyze, and connect to your tools.</p>
+            <h2 className="text-lg font-medium text-gray-400 dark:text-zinc-400 mb-1">What can I help with?</h2>
+            <p className="text-sm text-gray-400 dark:text-zinc-600 max-w-sm">Ask me anything. I can search, analyze, and connect to your tools.</p>
           </div>
         ) : (
           <div className="max-w-3xl mx-auto px-4 py-6">
@@ -203,14 +203,14 @@ export function ChatPage() {
                     {msg.text}
                   </div>
                 ) : (
-                  <div className="text-[14px] text-zinc-400 prose prose-invert prose-sm max-w-none prose-headings:text-zinc-400 prose-p:text-zinc-400 prose-strong:text-zinc-400 prose-code:text-indigo-400/60 prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-indigo-400/60">
+                  <div className="text-[14px] text-gray-400 dark:text-zinc-400 prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-400 dark:prose-headings:text-zinc-400 prose-p:text-gray-400 dark:prose-p:text-zinc-400 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-indigo-500/60 dark:prose-a:text-indigo-400/60">
                     <Markdown>{msg.text}</Markdown>
                   </div>
                 )}
               </div>
             ))}
             {history.length > 0 && messages.length === 0 && (
-              <div className="text-center text-xs text-zinc-600 mb-4 py-2 border-t border-zinc-800/50">
+              <div className="text-center text-xs text-gray-400 dark:text-zinc-600 mb-4 py-2 border-t border-gray-200 dark:border-zinc-800/50">
                 Session resumed
               </div>
             )}
@@ -228,7 +228,7 @@ export function ChatPage() {
                 case 'assistant_text':
                   return (
                     <div key={msg.id} className="mb-6">
-                      <div className="text-[14px] text-zinc-200">
+                      <div className="text-[14px] text-gray-900 dark:text-zinc-200">
                         <MessageContent blocks={msg.contentBlocks} respondToConfirmation={respondToConfirmation} />
                       </div>
                     </div>
@@ -254,7 +254,7 @@ export function ChatPage() {
         )}
       </div>
 
-      <div className="border-t border-zinc-800/80 bg-[#0f0f17] px-4 py-4">
+      <div className="border-t border-gray-200 dark:border-zinc-800/80 bg-gray-50 dark:bg-[#0f0f17] px-4 py-4">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative">
           <textarea
             ref={inputRef}
@@ -269,7 +269,7 @@ export function ChatPage() {
             placeholder="Message..."
             disabled={isStreaming}
             rows={1}
-            className="w-full resize-none rounded-xl bg-zinc-800/80 border border-zinc-700/60 px-4 py-3 pr-12 text-[14px] text-zinc-100 placeholder-zinc-500 outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/20 transition-colors disabled:opacity-50 overflow-y-auto"
+            className="w-full resize-none rounded-xl bg-white dark:bg-zinc-800/80 border border-gray-300 dark:border-zinc-700/60 px-4 py-3 pr-12 text-[14px] text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/20 transition-colors disabled:opacity-50 overflow-y-auto"
             style={{ minHeight: '48px', maxHeight: '160px' }}
           />
           <button
