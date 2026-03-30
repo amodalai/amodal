@@ -12,15 +12,6 @@ import {createLocalServer} from '@amodalai/runtime';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 import {runConnectionPreflight, printPreflightTable} from '../shared/connection-preflight.js';
 
-async function loadRuntimeApp(): Promise<typeof import('@amodalai/runtime-app/dev') | null> {
-  try {
-    return await import('@amodalai/runtime-app/dev');
-  } catch {
-    // Runtime app is optional — server-only mode without the frontend
-    return null;
-  }
-}
-
 export interface DevOptions {
   cwd?: string;
   port?: number;
@@ -49,29 +40,22 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
   process.stderr.write(`[dev] Starting dev server for ${repoPath}\n`);
 
   try {
-    // Try to load the runtime app for the dev UI
-    let appMiddleware: ((req: unknown, res: unknown, next: unknown) => void) | undefined;
     let staticAppDir: string | undefined;
 
-    const runtimeApp = await loadRuntimeApp();
-    if (runtimeApp) {
-      process.stderr.write('[dev] Loading runtime app (Vite dev server)...\n');
-      appMiddleware = await runtimeApp.createDevMiddleware(repoPath);
-    } else {
-      // Fall back to pre-built static assets (bundled mode or global install)
-      const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-      const candidates = [
-        // esbuild bundle: bundle/app/
-        path.resolve(scriptDir, 'app'),
-        // global/local install: <pkg root>/node_modules/@amodalai/runtime-app/dist/
-        path.resolve(scriptDir, '..', '..', '..', 'node_modules', '@amodalai', 'runtime-app', 'dist'),
-      ];
-      for (const dir of candidates) {
-        if (existsSync(path.join(dir, 'index.html'))) {
-          process.stderr.write('[dev] Serving pre-built runtime app\n');
-          staticAppDir = dir;
-          break;
-        }
+    // Use pre-built static assets for the SPA for the SPA.
+    // Vite dev middleware is only used inside the monorepo with `pnpm dev`.
+    const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+      // esbuild bundle: bundle/app/
+      path.resolve(scriptDir, 'app'),
+      // global/local install: <pkg root>/node_modules/@amodalai/runtime-app/dist/
+      path.resolve(scriptDir, '..', '..', '..', 'node_modules', '@amodalai', 'runtime-app', 'dist'),
+    ];
+    for (const dir of candidates) {
+      if (existsSync(path.join(dir, 'index.html'))) {
+        process.stderr.write('[dev] Serving pre-built runtime app\n');
+        staticAppDir = dir;
+        break;
       }
     }
 
@@ -81,7 +65,6 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
       host,
       hotReload: true,
       corsOrigin: '*',
-      appMiddleware,
       staticAppDir,
       resumeSessionId: options.resume,
     });
