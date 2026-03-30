@@ -1,5 +1,11 @@
 # @amodalai/core
 
+## 0.1.7
+
+### Patch Changes
+
+- [#24](https://github.com/amodalai/amodal/pull/24) [`90ce461`](https://github.com/amodalai/amodal/commit/90ce46146398cad6e33f1b0794457142d7b38f1a) Thanks [@gte620v](https://github.com/gte620v)! - Add live connection testing to validate command and testPath field to connection spec
+
 ## 0.1.6
 
 ### Patch Changes
