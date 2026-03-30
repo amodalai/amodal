@@ -14,6 +14,7 @@ interface PersistedSession {
   conversationHistory: unknown[];
   createdAt: number;
   lastAccessedAt: number;
+  automationName?: string;
 }
 
 /**
@@ -50,7 +51,7 @@ export class SessionStore {
   /**
    * Save a session's conversation history to disk.
    */
-  save(session: AgentSession): void {
+  save(session: AgentSession, automationName?: string): void {
     const file = this.resolvePath(session.id);
     if (!file) return;
     this.ensureDir();
@@ -60,6 +61,7 @@ export class SessionStore {
       conversationHistory: session.conversationHistory,
       createdAt: session.createdAt,
       lastAccessedAt: session.lastAccessedAt,
+      automationName,
     };
     writeFileSync(file, JSON.stringify(data, null, 2));
   }
@@ -83,10 +85,10 @@ export class SessionStore {
   /**
    * List all persisted sessions, newest first.
    */
-  list(): Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number; summary: string}> {
+  list(): Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number; summary: string; automationName?: string}> {
     if (!existsSync(this.dir)) return [];
     const files = readdirSync(this.dir).filter((f) => f.endsWith('.json'));
-    const sessions: Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number; summary: string}> = [];
+    const sessions: Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number; summary: string; automationName?: string}> = [];
 
     for (const file of files) {
       try {
@@ -105,6 +107,7 @@ export class SessionStore {
           createdAt: data.createdAt,
           lastAccessedAt: data.lastAccessedAt,
           summary,
+          automationName: data.automationName,
         });
       } catch {
         // Skip corrupt files

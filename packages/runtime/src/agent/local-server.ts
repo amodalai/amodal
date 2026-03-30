@@ -56,10 +56,18 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     storeBackend,
   });
 
+  // sessionStore is created later — use a lazy reference for the onSessionComplete callback
+  let sessionStoreRef: SessionStore | null = null;
+
   const runner = new ProactiveRunner(repo, {
     webhookSecret: config.webhookSecret,
-    createSession: async () => sessionManager.create('automation'),
+    createSession: async () => sessionManager.create('local'),
     destroySession: async (id) => sessionManager.destroy(id),
+    onSessionComplete: (session, automationName) => {
+      if (sessionStoreRef) {
+        sessionStoreRef.save(session, automationName);
+      }
+    },
   });
 
   let watcher: ConfigWatcher | null = null;
@@ -101,6 +109,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Session persistence
   const sessionStore = new SessionStore(config.repoPath);
+  sessionStoreRef = sessionStore;
 
   // Resolve resume session ID
   let resumeSessionId = config.resumeSessionId;
@@ -117,8 +126,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   });
 
   // Sessions endpoints
-  app.get('/sessions', (_req, res) => {
-    res.json({sessions: sessionStore.list()});
+  app.get('/sessions', (req, res) => {
+    const automationFilter = typeof req.query?.['automation'] === 'string' ? String(req.query['automation']) : undefined;
+    const all = sessionStore.list();
+    const filtered = automationFilter ? all.filter((s) => s.automationName === automationFilter) : all;
+    res.json({sessions: filtered});
   });
 
   app.get('/session/:id', (req, res) => {

@@ -12,6 +12,7 @@ import { SessionDetailPage } from '@/pages/SessionDetailPage';
 import { EntityListPage } from '@/pages/EntityListPage';
 import { EntityDetailPage } from '@/pages/EntityDetailPage';
 import { AutomationsPage } from '@/pages/AutomationsPage';
+import { AutomationDetailPage } from '@/pages/AutomationDetailPage';
 import { DevPage } from '@/pages/DevPage';
 
 export const router = createBrowserRouter([
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
       { path: 'entities/:storeName', element: <EntityListPage /> },
       { path: 'entities/:storeName/:key', element: <EntityDetailPage /> },
       { path: 'automations', element: <AutomationsPage /> },
+      { path: 'automations/:automationName', element: <AutomationDetailPage /> },
       { path: 'pages/:pageName', element: <DevPage /> },
     ],
   },

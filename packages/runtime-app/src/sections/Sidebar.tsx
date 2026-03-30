@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { SquarePen, MessageSquare, Database, Zap, FileText, Plug, Sparkles, BookOpen, ChevronRight } from 'lucide-react';
+import { SquarePen, MessageSquare, Database, Zap, FileText, Plug, Sparkles, BookOpen, ChevronRight, Loader2 } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { cn } from '@/lib/utils';
 import type { PageConfig } from 'virtual:amodal-manifest';
@@ -76,6 +76,7 @@ export function Sidebar() {
   const { stores, connections, skills, automations, knowledge } = useRuntimeManifest();
   const [devPages, setDevPages] = useState<PageConfig[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [runningAutomations, setRunningAutomations] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -100,14 +101,36 @@ export function Sidebar() {
       });
   }, []);
 
+  // Poll automation running state every 3 seconds
+  useEffect(() => {
+    const poll = () => {
+      fetch('/automations')
+        .then((res) => (res.ok ? res.json() : { automations: [] }))
+        .then((data: unknown) => {
+          if (data && typeof data === 'object' && 'automations' in data) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+            const autos = (data as Record<string, unknown>)['automations'] as Array<{name: string; lastRun?: string; lastRunStatus?: string}>;
+            // Consider "running" if lastRun was in the last 5 seconds (rough heuristic since we don't track in-flight)
+            const running = new Set(autos.filter((a) => a.lastRun && (Date.now() - new Date(a.lastRun).getTime()) < 5000).map((a) => a.name));
+            setRunningAutomations(running);
+          }
+        })
+        .catch(() => {});
+    };
+    poll();
+    const timer = setInterval(poll, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     fetch('/sessions')
       .then((res) => (res.ok ? res.json() : { sessions: [] }))
       .then((data: unknown) => {
         if (data && typeof data === 'object' && 'sessions' in data && Array.isArray((data as Record<string, unknown>)['sessions'])) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const all = (data as Record<string, unknown>)['sessions'] as SessionSummary[];
-          setSessions(all.slice(0, 10));
+          const all = (data as Record<string, unknown>)['sessions'] as Array<SessionSummary & {automationName?: string}>;
+          // Filter out automation sessions — those show in the automation detail page
+          setSessions(all.filter((s) => !s.automationName).slice(0, 10));
         }
       })
       .catch(() => {});
@@ -173,8 +196,25 @@ export function Sidebar() {
           </>
         )}
 
+        {/* Automations */}
+        {automations.length > 0 && (
+          <>
+            <SectionLabel>Automations</SectionLabel>
+            {automations.map((name) => (
+              <NavItem key={name} to={`/automations/${encodeURIComponent(name)}`}>
+                {runningAutomations.has(name) ? (
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 text-purple-400 animate-spin" />
+                ) : (
+                  <Zap className="h-3.5 w-3.5 shrink-0 text-purple-500/60" />
+                )}
+                <span className="truncate">{name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+              </NavItem>
+            ))}
+          </>
+        )}
+
         {/* Agent composition — collapsible */}
-        {(connections.length > 0 || skills.length > 0 || knowledge.length > 0 || automations.length > 0) && (
+        {(connections.length > 0 || skills.length > 0 || knowledge.length > 0) && (
           <SectionLabel>Agent</SectionLabel>
         )}
 
@@ -198,14 +238,6 @@ export function Sidebar() {
           <CollapsibleSection label="Knowledge" icon={<BookOpen className="h-3.5 w-3.5 shrink-0 text-blue-500/60" />} count={knowledge.length}>
             {knowledge.map((name) => (
               <InfoItem key={name} icon={<BookOpen className="h-3 w-3 shrink-0 text-blue-500/40" />} label={name} />
-            ))}
-          </CollapsibleSection>
-        )}
-
-        {automations.length > 0 && (
-          <CollapsibleSection label="Automations" icon={<Zap className="h-3.5 w-3.5 shrink-0 text-purple-500/60" />} count={automations.length}>
-            {automations.map((name) => (
-              <InfoItem key={name} icon={<Zap className="h-3 w-3 shrink-0 text-purple-500/40" />} label={name} />
             ))}
           </CollapsibleSection>
         )}
