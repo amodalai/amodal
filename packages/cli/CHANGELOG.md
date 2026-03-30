@@ -1,5 +1,16 @@
 # @amodalai/amodal
 
+## 0.1.4
+
+### Patch Changes
+
+- [#17](https://github.com/amodalai/amodal/pull/17) [`7a2b7d1`](https://github.com/amodalai/amodal/commit/7a2b7d1dd27588b626a23453f0f97f5e9317b275) Thanks [@gte620v](https://github.com/gte620v)! - Fix GitHub Release creation after npm publish
+
+- Updated dependencies []:
+  - @amodalai/core@0.1.4
+  - @amodalai/runtime@0.1.4
+  - @amodalai/runtime-app@0.1.4
+
 ## 0.1.3
 
 ### Patch Changes
