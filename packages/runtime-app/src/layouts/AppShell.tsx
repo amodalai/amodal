@@ -4,11 +4,31 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sun, Moon } from 'lucide-react';
 import { Sidebar } from '@/sections/Sidebar';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
+
+type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
+
+function useConnectionStatus(): ConnectionStatus {
+  const [status, setStatus] = useState<ConnectionStatus>('checking');
+  const timer = useRef<ReturnType<typeof setInterval>>();
+
+  useEffect(() => {
+    const check = () => {
+      fetch('/inspect/health', { signal: AbortSignal.timeout(3000) })
+        .then((res) => { setStatus(res.ok ? 'connected' : 'disconnected'); })
+        .catch(() => { setStatus('disconnected'); });
+    };
+    check();
+    timer.current = setInterval(check, 10_000);
+    return () => clearInterval(timer.current);
+  }, []);
+
+  return status;
+}
 
 function useTheme() {
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -35,6 +55,7 @@ function useTheme() {
 export function AppShell() {
   const { name, model } = useRuntimeManifest();
   const { dark, toggle } = useTheme();
+  const connectionStatus = useConnectionStatus();
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-white dark:bg-[#0a0a0f]">
@@ -68,8 +89,16 @@ export function AppShell() {
             <span className="text-[11px] text-gray-400 dark:text-white/25 font-mono">{model.replace(/-\d{8}$/, '')}</span>
           )}
           <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[11px] text-gray-400 dark:text-white/40 font-medium tracking-wide uppercase">Connected</span>
+            <div className={`h-2 w-2 rounded-full ${
+              connectionStatus === 'connected' ? 'bg-emerald-400 animate-pulse' :
+              connectionStatus === 'checking' ? 'bg-amber-400 animate-pulse' :
+              'bg-red-400'
+            }`} />
+            <span className="text-[11px] text-gray-400 dark:text-white/40 font-medium tracking-wide uppercase">
+              {connectionStatus === 'connected' ? 'Connected' :
+               connectionStatus === 'checking' ? 'Connecting' :
+               'Disconnected'}
+            </span>
           </div>
         </div>
       </header>

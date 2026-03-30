@@ -14,6 +14,7 @@ import { EntityDetailPage } from '@/pages/EntityDetailPage';
 import { AutomationsPage } from '@/pages/AutomationsPage';
 import { AutomationDetailPage } from '@/pages/AutomationDetailPage';
 import { DevPage } from '@/pages/DevPage';
+import { InspectDetailPage } from '@/pages/InspectDetailPage';
 
 export const router = createBrowserRouter([
   {
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: 'entities/:storeName/:key', element: <EntityDetailPage /> },
       { path: 'automations', element: <AutomationsPage /> },
       { path: 'automations/:automationName', element: <AutomationDetailPage /> },
+      { path: 'inspect/:kind/:name', element: <InspectDetailPage /> },
       { path: 'pages/:pageName', element: <DevPage /> },
     ],
   },
