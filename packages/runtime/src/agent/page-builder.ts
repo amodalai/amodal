@@ -56,14 +56,16 @@ window.__AMODAL_PAGES__['${name}'] = PageComponent;
       bundle: true,
       format: 'iife',
       platform: 'browser',
-      jsx: 'automatic',
-      // React comes from the SPA — inject a shim that reads from window.React
-      external: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+      // Use classic JSX transform so pages use React.createElement from window.React
+      jsx: 'transform',
+      jsxFactory: 'React.createElement',
+      jsxFragment: 'React.Fragment',
+      external: ['react', 'react-dom'],
       banner: {
         js: `
 var React = window.React;
 var require = function(m) {
-  if (m === 'react' || m === 'react/jsx-runtime' || m === 'react/jsx-dev-runtime') return window.React;
+  if (m === 'react') return window.React;
   if (m === 'react-dom') return window.ReactDOM;
   throw new Error('Cannot require ' + m);
 };
