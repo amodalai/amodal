@@ -6,6 +6,7 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
+import rateLimit from 'express-rate-limit';
 import {readdir, readFile, writeFile, stat, mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import rateLimit from 'express-rate-limit';
@@ -79,6 +80,13 @@ function validateFilePath(repoPath: string, filePath: string): string | null {
 export function createFilesRouter(options: FilesRouterOptions): Router {
   const router = Router();
   const {repoPath} = options;
+  const filesLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs for file operations
+  });
+
+  router.use('/api/files', filesLimiter);
+
 
   const filesRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
