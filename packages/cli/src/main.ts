@@ -9,6 +9,10 @@ import {readFileSync} from 'node:fs';
 import yargs from 'yargs';
 import {hideBin} from 'yargs/helpers';
 import {amodalCommands} from './commands/index.js';
+import {loadEnvFile} from './shared/load-env.js';
+
+// Load .env from current directory before anything else
+loadEnvFile(process.cwd());
 
 const raw: unknown = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
 if (typeof raw !== 'object' || raw === null || !('version' in raw) || typeof raw.version !== 'string') {
