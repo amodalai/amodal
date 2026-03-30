@@ -5,10 +5,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import { MessageSquare, Sun, Moon } from 'lucide-react';
+import { Outlet } from 'react-router-dom';
+import { Sun, Moon } from 'lucide-react';
 import { Sidebar } from '@/sections/Sidebar';
-import { ChatPanel } from './ChatPanel';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 
 function useTheme() {
@@ -20,7 +19,6 @@ function useTheme() {
     try { localStorage.setItem('amodal-theme', next ? 'dark' : 'light'); } catch { /* */ }
   }, [dark]);
 
-  // Restore from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem('amodal-theme');
@@ -35,9 +33,6 @@ function useTheme() {
 }
 
 export function AppShell() {
-  const [chatOpen, setChatOpen] = useState(false);
-  const location = useLocation();
-  const isChatPage = location.pathname === '/';
   const { name, model } = useRuntimeManifest();
   const { dark, toggle } = useTheme();
 
@@ -84,18 +79,6 @@ export function AppShell() {
         <main className="flex-1 overflow-auto bg-white dark:bg-[#0a0a0f] scrollbar-thin">
           <Outlet />
         </main>
-        {!isChatPage && !chatOpen && (
-          <button
-            onClick={() => setChatOpen(true)}
-            className="fixed bottom-6 right-6 h-12 w-12 rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 flex items-center justify-center hover:bg-indigo-500 transition-colors z-10"
-            title="Open chat"
-          >
-            <MessageSquare className="h-5 w-5" />
-          </button>
-        )}
-        {!isChatPage && (
-          <ChatPanel isOpen={chatOpen} onClose={() => setChatOpen(false)} />
-        )}
       </div>
     </div>
   );
