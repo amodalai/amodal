@@ -1,0 +1,116 @@
+name: Changeset Summary
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  comment:
+    name: Changeset Summary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Summarize changesets
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const changesetDir = '.changeset';
+            const files = fs.readdirSync(changesetDir)
+              .filter(f => f.endsWith('.md') && f !== 'README.md');
+
+            if (files.length === 0) {
+              const body = '📦 **No changeset found.** If this PR changes published packages, run `pnpm changeset` to add one.';
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+              });
+              const existing = comments.find(c => c.body?.includes('📦'));
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body,
+                });
+              }
+              return;
+            }
+
+            const bumps = [];
+            for (const file of files) {
+              const content = fs.readFileSync(path.join(changesetDir, file), 'utf8');
+              const frontmatter = content.split('---')[1] || '';
+              const lines = frontmatter.trim().split('\n');
+              for (const line of lines) {
+                const match = line.match(/^"([^"]+)":\s*(patch|minor|major)$/);
+                if (match) {
+                  bumps.push({ pkg: match[1], bump: match[2], file });
+                }
+              }
+            }
+
+            const bumpEmoji = { patch: '🩹', minor: '✨', major: '💥' };
+            const bumpLabel = { patch: 'Patch', minor: 'Minor', major: 'Major' };
+
+            // Determine the highest bump level
+            const levels = bumps.map(b => b.bump);
+            const highest = levels.includes('major') ? 'major' : levels.includes('minor') ? 'minor' : 'patch';
+
+            let body = `📦 **${bumpLabel[highest]} version bump** ${bumpEmoji[highest]}\n\n`;
+            body += `This PR includes ${files.length} changeset${files.length > 1 ? 's' : ''}:\n\n`;
+
+            for (const b of bumps) {
+              body += `- ${bumpEmoji[b.bump]} \`${b.pkg}\`: **${b.bump}**\n`;
+            }
+
+            // Get the description from the changeset
+            for (const file of files) {
+              const content = fs.readFileSync(path.join(changesetDir, file), 'utf8');
+              const parts = content.split('---');
+              const description = (parts[2] || '').trim();
+              if (description) {
+                body += `\n> ${description}\n`;
+              }
+            }
+
+            body += `\n_All packages in the fixed group will bump to the same version._`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body?.includes('📦'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
