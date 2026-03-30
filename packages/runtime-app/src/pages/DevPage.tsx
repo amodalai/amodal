@@ -10,12 +10,12 @@ import { useParams } from 'react-router-dom';
 /**
  * Developer page loader.
  *
- * Loads pages from the `virtual:amodal-pages` module (provided by the Vite plugin).
- * Matches the `:pageName` route param to the page's exported name.
+ * Two strategies:
+ * 1. Pre-built bundles: loads from /pages-bundle/{name}.mjs (compiled by esbuild at startup)
+ * 2. Vite virtual module: loads from virtual:amodal-pages (when Vite dev middleware is active)
  *
- * In dev mode, the Vite plugin resolves `virtual:amodal-pages` to the developer's
- * `pages/` directory. Changes to page files trigger HMR via the plugin's
- * handleHotUpdate handler.
+ * Strategy 1 is used when running outside the monorepo (npm install / npm link).
+ * Strategy 2 is used when running inside the monorepo with Vite middleware.
  */
 export function DevPage() {
   const { pageName } = useParams<{ pageName: string }>();
@@ -24,19 +24,25 @@ export function DevPage() {
     if (!pageName) return null;
 
     return lazy(async () => {
+      // Strategy 1: Try loading from pre-built bundle
       try {
-        // Dynamic import of the virtual module
+        const mod = await import(/* @vite-ignore */ `/pages-bundle/${pageName}.mjs`);
+        const Component = mod.default;
+        if (Component) return { default: Component };
+      } catch {
+        // Bundle not available — try virtual module
+      }
+
+      // Strategy 2: Try Vite virtual module (works inside monorepo)
+      try {
         const pages = (await import('virtual:amodal-pages')).default;
         const Component = pages[pageName];
-
-        if (!Component) {
-          return { default: () => <PageNotFound name={pageName} /> };
-        }
-
-        return { default: Component };
+        if (Component) return { default: Component };
       } catch {
-        return { default: () => <PageNotFound name={pageName} /> };
+        // Virtual module not available
       }
+
+      return { default: () => <PageNotFound name={pageName} /> };
     });
   }, [pageName]);
 
@@ -45,7 +51,7 @@ export function DevPage() {
   }
 
   return (
-    <Suspense fallback={<div className="p-6 text-muted-foreground text-sm">Loading page...</div>}>
+    <Suspense fallback={<div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading page...</div>}>
       <PageComponent />
     </Suspense>
   );
@@ -54,8 +60,8 @@ export function DevPage() {
 function PageNotFound({ name }: { name: string }) {
   return (
     <div className="p-6">
-      <h1 className="text-xl font-bold mb-2">Page Not Found</h1>
-      <p className="text-muted-foreground">
+      <h1 className="text-xl font-bold mb-2 text-gray-900 dark:text-zinc-200">Page Not Found</h1>
+      <p className="text-gray-500 dark:text-zinc-500">
         {name
           ? `No page named "${name}" found in pages/.`
           : 'No page specified.'}

@@ -80,11 +80,24 @@ export function Sidebar() {
   const location = useLocation();
 
   useEffect(() => {
-    import('virtual:amodal-manifest')
-      .then((m) => {
-        setDevPages(m.pages.filter((p: PageConfig) => !p.hidden));
+    // Try API first (works with pre-built pages), fall back to Vite virtual module
+    fetch('/api/pages')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data: unknown) => {
+        if (data && typeof data === 'object' && 'pages' in data && Array.isArray((data as Record<string, unknown>)['pages'])) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+          const pages = (data as Record<string, unknown>)['pages'] as Array<{name: string}>;
+          setDevPages(pages.map((p) => ({name: p.name, filePath: ''} as PageConfig)));
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        // Fall back to Vite virtual module (inside monorepo)
+        import('virtual:amodal-manifest')
+          .then((m) => {
+            setDevPages(m.pages.filter((p: PageConfig) => !p.hidden));
+          })
+          .catch(() => {});
+      });
   }, []);
 
   useEffect(() => {
