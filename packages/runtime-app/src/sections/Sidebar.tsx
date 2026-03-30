@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { MessageSquare, Database, Zap, FileText, Plug, Sparkles } from 'lucide-react';
+import { MessageSquare, History, Database, Zap, FileText, Plug, Sparkles } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { cn } from '@/lib/utils';
 import type { PageConfig } from 'virtual:amodal-manifest';
@@ -65,6 +65,10 @@ export function Sidebar() {
         <NavItem to="/" end>
           <MessageSquare className="h-4 w-4 shrink-0" />
           Chat
+        </NavItem>
+        <NavItem to="/sessions">
+          <History className="h-4 w-4 shrink-0" />
+          Sessions
         </NavItem>
 
         {connections.length > 0 && (
