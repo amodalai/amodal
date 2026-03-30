@@ -6,7 +6,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Sidebar } from '@/sections/Sidebar';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 
@@ -78,6 +79,13 @@ export function AppShell() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            to="/config"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+            title="Configuration"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
           <button
             onClick={toggle}
             className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"

@@ -15,6 +15,12 @@ import { AutomationsPage } from '@/pages/AutomationsPage';
 import { AutomationDetailPage } from '@/pages/AutomationDetailPage';
 import { DevPage } from '@/pages/DevPage';
 import { InspectDetailPage } from '@/pages/InspectDetailPage';
+import { ConfigLayout } from '@/pages/config/ConfigLayout';
+import { ConfigAgentPage } from '@/pages/config/ConfigAgentPage';
+import { ConfigModelsPage } from '@/pages/config/ConfigModelsPage';
+import { ConfigPromptPage } from '@/pages/config/ConfigPromptPage';
+import { ConfigSecretsPage } from '@/pages/config/ConfigSecretsPage';
+import { ConfigSystemPage } from '@/pages/config/ConfigSystemPage';
 
 export const router = createBrowserRouter([
   {
@@ -30,6 +36,17 @@ export const router = createBrowserRouter([
       { path: 'automations/:automationName', element: <AutomationDetailPage /> },
       { path: 'inspect/:kind/:name', element: <InspectDetailPage /> },
       { path: 'pages/:pageName', element: <DevPage /> },
+    ],
+  },
+  {
+    path: '/config',
+    element: <ConfigLayout />,
+    children: [
+      { index: true, element: <ConfigAgentPage /> },
+      { path: 'models', element: <ConfigModelsPage /> },
+      { path: 'prompt', element: <ConfigPromptPage /> },
+      { path: 'secrets', element: <ConfigSecretsPage /> },
+      { path: 'system', element: <ConfigSystemPage /> },
     ],
   },
 ]);
