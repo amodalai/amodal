@@ -14,7 +14,7 @@ import {findRepoRoot} from '../shared/repo-discovery.js';
 export interface ValidateOptions {
   cwd?: string;
   packages?: boolean;
-  test?: boolean;
+  skipTest?: boolean;
 }
 
 interface ValidationIssue {
@@ -95,12 +95,32 @@ async function testRestConnection(
       return {name, type: 'REST', status: 'fail', detail: 'baseUrl not resolved', durationMs: 0};
     }
 
+    const testUrl = spec.testPath ? `${baseUrl.replace(/\/$/, '')}${spec.testPath}` : baseUrl;
     const headers = buildSpecAuthHeaders(spec.auth, envVars);
-    const response = await fetch(baseUrl, {
+    const response = await fetch(testUrl, {
       method: 'GET',
       headers,
+      redirect: 'follow',
       signal: AbortSignal.timeout(10_000),
     });
+
+    // If we got a 401 after a redirect, retry the final URL with auth headers
+    // (fetch strips auth headers on redirects)
+    if (response.status === 401 && response.redirected) {
+      const retryResponse = await fetch(response.url, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(10_000),
+      });
+      const durationMs = Date.now() - start;
+      if (retryResponse.status === 401 || retryResponse.status === 403) {
+        return {name, type: 'REST', status: 'fail', detail: `${retryResponse.status} Unauthorized`, durationMs};
+      }
+      if (retryResponse.status >= 500) {
+        return {name, type: 'REST', status: 'fail', detail: `${retryResponse.status} Server Error`, durationMs};
+      }
+      return {name, type: 'REST', status: 'pass', detail: `${retryResponse.status} OK (after redirect)`, durationMs};
+    }
 
     const durationMs = Date.now() - start;
 
@@ -229,7 +249,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<number
 
   // Load .env into process.env before loadRepo so env: references resolve
   let envVars = new Map<string, string>();
-  if (options.test) {
+  if (!options.skipTest) {
     envVars = await loadEnvIntoProcess(repoPath);
   }
 
@@ -265,7 +285,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<number
     }
 
     // Live connection tests
-    if (options.test) {
+    if (!options.skipTest) {
       process.stderr.write('\n[validate] Testing live connections...\n');
       const liveResults: LiveTestResult[] = [];
 
@@ -374,13 +394,13 @@ export const validateCommand: CommandModule = {
   builder: (yargs) =>
     yargs
       .option('packages', {type: 'boolean', default: false, describe: 'Include package resolution validation'})
-      .option('test', {type: 'boolean', default: false, describe: 'Test live connections and MCP servers'}),
+      .option('skip-test', {type: 'boolean', default: false, describe: 'Skip live connection and MCP server tests'}),
   handler: async (argv) => {
     const code = await runValidate({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       packages: argv['packages'] as boolean,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      test: argv['test'] as boolean,
+      skipTest: argv['skipTest'] as boolean,
     });
     process.exit(code);
   },
