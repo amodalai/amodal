@@ -8,12 +8,26 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { StoreDefinitionInfo } from '@amodalai/react';
 
+export interface ConnectionStatus {
+  name: string;
+  status: 'connected' | 'error' | 'unknown';
+  error?: string;
+}
+
+export interface McpServerStatus {
+  name: string;
+  status: 'connected' | 'connecting' | 'disconnected' | 'error';
+  toolCount: number;
+  error?: string;
+}
+
 export interface RuntimeManifest {
   name: string;
   model: string;
   provider: string;
   stores: StoreDefinitionInfo[];
-  connections: string[];
+  connections: ConnectionStatus[];
+  mcpServers: McpServerStatus[];
   skills: string[];
   automations: string[];
   knowledge: string[];
@@ -28,6 +42,7 @@ const RuntimeContext = createContext<RuntimeManifest>({
   provider: '',
   stores: [],
   connections: [],
+  mcpServers: [],
   skills: [],
   automations: [],
   knowledge: [],
@@ -48,6 +63,7 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
     provider: '',
     stores: [],
     connections: [],
+    mcpServers: [],
     skills: [],
     automations: [],
     knowledge: [],
@@ -65,7 +81,8 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
         let agentName = '';
         let model = '';
         let provider = '';
-        let connections: string[] = [];
+        let connections: ConnectionStatus[] = [];
+        let mcpServers: McpServerStatus[] = [];
         let skills: string[] = [];
         let automations: string[] = [];
         let knowledge: string[] = [];
@@ -75,7 +92,8 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
             name?: string;
             model?: string;
             provider?: string;
-            connections?: string[];
+            connections?: ConnectionStatus[];
+            mcpServers?: McpServerStatus[];
             skills?: string[];
             automations?: string[];
             knowledge?: string[];
@@ -84,6 +102,7 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
           model = inspect.model ?? '';
           provider = inspect.provider ?? '';
           connections = inspect.connections ?? [];
+          mcpServers = inspect.mcpServers ?? [];
           skills = inspect.skills ?? [];
           automations = inspect.automations ?? [];
           knowledge = inspect.knowledge ?? [];
@@ -117,6 +136,7 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
             provider,
             stores,
             connections,
+            mcpServers,
             skills,
             automations,
             knowledge,

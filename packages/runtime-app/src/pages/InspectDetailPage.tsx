@@ -6,18 +6,37 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plug, Sparkles, BookOpen } from 'lucide-react';
+import { Plug, Sparkles, BookOpen, Cable } from 'lucide-react';
 import Markdown from 'react-markdown';
 
-type InspectKind = 'connections' | 'skills' | 'knowledge';
+type InspectKind = 'connections' | 'mcp' | 'skills' | 'knowledge';
 
 interface ConnectionDetail {
   name: string;
+  kind: 'rest';
   spec: { baseUrl: string; format: string; authType: string };
   surface: Array<{ method: string; path: string; description: string }>;
   entities: string | null;
   rules: string | null;
   location: string;
+}
+
+interface McpToolDetail {
+  name: string;
+  qualifiedName: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+interface McpDetail {
+  name: string;
+  kind: 'mcp';
+  status: string;
+  error: string | null;
+  transport: string;
+  command: string | null;
+  url: string | null;
+  tools: McpToolDetail[];
 }
 
 interface SkillDetail {
@@ -35,8 +54,11 @@ interface KnowledgeDetail {
   location: string;
 }
 
+type DetailData = ConnectionDetail | McpDetail | SkillDetail | KnowledgeDetail;
+
 const kindConfig: Record<InspectKind, { icon: typeof Plug; color: string; label: string }> = {
-  connections: { icon: Plug, color: 'emerald', label: 'Connection' },
+  connections: { icon: Plug, color: 'emerald', label: 'REST Connection' },
+  mcp: { icon: Cable, color: 'violet', label: 'MCP Server' },
   skills: { icon: Sparkles, color: 'amber', label: 'Skill' },
   knowledge: { icon: BookOpen, color: 'blue', label: 'Knowledge' },
 };
@@ -125,6 +147,79 @@ function ConnectionView({ data }: { data: ConnectionDetail }) {
   );
 }
 
+function McpView({ data }: { data: McpDetail }) {
+  return (
+    <div className="space-y-6">
+      {/* Metadata badges */}
+      <div className="flex flex-wrap gap-2">
+        <span className="text-[11px] px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-400 font-medium">
+          {data.transport}
+        </span>
+        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+          data.status === 'connected'
+            ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+            : 'bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400'
+        }`}>
+          {data.status}
+        </span>
+        {data.command && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-500 dark:text-zinc-500 font-mono">
+            {data.command}
+          </span>
+        )}
+        {data.url && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-500 dark:text-zinc-500 font-mono">
+            {data.url}
+          </span>
+        )}
+      </div>
+
+      {/* Error */}
+      {data.error && (
+        <div className="bg-red-50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/20 rounded-lg px-4 py-3">
+          <p className="text-sm text-red-700 dark:text-red-400 font-mono">{data.error}</p>
+        </div>
+      )}
+
+      {/* Tools */}
+      {data.tools.length > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-3">
+            Tools ({String(data.tools.length)})
+          </h2>
+          <div className="space-y-3">
+            {data.tools.map((tool) => (
+              <div key={tool.name} className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 dark:bg-zinc-900/50">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono font-semibold text-gray-800 dark:text-zinc-200">{tool.name}</span>
+                  </div>
+                  {tool.description && (
+                    <p className="text-xs text-gray-500 dark:text-zinc-500 mt-1">{tool.description}</p>
+                  )}
+                </div>
+                {tool.parameters && Object.keys(tool.parameters).length > 0 && (
+                  <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800/50">
+                    <pre className="text-[12px] text-gray-600 dark:text-zinc-400 font-mono whitespace-pre-wrap overflow-auto leading-relaxed">
+                      {JSON.stringify(tool.parameters, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {data.tools.length === 0 && data.status === 'connected' && (
+        <div className="text-center py-8 text-gray-400 dark:text-zinc-600 text-sm">
+          Connected but no tools discovered.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SkillView({ data }: { data: SkillDetail }) {
   return (
     <div className="space-y-6">
@@ -174,12 +269,12 @@ function KnowledgeView({ data }: { data: KnowledgeDetail }) {
 
 export function InspectDetailPage() {
   const { kind, name } = useParams<{ kind: string; name: string }>();
-  const [data, setData] = useState<ConnectionDetail | SkillDetail | KnowledgeDetail | null>(null);
+  const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const validKinds = new Set<string>(['connections', 'skills', 'knowledge']);
-  const inspectKind = kind && validKinds.has(kind) ? kind as 'connections' | 'skills' | 'knowledge' : undefined; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- validated above
+  const validKinds = new Set<string>(['connections', 'mcp', 'skills', 'knowledge']);
+  const inspectKind = kind && validKinds.has(kind) ? kind as InspectKind : undefined; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- validated above
   const config = inspectKind ? kindConfig[inspectKind] : undefined;
 
   useEffect(() => {
@@ -194,7 +289,7 @@ export function InspectDetailPage() {
       })
       .then((body: unknown) => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-        setData(body as ConnectionDetail | SkillDetail | KnowledgeDetail);
+        setData(body as DetailData);
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'Failed to load');
@@ -242,6 +337,7 @@ export function InspectDetailPage() {
         <div className="max-w-3xl mx-auto px-6 py-6">
           {/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- data shape matches inspectKind */}
           {inspectKind === 'connections' && <ConnectionView data={data as unknown as ConnectionDetail} />}
+          {inspectKind === 'mcp' && <McpView data={data as unknown as McpDetail} />}
           {inspectKind === 'skills' && <SkillView data={data as unknown as SkillDetail} />}
           {inspectKind === 'knowledge' && <KnowledgeView data={data as unknown as KnowledgeDetail} />}
           {/* eslint-enable @typescript-eslint/no-unsafe-type-assertion */}

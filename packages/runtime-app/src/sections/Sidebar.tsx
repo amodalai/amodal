@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { SquarePen, MessageSquare, Database, Zap, FileText, Plug, Sparkles, BookOpen, ChevronRight, Loader2 } from 'lucide-react';
+import { SquarePen, MessageSquare, Database, Zap, FileText, Plug, Sparkles, BookOpen, ChevronRight, Loader2, Cable } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { cn } from '@/lib/utils';
 import type { PageConfig } from 'virtual:amodal-manifest';
@@ -63,7 +63,7 @@ function CollapsibleSection({ label, icon, children, count }: { label: string; i
   );
 }
 
-function InfoItem({ icon, label, to }: { icon: React.ReactNode; label: string; to: string }) {
+function InfoItem({ icon, label, to, status }: { icon: React.ReactNode; label: string; to: string; status?: 'connected' | 'error' | 'connecting' | 'disconnected' | 'unknown' }) {
   return (
     <NavLink
       to={to}
@@ -77,13 +77,22 @@ function InfoItem({ icon, label, to }: { icon: React.ReactNode; label: string; t
       }
     >
       {icon}
-      <span className="truncate">{label}</span>
+      <span className="flex-1 truncate">{label}</span>
+      {status && (
+        <div className={cn('h-1.5 w-1.5 rounded-full shrink-0',
+          status === 'connected' ? 'bg-emerald-400' :
+          status === 'connecting' ? 'bg-amber-400 animate-pulse' :
+          status === 'error' || status === 'disconnected' ? 'bg-red-400' :
+          'bg-gray-400',
+        )} title={status} />
+      )}
     </NavLink>
   );
 }
 
 export function Sidebar() {
-  const { stores, connections, skills, automations, knowledge } = useRuntimeManifest();
+  const { stores, connections, mcpServers, skills, automations, knowledge } = useRuntimeManifest();
+  const totalConnections = connections.length + mcpServers.length;
   const [devPages, setDevPages] = useState<PageConfig[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [runningAutomations, setRunningAutomations] = useState<Set<string>>(new Set());
@@ -232,14 +241,17 @@ export function Sidebar() {
         )}
 
         {/* Agent composition — collapsible */}
-        {(connections.length > 0 || skills.length > 0 || knowledge.length > 0) && (
+        {(totalConnections > 0 || skills.length > 0 || knowledge.length > 0) && (
           <SectionLabel>Agent</SectionLabel>
         )}
 
-        {connections.length > 0 && (
-          <CollapsibleSection label="Connections" icon={<Plug className="h-3.5 w-3.5 shrink-0 text-emerald-500/60" />} count={connections.length}>
-            {connections.map((name) => (
-              <InfoItem key={name} icon={<Plug className="h-3 w-3 shrink-0 text-emerald-500/40" />} label={name} to={`/inspect/connections/${encodeURIComponent(name)}`} />
+        {totalConnections > 0 && (
+          <CollapsibleSection label="Connections" icon={<Plug className="h-3.5 w-3.5 shrink-0 text-emerald-500/60" />} count={totalConnections}>
+            {connections.map((conn) => (
+              <InfoItem key={conn.name} icon={<Plug className="h-3 w-3 shrink-0 text-emerald-500/40" />} label={conn.name} to={`/inspect/connections/${encodeURIComponent(conn.name)}`} status={conn.status} />
+            ))}
+            {mcpServers.map((mcp) => (
+              <InfoItem key={`mcp-${mcp.name}`} icon={<Cable className="h-3 w-3 shrink-0 text-violet-500/40" />} label={mcp.name} to={`/inspect/mcp/${encodeURIComponent(mcp.name)}`} status={mcp.status} />
             ))}
           </CollapsibleSection>
         )}
