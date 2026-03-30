@@ -10,6 +10,8 @@ import type { StoreDefinitionInfo } from '@amodalai/react';
 
 export interface RuntimeManifest {
   name: string;
+  model: string;
+  provider: string;
   stores: StoreDefinitionInfo[];
   connections: string[];
   skills: string[];
@@ -22,6 +24,8 @@ export interface RuntimeManifest {
 
 const RuntimeContext = createContext<RuntimeManifest>({
   name: '',
+  model: '',
+  provider: '',
   stores: [],
   connections: [],
   skills: [],
@@ -40,6 +44,8 @@ export interface RuntimeProviderProps {
 export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) {
   const [state, setState] = useState<RuntimeManifest>({
     name: '',
+    model: '',
+    provider: '',
     stores: [],
     connections: [],
     skills: [],
@@ -56,6 +62,9 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
     async function fetchManifest() {
       try {
         const inspectRes = await fetch(`${runtimeUrl}/inspect/context`);
+        let agentName = '';
+        let model = '';
+        let provider = '';
         let connections: string[] = [];
         let skills: string[] = [];
         let automations: string[] = [];
@@ -63,11 +72,17 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
         if (inspectRes.ok) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
           const inspect = await inspectRes.json() as {
+            name?: string;
+            model?: string;
+            provider?: string;
             connections?: string[];
             skills?: string[];
             automations?: string[];
             knowledge?: string[];
           };
+          agentName = inspect.name ?? '';
+          model = inspect.model ?? '';
+          provider = inspect.provider ?? '';
           connections = inspect.connections ?? [];
           skills = inspect.skills ?? [];
           automations = inspect.automations ?? [];
@@ -97,7 +112,9 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
 
         if (!cancelled) {
           setState({
-            name: '',
+            name: agentName,
+            model,
+            provider,
             stores,
             connections,
             skills,
