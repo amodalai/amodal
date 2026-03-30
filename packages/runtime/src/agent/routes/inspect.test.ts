@@ -26,7 +26,7 @@ function makeSessionManager(): AgentSessionManager {
           ],
         },
         repo: {
-          connections: new Map([['crm', {}]]),
+          connections: new Map([['crm', {name: 'crm', spec: {baseUrl: 'https://api.example.com', testPath: undefined}, surface: [], entities: null, rules: null, location: 'connections/crm'}]]),
           skills: [{name: 'triage'}, {name: 'investigate'}],
           automations: [{name: 'daily-scan'}],
           knowledge: [{name: 'api-docs'}],
@@ -38,7 +38,8 @@ function makeSessionManager(): AgentSessionManager {
     cleanup: vi.fn(),
     updateRepo: vi.fn(),
     shutdown: vi.fn(),
-   
+    getRepo: vi.fn(() => ({connections: new Map(), skills: [], automations: [], knowledge: []})),
+    getInspectMcpManager: vi.fn(async () => undefined),
   } as unknown as AgentSessionManager;
 }
 
@@ -68,7 +69,7 @@ describe('repo-inspect route', () => {
       sectionBreakdown: {core: 200, skills: 300},
     });
     expect(res.body['sections']).toHaveLength(2);
-    expect(res.body['connections']).toEqual(['crm']);
+    expect(res.body['connections']).toEqual([expect.objectContaining({name: 'crm'})]);
     expect(res.body['skills']).toEqual(['triage', 'investigate']);
     expect(res.body['automations']).toEqual(['daily-scan']);
     expect(res.body['knowledge']).toEqual(['api-docs']);
