@@ -48,6 +48,7 @@ export function CodeEditor({ value, language, onChange, readOnly = false }: Code
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       keymap.of([...defaultKeymap, indentWithTab]),
       getLanguageExtension(language),
+      EditorView.lineWrapping,
       oneDark,
       EditorView.theme({
         '&': { height: '100%', fontSize: '13px' },
