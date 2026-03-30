@@ -63,12 +63,22 @@ function CollapsibleSection({ label, icon, children, count }: { label: string; i
   );
 }
 
-function InfoItem({ icon, label }: { icon: React.ReactNode; label: string }) {
+function InfoItem({ icon, label, to }: { icon: React.ReactNode; label: string; to: string }) {
   return (
-    <div className="flex items-center gap-2.5 px-3 py-[6px] text-[13px] text-gray-400 dark:text-white/40">
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-2.5 px-3 py-[6px] text-[13px] rounded-md transition-colors duration-150',
+          isActive
+            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+            : 'text-gray-400 dark:text-white/40 hover:text-gray-700 dark:hover:text-white/70 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
+        )
+      }
+    >
       {icon}
       <span className="truncate">{label}</span>
-    </div>
+    </NavLink>
   );
 }
 
@@ -229,7 +239,7 @@ export function Sidebar() {
         {connections.length > 0 && (
           <CollapsibleSection label="Connections" icon={<Plug className="h-3.5 w-3.5 shrink-0 text-emerald-500/60" />} count={connections.length}>
             {connections.map((name) => (
-              <InfoItem key={name} icon={<Plug className="h-3 w-3 shrink-0 text-emerald-500/40" />} label={name} />
+              <InfoItem key={name} icon={<Plug className="h-3 w-3 shrink-0 text-emerald-500/40" />} label={name} to={`/inspect/connections/${encodeURIComponent(name)}`} />
             ))}
           </CollapsibleSection>
         )}
@@ -237,7 +247,7 @@ export function Sidebar() {
         {skills.length > 0 && (
           <CollapsibleSection label="Skills" icon={<Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500/60" />} count={skills.length}>
             {skills.map((name) => (
-              <InfoItem key={name} icon={<Sparkles className="h-3 w-3 shrink-0 text-amber-500/40" />} label={name} />
+              <InfoItem key={name} icon={<Sparkles className="h-3 w-3 shrink-0 text-amber-500/40" />} label={name} to={`/inspect/skills/${encodeURIComponent(name)}`} />
             ))}
           </CollapsibleSection>
         )}
@@ -245,7 +255,7 @@ export function Sidebar() {
         {knowledge.length > 0 && (
           <CollapsibleSection label="Knowledge" icon={<BookOpen className="h-3.5 w-3.5 shrink-0 text-blue-500/60" />} count={knowledge.length}>
             {knowledge.map((name) => (
-              <InfoItem key={name} icon={<BookOpen className="h-3 w-3 shrink-0 text-blue-500/40" />} label={name} />
+              <InfoItem key={name} icon={<BookOpen className="h-3 w-3 shrink-0 text-blue-500/40" />} label={name} to={`/inspect/knowledge/${encodeURIComponent(name)}`} />
             ))}
           </CollapsibleSection>
         )}
