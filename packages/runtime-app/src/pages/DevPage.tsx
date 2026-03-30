@@ -4,58 +4,66 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Suspense, lazy, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 /**
  * Developer page loader.
  *
- * Loads pages from the `virtual:amodal-pages` module (provided by the Vite plugin).
- * Matches the `:pageName` route param to the page's exported name.
- *
- * In dev mode, the Vite plugin resolves `virtual:amodal-pages` to the developer's
- * `pages/` directory. Changes to page files trigger HMR via the plugin's
- * handleHotUpdate handler.
+ * Loads pre-built page bundles from /pages-bundle/{name}.js via a script tag.
+ * The page registers itself on window.__AMODAL_PAGES__[name].
+ * React is available on window.React (set by the SPA entry point).
  */
 export function DevPage() {
   const { pageName } = useParams<{ pageName: string }>();
+  const [PageComponent, setPageComponent] = useState<React.ComponentType | null>(null);
+  const [error, setError] = useState(false);
 
-  const PageComponent = useMemo(() => {
-    if (!pageName) return null;
+  useEffect(() => {
+    if (!pageName) return;
+    setPageComponent(null);
+    setError(false);
 
-    return lazy(async () => {
-      try {
-        // Dynamic import of the virtual module
-        const pages = (await import('virtual:amodal-pages')).default;
-        const Component = pages[pageName];
+    // Check if already loaded
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Global page registry
+    const registry = (window as unknown as Record<string, unknown>)['__AMODAL_PAGES__'] as Record<string, React.ComponentType> | undefined;
+    if (registry?.[pageName]) {
+      setPageComponent(() => registry[pageName]);
+      return;
+    }
 
-        if (!Component) {
-          return { default: () => <PageNotFound name={pageName} /> };
-        }
-
-        return { default: Component };
-      } catch {
-        return { default: () => <PageNotFound name={pageName} /> };
+    // Load via script tag
+    const script = document.createElement('script');
+    script.src = `/pages-bundle/${pageName}.js`;
+    script.onload = () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Global page registry
+      const reg = (window as unknown as Record<string, unknown>)['__AMODAL_PAGES__'] as Record<string, React.ComponentType> | undefined;
+      if (reg?.[pageName]) {
+        setPageComponent(() => reg[pageName]);
+      } else {
+        setError(true);
       }
-    });
+    };
+    script.onerror = () => setError(true);
+    document.head.appendChild(script);
   }, [pageName]);
 
-  if (!PageComponent) {
-    return <PageNotFound name="" />;
+  if (error) {
+    return <PageNotFound name={pageName ?? ''} />;
   }
 
-  return (
-    <Suspense fallback={<div className="p-6 text-muted-foreground text-sm">Loading page...</div>}>
-      <PageComponent />
-    </Suspense>
-  );
+  if (!PageComponent) {
+    return <div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading page...</div>;
+  }
+
+  return <PageComponent />;
 }
 
 function PageNotFound({ name }: { name: string }) {
   return (
     <div className="p-6">
-      <h1 className="text-xl font-bold mb-2">Page Not Found</h1>
-      <p className="text-muted-foreground">
+      <h1 className="text-xl font-bold mb-2 text-gray-900 dark:text-zinc-200">Page Not Found</h1>
+      <p className="text-gray-500 dark:text-zinc-500">
         {name
           ? `No page named "${name}" found in pages/.`
           : 'No page specified.'}

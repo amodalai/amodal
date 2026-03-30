@@ -80,11 +80,24 @@ export function Sidebar() {
   const location = useLocation();
 
   useEffect(() => {
-    import('virtual:amodal-manifest')
-      .then((m) => {
-        setDevPages(m.pages.filter((p: PageConfig) => !p.hidden));
+    // Try API first (works with pre-built pages), fall back to Vite virtual module
+    fetch('/api/pages')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data: unknown) => {
+        if (data && typeof data === 'object' && 'pages' in data && Array.isArray((data as Record<string, unknown>)['pages'])) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+          const pages = (data as Record<string, unknown>)['pages'] as Array<{name: string}>;
+          setDevPages(pages.map((p) => ({name: p.name, filePath: ''} as PageConfig)));
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        // Fall back to Vite virtual module (inside monorepo)
+        import('virtual:amodal-manifest')
+          .then((m) => {
+            setDevPages(m.pages.filter((p: PageConfig) => !p.hidden));
+          })
+          .catch(() => {});
+      });
   }, []);
 
   useEffect(() => {
@@ -145,6 +158,21 @@ export function Sidebar() {
           </>
         )}
 
+        {/* Pages */}
+        {devPages.length > 0 && (
+          <>
+            <SectionLabel>Pages</SectionLabel>
+            <div className="space-y-0.5">
+              {devPages.map((page) => (
+                <NavItem key={page.name} to={`/pages/${page.name}`}>
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{formatPageName(page.name)}</span>
+                </NavItem>
+              ))}
+            </div>
+          </>
+        )}
+
         {/* Agent composition — collapsible */}
         {(connections.length > 0 || skills.length > 0 || knowledge.length > 0 || automations.length > 0) && (
           <SectionLabel>Agent</SectionLabel>
@@ -180,22 +208,6 @@ export function Sidebar() {
               <InfoItem key={name} icon={<Zap className="h-3 w-3 shrink-0 text-purple-500/40" />} label={name} />
             ))}
           </CollapsibleSection>
-        )}
-
-        {devPages.length > 0 && (
-          <>
-            <SectionLabel>Pages</SectionLabel>
-            <div className="space-y-0.5">
-              {devPages.map((page) => (
-                <NavItem key={page.name} to={`/pages/${page.name}`}>
-                  <FileText className="h-4 w-4 shrink-0" />
-                  <span className="truncate" title={page.description}>
-                    {formatPageName(page.name)}
-                  </span>
-                </NavItem>
-              ))}
-            </div>
-          </>
         )}
 
         {stores.length > 0 && (

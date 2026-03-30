@@ -25,6 +25,7 @@ import type {ServerInstance} from '../server.js';
 import {createPGLiteStoreBackend} from '../stores/pglite-store-backend.js';
 import type {StoreBackend, LLMMessage} from '@amodalai/core';
 import {SessionStore} from './session-store.js';
+import {buildPages} from './page-builder.js';
 
 /**
  * Creates an Express server for repo-based agent mode.
@@ -177,9 +178,31 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     app.use(createStoresRouter({repo, storeBackend, tenantId: 'local'}));
   }
 
+  // Build user pages (if pages/ directory exists)
+  let builtPages: Array<{name: string; outputPath: string}> = [];
+  try {
+    const result = await buildPages(config.repoPath);
+    builtPages = result.pages;
+    if (builtPages.length > 0) {
+      process.stderr.write(`[dev] Built ${String(builtPages.length)} page(s)\n`);
+      // Serve compiled page bundles
+      app.use('/pages-bundle', express.static(result.outDir));
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[dev] Page build failed: ${msg}\n`);
+  }
+
+  // Pages list endpoint
+  app.get('/api/pages', (_req, res) => {
+    res.json({
+      pages: builtPages.map((p) => ({name: p.name})),
+    });
+  });
+
   // App middleware (e.g., Vite dev server for runtime app)
   if (config.appMiddleware) {
-     
+
     app.use(config.appMiddleware as express.RequestHandler);
   } else if (config.staticAppDir && existsSync(config.staticAppDir)) {
     // Serve pre-built SPA static assets with index.html fallback
