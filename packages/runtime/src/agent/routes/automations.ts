@@ -56,14 +56,45 @@ export function createAutomationRouter(options: AutomationRouterOptions): Router
     try {
       const result = await options.runner.triggerAutomation(name, payload);
       if (!result.success) {
-        res.status(404).json({error: result.error});
+        res.status(result.error?.toLowerCase().includes('not found') ? 404 : 500).json({status: 'error', automation: name, error: result.error});
         return;
       }
-      res.json({status: 'triggered', automation: name});
+      res.json({status: 'completed', automation: name});
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: msg});
     }
+  });
+
+  // SSE streaming endpoint for live automation runs
+  router.post('/automations/:name/stream', async (req: Request, res: Response) => {
+    const name = req.params['name'] ?? '';
+
+    // SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
+    try {
+      const stream = options.runner.streamAutomation(name);
+      if (!stream) {
+        res.write(`data: ${JSON.stringify({type: 'error', message: `Automation "${name}" not found`})}\n\n`);
+        res.end();
+        return;
+      }
+
+      for await (const event of stream) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.write(`data: ${JSON.stringify({type: 'error', message: msg})}\n\n`);
+    }
+
+    res.write(`data: ${JSON.stringify({type: 'done', timestamp: new Date().toISOString()})}\n\n`);
+    res.end();
   });
 
   return router;

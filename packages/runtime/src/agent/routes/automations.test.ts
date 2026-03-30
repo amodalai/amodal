@@ -102,7 +102,7 @@ describe('repo-automations routes', () => {
       .send({});
 
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('triggered');
+    expect(res.body.status).toBe('completed');
     expect(runner.triggerAutomation).toHaveBeenCalledWith('daily-check', {});
   });
 

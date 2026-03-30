@@ -16,6 +16,8 @@ export interface ProactiveRunnerConfig {
   createSession: () => Promise<AgentSession>;
   /** Cleanup after ephemeral session */
   destroySession: (sessionId: string) => Promise<void>;
+  /** Called before session is destroyed — use to persist session history */
+  onSessionComplete?: (session: AgentSession, automationName: string) => void;
 }
 
 interface CronJob {
@@ -26,9 +28,15 @@ interface CronJob {
 export interface AutomationInfo {
   name: string;
   title: string;
+  prompt: string;
   schedule?: string;
+  trigger: string;
   webhookTriggered: boolean;
   running: boolean;
+  lastRun?: string;
+  lastRunStatus?: 'success' | 'error';
+  lastRunError?: string;
+  lastRunSessionId?: string;
 }
 
 /**
@@ -42,6 +50,7 @@ export class ProactiveRunner {
   private readonly config: ProactiveRunnerConfig;
   private readonly automations: Map<string, RunnableAutomation> = new Map();
   private readonly cronJobs: Map<string, CronJob> = new Map();
+  private readonly runHistory: Map<string, {timestamp: string; status: 'success' | 'error'; error?: string; sessionId?: string}> = new Map();
 
   constructor(repo: AmodalRepo, config: ProactiveRunnerConfig) {
     this.config = config;
@@ -153,13 +162,22 @@ export class ProactiveRunner {
    * List all registered automations with their running state.
    */
   listAutomations(): AutomationInfo[] {
-    return [...this.automations.values()].map((a) => ({
-      name: a.name,
-      title: a.title,
-      schedule: a.schedule,
-      webhookTriggered: a.isWebhookTriggered,
-      running: a.isWebhookTriggered || this.cronJobs.has(a.name),
-    }));
+    return [...this.automations.values()].map((a) => {
+      const history = this.runHistory.get(a.name);
+      return {
+        name: a.name,
+        title: a.title,
+        prompt: a.prompt,
+        schedule: a.schedule,
+        trigger: a.isWebhookTriggered ? 'webhook' : a.schedule ? 'cron' : 'manual',
+        webhookTriggered: a.isWebhookTriggered,
+        running: a.isWebhookTriggered || this.cronJobs.has(a.name),
+        lastRun: history?.timestamp,
+        lastRunStatus: history?.status,
+        lastRunError: history?.error,
+        lastRunSessionId: history?.sessionId,
+      };
+    });
   }
 
   /**
@@ -183,6 +201,49 @@ export class ProactiveRunner {
     }
   }
 
+  /**
+   * Stream an automation run, yielding SSE events in real time.
+   */
+  async *streamAutomation(name: string): AsyncGenerator<Record<string, unknown>> {
+    const automation = this.automations.get(name);
+    if (!automation) return;
+
+    process.stderr.write(`[proactive] Streaming "${name}"...\n`);
+    let session: AgentSession | undefined;
+    try {
+      session = await this.config.createSession();
+      const signal = new AbortController().signal;
+
+      yield {type: 'init', session_id: session.id, automation: name, timestamp: new Date().toISOString()};
+
+      for await (const event of runAgentTurn(session, automation.prompt, signal)) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE event from agent runner
+        yield event as unknown as Record<string, unknown>;
+      }
+
+      if (session && this.config.onSessionComplete) {
+        this.config.onSessionComplete(session, name);
+      }
+      this.runHistory.set(name, {timestamp: new Date().toISOString(), status: 'success', sessionId: session.id});
+      process.stderr.write(`[proactive] Stream completed "${name}"\n`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (session && this.config.onSessionComplete) {
+        this.config.onSessionComplete(session, name);
+      }
+      this.runHistory.set(name, {timestamp: new Date().toISOString(), status: 'error', error: msg, sessionId: session?.id});
+      yield {type: 'error', message: msg};
+    } finally {
+      if (session) {
+        await this.config.destroySession(session.id);
+      }
+    }
+  }
+
+  getAutomation(name: string): RunnableAutomation | undefined {
+    return this.automations.get(name);
+  }
+
   private async runAutomation(
     automation: RunnableAutomation,
     payload?: Record<string, unknown>,
@@ -202,6 +263,9 @@ export class ProactiveRunner {
       const signal = new AbortController().signal;
       let responseText = '';
       for await (const event of runAgentTurn(session, prompt, signal)) {
+        if ('type' in event && event['type'] === 'error' && 'message' in event) {
+          throw new Error(String(event['message']));
+        }
         if ('content' in event && typeof event['content'] === 'string') {
           responseText += event['content'];
         }
@@ -218,9 +282,20 @@ export class ProactiveRunner {
         this.config.webhookSecret,
       );
 
-      process.stderr.write(`[proactive] Completed "${automation.name}"\n`);
+      const sessionId = session?.id;
+      // Persist session before destroying so it shows in session history
+      if (session && this.config.onSessionComplete) {
+        this.config.onSessionComplete(session, automation.name);
+      }
+      this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'success', sessionId});
+      process.stderr.write(`[proactive] Completed "${automation.name}" (session ${sessionId ?? 'none'})\n`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      const sessionId = session?.id;
+      if (session && this.config.onSessionComplete) {
+        this.config.onSessionComplete(session, automation.name);
+      }
+      this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'error', error: msg, sessionId});
       process.stderr.write(`[proactive] Error in "${automation.name}": ${msg}\n`);
       throw err;
     } finally {
