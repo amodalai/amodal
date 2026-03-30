@@ -11,16 +11,16 @@ import { cn } from '@/lib/utils';
  * Maps a string to one of several predefined color classes.
  */
 const ENUM_COLORS = [
-  'bg-blue-100 text-blue-800',
-  'bg-green-100 text-green-800',
-  'bg-yellow-100 text-yellow-800',
-  'bg-red-100 text-red-800',
-  'bg-purple-100 text-purple-800',
-  'bg-pink-100 text-pink-800',
-  'bg-indigo-100 text-indigo-800',
-  'bg-orange-100 text-orange-800',
-  'bg-teal-100 text-teal-800',
-  'bg-cyan-100 text-cyan-800',
+  'bg-blue-100 dark:bg-blue-500/10 text-blue-800 dark:text-blue-400',
+  'bg-green-100 dark:bg-green-500/10 text-green-800 dark:text-green-400',
+  'bg-yellow-100 dark:bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
+  'bg-red-100 dark:bg-red-500/10 text-red-800 dark:text-red-400',
+  'bg-purple-100 dark:bg-purple-500/10 text-purple-800 dark:text-purple-400',
+  'bg-pink-100 dark:bg-pink-500/10 text-pink-800 dark:text-pink-400',
+  'bg-indigo-100 dark:bg-indigo-500/10 text-indigo-800 dark:text-indigo-400',
+  'bg-orange-100 dark:bg-orange-500/10 text-orange-800 dark:text-orange-400',
+  'bg-teal-100 dark:bg-teal-500/10 text-teal-800 dark:text-teal-400',
+  'bg-cyan-100 dark:bg-cyan-500/10 text-cyan-800 dark:text-cyan-400',
 ];
 
 function hashString(str: string): number {

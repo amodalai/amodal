@@ -4,11 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { StoreFieldDefinitionInfo, StoreDocument } from '@amodalai/react';
-import { FieldRenderer } from './FieldRenderer';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { EnumBadge } from './EnumBadge';
 
 export interface EntityTableProps {
   storeName: string;
@@ -20,124 +18,125 @@ export interface EntityTableProps {
   onFilterChange?: (filter: Record<string, unknown>) => void;
 }
 
+function formatDateRelative(value: unknown): string {
+  const date = new Date(String(value));
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${String(mins)}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${String(hours)}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${String(days)}d ago`;
+  return date.toLocaleDateString();
+}
+
+/** Pick the most useful fields to show in the card. */
+function pickDisplayFields(
+  schema: Record<string, StoreFieldDefinitionInfo>,
+  keyField: string,
+): { title: string | null; badges: string[]; textFields: string[]; dateField: string | null } {
+  const fields = Object.entries(schema);
+  let title: string | null = null;
+  const badges: string[] = [];
+  const textFields: string[] = [];
+  let dateField: string | null = null;
+
+  for (const [name, field] of fields) {
+    if (name === keyField) continue;
+    if (field.type === 'enum') { badges.push(name); continue; }
+    if (field.type === 'datetime' && !dateField) { dateField = name; continue; }
+    if (!title && field.type === 'string' && ['title', 'name', 'summary', 'subject'].includes(name)) {
+      title = name;
+      continue;
+    }
+    if (field.type === 'string') { textFields.push(name); }
+  }
+
+  if (!title && textFields.length > 0) {
+    title = textFields.shift() ?? null;
+  }
+
+  return { title, badges, textFields: textFields.slice(0, 2), dateField };
+}
+
 export function EntityTable({
   storeName,
   schema,
   keyTemplate,
   documents,
   total,
-  onSortChange,
-  onFilterChange,
 }: EntityTableProps) {
   const navigate = useNavigate();
-  const fields = Object.entries(schema);
-  const [currentSort, setCurrentSort] = useState<string>('');
-  const [enumFilters, setEnumFilters] = useState<Record<string, string>>({});
-
   const keyField = keyTemplate.replace(/[{}]/g, '');
+  const display = pickDisplayFields(schema, keyField);
 
-  const handleSort = useCallback(
-    (fieldName: string) => {
-      const newSort = currentSort === fieldName ? `-${fieldName}` : fieldName;
-      setCurrentSort(newSort);
-      onSortChange?.(newSort);
-    },
-    [currentSort, onSortChange],
-  );
-
-  const handleEnumFilter = useCallback(
-    (fieldName: string, value: string) => {
-      const next = { ...enumFilters };
-      if (value === '') {
-        delete next[fieldName];
-      } else {
-        next[fieldName] = value;
-      }
-      setEnumFilters(next);
-      onFilterChange?.(next);
-    },
-    [enumFilters, onFilterChange],
-  );
+  if (documents.length === 0) {
+    return (
+      <div className="text-center py-16 text-gray-400 dark:text-zinc-600 text-sm">
+        No documents yet.
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50/80">
-              {fields.map(([name, _field]) => (
-                <th
-                  key={name}
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none transition-colors"
-                  onClick={() => handleSort(name)}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {name}
-                    {currentSort === name && <ChevronUp className="h-3 w-3" />}
-                    {currentSort === `-${name}` && <ChevronDown className="h-3 w-3" />}
-                  </span>
-                </th>
-              ))}
-            </tr>
+    <div>
+      <div className="space-y-2">
+        {documents.map((doc) => {
+          const payload = doc.payload;
+          const titleValue = display.title ? String(payload[display.title] ?? doc.key) : doc.key;
 
-            {/* Enum filter row */}
-            {fields.some(([, f]) => f.type === 'enum') && (
-              <tr className="border-b border-gray-100 bg-gray-50/40">
-                {fields.map(([name, field]) => (
-                  <th key={name} className="px-4 py-1.5">
-                    {field.type === 'enum' && field.values ? (
-                      <select
-                        className="text-xs bg-white border border-gray-200 rounded px-1.5 py-1 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                        value={enumFilters[name] ?? ''}
-                        onChange={(e) => handleEnumFilter(name, e.target.value)}
-                      >
-                        <option value="">All</option>
-                        {field.values.map((v) => (
-                          <option key={v} value={v}>{v}</option>
-                        ))}
-                      </select>
-                    ) : null}
-                  </th>
-                ))}
-              </tr>
-            )}
-          </thead>
+          return (
+            <div
+              key={doc.key}
+              onClick={() => { void navigate(`/entities/${storeName}/${doc.key}`); }}
+              className="border border-gray-200 dark:border-zinc-800 rounded-xl p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 dark:text-zinc-200 mb-1">
+                    {titleValue}
+                  </div>
 
-          <tbody className="divide-y divide-gray-100">
-            {documents.map((doc) => {
-              const rowKey = String(doc.payload[keyField] ?? doc.key);
-              return (
-                <tr
-                  key={doc.key}
-                  className="hover:bg-indigo-50/40 cursor-pointer transition-colors duration-100"
-                  onClick={() => navigate(`/entities/${storeName}/${rowKey}`)}
-                >
-                  {fields.map(([name, field]) => (
-                    <td key={name} className="px-4 py-3 max-w-[220px]">
-                      <FieldRenderer field={field} value={doc.payload[name]} mode="table" />
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
+                  {display.textFields.map((name) => {
+                    const val = payload[name];
+                    if (!val) return null;
+                    const str = String(val);
+                    return (
+                      <div key={name} className="text-xs text-gray-500 dark:text-zinc-400 mb-1.5 line-clamp-2">
+                        {str.length > 150 ? str.slice(0, 150) + '...' : str}
+                      </div>
+                    );
+                  })}
 
-            {documents.length === 0 && (
-              <tr>
-                <td
-                  colSpan={fields.length}
-                  className="px-4 py-16 text-center text-gray-400 text-sm"
-                >
-                  No documents yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  {display.badges.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                      {display.badges.map((name) => {
+                        const val = payload[name];
+                        if (!val) return null;
+                        return <EnumBadge key={name} value={String(val)} />;
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-[11px] font-mono text-gray-400 dark:text-zinc-600">{doc.key}</span>
+                  {display.dateField && payload[display.dateField] && (
+                    <span className="text-[11px] text-gray-400 dark:text-zinc-600">
+                      {formatDateRelative(payload[display.dateField])}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {total > 0 && (
-        <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50/50 text-xs text-gray-500">
-          Showing {documents.length} of {total.toLocaleString()} document{total !== 1 ? 's' : ''}
+      {total > documents.length && (
+        <div className="mt-4 text-center text-xs text-gray-400 dark:text-zinc-600">
+          Showing {documents.length} of {total.toLocaleString()}
         </div>
       )}
     </div>

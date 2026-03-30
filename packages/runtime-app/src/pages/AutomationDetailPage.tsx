@@ -17,6 +17,7 @@ interface AutomationInfo {
   prompt: string;
   schedule?: string;
   trigger: string;
+  running: boolean;
 }
 
 interface SessionSummary {
@@ -185,17 +186,35 @@ export function AutomationDetailPage() {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => { void handleRunNow(); }}
-            disabled={isRunning}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-colors disabled:opacity-50"
-          >
-            {isRunning ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
-            ) : (
-              <><Play className="h-4 w-4" /> Run Now</>
+          <div className="flex items-center gap-2 shrink-0">
+            {automation.schedule && (
+              <button
+                onClick={() => {
+                  const action = automation.running ? 'stop' : 'start';
+                  void fetch(`/automations/${encodeURIComponent(automationName ?? '')}/${action}`, { method: 'POST' })
+                    .then(() => fetchData());
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
+                  automation.running
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                    : 'border-gray-300 dark:border-zinc-700 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                {automation.running ? 'Active' : 'Inactive'}
+              </button>
             )}
-          </button>
+            <button
+              onClick={() => { void handleRunNow(); }}
+              disabled={isRunning}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-colors disabled:opacity-50"
+            >
+              {isRunning ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
+              ) : (
+                <><Play className="h-4 w-4" /> Run Now</>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

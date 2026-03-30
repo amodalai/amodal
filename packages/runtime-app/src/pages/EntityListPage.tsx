@@ -39,7 +39,7 @@ export function EntityListPage() {
 
   if (!store) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+      <div className="flex items-center justify-center h-full text-gray-400 dark:text-zinc-500 text-sm">
         Store &ldquo;{storeName}&rdquo; not found.
       </div>
     );
@@ -48,25 +48,25 @@ export function EntityListPage() {
   return (
     <div className="max-w-[1200px] mx-auto px-6 pt-8 pb-12">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-          <Database className="h-5 w-5 text-indigo-500" />
+        <div className="h-9 w-9 rounded-lg bg-indigo-100 dark:bg-indigo-500/10 flex items-center justify-center">
+          <Database className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{store.entity.name}</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-zinc-200">{store.entity.name}</h1>
+          <p className="text-sm text-gray-500 dark:text-zinc-500">
             {total.toLocaleString()} document{total !== 1 ? 's' : ''} in <span className="font-mono text-xs">{store.name}</span>
           </p>
         </div>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm">
+        <div className="mb-4 p-3 rounded-md bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300 text-sm">
           {error}
         </div>
       )}
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-gray-400 text-sm">Loading...</div>
+        <div className="flex items-center justify-center py-16 text-gray-400 dark:text-zinc-500 text-sm">Loading...</div>
       ) : (
         <EntityTable
           storeName={storeName ?? ''}

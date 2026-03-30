@@ -77,6 +77,7 @@ export function Sidebar() {
   const [devPages, setDevPages] = useState<PageConfig[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [runningAutomations, setRunningAutomations] = useState<Set<string>>(new Set());
+  const [activeAutomations, setActiveAutomations] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -109,10 +110,10 @@ export function Sidebar() {
         .then((data: unknown) => {
           if (data && typeof data === 'object' && 'automations' in data) {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-            const autos = (data as Record<string, unknown>)['automations'] as Array<{name: string; lastRun?: string; lastRunStatus?: string}>;
-            // Consider "running" if lastRun was in the last 5 seconds (rough heuristic since we don't track in-flight)
+            const autos = (data as Record<string, unknown>)['automations'] as Array<{name: string; running: boolean; lastRun?: string}>;
             const running = new Set(autos.filter((a) => a.lastRun && (Date.now() - new Date(a.lastRun).getTime()) < 5000).map((a) => a.name));
             setRunningAutomations(running);
+            setActiveAutomations(new Set(autos.filter((a) => a.running).map((a) => a.name)));
           }
         })
         .catch(() => {});
@@ -200,16 +201,23 @@ export function Sidebar() {
         {automations.length > 0 && (
           <>
             <SectionLabel>Automations</SectionLabel>
-            {automations.map((name) => (
-              <NavItem key={name} to={`/automations/${encodeURIComponent(name)}`}>
-                {runningAutomations.has(name) ? (
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 text-purple-400 animate-spin" />
-                ) : (
-                  <Zap className="h-3.5 w-3.5 shrink-0 text-purple-500/60" />
-                )}
-                <span className="truncate">{name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</span>
-              </NavItem>
-            ))}
+            {[...automations].sort().map((name) => {
+              const isActive = activeAutomations.has(name);
+              const isRunning = runningAutomations.has(name);
+              return (
+                <NavItem key={name} to={`/automations/${encodeURIComponent(name)}`}>
+                  {isRunning ? (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 text-purple-400 animate-spin" />
+                  ) : (
+                    <Zap className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-purple-500' : 'text-purple-500/30')} />
+                  )}
+                  <span className={cn('truncate', !isActive && !isRunning && 'opacity-40')}>
+                    {name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                  </span>
+                  {isActive && <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0 ml-auto" />}
+                </NavItem>
+              );
+            })}
           </>
         )}
 

@@ -1,0 +1,15 @@
+#!/bin/sh
+# Block direct pushes to main on the upstream repo.
+# Forks can push to their own main freely.
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$branch" != "main" ]; then
+  exit 0
+fi
+
+# Only block if pushing to the amodalai org repo
+remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+if echo "$remote_url" | grep -q "amodalai/amodal"; then
+  echo "❌ Direct push to main is not allowed. Use a PR."
+  exit 1
+fi
