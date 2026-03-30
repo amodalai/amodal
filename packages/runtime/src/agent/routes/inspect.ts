@@ -56,83 +56,65 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
     res.json({status: 'ok'});
   });
 
-  /** Connection detail by name. */
-  router.get('/inspect/connections/:name', async (req: Request, res: Response) => {
-    try {
-      const session = await options.sessionManager.create('__inspect__');
-      const conn = session.runtime.repo.connections.get(req.params['name'] ?? '');
-      options.sessionManager.destroy(session.id);
+  /** Connection detail by name — reads repo directly, no session needed. */
+  router.get('/inspect/connections/:name', (_req: Request, res: Response) => {
+    const repo = options.sessionManager.getRepo();
+    const conn = repo.connections.get(_req.params['name'] ?? '');
 
-      if (!conn) {
-        res.status(404).json({error: {code: 'NOT_FOUND', message: 'Connection not found'}});
-        return;
-      }
-
-      res.json({
-        name: conn.name,
-        spec: {baseUrl: conn.spec.baseUrl, format: conn.spec.format, authType: conn.spec.auth?.type ?? 'none'},
-        surface: conn.surface.filter((e) => e.included).map((e) => ({
-          method: e.method,
-          path: e.path,
-          description: e.description,
-        })),
-        entities: conn.entities ?? null,
-        rules: conn.rules ?? null,
-        location: conn.location,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      res.status(500).json({error: {code: 'INSPECT_FAILED', message: msg}});
+    if (!conn) {
+      res.status(404).json({error: {code: 'NOT_FOUND', message: 'Connection not found'}});
+      return;
     }
+
+    res.json({
+      name: conn.name,
+      spec: {baseUrl: conn.spec.baseUrl, format: conn.spec.format, authType: conn.spec.auth?.type ?? 'none'},
+      surface: conn.surface.filter((e) => e.included).map((e) => ({
+        method: e.method,
+        path: e.path,
+        description: e.description,
+      })),
+      entities: conn.entities ?? null,
+      rules: conn.rules ?? null,
+      location: conn.location,
+    });
   });
 
-  /** Skill detail by name. */
-  router.get('/inspect/skills/:name', async (req: Request, res: Response) => {
-    try {
-      const session = await options.sessionManager.create('__inspect__');
-      const skill = session.runtime.repo.skills.find((s) => s.name === req.params['name']);
-      options.sessionManager.destroy(session.id);
+  /** Skill detail by name — reads repo directly, no session needed. */
+  router.get('/inspect/skills/:name', (_req: Request, res: Response) => {
+    const repo = options.sessionManager.getRepo();
+    const skill = repo.skills.find((s) => s.name === _req.params['name']);
 
-      if (!skill) {
-        res.status(404).json({error: {code: 'NOT_FOUND', message: 'Skill not found'}});
-        return;
-      }
-
-      res.json({
-        name: skill.name,
-        description: skill.description,
-        trigger: skill.trigger ?? null,
-        body: skill.body,
-        location: skill.location,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      res.status(500).json({error: {code: 'INSPECT_FAILED', message: msg}});
+    if (!skill) {
+      res.status(404).json({error: {code: 'NOT_FOUND', message: 'Skill not found'}});
+      return;
     }
+
+    res.json({
+      name: skill.name,
+      description: skill.description,
+      trigger: skill.trigger ?? null,
+      body: skill.body,
+      location: skill.location,
+    });
   });
 
-  /** Knowledge document detail by name. */
-  router.get('/inspect/knowledge/:name', async (req: Request, res: Response) => {
-    try {
-      const session = await options.sessionManager.create('__inspect__');
-      const doc = session.runtime.repo.knowledge.find((k) => k.name === req.params['name']);
-      options.sessionManager.destroy(session.id);
+  /** Knowledge document detail by name — reads repo directly, no session needed. */
+  router.get('/inspect/knowledge/:name', (_req: Request, res: Response) => {
+    const repo = options.sessionManager.getRepo();
+    const doc = repo.knowledge.find((k) => k.name === _req.params['name']);
 
-      if (!doc) {
-        res.status(404).json({error: {code: 'NOT_FOUND', message: 'Knowledge document not found'}});
-        return;
-      }
-
-      res.json({
-        name: doc.name,
-        title: doc.title,
-        body: doc.body,
-        location: doc.location,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      res.status(500).json({error: {code: 'INSPECT_FAILED', message: msg}});
+    if (!doc) {
+      res.status(404).json({error: {code: 'NOT_FOUND', message: 'Knowledge document not found'}});
+      return;
     }
+
+    res.json({
+      name: doc.name,
+      title: doc.title,
+      body: doc.body,
+      location: doc.location,
+    });
   });
 
   return router;
