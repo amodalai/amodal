@@ -19,6 +19,7 @@ import {createInspectRouter} from './routes/inspect.js';
 import {createAutomationRouter} from './routes/automations.js';
 import {createWebhookRouter} from './routes/webhooks.js';
 import {createStoresRouter} from './routes/stores.js';
+import {createFilesRouter} from './routes/files.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {LocalServerConfig} from './agent-types.js';
 import type {ServerInstance} from '../server.js';
@@ -189,6 +190,9 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     res.json({session_id: persisted.id, messages});
   });
 
+  // File browser/editor
+  app.use(createFilesRouter({repoPath: config.repoPath}));
+
   // Routes
   app.use(createChatRouter({
     sessionManager,
@@ -243,17 +247,22 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // App middleware (e.g., Vite dev server for runtime app)
   if (config.appMiddleware) {
-
     app.use(config.appMiddleware as express.RequestHandler);
   } else if (config.staticAppDir && existsSync(config.staticAppDir)) {
     // Serve pre-built SPA static assets with index.html fallback
     app.use(express.static(config.staticAppDir));
-    app.get('*', (_req, res) => {
+    // SPA fallback — serve index.html for any non-API, non-static route
+    app.use((_req, res, next) => {
+      // Don't intercept API or inspect routes (already handled above)
+      if (_req.path.startsWith('/api/') || _req.path.startsWith('/inspect/') || _req.method !== 'GET') {
+        next();
+        return;
+      }
       const indexPath = path.join(config.staticAppDir!, 'index.html');
       if (existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
-        res.status(404).json({error: 'Runtime app not found'});
+        next();
       }
     });
   }
