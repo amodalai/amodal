@@ -147,7 +147,7 @@ describe('E2E: Incident Response Agent', () => {
     //    We need to rebuild with the mock URL baked in
     const specWithMockUrl = {
       ...STATUSPAGE_SPEC,
-      source: `http://127.0.0.1:${mockApi.port}/openapi.json`,
+      specUrl: `http://127.0.0.1:${mockApi.port}/openapi.json`,
     };
     writeFileSync(join(connDir, 'spec.json'), JSON.stringify(specWithMockUrl, null, 2));
 

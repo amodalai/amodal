@@ -134,12 +134,12 @@ describe('runDiff', () => {
     mockNpmView.mockResolvedValue({name: '@amodalai/connection-salesforce', version: '2.0.0', versions: ['1.0.0', '2.0.0']});
     mockGetPackageDir.mockResolvedValue('/test/repo/.amodal/packages/connection--salesforce');
     mockListPackageFiles.mockResolvedValue(['spec.json']);
-    mockReadPackageFile.mockResolvedValue(JSON.stringify({source: 'https://api.example.com', format: 'openapi'}));
+    mockReadPackageFile.mockResolvedValue(JSON.stringify({baseUrl: 'https://api.example.com', specUrl: 'https://api.example.com/spec', format: 'openapi'}));
 
     const {runDiff} = await import('./diff.js');
     const result = await runDiff({type: 'connection', name: 'salesforce'});
     expect(result).toBe(0);
-    expect(stdoutOutput).toContain('source');
+    expect(stdoutOutput).toContain('specUrl');
     expect(stdoutOutput).toContain('format');
   });
 

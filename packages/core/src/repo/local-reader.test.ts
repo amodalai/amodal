@@ -31,7 +31,7 @@ const minimalConfig = JSON.stringify({
 });
 
 const validSpec = JSON.stringify({
-  source: 'https://api.example.com/spec',
+  baseUrl: 'https://api.example.com',
   format: 'openapi',
 });
 

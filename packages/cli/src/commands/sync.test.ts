@@ -27,7 +27,7 @@ describe('runSync', () => {
 
   it('should return 0 when all connections are in sync', async () => {
     mockLoadRepo.mockResolvedValue({
-      connections: new Map([['api', {spec: {format: 'openapi', source: 'https://api.test'}}]]),
+      connections: new Map([['api', {spec: {format: 'openapi', baseUrl: 'https://api.test'}}]]),
     });
     mockBuildSyncPlan.mockResolvedValue({
       connectionName: 'api',
@@ -44,7 +44,7 @@ describe('runSync', () => {
 
   it('should return 1 in check mode when drift detected', async () => {
     mockLoadRepo.mockResolvedValue({
-      connections: new Map([['api', {spec: {format: 'openapi', source: 'https://api.test'}}]]),
+      connections: new Map([['api', {spec: {format: 'openapi', baseUrl: 'https://api.test'}}]]),
     });
     mockBuildSyncPlan.mockResolvedValue({
       connectionName: 'api',
@@ -61,7 +61,7 @@ describe('runSync', () => {
 
   it('should skip non-openapi connections', async () => {
     mockLoadRepo.mockResolvedValue({
-      connections: new Map([['api', {spec: {format: 'graphql', source: 'https://api.test'}}]]),
+      connections: new Map([['api', {spec: {format: 'graphql', baseUrl: 'https://api.test'}}]]),
     });
 
     const {runSync} = await import('./sync.js');
@@ -73,8 +73,8 @@ describe('runSync', () => {
   it('should filter by connection name', async () => {
     mockLoadRepo.mockResolvedValue({
       connections: new Map([
-        ['api-1', {spec: {format: 'openapi', source: 'https://api1.test'}}],
-        ['api-2', {spec: {format: 'openapi', source: 'https://api2.test'}}],
+        ['api-1', {spec: {format: 'openapi', baseUrl: 'https://api1.test'}}],
+        ['api-2', {spec: {format: 'openapi', baseUrl: 'https://api2.test'}}],
       ]),
     });
     mockBuildSyncPlan.mockResolvedValue({
@@ -102,7 +102,7 @@ describe('runSync', () => {
 
   it('should handle sync errors gracefully', async () => {
     mockLoadRepo.mockResolvedValue({
-      connections: new Map([['api', {spec: {format: 'openapi', source: 'https://api.test'}}]]),
+      connections: new Map([['api', {spec: {format: 'openapi', baseUrl: 'https://api.test'}}]]),
     });
     mockBuildSyncPlan.mockRejectedValue(new Error('Fetch failed'));
 
@@ -113,7 +113,7 @@ describe('runSync', () => {
 
   it('should return 0 in check mode when no drift', async () => {
     mockLoadRepo.mockResolvedValue({
-      connections: new Map([['api', {spec: {format: 'openapi', source: 'https://api.test'}}]]),
+      connections: new Map([['api', {spec: {format: 'openapi', baseUrl: 'https://api.test'}}]]),
     });
     mockBuildSyncPlan.mockResolvedValue({
       connectionName: 'api',

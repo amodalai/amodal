@@ -94,7 +94,7 @@ async function writeLock(
 // Minimal valid spec.json for a plugin connection
 function pluginSpec(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
-    source: 'https://api.example.com/spec.json',
+    specUrl: 'https://api.example.com/spec.json',
     format: 'openapi',
     baseUrl: 'https://api.example.com',
     auth: {
@@ -254,7 +254,7 @@ describe('plugin connection → build pipeline', () => {
     await fs.writeFile(
       path.join(repoConnDir, 'spec.json'),
       JSON.stringify({
-        source: 'https://internal.corp/openapi.json',
+        specUrl: 'https://internal.corp/openapi.json',
         format: 'openapi',
         baseUrl: 'https://internal.corp/v1',
       }),
@@ -319,7 +319,7 @@ describe('plugin connection → build pipeline', () => {
     // This mirrors the actual Salesforce plugin spec.json structure
     await simulatePluginInstall(tmpDir, 'salesforce', {
       'spec.json': JSON.stringify({
-        source: 'https://developer.salesforce.com/docs',
+        specUrl: 'https://developer.salesforce.com/docs',
         format: 'openapi',
         baseUrl: 'env:SALESFORCE_INSTANCE_URL',
         auth: {
@@ -350,7 +350,7 @@ describe('plugin connection → build pipeline', () => {
     // Many real plugins use format: "rest" instead of "openapi"
     await simulatePluginInstall(tmpDir, 'internal', {
       'spec.json': JSON.stringify({
-        source: 'https://api.internal.com/docs',
+        specUrl: 'https://api.internal.com/docs',
         format: 'rest',
         baseUrl: 'https://api.internal.com',
         auth: {type: 'bearer', token: 'env:API_TOKEN'},
@@ -370,7 +370,7 @@ describe('plugin connection → build pipeline', () => {
 
     await simulatePluginInstall(tmpDir, 'monitor', {
       'spec.json': JSON.stringify({
-        source: 'https://api.monitor.com/spec',
+        specUrl: 'https://api.monitor.com/spec',
         format: 'openapi',
         baseUrl: 'https://api.monitor.com',
         sync: {auto: true, frequency: 'hourly', notify_drift: true},

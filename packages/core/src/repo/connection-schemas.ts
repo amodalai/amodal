@@ -10,8 +10,8 @@ import {z} from 'zod';
  * Schema for spec.json — the structural layer of a connection.
  */
 export const ConnectionSpecSchema = z.object({
-  source: z.string().min(1),
-  baseUrl: z.string().optional(),
+  baseUrl: z.string().min(1),
+  specUrl: z.string().min(1).optional(),
   format: z.enum(['openapi', 'graphql', 'grpc', 'rest', 'aws-api']),
   auth: z
     .object({

@@ -21,7 +21,7 @@ function makeConnection(
   access: Partial<AccessConfig> = {},
 ): LoadedConnection {
   const spec: ConnectionSpec = {
-    source: `https://${name}.example.com`,
+    baseUrl: `https://${name}.example.com`,
     format: 'openapi',
   };
   const fullAccess: AccessConfig = {
