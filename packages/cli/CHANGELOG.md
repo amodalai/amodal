@@ -1,5 +1,18 @@
 # @amodalai/amodal
 
+## 0.1.8
+
+### Patch Changes
+
+- [#27](https://github.com/amodalai/amodal/pull/27) [`e5ffdf0`](https://github.com/amodalai/amodal/commit/e5ffdf0f6cdbb6b4d9f62a9a9d3e481a61931a37) Thanks [@gte620v](https://github.com/gte620v)! - Fix browser chat UI not loading: correct package scope typo in runtime-app path resolution.
+
+- [#30](https://github.com/amodalai/amodal/pull/30) [`ccd38eb`](https://github.com/amodalai/amodal/commit/ccd38eb0a72a07cabada10fb501fd95aae88ee46) Thanks [@gte620v](https://github.com/gte620v)! - Polish web chat UI: dark theme, real Amodal logo, greyscale favicon, markdown rendering, auto-grow input, connections and skills in sidebar, smarter streaming indicators.
+
+- Updated dependencies []:
+  - @amodalai/core@0.1.8
+  - @amodalai/runtime@0.1.8
+  - @amodalai/runtime-app@0.1.8
+
 ## 0.1.7
 
 ### Patch Changes
