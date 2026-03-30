@@ -1,5 +1,11 @@
 # @amodalai/core
 
+## 0.1.6
+
+### Patch Changes
+
+- [#21](https://github.com/amodalai/amodal/pull/21) [`e4c29ea`](https://github.com/amodalai/amodal/commit/e4c29ea5f768f1514e82fef2585bb7f63588075a) Thanks [@gte620v](https://github.com/gte620v)! - Add headers support for MCP HTTP/SSE transports to enable authenticated MCP servers
+
 ## 0.1.5
 
 ### Patch Changes
