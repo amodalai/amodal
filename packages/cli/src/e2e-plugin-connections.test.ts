@@ -101,9 +101,9 @@ function simulateInstallConnection(
 // ---------------------------------------------------------------------------
 
 const STRIPE_SPEC = JSON.stringify({
-  source: 'https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json',
-  format: 'openapi',
   baseUrl: 'https://api.stripe.com',
+  specUrl: 'https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json',
+  format: 'openapi',
   auth: {
     type: 'bearer',
     token: 'env:STRIPE_API_KEY',
@@ -154,9 +154,9 @@ const STRIPE_RULES = [
 ].join('\n');
 
 const SALESFORCE_SPEC = JSON.stringify({
-  source: 'https://developer.salesforce.com/docs',
-  format: 'openapi',
   baseUrl: 'env:SALESFORCE_INSTANCE_URL',
+  specUrl: 'https://developer.salesforce.com/docs',
+  format: 'openapi',
   auth: {
     type: 'bearer',
     token: 'env:SALESFORCE_ACCESS_TOKEN',
@@ -291,9 +291,9 @@ describe('E2E: plugin connection install → build → deploy', () => {
     writeFileSync(
       join(connDir, 'spec.json'),
       JSON.stringify({
-        source: 'https://internal.corp/openapi.json',
-        format: 'openapi',
         baseUrl: 'https://internal.corp/v1',
+        specUrl: 'https://internal.corp/openapi.json',
+        format: 'openapi',
         auth: {type: 'bearer', token: 'env:INTERNAL_TOKEN'},
       }),
     );
@@ -358,9 +358,9 @@ describe('E2E: plugin connection install → build → deploy', () => {
     createRepo(repoDir);
     simulateInstallConnection(repoDir, 'custom-rest', {
       'spec.json': JSON.stringify({
-        source: 'https://api.custom.com/docs',
-        format: 'rest',
         baseUrl: 'https://api.custom.com',
+        specUrl: 'https://api.custom.com/docs',
+        format: 'rest',
       }),
       'access.json': JSON.stringify({
         endpoints: {'GET /data': {returns: ['items']}},

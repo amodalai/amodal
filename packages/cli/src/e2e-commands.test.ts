@@ -56,7 +56,8 @@ function createTestRepo(): string {
   const connDir = join(dir, 'connections', 'test-api');
   mkdirSync(connDir, {recursive: true});
   writeFileSync(join(connDir, 'spec.json'), JSON.stringify({
-    source: 'https://api.example.com/openapi.json',
+    baseUrl: 'https://api.example.com',
+    specUrl: 'https://api.example.com/openapi.json',
     format: 'openapi',
     auth: {type: 'bearer', header: 'Authorization', prefix: 'Bearer', token: 'env:TEST_API_TOKEN'},
   }, null, 2));

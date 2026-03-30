@@ -19,16 +19,17 @@ import {
 describe('ConnectionSpecSchema', () => {
   it('validates a minimal spec', () => {
     const spec = ConnectionSpecSchema.parse({
-      source: 'https://api.example.com/openapi.json',
+      baseUrl: 'https://api.example.com',
       format: 'openapi',
     });
-    expect(spec.source).toBe('https://api.example.com/openapi.json');
+    expect(spec.baseUrl).toBe('https://api.example.com');
     expect(spec.format).toBe('openapi');
   });
 
   it('validates a full spec with auth, sync, and filter', () => {
     const spec = ConnectionSpecSchema.parse({
-      source: 'https://api.example.com/openapi.json',
+      baseUrl: 'https://api.example.com',
+      specUrl: 'https://api.example.com/openapi.json',
       format: 'openapi',
       auth: {type: 'bearer', token: 'env:API_TOKEN'},
       sync: {auto: true, frequency: 'on_push', notify_drift: true},
@@ -43,21 +44,21 @@ describe('ConnectionSpecSchema', () => {
   });
 
   it('supports graphql and grpc formats', () => {
-    expect(ConnectionSpecSchema.parse({source: 'x', format: 'graphql'}).format).toBe('graphql');
-    expect(ConnectionSpecSchema.parse({source: 'x', format: 'grpc'}).format).toBe('grpc');
+    expect(ConnectionSpecSchema.parse({baseUrl: 'x', format: 'graphql'}).format).toBe('graphql');
+    expect(ConnectionSpecSchema.parse({baseUrl: 'x', format: 'grpc'}).format).toBe('grpc');
   });
 
   it('rejects invalid format', () => {
-    expect(() => ConnectionSpecSchema.parse({source: 'x', format: 'soap'})).toThrow();
+    expect(() => ConnectionSpecSchema.parse({baseUrl: 'x', format: 'soap'})).toThrow();
   });
 
-  it('rejects empty source', () => {
-    expect(() => ConnectionSpecSchema.parse({source: '', format: 'openapi'})).toThrow();
+  it('rejects empty baseUrl', () => {
+    expect(() => ConnectionSpecSchema.parse({baseUrl: '', format: 'openapi'})).toThrow();
   });
 
   it('applies sync defaults', () => {
     const spec = ConnectionSpecSchema.parse({
-      source: 'x',
+      baseUrl: 'x',
       format: 'openapi',
       sync: {},
     });

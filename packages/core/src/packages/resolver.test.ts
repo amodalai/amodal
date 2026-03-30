@@ -57,7 +57,8 @@ async function writeRepoFiles(
 
 function makeSpec(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
-    source: 'https://api.example.com/openapi.json',
+    baseUrl: 'https://api.example.com',
+    specUrl: 'https://api.example.com/openapi.json',
     format: 'openapi',
     ...overrides,
   });
@@ -87,18 +88,18 @@ describe('resolveConnection', () => {
     const result = await resolveConnection('test', null, pkgDir);
     expect(result).not.toBeNull();
     expect(result!.name).toBe('test');
-    expect(result!.spec.source).toBe('https://api.example.com/openapi.json');
+    expect(result!.spec.specUrl).toBe('https://api.example.com/openapi.json');
   });
 
   it('loads from repo only (hand-written)', async () => {
     const repoDir = path.join(tmpDir, 'repo', 'connections', 'test');
     await writePackageFiles(repoDir, {
-      'spec.json': makeSpec({source: 'custom'}),
+      'spec.json': makeSpec({specUrl: 'custom'}),
       'access.json': makeAccess(),
     });
     const result = await resolveConnection('test', repoDir, null);
     expect(result).not.toBeNull();
-    expect(result!.spec.source).toBe('custom');
+    expect(result!.spec.specUrl).toBe('custom');
   });
 
   it('merges repo with import header on top of package', async () => {
@@ -118,7 +119,7 @@ describe('resolveConnection', () => {
     const result = await resolveConnection('test', repoDir, pkgDir);
     expect(result).not.toBeNull();
     expect(result!.spec.auth).toEqual({type: 'bearer', token: 'env:T'});
-    expect(result!.spec.source).toBe('https://api.example.com/openapi.json');
+    expect(result!.spec.specUrl).toBe('https://api.example.com/openapi.json');
     // Surface should contain both base and local
     expect(result!.surface.length).toBeGreaterThan(0);
   });
@@ -126,18 +127,18 @@ describe('resolveConnection', () => {
   it('uses repo file as-is when no import header', async () => {
     const pkgDir = path.join(tmpDir, 'pkg');
     await writePackageFiles(pkgDir, {
-      'spec.json': makeSpec({source: 'package-source'}),
+      'spec.json': makeSpec({specUrl: 'package-source'}),
       'access.json': makeAccess(),
     });
 
     const repoDir = path.join(tmpDir, 'repo');
     await writePackageFiles(repoDir, {
-      'spec.json': makeSpec({source: 'repo-source'}),
+      'spec.json': makeSpec({specUrl: 'repo-source'}),
     });
 
     const result = await resolveConnection('test', repoDir, pkgDir);
     expect(result).not.toBeNull();
-    expect(result!.spec.source).toBe('repo-source');
+    expect(result!.spec.specUrl).toBe('repo-source');
   });
 });
 
@@ -258,13 +259,13 @@ describe('resolveAllPackages', () => {
 
   it('resolves hand-written repo items with no lock file', async () => {
     await writeRepoFiles(tmpDir, 'connections', 'internal', {
-      'spec.json': makeSpec({source: 'internal'}),
+      'spec.json': makeSpec({specUrl: 'internal'}),
       'access.json': makeAccess(),
     });
 
     const result = await resolveAllPackages({repoPath: tmpDir, lockFile: null});
     expect(result.connections.size).toBe(1);
-    expect(result.connections.get('internal')!.spec.source).toBe('internal');
+    expect(result.connections.get('internal')!.spec.specUrl).toBe('internal');
   });
 
   it('resolves mixed packages and hand-written', async () => {
@@ -285,7 +286,7 @@ describe('resolveAllPackages', () => {
     });
 
     await writeRepoFiles(tmpDir, 'connections', 'internal', {
-      'spec.json': makeSpec({source: 'internal'}),
+      'spec.json': makeSpec({specUrl: 'internal'}),
       'access.json': makeAccess(),
     });
 

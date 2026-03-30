@@ -37,7 +37,8 @@ export const CONFIG = {
 // ---------------------------------------------------------------------------
 
 export const STATUSPAGE_SPEC = {
-  source: 'https://statuspage.example.com/api/v1/openapi.json',
+  baseUrl: 'https://statuspage.example.com/api/v1',
+  specUrl: 'https://statuspage.example.com/api/v1/openapi.json',
   format: 'openapi' as const,
   auth: {
     type: 'bearer',

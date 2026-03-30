@@ -20,11 +20,13 @@ import type {RepoError} from './repo-types.js';
 describe('parseSpecJson', () => {
   it('parses valid spec JSON', () => {
     const json = JSON.stringify({
-      source: 'https://api.example.com/openapi.json',
+      baseUrl: 'https://api.example.com',
+      specUrl: 'https://api.example.com/openapi.json',
       format: 'openapi',
     });
     const spec = parseSpecJson(json);
-    expect(spec.source).toBe('https://api.example.com/openapi.json');
+    expect(spec.baseUrl).toBe('https://api.example.com');
+    expect(spec.specUrl).toBe('https://api.example.com/openapi.json');
     expect(spec.format).toBe('openapi');
   });
 
@@ -39,7 +41,7 @@ describe('parseSpecJson', () => {
 
   it('throws CONFIG_VALIDATION_FAILED for schema errors', () => {
     try {
-      parseSpecJson(JSON.stringify({source: 'x', format: 'invalid'}));
+      parseSpecJson(JSON.stringify({baseUrl: 'x', format: 'invalid'}));
       expect.fail('should have thrown');
     } catch (err) {
       expect((err as RepoError).code).toBe('CONFIG_VALIDATION_FAILED');
@@ -79,7 +81,7 @@ describe('parseAccessJson', () => {
 });
 
 describe('parseConnection', () => {
-  const validSpec = JSON.stringify({source: 'https://api.test.com/spec', format: 'openapi'});
+  const validSpec = JSON.stringify({baseUrl: 'https://api.test.com', specUrl: 'https://api.test.com/spec', format: 'openapi'});
   const validAccess = JSON.stringify({endpoints: {'GET /test': {returns: ['item']}}});
 
   it('parses a connection with all files', () => {

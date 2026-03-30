@@ -37,7 +37,7 @@ function resolveEnvRef(value: string, credentials?: Record<string, string>): str
 /**
  * Build a ConnectionsMap from LoadedConnections.
  *
- * Each entry has: base_url (from spec.baseUrl or spec.source), _request_config with auth details,
+ * Each entry has: base_url (from spec.baseUrl), _request_config with auth details,
  * and any injected credential values for {{VAR}} template resolution.
  */
 export function buildConnectionsMap(
@@ -50,9 +50,7 @@ export function buildConnectionsMap(
     const connCredentials = credentials?.[name];
     const auth = buildAuthHeaders(conn, connCredentials);
 
-    // Use baseUrl if specified, otherwise fall back to source
-    const baseUrl = conn.spec.baseUrl ?? conn.spec.source;
-    const resolvedBaseUrl = resolveEnvRef(baseUrl, connCredentials);
+    const resolvedBaseUrl = resolveEnvRef(conn.spec.baseUrl, connCredentials);
 
     const entry: Record<string, unknown> = {
       base_url: resolvedBaseUrl,

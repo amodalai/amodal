@@ -55,7 +55,8 @@ describe('deepMergeLocalWins', () => {
 
 describe('mergeSpecJson', () => {
   const baseSpec = JSON.stringify({
-    source: 'https://api.example.com/openapi.json',
+    baseUrl: 'https://api.example.com',
+    specUrl: 'https://api.example.com/openapi.json',
     format: 'openapi',
     sync: {auto: true, frequency: 'on_push', notify_drift: true},
     filter: {tags: ['a', 'b', 'c']},
@@ -68,7 +69,7 @@ describe('mergeSpecJson', () => {
       filter: {tags: ['a']},
     });
     const result = mergeSpecJson(baseSpec, local);
-    expect(result.source).toBe('https://api.example.com/openapi.json');
+    expect(result.specUrl).toBe('https://api.example.com/openapi.json');
     expect(result.format).toBe('openapi');
     expect(result.auth).toEqual({type: 'bearer', token: 'env:TOKEN'});
     expect(result.filter!.tags).toEqual(['a']);
@@ -84,7 +85,7 @@ describe('mergeSpecJson', () => {
   it('passes through base when local has no overrides', () => {
     const local = JSON.stringify({import: 'example'});
     const result = mergeSpecJson(baseSpec, local);
-    expect(result.source).toBe('https://api.example.com/openapi.json');
+    expect(result.specUrl).toBe('https://api.example.com/openapi.json');
     expect(result.filter!.tags).toEqual(['a', 'b', 'c']);
   });
 

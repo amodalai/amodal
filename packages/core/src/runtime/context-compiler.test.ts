@@ -20,7 +20,7 @@ function makeConnection(name: string): LoadedConnection {
   return {
     name,
     spec: {
-      source: 'https://api.example.com',
+      baseUrl: 'https://api.example.com',
       format: 'openapi' as const,
     },
     access: {

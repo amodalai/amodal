@@ -43,9 +43,17 @@ export async function buildSyncPlan(connection: LoadedConnection): Promise<SyncP
     };
   }
 
-  // Derive spec URL from the source base URL
-  const baseUrl = connection.spec.source.replace(/\/$/, '');
-  const specUrl = `${baseUrl}/openapi.json`;
+  // Derive spec URL from the specUrl field
+  if (!connection.spec.specUrl) {
+    return {
+      connectionName: connection.name,
+      added: [],
+      removed: [],
+      changed: [],
+      unchanged: connection.surface.map((ep) => `${ep.method} ${ep.path}`),
+    };
+  }
+  const specUrl = connection.spec.specUrl.replace(/\/$/, '');
 
   // Build auth for the spec fetch
   let auth: {header: string; value: string} | undefined;
@@ -78,7 +86,16 @@ export async function buildSyncPlan(connection: LoadedConnection): Promise<SyncP
 }
 
 async function buildGraphQLSyncPlan(connection: LoadedConnection): Promise<SyncPlan> {
-  const baseUrl = connection.spec.source.replace(/\/$/, '');
+  if (!connection.spec.specUrl) {
+    return {
+      connectionName: connection.name,
+      added: [],
+      removed: [],
+      changed: [],
+      unchanged: connection.surface.map((ep) => `${ep.method} ${ep.path}`),
+    };
+  }
+  const baseUrl = connection.spec.specUrl.replace(/\/$/, '');
 
   let auth: {header: string; value: string} | undefined;
   if (connection.spec.auth) {

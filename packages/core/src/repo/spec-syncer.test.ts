@@ -12,7 +12,8 @@ function makeConnection(overrides?: Partial<LoadedConnection>): LoadedConnection
   return {
     name: 'test-api',
     spec: {
-      source: 'https://api.example.com',
+      baseUrl: 'https://api.example.com',
+      specUrl: 'https://api.example.com/openapi.json',
       format: 'openapi',
     },
     access: {
@@ -31,7 +32,7 @@ function makeConnection(overrides?: Partial<LoadedConnection>): LoadedConnection
 describe('buildSyncPlan', () => {
   it('should skip non-openapi connections', async () => {
     const conn = makeConnection({
-      spec: {source: 'https://api.example.com', format: 'grpc'},
+      spec: {baseUrl: 'https://api.example.com', format: 'grpc'},
      
     } as Partial<LoadedConnection>);
 
@@ -123,11 +124,12 @@ describe('buildSyncPlan', () => {
   it('should pass auth headers from connection spec', async () => {
     const conn = makeConnection({
       spec: {
-        source: 'https://api.example.com',
+        baseUrl: 'https://api.example.com',
+        specUrl: 'https://api.example.com/openapi.json',
         format: 'openapi',
         auth: {type: 'bearer', token: 'secret-token'},
       },
-     
+
     } as Partial<LoadedConnection>);
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(

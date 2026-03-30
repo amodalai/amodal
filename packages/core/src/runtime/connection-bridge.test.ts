@@ -16,7 +16,7 @@ function makeConnection(
   accessOverrides: Partial<AccessConfig> = {},
 ): LoadedConnection {
   const spec: ConnectionSpec = {
-    source: `https://${name}.example.com`,
+    baseUrl: `https://${name}.example.com`,
     format: 'openapi',
     ...specOverrides,
   };
@@ -128,11 +128,11 @@ describe('buildConnectionsMap', () => {
     expect(auth).toHaveLength(0);
   });
 
-  it('uses spec.source as base_url', () => {
+  it('uses spec.baseUrl as base_url', () => {
     const connections = new Map([
       [
         'custom',
-        makeConnection('custom', {source: 'https://my-api.internal.co/v2'}),
+        makeConnection('custom', {baseUrl: 'https://my-api.internal.co/v2'}),
       ],
     ]);
 
