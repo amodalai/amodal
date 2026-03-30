@@ -10,6 +10,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createLocalServer} from '@amodalai/runtime';
 import {findRepoRoot} from '../shared/repo-discovery.js';
+import {runConnectionPreflight, printPreflightTable} from '../shared/connection-preflight.js';
 
 async function loadRuntimeApp(): Promise<typeof import('@amodalai/runtime-app/dev') | null> {
   try {
@@ -84,6 +85,17 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
     });
 
     await server.start();
+
+    // Preflight connection check (non-blocking)
+    const preflight = await runConnectionPreflight(repoPath);
+    if (preflight.results.length > 0) {
+      process.stderr.write('\n');
+      printPreflightTable(preflight.results);
+      if (preflight.hasFailures) {
+        process.stderr.write('\n  WARNING: Some connections failed. The agent may not work correctly.\n');
+      }
+      process.stderr.write('\n');
+    }
 
     // Graceful shutdown
     const shutdown = async (signal: string): Promise<void> => {

@@ -412,7 +412,20 @@ async function executeTool(
         return {result: await executeMcpTool(session, toolName, args)};
       }
 
-      return {result: {error: `Unknown tool: ${toolName}`}};
+      // Build helpful error for unknown tools
+      if (toolName.includes('__')) {
+        const [serverName] = toolName.split('__', 2);
+        const mcpTools = session.mcpManager?.getDiscoveredTools() ?? [];
+        const fromServer = mcpTools.filter((t) => t.serverName === serverName);
+        if (fromServer.length > 0) {
+          const names = fromServer.map((t) => t.name).slice(0, 10).join(', ');
+          return {result: {error: `MCP tool "${toolName}" not found on server "${serverName}". Available: ${names}`}};
+        }
+        const servers = [...new Set(mcpTools.map((t) => t.serverName))];
+        return {result: {error: `MCP server "${serverName}" not found. Available MCP servers: ${servers.join(', ') || '(none)'}. MCP tools use the format: serverName__toolName`}};
+      }
+
+      return {result: {error: `Unknown tool: "${toolName}". Available tools: request, explore, enter_plan_mode, exit_plan_mode`}};
     }
   }
 }
@@ -512,7 +525,13 @@ async function executeMcpTool(
     return {output};
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return {error: `MCP tool call failed: ${message}`};
+    if (message.includes('ECONNREFUSED') || message.includes('ENOTFOUND') || message.includes('unreachable')) {
+      return {error: `MCP server for "${toolName}" is unreachable: ${message}. The MCP server may have crashed or the URL may be wrong.`};
+    }
+    if (message.includes('401') || message.includes('403') || message.includes('missing_token') || message.includes('invalid_token')) {
+      return {error: `MCP authentication failed for "${toolName}": ${message}. Check that the auth headers and credentials are configured correctly in amodal.json.`};
+    }
+    return {error: `MCP tool call failed for "${toolName}": ${message}`};
   }
 }
 
