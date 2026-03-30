@@ -76,6 +76,11 @@ export class AgentSessionManager {
     return this.sessions.size;
   }
 
+  /** Direct access to the repo for read-only operations (inspect, etc.) */
+  getRepo(): AmodalRepo {
+    return this.repo;
+  }
+
   /**
    * Create a new session, optionally fetching user context for role extraction.
    */

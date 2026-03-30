@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Play, Clock, CheckCircle2, Loader2, Zap } from 'lucide-react';
 import { CronExpressionParser } from 'cron-parser';
@@ -65,6 +65,7 @@ export function AutomationDetailPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [liveText, setLiveText] = useState('');
   const [loading, setLoading] = useState(true);
+  const liveRef = useRef<HTMLDivElement>(null);
 
   const fetchData = useCallback(async () => {
     if (!automationName) return;
@@ -78,8 +79,8 @@ export function AutomationDetailPage() {
         if (found) setAutomation(found);
       }
 
-      // Fetch sessions for this automation
-      const sessRes = await fetch(`/sessions?automation=${encodeURIComponent(automationName)}`);
+      // Fetch sessions for this automation (cache-bust to get latest after a run)
+      const sessRes = await fetch(`/sessions?automation=${encodeURIComponent(automationName)}&_t=${Date.now()}`);
       if (sessRes.ok) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
         const body = await sessRes.json() as { sessions: SessionSummary[] };
@@ -186,22 +187,25 @@ export function AutomationDetailPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
             {automation.schedule && (
-              <button
-                onClick={() => {
-                  const action = automation.running ? 'stop' : 'start';
-                  void fetch(`/automations/${encodeURIComponent(automationName ?? '')}/${action}`, { method: 'POST' })
-                    .then(() => fetchData());
-                }}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
-                  automation.running
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
-                    : 'border-gray-300 dark:border-zinc-700 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800'
-                }`}
-              >
-                {automation.running ? 'Active' : 'Inactive'}
-              </button>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-xs text-gray-500 dark:text-zinc-400">{automation.running ? 'Scheduled' : 'Paused'}</span>
+                <button
+                  onClick={() => {
+                    const action = automation.running ? 'stop' : 'start';
+                    void fetch(`/automations/${encodeURIComponent(automationName ?? '')}/${action}`, { method: 'POST' })
+                      .then(() => fetchData());
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    automation.running ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-zinc-700'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    automation.running ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </label>
             )}
             <button
               onClick={() => { void handleRunNow(); }}

@@ -146,8 +146,8 @@ function SkillView({ data }: { data: SkillDetail }) {
       {/* Skill body */}
       <section>
         <h2 className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-3">Skill Definition</h2>
-        <div className="bg-gray-50 dark:bg-zinc-900/30 border border-gray-200 dark:border-zinc-800 rounded-lg p-4 overflow-auto">
-          <pre className="text-[13px] text-gray-700 dark:text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed">{data.body}</pre>
+        <div className="bg-gray-50 dark:bg-zinc-900/30 border border-gray-200 dark:border-zinc-800 rounded-lg p-4 overflow-auto prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-900 dark:prose-headings:text-zinc-200 prose-p:text-gray-900 dark:prose-p:text-zinc-300 prose-strong:text-gray-900 dark:prose-strong:text-zinc-200 prose-code:text-indigo-700 dark:prose-code:text-indigo-300 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-li:text-gray-900 dark:prose-li:text-zinc-300">
+          <Markdown>{data.body}</Markdown>
         </div>
       </section>
     </div>
