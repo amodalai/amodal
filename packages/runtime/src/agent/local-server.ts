@@ -19,6 +19,7 @@ import {createInspectRouter} from './routes/inspect.js';
 import {createAutomationRouter} from './routes/automations.js';
 import {createWebhookRouter} from './routes/webhooks.js';
 import {createStoresRouter} from './routes/stores.js';
+import {createFilesRouter} from './routes/files.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {LocalServerConfig} from './agent-types.js';
 import type {ServerInstance} from '../server.js';
@@ -188,6 +189,9 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     });
     res.json({session_id: persisted.id, messages});
   });
+
+  // File browser/editor
+  app.use(createFilesRouter({repoPath: config.repoPath}));
 
   // Routes
   app.use(createChatRouter({
