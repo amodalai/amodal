@@ -45,6 +45,8 @@ export class AgentSessionManager {
   private readonly storeBackend?: StoreBackend;
   private platformTelemetry?: PlatformTelemetrySink;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private inspectMcp?: McpManager;
+  private inspectMcpInitialized = false;
 
   constructor(repo: AmodalRepo, options?: AgentSessionManagerOptions) {
     this.repo = repo;
@@ -238,6 +240,12 @@ export class AgentSessionManager {
         await session.mcpManager.shutdown().catch(() => {});
       }
     }
+    // Shutdown the persistent inspect MCP manager
+    if (this.inspectMcp) {
+      await this.inspectMcp.shutdown().catch(() => {});
+      this.inspectMcp = undefined;
+      this.inspectMcpInitialized = false;
+    }
     this.sessions.clear();
   }
 
@@ -258,6 +266,32 @@ export class AgentSessionManager {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[SESSION] MCP initialization failed: ${msg}\n`);
+    }
+  }
+
+  /**
+   * Get a persistent MCP manager for inspect/health operations.
+   * Lazy-initialized on first call, reused across requests.
+   */
+  async getInspectMcpManager(): Promise<McpManager | undefined> {
+    if (this.inspectMcpInitialized) return this.inspectMcp;
+    this.inspectMcpInitialized = true;
+
+    if (!this.repo.mcpServers || Object.keys(this.repo.mcpServers).length === 0) {
+      return undefined;
+    }
+
+    const manager = new McpManager();
+    try {
+      await manager.startServers(this.repo.mcpServers);
+      this.inspectMcp = manager;
+      return manager;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[INSPECT] MCP initialization failed: ${msg}\n`);
+      // Still return the manager so we can report error status
+      this.inspectMcp = manager;
+      return manager;
     }
   }
 
