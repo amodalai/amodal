@@ -83,21 +83,28 @@ export class SessionStore {
   /**
    * List all persisted sessions, newest first.
    */
-  list(): Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number}> {
+  list(): Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number; summary: string}> {
     if (!existsSync(this.dir)) return [];
     const files = readdirSync(this.dir).filter((f) => f.endsWith('.json'));
-    const sessions: Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number}> = [];
+    const sessions: Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number; summary: string}> = [];
 
     for (const file of files) {
       try {
         const raw: unknown = JSON.parse(readFileSync(join(this.dir, file), 'utf-8'));
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Trusted local file we wrote
         const data = raw as PersistedSession;
+        // Extract first user message as summary
+        const isUserMsg = (m: unknown): m is {role: 'user'; content: string} =>
+          typeof m === 'object' && m !== null && 'role' in m && 'content' in m &&
+          (m as Record<string, unknown>)['role'] === 'user' && typeof (m as Record<string, unknown>)['content'] === 'string';
+        const firstUserMsg = data.conversationHistory.find(isUserMsg);
+        const summary = firstUserMsg ? firstUserMsg.content.slice(0, 80) : 'Untitled';
         sessions.push({
           id: data.id,
           tenantId: data.tenantId,
           createdAt: data.createdAt,
           lastAccessedAt: data.lastAccessedAt,
+          summary,
         });
       } catch {
         // Skip corrupt files

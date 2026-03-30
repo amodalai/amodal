@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { Send, Loader2, CheckCircle2, XCircle, Wrench } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { useAmodalChat } from '@amodalai/react';
 import type { ToolCallInfo, ContentBlock, ConfirmationInfo } from '@amodalai/react';
@@ -113,9 +114,13 @@ interface HistoryMessage {
 }
 
 export function ChatPage() {
-  const { resumeSessionId } = useRuntimeManifest();
+  const { resumeSessionId: serverResumeId } = useRuntimeManifest();
+  const [searchParams] = useSearchParams();
+  const urlResumeId = searchParams.get('resume');
+  const activeResumeId = useMemo(() => urlResumeId ?? serverResumeId, [urlResumeId, serverResumeId]);
+
   const { messages, send, isStreaming, activeToolCalls, respondToConfirmation } = useAmodalChat({
-    initialSessionId: resumeSessionId,
+    initialSessionId: activeResumeId,
   });
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<HistoryMessage[]>([]);
@@ -124,8 +129,8 @@ export function ChatPage() {
 
   // Load conversation history for resumed sessions
   useEffect(() => {
-    if (!resumeSessionId) return;
-    fetch(`/session/${encodeURIComponent(resumeSessionId)}`)
+    if (!activeResumeId) { setHistory([]); return; }
+    fetch(`/session/${encodeURIComponent(activeResumeId)}`)
       .then((res) => res.ok ? res.json() : null)
       .then((data: unknown) => {
         if (data && typeof data === 'object' && 'messages' in data && Array.isArray((data as Record<string, unknown>)['messages'])) {
@@ -135,7 +140,7 @@ export function ChatPage() {
         }
       })
       .catch(() => {});
-  }, [resumeSessionId]);
+  }, [activeResumeId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
