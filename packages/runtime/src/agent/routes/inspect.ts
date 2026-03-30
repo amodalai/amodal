@@ -26,9 +26,9 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
       res.json({
         repo_path: options.repoPath,
-        name: runtime.repo.config.name ?? '',
-        model: runtime.repo.config.models?.['main']?.model ?? '',
-        provider: runtime.repo.config.models?.['main']?.provider ?? '',
+        name: runtime.repo.config?.name ?? '',
+        model: runtime.repo.config?.models?.['main']?.model ?? '',
+        provider: runtime.repo.config?.models?.['main']?.provider ?? '',
         system_prompt_length: compiled.systemPrompt.length,
         token_usage: compiled.tokenUsage,
         sections: compiled.sections.map((s) => ({

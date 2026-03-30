@@ -119,7 +119,7 @@ export function ChatPage() {
   const urlResumeId = searchParams.get('resume');
   const activeResumeId = useMemo(() => urlResumeId ?? serverResumeId, [urlResumeId, serverResumeId]);
 
-  const { messages, send, isStreaming, activeToolCalls, respondToConfirmation } = useAmodalChat({
+  const { messages, send, isStreaming, activeToolCalls, respondToConfirmation, usage } = useAmodalChat({
     initialSessionId: activeResumeId,
   });
   const [input, setInput] = useState('');
@@ -280,6 +280,11 @@ export function ChatPage() {
             <Send className="h-4 w-4" />
           </button>
         </form>
+        {(usage.inputTokens > 0 || usage.outputTokens > 0) && (
+          <div className="max-w-3xl mx-auto mt-1.5 text-[11px] text-gray-400 dark:text-zinc-600 font-mono text-right">
+            {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens ({usage.inputTokens.toLocaleString()} in / {usage.outputTokens.toLocaleString()} out)
+          </div>
+        )}
       </div>
     </div>
   );

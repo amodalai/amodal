@@ -164,6 +164,7 @@ export interface SSEErrorEvent {
 export interface SSEDoneEvent {
   type: 'done';
   timestamp: string;
+  usage?: {input_tokens: number; output_tokens: number};
 }
 
 export type SSEEvent =
@@ -369,6 +370,8 @@ export interface ChatState {
   activeToolCalls: ToolCallInfo[];
   /** True when viewing a loaded historical session (read-only) */
   isHistorical: boolean;
+  /** Cumulative token usage across all turns in this session */
+  usage: {inputTokens: number; outputTokens: number};
 }
 
 export type ChatAction =
@@ -388,7 +391,7 @@ export type ChatAction =
   | { type: 'STREAM_CONFIRMATION_REQUIRED'; confirmation: ConfirmationInfo }
   | { type: 'CONFIRMATION_RESPONDED'; correlationId: string; approved: boolean }
   | { type: 'STREAM_ERROR'; message: string }
-  | { type: 'STREAM_DONE' }
+  | { type: 'STREAM_DONE'; usage?: {inputTokens: number; outputTokens: number} }
   | { type: 'LOAD_HISTORY'; sessionId: string; messages: ChatMessage[] }
   | { type: 'RESET' };
 
