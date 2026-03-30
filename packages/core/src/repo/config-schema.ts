@@ -135,6 +135,7 @@ export const AmodalConfigSchema = z.object({
         args: z.array(z.string()).optional(),
         env: z.record(z.string()).optional(),
         url: z.string().optional(),
+        headers: z.record(z.string()).optional(),
         trust: z.boolean().optional(),
       })),
     })

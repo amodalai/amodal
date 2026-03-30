@@ -140,14 +140,20 @@ export class McpManager {
       if (!config.url) {
         throw new Error(`MCP server "${name}" has sse transport but no url`);
       }
-      return new SSEClientTransport(new URL(config.url));
+      const opts = config.headers
+        ? {requestInit: {headers: config.headers}}
+        : undefined;
+      return new SSEClientTransport(new URL(config.url), opts);
     }
 
     if (config.transport === 'http') {
       if (!config.url) {
         throw new Error(`MCP server "${name}" has http transport but no url`);
       }
-      return new StreamableHTTPClientTransport(new URL(config.url));
+      const opts = config.headers
+        ? {requestInit: {headers: config.headers}}
+        : undefined;
+      return new StreamableHTTPClientTransport(new URL(config.url), opts);
     }
 
     throw new Error(`Unknown MCP transport "${config.transport}" for server "${name}"`);
