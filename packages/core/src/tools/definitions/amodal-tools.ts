@@ -20,13 +20,13 @@ export function getProposeKnowledgeDefinition(): ToolDefinition {
     base: {
       name: PROPOSE_KNOWLEDGE_TOOL_NAME,
       description:
-        `Propose a knowledge base update. Use when you discover a new pattern, learn domain context from the analyst, notice a gap in the knowledge base, find outdated information, or want to record working memory for future sessions. Choose 'application' scope for knowledge that applies to all tenants, 'tenant' for knowledge specific to this deployment. Working memory is always tenant-scoped.
+        `Propose a knowledge base update. Use when you discover a new pattern, learn domain context from the analyst, notice a gap in the knowledge base, find outdated information, or want to record working memory for future sessions.
 
 When to propose:
 - New false positive discovered → category: false_positives
 - New risk pattern identified → category: patterns
 - Baseline shift detected → category: baselines
-- Session notes for future reference → category: working_memory (always tenant-scoped)
+- Session notes for future reference → category: working_memory
 
 Working memory is for session-to-session continuity. Formal categories (patterns, false_positives, etc.) are for permanent knowledge. Do not use this for analyst preferences — use save_memory instead.`,
       parametersJsonSchema: {
@@ -40,9 +40,9 @@ Working memory is for session-to-session continuity. Formal categories (patterns
           },
           scope: {
             type: 'string',
-            enum: ['application', 'tenant'],
+            enum: ['application'],
             description:
-              'application = shared across all tenants (universal patterns, product knowledge). tenant = specific to this deployment (local incidents, environment details, working memory).',
+              'application = application-level knowledge (patterns, product knowledge, environment details, working memory).',
           },
           document_id: {
             type: 'string',
@@ -68,7 +68,7 @@ Working memory is for session-to-session continuity. Formal categories (patterns
               'working_memory',
             ],
             description:
-              'Category for the document. Application-level: system_docs, methodology, patterns, false_positives, response_procedures. Tenant-level: environment, baselines, team, incident_history, working_memory.',
+              'Category for the document: system_docs, methodology, patterns, false_positives, response_procedures, environment, baselines, team, incident_history, working_memory.',
           },
           body: {
             type: 'string',

@@ -44,7 +44,7 @@ describe('parseSSELine', () => {
 describe('streamSSE', () => {
   it('yields events from POST endpoint', async () => {
     const events = [];
-    for await (const event of streamSSE(`${RUNTIME_TEST_URL}/chat`, { message: 'hello', tenant_id: 't1' })) {
+    for await (const event of streamSSE(`${RUNTIME_TEST_URL}/chat`, { message: 'hello', app_id: 't1' })) {
       events.push(event);
     }
     expect(events.length).toBe(4);
@@ -59,7 +59,7 @@ describe('streamSSE', () => {
       ),
     );
 
-    const gen = streamSSE(`${RUNTIME_TEST_URL}/chat`, { message: 'hello', tenant_id: 't1' });
+    const gen = streamSSE(`${RUNTIME_TEST_URL}/chat`, { message: 'hello', app_id: 't1' });
     await expect(gen.next()).rejects.toThrow('SSE request failed: 500');
   });
 
@@ -75,7 +75,7 @@ describe('streamSSE', () => {
     );
 
     const events = [];
-    for await (const event of streamSSE(`${RUNTIME_TEST_URL}/chat`, { message: 'hi', tenant_id: 't1' }, { headers: { 'Authorization': 'Bearer tok' } })) {
+    for await (const event of streamSSE(`${RUNTIME_TEST_URL}/chat`, { message: 'hi', app_id: 't1' }, { headers: { 'Authorization': 'Bearer tok' } })) {
       events.push(event);
     }
     expect(capturedAuth).toBe('Bearer tok');

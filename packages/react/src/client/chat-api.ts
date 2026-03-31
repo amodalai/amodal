@@ -89,8 +89,7 @@ export async function createSession(
 
 export interface SessionHistoryItem {
   id: string;
-  tenant_id: string;
-  app_id?: string;
+  app_id: string;
   title?: string;
   tags: string[];
   status: string;
@@ -122,7 +121,7 @@ function authHeaders(token?: string | null): Record<string, string> {
 }
 
 /**
- * List past sessions for the authenticated tenant.
+ * List past sessions for the authenticated app.
  */
 export async function listSessions(
   serverUrl: string,

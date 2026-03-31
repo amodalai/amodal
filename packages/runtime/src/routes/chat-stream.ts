@@ -68,7 +68,6 @@ export function createChatStreamRouter(
               auditClient: options.auditClient,
               appId: auth.applicationId,
               token: auth.token,
-              tenantId: auth.tenantId,
               orgId: auth.orgId,
               actor: auth.actor,
               platformApiUrl: options.platformApiUrl,

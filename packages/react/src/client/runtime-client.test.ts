@@ -13,7 +13,7 @@ import { RuntimeClient } from './runtime-client';
 function createClient(getToken?: () => string | Promise<string> | null | undefined) {
   return new RuntimeClient({
     runtimeUrl: RUNTIME_TEST_URL,
-    tenantId: 'tenant-1',
+    appId: 'app-1',
     getToken,
   });
 }
@@ -31,7 +31,7 @@ describe('RuntimeClient', () => {
       expect(events[3]).toMatchObject({ type: 'done' });
     });
 
-    it('sends tenant_id in body', async () => {
+    it('sends app_id in body', async () => {
       let capturedBody: Record<string, unknown> | null = null;
       server.use(
         http.post(`${RUNTIME_TEST_URL}/chat`, async ({ request }) => {
@@ -47,7 +47,7 @@ describe('RuntimeClient', () => {
       for await (const event of client.chatStream('hi')) {
         events.push(event);
       }
-      expect(capturedBody).toMatchObject({ message: 'hi', tenant_id: 'tenant-1' });
+      expect(capturedBody).toMatchObject({ message: 'hi', app_id: 'app-1' });
     });
 
     it('includes session_id and context when provided', async () => {
@@ -68,7 +68,7 @@ describe('RuntimeClient', () => {
       }
       expect(capturedBody).toMatchObject({
         message: 'hi',
-        tenant_id: 'tenant-1',
+        app_id: 'app-1',
         session_id: 'sess-1',
         context: { foo: 'bar' },
       });
@@ -127,7 +127,7 @@ describe('RuntimeClient', () => {
       expect(result).toEqual({ task_id: 'task-1' });
     });
 
-    it('sends tenant_id in body', async () => {
+    it('sends app_id in body', async () => {
       let capturedBody: Record<string, unknown> | null = null;
       server.use(
         http.post(`${RUNTIME_TEST_URL}/task`, async ({ request }) => {
@@ -138,10 +138,10 @@ describe('RuntimeClient', () => {
 
       const client = createClient();
       await client.startTask('do thing');
-      expect(capturedBody).toMatchObject({ prompt: 'do thing', tenant_id: 'tenant-1' });
+      expect(capturedBody).toMatchObject({ prompt: 'do thing', app_id: 'app-1' });
     });
 
-    it('includes tenant_token when provided', async () => {
+    it('includes app_token when provided', async () => {
       let capturedBody: Record<string, unknown> | null = null;
       server.use(
         http.post(`${RUNTIME_TEST_URL}/task`, async ({ request }) => {
@@ -152,7 +152,7 @@ describe('RuntimeClient', () => {
 
       const client = createClient();
       await client.startTask('do thing', 'tok-123');
-      expect(capturedBody).toMatchObject({ prompt: 'do thing', tenant_id: 'tenant-1', tenant_token: 'tok-123' });
+      expect(capturedBody).toMatchObject({ prompt: 'do thing', app_id: 'app-1', app_token: 'tok-123' });
     });
 
     it('throws on error response', async () => {
@@ -215,7 +215,7 @@ describe('RuntimeClient', () => {
     it('strips trailing slash from runtimeUrl', async () => {
       const client = new RuntimeClient({
         runtimeUrl: `${RUNTIME_TEST_URL}/`,
-        tenantId: 'tenant-1',
+        appId: 'app-1',
       });
 
       const events = [];

@@ -35,7 +35,7 @@ class StoreWriteInvocation extends BaseToolInvocation<StoreWriteParams, ToolResu
     messageBus: MessageBus,
     private readonly store: LoadedStore,
     private readonly backend: StoreBackend,
-    private readonly tenantId: string,
+    private readonly appId: string,
     _toolName?: string,
     _toolDisplayName?: string,
   ) {
@@ -61,7 +61,7 @@ class StoreWriteInvocation extends BaseToolInvocation<StoreWriteParams, ToolResu
 
     try {
       const result = await this.backend.put(
-        this.tenantId,
+        this.appId,
         this.store.name,
         key,
         this.params,
@@ -92,7 +92,7 @@ export class StoreWriteTool extends BaseDeclarativeTool<StoreWriteParams, ToolRe
   constructor(
     private readonly store: LoadedStore,
     private readonly backend: StoreBackend,
-    private readonly tenantId: string,
+    private readonly appId: string,
     messageBus: MessageBus,
   ) {
     super(
@@ -118,7 +118,7 @@ export class StoreWriteTool extends BaseDeclarativeTool<StoreWriteParams, ToolRe
       messageBus,
       this.store,
       this.backend,
-      this.tenantId,
+      this.appId,
       _toolName,
       _toolDisplayName,
     );

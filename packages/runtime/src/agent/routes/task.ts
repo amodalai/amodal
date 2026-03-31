@@ -19,8 +19,8 @@ export interface TaskRouterOptions {
 
 const TaskRequestSchema = z.object({
   prompt: z.string().min(1),
-  tenant_id: z.string().min(1),
-  tenant_token: z.string().optional(),
+  app_id: z.string().min(1),
+  app_token: z.string().optional(),
 });
 
 interface TaskRecord {
@@ -43,7 +43,7 @@ export function createTaskRouter(options: TaskRouterOptions): Router {
       return;
     }
 
-    const {prompt, tenant_id, tenant_token} = parsed.data;
+    const {prompt, app_id, app_token} = parsed.data;
     const taskId = randomUUID();
 
     const record: TaskRecord = {
@@ -60,7 +60,7 @@ export function createTaskRouter(options: TaskRouterOptions): Router {
     // Run in background
     void (async () => {
       try {
-        const session = await options.sessionManager.create(tenant_id, tenant_token);
+        const session = await options.sessionManager.create(app_id, app_token);
         const controller = new AbortController();
 
         for await (const event of runAgentTurn(session, prompt, controller.signal)) {

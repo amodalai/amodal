@@ -46,7 +46,7 @@ export interface PresentParams {
  */
 export interface CredentialInputData {
   connection_name: string;
-  tenant_id: string;
+  app_id: string;
   fields: Array<{
     name: string;
     label: string;

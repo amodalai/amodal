@@ -40,7 +40,7 @@ export class SessionEvalQueryProvider implements EvalQueryProvider {
 
   async query(
     message: string,
-    _tenantId?: string,
+    _appId?: string,
   ): Promise<{
     response: string;
     toolCalls: Array<{name: string; parameters: Record<string, unknown>}>;

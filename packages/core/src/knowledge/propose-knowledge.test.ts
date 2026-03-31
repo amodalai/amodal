@@ -23,7 +23,7 @@ function makeConfig(overrides: Partial<Record<string, unknown>> = {}): Config {
       get('platformApiKey', 'sk-test-key'),
     ),
     getApplicationId: vi.fn().mockReturnValue(get('applicationId', 'app-123')),
-    getTenantId: vi.fn().mockReturnValue(get('tenantId', 'ten-456')),
+    getAppId: vi.fn().mockReturnValue(get('applicationId', 'app-123')),
     getSessionId: vi.fn().mockReturnValue(get('sessionId', 'sess-789')),
     getAuditLogger: vi.fn().mockReturnValue(
       get('auditLogger', { logKbProposal: vi.fn() }),
@@ -127,10 +127,10 @@ describe('ProposeKnowledgeInvocation', () => {
     );
   });
 
-  it('getDescription shows tenant scope', () => {
-    const invocation = createInvocation(makeParams({ scope: 'tenant' }));
+  it('getDescription shows application scope', () => {
+    const invocation = createInvocation(makeParams({ scope: 'application' }));
     expect(invocation.getDescription()).toBe(
-      'propose_knowledge [tenant]: Rogue sensor detection patterns',
+      'propose_knowledge [application]: Rogue sensor detection patterns',
     );
   });
 
@@ -185,7 +185,7 @@ describe('ProposeKnowledgeInvocation', () => {
     expect(body['source']).toBe('agent:chat');
   });
 
-  it('execute() with valid tenant-scope proposal succeeds', async () => {
+  it('execute() with valid application-scope proposal succeeds (variant)', async () => {
     const mockResponse = { id: 'prop-002', status: 'pending' };
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify(mockResponse), {
@@ -194,7 +194,7 @@ describe('ProposeKnowledgeInvocation', () => {
       }),
     );
 
-    const invocation = createInvocation(makeParams({ scope: 'tenant' }));
+    const invocation = createInvocation(makeParams({ scope: 'application' }));
     const result = await invocation.execute(new AbortController().signal);
 
     expect(result.error).toBeUndefined();
@@ -228,13 +228,13 @@ describe('ProposeKnowledgeInvocation', () => {
     expect(result.llmContent).toContain('Application ID not configured');
   });
 
-  it('execute() returns error when tenantId missing for tenant-scope proposal', async () => {
-    const cfg = makeConfig({ tenantId: undefined });
-    const invocation = createInvocation(makeParams({ scope: 'tenant' }), cfg);
+  it('execute() returns error when applicationId missing', async () => {
+    const cfg = makeConfig({ applicationId: undefined });
+    const invocation = createInvocation(makeParams({ scope: 'application' }), cfg);
     const result = await invocation.execute(new AbortController().signal);
 
     expect(result.error).toBeDefined();
-    expect(result.llmContent).toContain('Tenant ID not configured');
+    expect(result.llmContent).toContain('Application ID not configured');
   });
 
   it('execute() returns error for update action without document_id', async () => {
@@ -329,7 +329,7 @@ describe('ProposeKnowledgeInvocation', () => {
     expect(body['reasoning']).toContain('Zone C');
   });
 
-  it('execute() sends tenant scope_type in request body', async () => {
+  it('execute() sends application scope_type in request body', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify({ id: 'prop-004b', status: 'pending' }), {
         status: 200,
@@ -337,7 +337,7 @@ describe('ProposeKnowledgeInvocation', () => {
       }),
     );
 
-    const params = makeParams({ scope: 'tenant' });
+    const params = makeParams({ scope: 'application' });
     const invocation = createInvocation(params);
     await invocation.execute(new AbortController().signal);
 
@@ -345,8 +345,8 @@ describe('ProposeKnowledgeInvocation', () => {
     const options = callArgs[1] as RequestInit;
     const body = JSON.parse(options.body as string) as Record<string, unknown>;
 
-    expect(body['scope_type']).toBe('tenant');
-    expect(body['scope_id']).toBe('ten-456');
+    expect(body['scope_type']).toBe('application');
+    expect(body['scope_id']).toBe('app-123');
   });
 
   it('execute() includes session_id from Config', async () => {
@@ -454,7 +454,7 @@ describe('ProposeKnowledgeInvocation', () => {
 
     const invocation = createInvocation(makeParams({
       category: 'working_memory',
-      scope: 'tenant',
+      scope: 'application',
     }));
     const result = await invocation.execute(new AbortController().signal);
 

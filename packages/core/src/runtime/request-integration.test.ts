@@ -530,7 +530,7 @@ describe('session env isolation', () => {
 
     const messageBus = createMockMessageBus();
 
-    // Session A — tenant A's secret
+    // Session A — app A's secret
     const toolA = new RequestTool(connections, messageBus, false, { TENANT_KEY: 'secret-A' });
     const invA = toolA.build({
       connection: 'test_api',
@@ -540,7 +540,7 @@ describe('session env isolation', () => {
     });
     await invA.execute(new AbortController().signal);
 
-    // Session B — tenant B's secret
+    // Session B — app B's secret
     const toolB = new RequestTool(connections, messageBus, false, { TENANT_KEY: 'secret-B' });
     const invB = toolB.build({
       connection: 'test_api',

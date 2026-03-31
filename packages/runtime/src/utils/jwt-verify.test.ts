@@ -62,11 +62,11 @@ describe('jwt-verify', () => {
     const token = await new SignJWT({
       org_id: 'org-1',
       app_id: 'app-1',
-      tenant_id: 'tenant-1',
+
     })
       .setProtectedHeader({ alg: 'ES256', kid })
       .setIssuer('aitize-platform')
-      .setSubject('tenant-1')
+      .setSubject('app-1')
       .setIssuedAt()
       .setExpirationTime('1h')
       .sign(privateKey);
@@ -75,18 +75,18 @@ describe('jwt-verify', () => {
     expect(claims).not.toBeNull();
     expect(claims?.org_id).toBe('org-1');
     expect(claims?.app_id).toBe('app-1');
-    expect(claims?.tenant_id).toBe('tenant-1');
+    expect(claims?.app_id).toBe('app-1');
   });
 
   it('returns null for expired JWT', async () => {
     const token = await new SignJWT({
       org_id: 'org-1',
       app_id: 'app-1',
-      tenant_id: 'tenant-1',
+
     })
       .setProtectedHeader({ alg: 'ES256', kid })
       .setIssuer('aitize-platform')
-      .setSubject('tenant-1')
+      .setSubject('app-1')
       .setIssuedAt(Math.floor(Date.now() / 1000) - 7200)
       .setExpirationTime(Math.floor(Date.now() / 1000) - 3600)
       .sign(privateKey);
@@ -99,11 +99,11 @@ describe('jwt-verify', () => {
     const token = await new SignJWT({
       org_id: 'org-1',
       app_id: 'app-1',
-      tenant_id: 'tenant-1',
+
     })
       .setProtectedHeader({ alg: 'ES256', kid })
       .setIssuer('wrong-issuer')
-      .setSubject('tenant-1')
+      .setSubject('app-1')
       .setIssuedAt()
       .setExpirationTime('1h')
       .sign(privateKey);
@@ -121,12 +121,12 @@ describe('jwt-verify', () => {
     const token = await new SignJWT({
       org_id: 'org-1',
       app_id: 'app-1',
-      tenant_id: 'tenant-1',
+
       actor: 'alice@example.com',
     })
       .setProtectedHeader({ alg: 'ES256', kid })
       .setIssuer('aitize-platform')
-      .setSubject('tenant-1')
+      .setSubject('app-1')
       .setIssuedAt()
       .setExpirationTime('1h')
       .sign(privateKey);
@@ -140,11 +140,11 @@ describe('jwt-verify', () => {
     const token = await new SignJWT({
       org_id: 'org-1',
       app_id: 'app-1',
-      tenant_id: 'tenant-1',
+
     })
       .setProtectedHeader({ alg: 'ES256', kid })
       .setIssuer('aitize-platform')
-      .setSubject('tenant-1')
+      .setSubject('app-1')
       .setIssuedAt()
       .setExpirationTime('1h')
       .sign(privateKey);
@@ -162,11 +162,11 @@ describe('jwt-verify', () => {
     const token = await new SignJWT({
       org_id: 'org-1',
       app_id: 'app-1',
-      tenant_id: 'tenant-1',
+
     })
       .setProtectedHeader({ alg: 'ES256', kid: otherKid })
       .setIssuer('aitize-platform')
-      .setSubject('tenant-1')
+      .setSubject('app-1')
       .setIssuedAt()
       .setExpirationTime('1h')
       .sign(otherPair.privateKey);

@@ -110,23 +110,34 @@ export async function runDeploy(options: DeployOptions = {}): Promise<number> {
   }
 
   try {
-    // Create tarball of the repo for server-side runtime-app build
-    process.stderr.write('[deploy] Packaging repo...\n');
-    const tarballPath = await createRepoTarball(repoPath);
-
     // Read appId from project link
     const projectLink = await readProjectLink();
     const appId = projectLink?.appId;
 
-    const result = await client.deployWithRepo(snapshot, createReadStream(tarballPath), {environment, appId});
+    // 1. Upload snapshot to platform API
+    const result = await client.uploadSnapshot(snapshot, {environment, appId});
     process.stderr.write(`[deploy] Deployed ${result.id} to ${result.environment}\n`);
     if (result.message) {
       process.stderr.write(`[deploy] Message: ${result.message}\n`);
     }
 
-    // Cleanup tarball
-    const {unlinkSync} = await import('node:fs');
-    try { unlinkSync(tarballPath); } catch { /* best-effort */ }
+    // 2. Build runtime-app on the build server
+    const buildServerUrl = process.env['BUILD_SERVER_URL'] ?? projectLink?.buildServerUrl;
+    if (buildServerUrl && appId) {
+      process.stderr.write('[deploy] Building runtime app...\n');
+      const tarballPath = await createRepoTarball(repoPath);
+
+      try {
+        await client.triggerBuild(buildServerUrl, appId, result.id, createReadStream(tarballPath));
+        process.stderr.write(`[deploy] Runtime app built and uploaded.\n`);
+      } catch (buildErr: unknown) {
+        const msg = buildErr instanceof Error ? buildErr.message : String(buildErr);
+        process.stderr.write(`[deploy] Runtime app build failed (non-blocking): ${msg}\n`);
+      } finally {
+        const {unlinkSync} = await import('node:fs');
+        try { unlinkSync(tarballPath); } catch { /* best-effort */ }
+      }
+    }
 
     return 0;
   } catch (err) {

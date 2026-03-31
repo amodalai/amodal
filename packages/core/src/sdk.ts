@@ -145,7 +145,6 @@ export class AgentSDK {
 
     // 2. Fetch knowledge base documents (non-fatal)
     let appDocuments: KBDocument[] = [];
-    let tenantDocuments: KBDocument[] = [];
 
     if (this.platformClientInstance) {
       const appId = this.sdkConfig.applicationId;
@@ -163,27 +162,12 @@ export class AgentSDK {
         }
       }
 
-      const tenId = this.sdkConfig.tenantId;
-      if (tenId) {
-        try {
-          tenantDocuments = await this.platformClientInstance.fetchDocuments(
-            'tenant',
-            tenId,
-            this.sdkConfig.sessionType,
-          );
-        } catch {
-          process.stderr.write(
-            '[WARN] Failed to fetch tenant knowledge base\n',
-          );
-        }
-      }
-
-      // 2.5 Resolve tenant secrets and merge into connections (non-fatal)
-      const tenantIdForSecrets = this.sdkConfig.tenantId;
-      if (tenantIdForSecrets) {
+      // 2.5 Resolve app secrets and merge into connections (non-fatal)
+      const appIdForSecrets = this.sdkConfig.applicationId;
+      if (appIdForSecrets) {
         try {
           const secrets = await this.platformClientInstance.resolveSecrets(
-            tenantIdForSecrets,
+            appIdForSecrets,
           );
           if (secrets.length > 0) {
             const connections = this.sdkConfig.connections ?? {};
@@ -195,14 +179,14 @@ export class AgentSDK {
           }
         } catch {
           process.stderr.write(
-            '[WARN] Failed to resolve tenant secrets\n',
+            '[WARN] Failed to resolve app secrets\n',
           );
         }
 
         // 2.6 Resolve connections (credentials + request_config) — non-fatal
         try {
           const resolvedConns = await this.platformClientInstance.resolveConnections(
-            tenantIdForSecrets,
+            appIdForSecrets,
           );
           const connections = this.sdkConfig.connections ?? {};
           for (const [connName, resolved] of Object.entries(resolvedConns)) {
@@ -324,7 +308,6 @@ export class AgentSDK {
       ...this.configOverrides,
       ...platformParams,
       appDocuments,
-      tenantDocuments,
       connectionInfos,
     };
 

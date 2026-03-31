@@ -601,7 +601,7 @@ export interface UseChatResult {
   dispatch: (action: ChatAction) => void;
 }
 
-export function useChat(baseUrl: string, tenantId: string): UseChatResult {
+export function useChat(baseUrl: string, appId: string): UseChatResult {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const sessionIdRef = useRef<string | null>(null);
 
@@ -615,14 +615,14 @@ export function useChat(baseUrl: string, tenantId: string): UseChatResult {
       dispatch({type: 'SEND_MESSAGE', text});
       const payload: Record<string, string> = {
         message: text,
-        tenant_id: tenantId,
+        app_id: appId,
       };
       if (sessionIdRef.current) {
         payload['session_id'] = sessionIdRef.current;
       }
       streamToServer(baseUrl, payload, dispatch);
     },
-    [baseUrl, tenantId],
+    [baseUrl, appId],
   );
 
   const respondToQuestion = useCallback(
@@ -631,7 +631,7 @@ export function useChat(baseUrl: string, tenantId: string): UseChatResult {
       const payload: Record<string, string> = {
         ask_id: askId,
         answer,
-        tenant_id: tenantId,
+        app_id: appId,
       };
       if (sessionIdRef.current) {
         payload['session_id'] = sessionIdRef.current;
@@ -653,7 +653,7 @@ export function useChat(baseUrl: string, tenantId: string): UseChatResult {
       req.write(body);
       req.end();
     },
-    [baseUrl, tenantId],
+    [baseUrl, appId],
   );
 
   const respondToConfirmation = useCallback(
@@ -661,7 +661,7 @@ export function useChat(baseUrl: string, tenantId: string): UseChatResult {
       dispatch({type: 'CONFIRMATION_RESPOND', approved});
       const payload: Record<string, string> = {
         approved: String(approved),
-        tenant_id: tenantId,
+        app_id: appId,
       };
       if (sessionIdRef.current) {
         payload['session_id'] = sessionIdRef.current;
@@ -682,7 +682,7 @@ export function useChat(baseUrl: string, tenantId: string): UseChatResult {
       req.write(body);
       req.end();
     },
-    [baseUrl, tenantId],
+    [baseUrl, appId],
   );
 
   const dismissNotification = useCallback((id: string) => {

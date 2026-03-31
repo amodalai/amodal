@@ -74,8 +74,8 @@ class PresentInvocation extends BaseToolInvocation<
     // Validate required fields for input widget types
     if (this.params.widget === 'credential-input') {
       const data = this.params.data;
-      if (!data['connection_name'] || !data['tenant_id'] || !Array.isArray(data['fields'])) {
-        const errorMessage = 'credential-input requires connection_name, tenant_id, and fields array.';
+      if (!data['connection_name'] || !data['app_id'] || !Array.isArray(data['fields'])) {
+        const errorMessage = 'credential-input requires connection_name, app_id, and fields array.';
         return {
           llmContent: `Error: ${errorMessage}`,
           returnDisplay: `Error: ${errorMessage}`,

@@ -71,14 +71,11 @@ export type ResolvedConnectionMap = Record<string, ResolvedConnection>;
 
 /**
  * Build the API URL path for fetching documents by scope.
- * 'application' → /api/applications/{id}/documents
- * 'tenant' → /api/tenants/{id}/documents
+ * All documents are now application-scoped.
  */
-function buildDocumentsPath(scopeType: ScopeType, scopeId: string): string {
+function buildDocumentsPath(_scopeType: ScopeType, scopeId: string): string {
   const encodedId = encodeURIComponent(scopeId);
-  return scopeType === 'application'
-    ? `/api/applications/${encodedId}/documents`
-    : `/api/tenants/${encodedId}/documents`;
+  return `/api/applications/${encodedId}/documents`;
 }
 
 /**
@@ -167,8 +164,8 @@ export class PlatformClient {
   /**
    * Fetch knowledge base documents for a given scope.
    *
-   * @param scopeType 'application' or 'tenant'
-   * @param scopeId The application or tenant ID
+   * @param scopeType 'application'
+   * @param scopeId The application ID
    * @param timeout Request timeout in ms (default 30000)
    */
   async fetchDocuments(
@@ -425,16 +422,16 @@ export class PlatformClient {
   }
 
   /**
-   * Resolve decrypted secrets for a tenant.
+   * Resolve decrypted secrets for an application.
    *
-   * @param tenantId The tenant ID
+   * @param appId The application ID
    * @param timeout Request timeout in ms (default 30000)
    */
   async resolveSecrets(
-    tenantId: string,
+    appId: string,
     timeout = 30000,
   ): Promise<ResolvedSecret[]> {
-    const url = `${this.config.apiUrl}/api/tenants/${encodeURIComponent(tenantId)}/secrets/resolve`;
+    const url = `${this.config.apiUrl}/api/applications/${encodeURIComponent(appId)}/secrets/resolve`;
 
     let response: Response;
     try {
@@ -466,16 +463,16 @@ export class PlatformClient {
   }
 
   /**
-   * Resolve connections for a tenant — returns per-connection credentials + request_config.
+   * Resolve connections for an application — returns per-connection credentials + request_config.
    *
-   * @param tenantId The tenant ID
+   * @param appId The application ID
    * @param timeout Request timeout in ms (default 30000)
    */
   async resolveConnections(
-    tenantId: string,
+    appId: string,
     timeout = 30000,
   ): Promise<ResolvedConnectionMap> {
-    const url = `${this.config.apiUrl}/api/tenants/${encodeURIComponent(tenantId)}/connections/resolve`;
+    const url = `${this.config.apiUrl}/api/applications/${encodeURIComponent(appId)}/connections/resolve`;
 
     let response: Response;
     try {

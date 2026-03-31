@@ -15,7 +15,7 @@ import {computeEvalCost, aggregateRunCost} from './eval-cost.js';
  * Provider interface for running a query against the agent.
  */
 export interface EvalQueryProvider {
-  query(message: string, tenantId?: string): Promise<{
+  query(message: string, appId?: string): Promise<{
     response: string;
     toolCalls: Array<{name: string; parameters: Record<string, unknown>}>;
     usage?: {inputTokens: number; outputTokens: number};
@@ -91,7 +91,7 @@ async function runSingleEval(
   try {
     const {response, toolCalls, usage} = await options.queryProvider.query(
       ev.query,
-      ev.setup.tenant,
+      ev.setup.app,
     );
 
     // Build enriched response that includes tool call info for the judge.

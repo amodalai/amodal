@@ -303,10 +303,10 @@ export function parseEval(
 
   // Parse setup section
   const setupText = sections['Setup'] ?? '';
-  const tenantMatch = /^Tenant:\s+(.+)$/m.exec(setupText);
+  const appMatch = /^App:\s+(.+)$/m.exec(setupText);
   const contextMatch = /^Context:\s+(.+)$/m.exec(setupText);
   const setup = {
-    tenant: tenantMatch ? tenantMatch[1].trim() : undefined,
+    app: appMatch ? appMatch[1].trim() : undefined,
     context: contextMatch ? contextMatch[1].trim() : undefined,
   };
 

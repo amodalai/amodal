@@ -22,7 +22,7 @@ export interface ToolContext {
   getPlatformApiUrl(): string | undefined;
   getPlatformApiKey(): string | undefined;
   getApplicationId(): string | undefined;
-  getTenantId(): string | undefined;
+  getAppId(): string | undefined;
   getAuditLogger(): AuditLogger | undefined;
   getConnections(): ConnectionsMap;
   getKnowledgeStore(): KnowledgeStore;
@@ -30,6 +30,6 @@ export interface ToolContext {
   getAgentContext(): string | undefined;
   getStores(): LoadedStore[];
   getStoreBackend(): StoreBackend | undefined;
-  /** Session-scoped environment variables (tenant secrets). */
+  /** Session-scoped environment variables (app secrets). */
   getSessionEnv(): Record<string, string>;
 }

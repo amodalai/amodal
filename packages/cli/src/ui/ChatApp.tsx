@@ -27,7 +27,7 @@ import {getCommand} from './commands/index.js';
 
 interface ChatAppProps {
   baseUrl: string;
-  tenantId: string;
+  appId: string;
   resumeSessionId?: string;
   fullscreen?: boolean;
 }
@@ -39,12 +39,12 @@ const INPUT_ROWS = 2;
 
 export const ChatApp: React.FC<ChatAppProps> = ({
   baseUrl,
-  tenantId,
+  appId,
   resumeSessionId,
   fullscreen,
 }) => {
   const {state, sendMessage, respondToQuestion, respondToConfirmation, dismissNotification, dispatch} =
-    useChat(baseUrl, tenantId);
+    useChat(baseUrl, appId);
   const {exit} = useApp();
   const {stdout} = useStdout();
   const width = stdout?.columns ?? 80;

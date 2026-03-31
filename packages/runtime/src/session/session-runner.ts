@@ -128,7 +128,6 @@ export interface StreamAuditContext {
   auditClient: AuditClient;
   appId: string;
   token: string;
-  tenantId?: string;
   orgId?: string;
   actor?: string;
   /** Platform API URL for session history persistence */
@@ -192,12 +191,11 @@ function saveSessionHistory(
   status: 'active' | 'completed' | 'error',
   sessionMeta?: { model?: string; provider?: string },
 ): void {
-  if (!audit.platformApiUrl || !audit.tenantId) return;
+  if (!audit.platformApiUrl || !audit.appId) return;
 
-  const url = `${audit.platformApiUrl}/api/tenants/${audit.tenantId}/sessions`;
+  const url = `${audit.platformApiUrl}/api/applications/${audit.appId}/sessions`;
   const body = JSON.stringify({
     id: sessionId,
-    tenant_id: audit.tenantId,
     app_id: audit.appId,
     actor: audit.actor,
     messages,
@@ -934,7 +932,7 @@ function logSessionCompleted(
   const details: Record<string, unknown> = {
     message,
     response,
-    tenant_id: audit.tenantId,
+    app_id: audit.appId,
     org_id: audit.orgId,
     turns,
     duration_ms: Date.now() - startMs,

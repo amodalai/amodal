@@ -220,7 +220,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Store REST API (if stores are defined)
   if (storeBackend) {
-    app.use(createStoresRouter({repo, storeBackend, tenantId: 'local'}));
+    app.use(createStoresRouter({repo, storeBackend, appId: 'local'}));
   }
 
   // Build user pages (if pages/ directory exists)

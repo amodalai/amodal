@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} tenantId="t1">
+    <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} appId="t1">
       {children}
     </AmodalProvider>
   );
@@ -23,7 +23,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 const mockDocument = {
   key: 'evt_123',
-  tenantId: 'local',
+  appId: 'local',
   store: 'active-alerts',
   version: 2,
   payload: { event_id: 'evt_123', severity: 'P1', confidence: 0.92 },
@@ -33,7 +33,7 @@ const mockDocument = {
 const mockHistory = [
   {
     key: 'evt_123',
-    tenantId: 'local',
+    appId: 'local',
     store: 'active-alerts',
     version: 1,
     payload: { event_id: 'evt_123', severity: 'P2', confidence: 0.6 },

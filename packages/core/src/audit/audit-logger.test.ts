@@ -117,13 +117,13 @@ describe('AuditLogger', () => {
 
   it('emits kb_proposal events without proposal_id', () => {
     const logger = new AuditLogger(makeConfig(), makeContext());
-    logger.logKbProposal('tenant', 'Zone C incident');
+    logger.logKbProposal('application', 'Zone C incident');
     const entries = parseStderrEntries();
 
     expect(entries).toHaveLength(1);
     expect(entries[0].event).toBe('kb_proposal');
     expect(entries[0].params).toEqual({
-      scope: 'tenant',
+      scope: 'application',
       title: 'Zone C incident',
       proposal_id: undefined,
     });

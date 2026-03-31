@@ -61,8 +61,6 @@ export interface AgentSDKConfig {
   versionBaseDir?: string;
   /** Application ID for fetching application-level knowledge base */
   applicationId?: string;
-  /** Tenant ID for fetching tenant-level knowledge base */
-  tenantId?: string;
   /** Agent context override (auto-detected from org if not set) */
   agentContext?: string;
   /** Platform tools to disable (e.g. shell_exec, load_knowledge) */

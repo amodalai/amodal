@@ -16,8 +16,8 @@ import type {CustomToolExecutor, CustomShellExecutor, StoreBackend, McpManager} 
 export const AgentChatRequestSchema = z.object({
   message: z.string().min(1),
   session_id: z.string().optional(),
-  tenant_id: z.string().min(1),
-  tenant_token: z.string().optional(),
+  app_id: z.string().min(1),
+  app_token: z.string().optional(),
   context: z.record(z.unknown()).optional(),
 });
 
@@ -51,7 +51,7 @@ export interface LocalServerConfig {
 export interface AgentSession {
   id: string;
   runtime: SessionRuntime;
-  tenantId: string;
+  appId: string;
   conversationHistory: LLMMessage[];
   createdAt: number;
   lastAccessedAt: number;

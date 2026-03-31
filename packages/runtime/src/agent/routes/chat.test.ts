@@ -23,10 +23,10 @@ function makeSessionManager(): AgentSessionManager {
 
   return {
     size: 0,
-    create: vi.fn(async (tenantId: string) => {
+    create: vi.fn(async (appId: string) => {
       const session = {
         id: 'session-1',
-        tenantId,
+        appId,
         runtime: {compiledContext: {systemPrompt: 'test'}},
         conversationHistory: [],
         createdAt: Date.now(),
@@ -66,7 +66,7 @@ describe('repo-chat route', () => {
     expect(res.status).toBe(400);
   });
 
-  it('should reject missing tenant_id', async () => {
+  it('should reject missing app_id', async () => {
     const app = createTestApp(sessionManager);
     const res = await request(app).post('/chat').send({message: 'hello'});
     expect(res.status).toBe(400);
@@ -76,7 +76,7 @@ describe('repo-chat route', () => {
     const app = createTestApp(sessionManager);
     const res = await request(app)
       .post('/chat')
-      .send({message: 'hello', tenant_id: 'tenant-1'})
+      .send({message: 'hello', app_id: 'tenant-1'})
       .set('Accept', 'text/event-stream');
 
     expect(res.status).toBe(200);
@@ -88,7 +88,7 @@ describe('repo-chat route', () => {
     const app = createTestApp(sessionManager);
     await request(app)
       .post('/chat')
-      .send({message: 'hello', tenant_id: 'tenant-1'});
+      .send({message: 'hello', app_id: 'tenant-1'});
 
     expect(sessionManager.create).toHaveBeenCalledWith('tenant-1', undefined);
   });
@@ -99,12 +99,12 @@ describe('repo-chat route', () => {
     // Create a session first
     await request(app)
       .post('/chat')
-      .send({message: 'hello', tenant_id: 'tenant-1'});
+      .send({message: 'hello', app_id: 'tenant-1'});
 
     // Reuse it
     await request(app)
       .post('/chat')
-      .send({message: 'follow up', tenant_id: 'tenant-1', session_id: 'session-1'});
+      .send({message: 'follow up', app_id: 'tenant-1', session_id: 'session-1'});
 
     expect(sessionManager.get).toHaveBeenCalledWith('session-1');
   });
@@ -113,7 +113,7 @@ describe('repo-chat route', () => {
     const app = createTestApp(sessionManager);
     const res = await request(app)
       .post('/chat')
-      .send({message: 'hello', tenant_id: 'tenant-1'});
+      .send({message: 'hello', app_id: 'tenant-1'});
 
     expect(res.text).toContain('"type":"init"');
   });
@@ -125,16 +125,16 @@ describe('repo-chat route', () => {
     const app = createTestApp(sessionManager);
     const res = await request(app)
       .post('/chat')
-      .send({message: 'hello', tenant_id: 'tenant-1'});
+      .send({message: 'hello', app_id: 'tenant-1'});
 
     expect(res.text).toContain('"type":"error"');
   });
 
-  it('should pass tenant_token when provided', async () => {
+  it('should pass app_token when provided', async () => {
     const app = createTestApp(sessionManager);
     await request(app)
       .post('/chat')
-      .send({message: 'hello', tenant_id: 'tenant-1', tenant_token: 'tok-123'});
+      .send({message: 'hello', app_id: 'tenant-1', app_token: 'tok-123'});
 
     expect(sessionManager.create).toHaveBeenCalledWith('tenant-1', 'tok-123');
   });

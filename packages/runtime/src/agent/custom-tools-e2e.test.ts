@@ -56,7 +56,7 @@ function makeSession(
 ): AgentSession {
   return {
     id: 'e2e-session',
-    tenantId: 'e2e-tenant',
+    appId: 'e2e-tenant',
     conversationHistory: [],
     createdAt: Date.now(),
     lastAccessedAt: Date.now(),

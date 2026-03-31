@@ -38,8 +38,8 @@ export interface StoreDocumentMeta {
 export interface StoreDocument {
   /** Document key (resolved from key template) */
   key: string;
-  /** Tenant that owns this document */
-  tenantId: string;
+  /** Application that owns this document */
+  appId: string;
   /** Store name this document belongs to */
   store: string;
   /** Version number (increments on each update) */
@@ -111,14 +111,14 @@ export interface StoreBackend {
    * Get a single document by key.
    * Returns null if the document doesn't exist.
    */
-  get(tenantId: string, store: string, key: string): Promise<StoreDocument | null>;
+  get(appId: string, store: string, key: string): Promise<StoreDocument | null>;
 
   /**
    * Upsert a document. If it exists, increments version and optionally
    * saves the previous version to history.
    */
   put(
-    tenantId: string,
+    appId: string,
     store: string,
     key: string,
     payload: Record<string, unknown>,
@@ -129,7 +129,7 @@ export interface StoreBackend {
    * List documents from a store with optional filtering, sorting, and pagination.
    */
   list(
-    tenantId: string,
+    appId: string,
     store: string,
     options?: StoreListOptions,
   ): Promise<StoreListResult>;
@@ -138,19 +138,19 @@ export interface StoreBackend {
    * Delete a document by key.
    * Returns true if the document existed and was deleted.
    */
-  delete(tenantId: string, store: string, key: string): Promise<boolean>;
+  delete(appId: string, store: string, key: string): Promise<boolean>;
 
   /**
    * Get version history for a document (most recent first).
    * Returns empty array if no history exists.
    */
-  history(tenantId: string, store: string, key: string): Promise<StoreDocument[]>;
+  history(appId: string, store: string, key: string): Promise<StoreDocument[]>;
 
   /**
    * Delete all documents past their TTL.
    * Returns the number of documents purged.
    */
-  purgeExpired(tenantId: string, store?: string): Promise<number>;
+  purgeExpired(appId: string, store?: string): Promise<number>;
 
   /**
    * Shut down the backend (close connections, release resources).

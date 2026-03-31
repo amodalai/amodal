@@ -33,11 +33,11 @@ const appDocs: KBDocument[] = [
   makeDoc({ id: 'org-3', title: 'False Positives', tags: ['false-positives'] }),
 ];
 
-const tenantDocs: KBDocument[] = [
+const extraDocs: KBDocument[] = [
   makeDoc({
     id: 'seg-1',
     title: 'Facility Zones',
-    scope_type: 'tenant',
+    scope_type: 'application',
     scope_id: 'seg-acme',
     tags: ['zones'],
     category: 'team',
@@ -58,7 +58,7 @@ let tool: LoadKnowledgeTool;
 let messageBus: MessageBus;
 
 beforeEach(() => {
-  store = new KnowledgeStore(appDocs, tenantDocs);
+  store = new KnowledgeStore([...appDocs, ...extraDocs]);
   messageBus = createMockMessageBus();
   tool = new LoadKnowledgeTool(store, messageBus);
 });

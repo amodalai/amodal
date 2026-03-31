@@ -61,7 +61,7 @@ function makeMockBackend(): StoreBackend {
 function createApp(repo: AmodalRepo, backend: StoreBackend) {
   const app = express();
   app.use(express.json());
-  app.use(createStoresRouter({repo, storeBackend: backend, tenantId: 'test-tenant'}));
+  app.use(createStoresRouter({repo, storeBackend: backend, appId: 'test-tenant'}));
   return app;
 }
 
@@ -103,7 +103,7 @@ describe('stores router', () => {
       const repo = makeRepo(stores);
       const backend = makeMockBackend();
       vi.mocked(backend.list).mockResolvedValue({
-        documents: [{key: 'a', tenantId: 'test', store: 'alerts', version: 1, payload: {id: 'a'}, meta: {computedAt: '2026-01-01', stale: false}}],
+        documents: [{key: 'a', appId: 'test', store: 'alerts', version: 1, payload: {id: 'a'}, meta: {computedAt: '2026-01-01', stale: false}}],
         total: 1,
         hasMore: false,
       });
@@ -169,7 +169,7 @@ describe('stores router', () => {
       const backend = makeMockBackend();
       vi.mocked(backend.get).mockResolvedValue({
         key: 'evt_123',
-        tenantId: 'test',
+        appId: 'test',
         store: 'alerts',
         version: 2,
         payload: {id: 'evt_123', value: 'test'},
@@ -213,11 +213,11 @@ describe('stores router', () => {
       const repo = makeRepo(stores);
       const backend = makeMockBackend();
       vi.mocked(backend.get).mockResolvedValue({
-        key: 'k', tenantId: 'test', store: 'alerts', version: 3,
+        key: 'k', appId: 'test', store: 'alerts', version: 3,
         payload: {id: 'k'}, meta: {computedAt: '2026-01-01', stale: false},
       });
       vi.mocked(backend.history).mockResolvedValue([
-        {key: 'k', tenantId: 'test', store: 'alerts', version: 2, payload: {id: 'k'}, meta: {computedAt: '2026-01-01', stale: false}},
+        {key: 'k', appId: 'test', store: 'alerts', version: 2, payload: {id: 'k'}, meta: {computedAt: '2026-01-01', stale: false}},
       ]);
 
       const app = createApp(repo, backend);

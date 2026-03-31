@@ -51,7 +51,6 @@ export function createChatRouter(options: ChatRouterOptions): Router {
             auditClient: options.auditClient,
             appId: auth.applicationId,
             token: auth.token,
-            tenantId: auth.tenantId,
             orgId: auth.orgId,
           };
         }

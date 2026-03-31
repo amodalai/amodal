@@ -16,15 +16,13 @@ import { errorHandler } from './error-handler.js';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-function meResponse(orgId = 'org-123', appId = 'app-456', tenantId = 'ten-789') {
+function meResponse(orgId = 'org-123', appId = 'app-456') {
   return {
     ok: true,
     json: async () => ({
       org: { id: orgId },
       app: { id: appId },
-      tenant: { id: tenantId },
       apps: [{ id: appId }],
-      tenants: [{ id: tenantId }],
       user: null,
     }),
   };
@@ -43,7 +41,6 @@ function createTestApp(platformApiUrl = 'http://localhost:4000', jwksUrl?: strin
       token: ctx?.token,
       orgId: ctx?.orgId,
       applicationId: ctx?.applicationId,
-      tenantId: ctx?.tenantId,
       authMethod: ctx?.authMethod,
       actor: ctx?.actor,
     });
@@ -102,7 +99,7 @@ describe('auth middleware', () => {
   });
 
   it('validates ak_ keys against platform API and returns full context', async () => {
-    mockFetch.mockResolvedValueOnce(meResponse('org-123', 'app-456', 'ten-789'));
+    mockFetch.mockResolvedValueOnce(meResponse('org-123', 'app-456'));
 
     const app = createTestApp();
     const res = await request(app)
@@ -114,7 +111,6 @@ describe('auth middleware', () => {
     expect(res.body.token).toBe('ak_test-key');
     expect(res.body.orgId).toBe('org-123');
     expect(res.body.applicationId).toBe('app-456');
-    expect(res.body.tenantId).toBe('ten-789');
     expect(res.body.authMethod).toBe('api_key');
 
     // Verify fetch was called with correct args
@@ -204,11 +200,11 @@ describe('auth middleware', () => {
       const token = await new SignJWT({
         org_id: 'org-jwt',
         app_id: 'app-jwt',
-        tenant_id: 'tenant-jwt',
+
       })
         .setProtectedHeader({ alg: 'ES256', kid })
         .setIssuer('aitize-platform')
-        .setSubject('tenant-jwt')
+        .setSubject('app-jwt')
         .setIssuedAt()
         .setExpirationTime('1h')
         .sign(privateKey);
@@ -222,7 +218,7 @@ describe('auth middleware', () => {
       expect(res.body.token).toBe(token);
       expect(res.body.orgId).toBe('org-jwt');
       expect(res.body.applicationId).toBe('app-jwt');
-      expect(res.body.tenantId).toBe('tenant-jwt');
+      expect(res.body.applicationId).toBe('app-jwt');
       expect(res.body.authMethod).toBe('platform_jwt');
 
       // Only JWKS fetch should have been made, not /api/me
@@ -242,12 +238,12 @@ describe('auth middleware', () => {
       const token = await new SignJWT({
         org_id: 'org-jwt',
         app_id: 'app-jwt',
-        tenant_id: 'tenant-jwt',
+
         actor: 'bob@example.com',
       })
         .setProtectedHeader({ alg: 'ES256', kid })
         .setIssuer('aitize-platform')
-        .setSubject('tenant-jwt')
+        .setSubject('app-jwt')
         .setIssuedAt()
         .setExpirationTime('1h')
         .sign(privateKey);
@@ -273,11 +269,11 @@ describe('auth middleware', () => {
       const token = await new SignJWT({
         org_id: 'org-jwt',
         app_id: 'app-jwt',
-        tenant_id: 'tenant-jwt',
+
       })
         .setProtectedHeader({ alg: 'ES256', kid })
         .setIssuer('aitize-platform')
-        .setSubject('tenant-jwt')
+        .setSubject('app-jwt')
         .setIssuedAt()
         .setExpirationTime('1h')
         .sign(privateKey);
@@ -302,11 +298,10 @@ describe('auth middleware', () => {
       const token = await new SignJWT({
         org_id: 'org-1',
         app_id: 'app-1',
-        tenant_id: 'tenant-1',
       })
         .setProtectedHeader({ alg: 'ES256', kid })
         .setIssuer('aitize-platform')
-        .setSubject('tenant-1')
+        .setSubject('app-1')
         .setIssuedAt(Math.floor(Date.now() / 1000) - 7200)
         .setExpirationTime(Math.floor(Date.now() / 1000) - 3600)
         .sign(privateKey);

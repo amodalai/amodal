@@ -30,7 +30,7 @@ describe('test-query command', () => {
     expect(mod.runTestQuery).toBeDefined();
   });
 
-  it('should use default tenant ID', async () => {
+  it('should use default app ID', async () => {
     const mod = await import('./test-query.js');
     expect(mod.runTestQuery).toBeDefined();
   });

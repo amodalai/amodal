@@ -16,7 +16,7 @@ interface CredentialField {
 
 interface CredentialInputData {
   connection_name: string;
-  tenant_id: string;
+  app_id: string;
   fields: CredentialField[];
 }
 
@@ -42,7 +42,7 @@ export function CredentialInput({ data, sendMessage }: WidgetProps) {
 
       try {
         const origin = window.location.origin;
-        const url = `${origin}/api/tenants/${d.tenant_id}/secrets`;
+        const url = `${origin}/api/apps/${d.app_id}/secrets`;
 
         for (const field of d.fields) {
           const response = await fetch(url, {
@@ -69,7 +69,7 @@ export function CredentialInput({ data, sendMessage }: WidgetProps) {
         setErrorMessage(err instanceof Error ? err.message : 'Failed to save credentials');
       }
     },
-    [d.tenant_id, d.connection_name, d.fields, values, sendMessage],
+    [d.app_id, d.connection_name, d.fields, values, sendMessage],
   );
 
   if (status === 'success') {

@@ -236,21 +236,19 @@ describe('buildPlatformConfigParams', () => {
     expect(result.platformApiKey).toBeUndefined();
   });
 
-  it('includes applicationId and tenantId from sdkConfig', () => {
+  it('includes applicationId from sdkConfig', () => {
     const result = buildPlatformConfigParams(
       null,
-      makeSdkConfig({ applicationId: 'app-abc', tenantId: 'ten-xyz' }),
+      makeSdkConfig({ applicationId: 'app-abc' }),
     );
 
     expect(result.applicationId).toBe('app-abc');
-    expect(result.tenantId).toBe('ten-xyz');
   });
 
-  it('omits applicationId and tenantId when not set in sdkConfig', () => {
+  it('omits applicationId when not set in sdkConfig', () => {
     const result = buildPlatformConfigParams(null, makeSdkConfig());
 
     expect(result.applicationId).toBeUndefined();
-    expect(result.tenantId).toBeUndefined();
   });
 
   it('includes agentContext from sdkConfig', () => {

@@ -13,23 +13,23 @@ export interface SessionsRouterOptions {
 
 /**
  * Proxy routes for session history.
- * Forwards to platform-api /api/tenants/{tenantId}/sessions endpoints.
+ * Forwards to platform-api /api/applications/{applicationId}/sessions endpoints.
  */
 export function createSessionsRouter(options: SessionsRouterOptions): Router {
   const router = Router();
 
-  // List sessions for the authenticated tenant
+  // List sessions for the authenticated application
   router.get('/sessions/history', async (req, res, next) => {
     try {
       const auth = getAuthContext(res);
-      if (!auth?.tenantId || !auth.token) {
+      if (!auth?.applicationId || !auth.token) {
         res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Missing auth context' } });
         return;
       }
 
       const tagsParam = req.query['tags'];
       const qs = tagsParam ? `?tags=${String(tagsParam)}` : '';
-      const url = `${options.platformApiUrl}/api/tenants/${auth.tenantId}/sessions${qs}`;
+      const url = `${options.platformApiUrl}/api/applications/${auth.applicationId}/sessions${qs}`;
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${auth.token}` },
@@ -46,13 +46,13 @@ export function createSessionsRouter(options: SessionsRouterOptions): Router {
   router.get('/sessions/history/:id', async (req, res, next) => {
     try {
       const auth = getAuthContext(res);
-      if (!auth?.tenantId || !auth.token) {
+      if (!auth?.applicationId || !auth.token) {
         res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Missing auth context' } });
         return;
       }
 
       const sessionId = req.params['id'];
-      const url = `${options.platformApiUrl}/api/tenants/${auth.tenantId}/sessions/${sessionId}`;
+      const url = `${options.platformApiUrl}/api/applications/${auth.applicationId}/sessions/${sessionId}`;
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${auth.token}` },
@@ -69,13 +69,13 @@ export function createSessionsRouter(options: SessionsRouterOptions): Router {
   router.patch('/sessions/history/:id', async (req, res, next) => {
     try {
       const auth = getAuthContext(res);
-      if (!auth?.tenantId || !auth.token) {
+      if (!auth?.applicationId || !auth.token) {
         res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Missing auth context' } });
         return;
       }
 
       const sessionId = req.params['id'];
-      const url = `${options.platformApiUrl}/api/tenants/${auth.tenantId}/sessions/${sessionId}`;
+      const url = `${options.platformApiUrl}/api/applications/${auth.applicationId}/sessions/${sessionId}`;
 
       const response = await fetch(url, {
         method: 'PATCH',

@@ -37,8 +37,6 @@ export interface AmodalConfigExtensions {
   platformApiKey?: string;
   /** Application ID for scope resolution */
   applicationId?: string;
-  /** Tenant ID for scope resolution */
-  tenantId?: string;
   /** Audit logging configuration */
   auditConfig?: AuditConfig;
   /** User identifier for audit entries */
@@ -51,8 +49,6 @@ export interface AmodalConfigExtensions {
   connections?: ConnectionsMap;
   /** Application-level knowledge documents */
   appDocuments?: KBDocument[];
-  /** Tenant-level knowledge documents */
-  tenantDocuments?: KBDocument[];
   /** Connection metadata for agent awareness */
   connectionInfos?: ConnectionInfo[];
   /** Agent context description */
@@ -114,14 +110,12 @@ const EXTENSION_KEYS: ReadonlyArray<keyof AmodalConfigExtensions> = [
   'platformApiUrl',
   'platformApiKey',
   'applicationId',
-  'tenantId',
   'auditConfig',
   'auditUser',
   'auditSource',
   'auditVersion',
   'connections',
   'appDocuments',
-  'tenantDocuments',
   'connectionInfos',
   'agentContext',
   'httpToolConfigs',
@@ -195,7 +189,6 @@ export class AmodalConfig implements ToolContext {
     // Initialize knowledge store from KB docs
     this.knowledgeStore = new KnowledgeStore(
       this.extensions.appDocuments ?? [],
-      this.extensions.tenantDocuments ?? [],
     );
 
     // Initialize audit logger if configured
@@ -250,8 +243,8 @@ export class AmodalConfig implements ToolContext {
     return this.extensions.applicationId;
   }
 
-  getTenantId(): string | undefined {
-    return this.extensions.tenantId;
+  getAppId(): string | undefined {
+    return this.extensions.applicationId;
   }
 
   getAuditLogger(): AuditLogger | undefined {

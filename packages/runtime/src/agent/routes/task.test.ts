@@ -23,7 +23,7 @@ function makeSessionManager(): AgentSessionManager {
     size: 0,
     create: vi.fn(async () => ({
       id: 'session-1',
-      tenantId: 'tenant-1',
+      appId: 'tenant-1',
       runtime: {compiledContext: {systemPrompt: 'test'}},
       conversationHistory: [],
       createdAt: Date.now(),
@@ -64,7 +64,7 @@ describe('repo-task route', () => {
     const app = createTestApp(sessionManager);
     const res = await request(app)
       .post('/task')
-      .send({prompt: 'do something', tenant_id: 'tenant-1'});
+      .send({prompt: 'do something', app_id: 'tenant-1'});
 
     expect(res.status).toBe(202);
     expect(res.body).toHaveProperty('task_id');
@@ -81,7 +81,7 @@ describe('repo-task route', () => {
 
     const createRes = await request(app)
       .post('/task')
-      .send({prompt: 'do something', tenant_id: 'tenant-1'});
+      .send({prompt: 'do something', app_id: 'tenant-1'});
 
     const taskId = createRes.body['task_id'] as string;
 
@@ -99,7 +99,7 @@ describe('repo-task route', () => {
 
     const createRes = await request(app)
       .post('/task')
-      .send({prompt: 'do something', tenant_id: 'tenant-1'});
+      .send({prompt: 'do something', app_id: 'tenant-1'});
 
     const taskId = createRes.body['task_id'] as string;
 

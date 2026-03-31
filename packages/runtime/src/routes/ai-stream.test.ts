@@ -691,7 +691,7 @@ describe('POST /chat/ai-stream', () => {
         {
           type: SSEEventType.KBProposal,
           proposal_id: 'p-1',
-          scope: 'tenant',
+          scope: 'application',
           title: 'New baseline',
           reasoning: 'Observed pattern',
           status: 'pending',
@@ -721,7 +721,7 @@ describe('POST /chat/ai-stream', () => {
       type: 'data-kb-proposal',
       data: {
         proposal_id: 'p-1',
-        scope: 'tenant',
+        scope: 'application',
         title: 'New baseline',
         reasoning: 'Observed pattern',
         status: 'pending',

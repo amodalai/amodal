@@ -71,7 +71,7 @@ export interface ModelConfig {
   /**
    * Explicit credentials for the provider.
    * When set, providers use these instead of reading from process.env.
-   * This avoids shared mutable state (process.env) in multi-tenant hosted mode.
+   * This avoids shared mutable state (process.env) in multi-app hosted mode.
    */
   credentials?: Record<string, string>;
 }

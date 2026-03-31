@@ -73,7 +73,7 @@ A basic test.
 
 ## Setup
 
-Tenant: test_tenant
+App: test_app
 
 ## Query
 

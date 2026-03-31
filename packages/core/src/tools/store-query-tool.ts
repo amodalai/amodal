@@ -26,7 +26,7 @@ class StoreQueryInvocation extends BaseToolInvocation<QueryStoreParams, ToolResu
     params: QueryStoreParams,
     messageBus: MessageBus,
     private readonly backend: StoreBackend,
-    private readonly tenantId: string,
+    private readonly appId: string,
     _toolName?: string,
     _toolDisplayName?: string,
   ) {
@@ -44,7 +44,7 @@ class StoreQueryInvocation extends BaseToolInvocation<QueryStoreParams, ToolResu
 
     try {
       if (key) {
-        const doc = await this.backend.get(this.tenantId, store, key);
+        const doc = await this.backend.get(this.appId, store, key);
         if (!doc) {
           const output = JSON.stringify({ found: false, key });
           return { llmContent: output, returnDisplay: `Not found: ${store}[${key}]` };
@@ -53,7 +53,7 @@ class StoreQueryInvocation extends BaseToolInvocation<QueryStoreParams, ToolResu
         return { llmContent: output, returnDisplay: `Found: ${store}[${key}]` };
       }
 
-      const result = await this.backend.list(this.tenantId, store, {
+      const result = await this.backend.list(this.appId, store, {
         filter,
         sort,
         limit: typeof limit === 'number' ? limit : 20,
@@ -79,7 +79,7 @@ export class StoreQueryTool extends BaseDeclarativeTool<QueryStoreParams, ToolRe
   constructor(
     stores: LoadedStore[],
     private readonly backend: StoreBackend,
-    private readonly tenantId: string,
+    private readonly appId: string,
     messageBus: MessageBus,
   ) {
     super(
@@ -118,7 +118,7 @@ export class StoreQueryTool extends BaseDeclarativeTool<QueryStoreParams, ToolRe
       params,
       messageBus,
       this.backend,
-      this.tenantId,
+      this.appId,
       _toolName,
       _toolDisplayName,
     );

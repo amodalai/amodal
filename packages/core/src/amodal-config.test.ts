@@ -22,7 +22,7 @@ describe('AmodalConfig', () => {
     expect(config.getPlatformApiUrl()).toBeUndefined();
     expect(config.getPlatformApiKey()).toBeUndefined();
     expect(config.getApplicationId()).toBeUndefined();
-    expect(config.getTenantId()).toBeUndefined();
+    expect(config.getAppId()).toBeUndefined();
     expect(config.getAuditLogger()).toBeUndefined();
     expect(config.getConnections()).toEqual({});
     expect(config.getConnectionInfos()).toEqual([]);
@@ -39,7 +39,6 @@ describe('AmodalConfig', () => {
       platformApiUrl: 'https://platform.test.com',
       platformApiKey: 'test-key',
       applicationId: 'app-1',
-      tenantId: 'tenant-1',
       connections: { datadog: { API_KEY: 'abc' } },
       agentContext: 'Test agent context',
       connectionInfos: [{ name: 'datadog', provider: 'Datadog' }],
@@ -48,7 +47,7 @@ describe('AmodalConfig', () => {
     expect(config.getPlatformApiUrl()).toBe('https://platform.test.com');
     expect(config.getPlatformApiKey()).toBe('test-key');
     expect(config.getApplicationId()).toBe('app-1');
-    expect(config.getTenantId()).toBe('tenant-1');
+    expect(config.getAppId()).toBe('app-1');
     expect(config.getConnections()).toEqual({ datadog: { API_KEY: 'abc' } });
     expect(config.getAgentContext()).toBe('Test agent context');
     expect(config.getConnectionInfos()).toHaveLength(1);
@@ -108,12 +107,12 @@ describe('AmodalConfig', () => {
       cwd: process.cwd(),
       connections: {
         test_api: { BASE_URL: 'https://api.example.com' },
-        _secrets: { API_KEY: 'tenant-secret', BASE_URL: 'https://custom.api.com' },
+        _secrets: { API_KEY: 'app-secret', BASE_URL: 'https://custom.api.com' },
       },
     });
 
     const env = config.getSessionEnv();
-    expect(env).toEqual({ API_KEY: 'tenant-secret', BASE_URL: 'https://custom.api.com' });
+    expect(env).toEqual({ API_KEY: 'app-secret', BASE_URL: 'https://custom.api.com' });
   });
 
   it('getSessionEnv returns empty object when no secrets', () => {

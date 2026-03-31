@@ -97,7 +97,7 @@ An item that hasn't been updated in 35 days.
 
 ## Setup
 
-Tenant: test_tenant
+App: test_app
 Context: viewing item page
 
 ## Query

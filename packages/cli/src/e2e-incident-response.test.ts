@@ -48,12 +48,12 @@ import {loadRepo, loadSnapshotFromFile, snapshotToRepo} from '@amodalai/core';
 async function sendChat(
   port: number,
   message: string,
-  tenantId: string,
+  appId: string,
   sessionId?: string,
   timeoutMs = 30000,
 ): Promise<{events: Array<Record<string, unknown>>; rawBody: string}> {
   return new Promise((resolve, reject) => {
-    const payload: Record<string, string> = {message, tenant_id: tenantId};
+    const payload: Record<string, string> = {message, app_id: appId};
     if (sessionId) payload['session_id'] = sessionId;
     const body = JSON.stringify(payload);
     const req = http.request(
@@ -292,7 +292,7 @@ describe('E2E: Incident Response Agent', () => {
     });
 
     it('should handle chat and stream SSE events', async () => {
-      const {events} = await sendChat(runtimePort, 'Is the API healthy?', 'tenant-incident-e2e');
+      const {events} = await sendChat(runtimePort, 'Is the API healthy?', 'app-incident-e2e');
 
       expect(events.length).toBeGreaterThanOrEqual(2);
       expect(events.find((e) => e['type'] === 'init')).toBeDefined();
@@ -307,7 +307,7 @@ describe('E2E: Incident Response Agent', () => {
       const {events} = await sendChat(
         runtimePort,
         'Check the current status of all services using the statuspage connection.',
-        'tenant-incident-tool-e2e',
+        'app-incident-tool-e2e',
       );
 
       const toolCalls = events.filter((e) => e['type'] === 'tool_call_start');
