@@ -115,6 +115,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 ...tc,
                 status: action.status,
                 result: action.result,
+                parameters: action.parameters ?? tc.parameters,
                 duration_ms: action.duration_ms,
                 error: action.error,
               }
@@ -307,6 +308,7 @@ export function useAmodalChat(options?: UseAmodalChatOptions): UseAmodalChatRetu
                   toolId: event.tool_id,
                   status: event.status,
                   result: event.result,
+                  parameters: event.parameters,
                   duration_ms: event.duration_ms,
                   error: event.error,
                 });

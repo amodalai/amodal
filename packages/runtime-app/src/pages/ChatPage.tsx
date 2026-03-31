@@ -6,18 +6,85 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import type { FormEvent } from 'react';
-import { Send, Loader2, CheckCircle2, XCircle, Wrench } from 'lucide-react';
+import { Send, Loader2, CheckCircle2, XCircle, Wrench, Pencil, Check } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { useAmodalChat } from '@amodalai/react';
 import type { ToolCallInfo, ContentBlock, ConfirmationInfo } from '@amodalai/react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 
-function ToolCallBadge({ call }: { call: ToolCallInfo }) {
+const METHOD_COLORS: Record<string, string> = {
+  GET: 'text-blue-500',
+  POST: 'text-emerald-500',
+  PUT: 'text-amber-500',
+  PATCH: 'text-amber-500',
+  DELETE: 'text-red-500',
+};
+
+function formatParams(params: Record<string, unknown>): string {
+  // For request tool, skip meta fields and show the interesting ones
+  const skip = new Set(['connection', 'method', 'path', 'intent', 'body']);
+  const entries = Object.entries(params).filter(([k]) => !skip.has(k));
+  if (entries.length === 0 && params['body'] && typeof params['body'] === 'object') {
+    // Show body keys instead
+    const bodyKeys = Object.keys(params['body'] as unknown as Record<string, unknown>).slice(0, 3); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+    return bodyKeys.map((k) => k).join(', ');
+  }
+  return entries.slice(0, 3).map(([k, v]) => {
+    const val = typeof v === 'string' ? v : JSON.stringify(v);
+    const truncated = val.length > 30 ? val.slice(0, 27) + '...' : val;
+    return `${k}: ${truncated}`;
+  }).join('  ');
+}
+
+function ToolCallCard({ call }: { call: ToolCallInfo }) {
   const isRunning = call.status === 'running';
   const isError = call.status === 'error';
+  const params = call.parameters ?? {};
+
+  // Request tool — show connection, method, path
+  const isRequest = call.toolName === 'request' && typeof params['connection'] === 'string';
+  const connection = isRequest ? String(params['connection']) : null;
+  const method = isRequest ? String(params['method'] ?? 'GET').toUpperCase() : null;
+  const path = isRequest ? String(params['path'] ?? '') : null;
+  const paramLine = isRequest ? formatParams(params) : null;
+
+  if (isRequest && connection) {
+    return (
+      <div className="my-1.5 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2">
+          {isRunning ? (
+            <Loader2 className="h-3.5 w-3.5 text-indigo-400 animate-spin shrink-0" />
+          ) : isError ? (
+            <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+          )}
+          <span className="text-[13px] font-semibold text-gray-800 dark:text-zinc-200">{connection}</span>
+          {method && (
+            <span className={`text-[10px] font-mono font-bold ${METHOD_COLORS[method] ?? 'text-gray-500'}`}>
+              {method}
+            </span>
+          )}
+          {path && (
+            <span className="text-[12px] font-mono text-gray-500 dark:text-zinc-400 truncate">{path}</span>
+          )}
+          {call.duration_ms != null && (
+            <span className="text-[11px] text-gray-400 dark:text-zinc-500 ml-auto tabular-nums shrink-0">{String(call.duration_ms)}ms</span>
+          )}
+        </div>
+        {paramLine && (
+          <div className="px-3 pb-2 text-[11px] text-gray-400 dark:text-zinc-500 font-mono truncate">
+            {paramLine}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Generic tool call — compact badge
   return (
-    <div className="flex items-center gap-2 px-3 py-2 my-1.5 rounded-lg bg-gray-100 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 text-xs font-mono">
+    <div className="flex items-center gap-2 px-3 py-2 my-1.5 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 text-xs font-mono">
       {isRunning ? (
         <Loader2 className="h-3.5 w-3.5 text-indigo-400 animate-spin shrink-0" />
       ) : isError ? (
@@ -86,7 +153,7 @@ function MessageContent({ blocks, respondToConfirmation }: {
           case 'tool_calls':
             return (
               <div key={`tc-${String(i)}`}>
-                {block.calls.map((call) => <ToolCallBadge key={call.toolId} call={call} />)}
+                {block.calls.map((call) => <ToolCallCard key={call.toolId} call={call} />)}
               </div>
             );
           case 'confirmation': {
@@ -108,9 +175,86 @@ function MessageContent({ blocks, respondToConfirmation }: {
   );
 }
 
+interface HistoryToolCall {
+  toolId: string;
+  toolName: string;
+  parameters: Record<string, unknown>;
+  status: 'success' | 'error';
+}
+
 interface HistoryMessage {
   role: string;
   text: string;
+  toolCalls?: HistoryToolCall[];
+}
+
+function SessionTitle({ sessionId }: { sessionId: string | null }) {
+  const [title, setTitle] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!sessionId) { setTitle(null); return; }
+    fetch(`/sessions`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data: unknown) => {
+        if (!data || typeof data !== 'object' || !('sessions' in data)) return;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
+        const sessions = (data as Record<string, unknown>)['sessions'] as Array<{id: string; title?: string; summary: string}>;
+        const session = sessions.find((s) => s.id === sessionId);
+        if (session) setTitle(session.title ?? session.summary);
+      })
+      .catch(() => {});
+  }, [sessionId]);
+
+  if (!sessionId || !title) return null;
+
+  const save = () => {
+    const trimmed = editValue.trim();
+    setEditing(false);
+    if (!trimmed) return;
+    setTitle(trimmed);
+    fetch(`/session/${encodeURIComponent(sessionId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: trimmed }),
+    }).catch(() => {});
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100 dark:border-zinc-800/50">
+        <input
+          ref={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') save();
+            if (e.key === 'Escape') setEditing(false);
+          }}
+          className="flex-1 text-sm font-medium px-2 py-1 rounded border border-indigo-500/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
+          autoFocus
+        />
+        <button onClick={save} className="text-emerald-500 hover:text-emerald-400">
+          <Check className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-2 px-6 py-2 border-b border-gray-100 dark:border-zinc-800/50">
+      <span className="text-sm font-medium text-gray-700 dark:text-zinc-300 truncate">{title}</span>
+      <button
+        onClick={() => { setEditValue(title); setEditing(true); }}
+        className="opacity-0 group-hover:opacity-40 hover:!opacity-80 transition-opacity"
+      >
+        <Pencil className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
+      </button>
+    </div>
+  );
 }
 
 export function ChatPage() {
@@ -119,7 +263,7 @@ export function ChatPage() {
   const urlResumeId = searchParams.get('resume');
   const activeResumeId = useMemo(() => urlResumeId ?? serverResumeId, [urlResumeId, serverResumeId]);
 
-  const { messages, send, isStreaming, activeToolCalls, respondToConfirmation, usage } = useAmodalChat({
+  const { messages, send, isStreaming, activeToolCalls, respondToConfirmation, usage, sessionId } = useAmodalChat({
     initialSessionId: activeResumeId,
   });
   const [input, setInput] = useState('');
@@ -181,6 +325,7 @@ export function ChatPage() {
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
+      <SessionTitle sessionId={activeResumeId ?? sessionId} />
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {!hasMessages ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-4">
@@ -203,8 +348,19 @@ export function ChatPage() {
                     {msg.text}
                   </div>
                 ) : (
-                  <div className="text-[14px] text-gray-400 dark:text-zinc-400 prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-400 dark:prose-headings:text-zinc-400 prose-p:text-gray-400 dark:prose-p:text-zinc-400 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-indigo-500/60 dark:prose-a:text-indigo-400/60">
-                    <Markdown>{msg.text}</Markdown>
+                  <div className="text-[14px] text-gray-400 dark:text-zinc-400">
+                    {msg.toolCalls && msg.toolCalls.length > 0 && (
+                      <div>
+                        {msg.toolCalls.map((tc) => (
+                          <ToolCallCard key={tc.toolId} call={{...tc, status: 'success'}} />
+                        ))}
+                      </div>
+                    )}
+                    {msg.text && (
+                      <div className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-400 dark:prose-headings:text-zinc-400 prose-p:text-gray-400 dark:prose-p:text-zinc-400 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-indigo-500/60 dark:prose-a:text-indigo-400/60">
+                        <Markdown>{msg.text}</Markdown>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

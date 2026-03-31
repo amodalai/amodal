@@ -54,6 +54,7 @@ export interface SSEToolCallResultEvent {
   tool_id: string;
   status: 'success' | 'error';
   result?: unknown;
+  parameters?: Record<string, unknown>;
   duration_ms?: number;
   error?: string;
   timestamp: string;
@@ -379,7 +380,7 @@ export type ChatAction =
   | { type: 'STREAM_INIT'; sessionId: string }
   | { type: 'STREAM_TEXT_DELTA'; content: string }
   | { type: 'STREAM_TOOL_CALL_START'; toolId: string; toolName: string; parameters: Record<string, unknown> }
-  | { type: 'STREAM_TOOL_CALL_RESULT'; toolId: string; status: 'success' | 'error'; result?: unknown; duration_ms?: number; error?: string }
+  | { type: 'STREAM_TOOL_CALL_RESULT'; toolId: string; status: 'success' | 'error'; result?: unknown; parameters?: Record<string, unknown>; duration_ms?: number; error?: string }
   | { type: 'STREAM_SUBAGENT_EVENT'; parentToolId: string; event: SubagentEventInfo }
   | { type: 'STREAM_SKILL_ACTIVATED'; skill: string }
   | { type: 'STREAM_KB_PROPOSAL'; scope: 'org' | 'segment'; title: string; reasoning: string }
