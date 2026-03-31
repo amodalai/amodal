@@ -14,17 +14,11 @@ import {loadEnvFile} from './shared/load-env.js';
 // Load .env from current directory before anything else
 loadEnvFile(process.cwd());
 
-let pkgVersion = process.env['CLI_VERSION'] ?? '';
-if (!pkgVersion) {
-  try {
-    const raw: unknown = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
-    if (raw && typeof raw === 'object' && 'version' in raw && typeof raw.version === 'string') {
-      pkgVersion = raw.version;
-    }
-  } catch {
-    pkgVersion = '0.0.0-dev';
-  }
+const raw: unknown = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
+if (typeof raw !== 'object' || raw === null || !('version' in raw) || typeof raw.version !== 'string') {
+  throw new Error('Failed to read version from package.json');
 }
+const pkgVersion = raw.version;
 
 const cli = yargs(hideBin(process.argv))
   .scriptName('amodal')
