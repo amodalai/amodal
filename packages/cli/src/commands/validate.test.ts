@@ -149,7 +149,7 @@ describe('runValidate', () => {
       skills: [{name: 'test', body: 'content'}],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
@@ -170,7 +170,7 @@ describe('runValidate', () => {
       skills: [],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-x'}}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {'@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-x'}}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
@@ -190,7 +190,7 @@ describe('runValidate', () => {
       skills: [],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [{name: 'bad-skill', body: '  '}],
@@ -237,7 +237,7 @@ describe('runValidate', () => {
       skills: [],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockRejectedValue(new Error('Disk error'));
 
     const {runValidate} = await import('./validate.js');
@@ -251,7 +251,7 @@ describe('runValidate', () => {
       skills: [],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map([['empty-conn', {surface: [], spec: {auth: null}}]]),
       skills: [],

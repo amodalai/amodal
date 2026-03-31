@@ -11,18 +11,9 @@ const mockEnsureNpmContext = vi.fn();
 const mockReadLockFile = vi.fn();
 const mockNpmViewVersions = vi.fn();
 const mockNpmInstall = vi.fn();
-const mockAddLockEntry = vi.fn();
-const mockEnsureSymlink = vi.fn();
-const mockMakePackageRef = vi.fn((type: string, name: string) => ({
-  type,
-  name,
-  key: `${type}/${name}`,
-  npmName: `@amodalai/${type}-${name}`,
-}));
-const mockParsePackageKey = vi.fn((key: string) => {
-  const [type, name] = key.split('/');
-  return {type, name};
-});
+const mockFromNpmName = vi.fn((npm: string) => npm.replace('@amodalai/', ''));
+const mockDiscoverInstalledPackages = vi.fn();
+const mockBuildLockFile = vi.fn();
 
 vi.mock('../shared/repo-discovery.js', () => ({
   findRepoRoot: mockFindRepoRoot,
@@ -33,10 +24,9 @@ vi.mock('@amodalai/core', () => ({
   readLockFile: mockReadLockFile,
   npmViewVersions: mockNpmViewVersions,
   npmInstall: mockNpmInstall,
-  addLockEntry: mockAddLockEntry,
-  ensureSymlink: mockEnsureSymlink,
-  makePackageRef: mockMakePackageRef,
-  parsePackageKey: mockParsePackageKey,
+  fromNpmName: mockFromNpmName,
+  discoverInstalledPackages: mockDiscoverInstalledPackages,
+  buildLockFile: mockBuildLockFile,
 }));
 
 vi.mock('semver', () => ({
@@ -66,8 +56,8 @@ describe('runUpdate', () => {
     mockFindRepoRoot.mockReturnValue('/test/repo');
     mockEnsureNpmContext.mockResolvedValue(mockPaths);
     mockNpmInstall.mockResolvedValue({version: '2.0.0', integrity: 'sha512-new'});
-    mockAddLockEntry.mockResolvedValue({lockVersion: 1, packages: {}});
-    mockEnsureSymlink.mockResolvedValue('/test/repo/.amodal/packages/connection--salesforce');
+    mockDiscoverInstalledPackages.mockResolvedValue([]);
+    mockBuildLockFile.mockResolvedValue(undefined);
     stderrOutput = '';
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
       stderrOutput += String(chunk);
@@ -77,9 +67,9 @@ describe('runUpdate', () => {
 
   it('should update all packages', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-old'},
       },
     });
     mockNpmViewVersions.mockResolvedValue(['1.0.0', '1.1.0', '1.2.0']);
@@ -91,27 +81,27 @@ describe('runUpdate', () => {
     expect(stderrOutput).toContain('Updated');
   });
 
-  it('should update single package by type and name', async () => {
+  it('should update single package by name', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
-        'skill/triage': {version: '1.0.0', npm: '@amodalai/skill-triage', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-old'},
+        '@amodalai/skill-triage': {version: '1.0.0', integrity: 'sha512-old'},
       },
     });
     mockNpmViewVersions.mockResolvedValue(['1.0.0', '1.1.0']);
 
     const {runUpdate} = await import('./update.js');
-    const result = await runUpdate({type: 'connection', name: 'salesforce'});
+    const result = await runUpdate({name: 'connection-salesforce'});
     expect(result).toBe(0);
     expect(mockNpmViewVersions).toHaveBeenCalledTimes(1);
   });
 
   it('should report already up to date', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.2.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.2.0', integrity: 'sha512-old'},
       },
     });
     mockNpmViewVersions.mockResolvedValue(['1.0.0', '1.1.0', '1.2.0']);
@@ -125,9 +115,9 @@ describe('runUpdate', () => {
 
   it('should show dry run output', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-old'},
       },
     });
     mockNpmViewVersions.mockResolvedValue(['1.0.0', '1.1.0']);
@@ -142,9 +132,9 @@ describe('runUpdate', () => {
 
   it('should use latest flag for cross-major updates', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-old'},
       },
     });
     mockNpmViewVersions.mockResolvedValue(['1.0.0', '1.1.0', '2.0.0', '3.0.0']);
@@ -177,9 +167,9 @@ describe('runUpdate', () => {
 
   it('should handle registry unreachable', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-old'},
       },
     });
     mockNpmViewVersions.mockRejectedValue(new Error('Registry unreachable'));
@@ -192,10 +182,10 @@ describe('runUpdate', () => {
 
   it('should continue on partial failure', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
-        'skill/triage': {version: '1.0.0', npm: '@amodalai/skill-triage', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-old'},
+        '@amodalai/skill-triage': {version: '1.0.0', integrity: 'sha512-old'},
       },
     });
     mockNpmViewVersions
@@ -212,7 +202,7 @@ describe('runUpdate', () => {
   });
 
   it('should handle empty lock file', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
 
     const {runUpdate} = await import('./update.js');
     const result = await runUpdate();
@@ -220,55 +210,40 @@ describe('runUpdate', () => {
     expect(stderrOutput).toContain('No packages installed');
   });
 
-  it('should filter by type only', async () => {
-    mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
-      packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
-        'skill/triage': {version: '1.0.0', npm: '@amodalai/skill-triage', integrity: 'sha512-old'},
-      },
-    });
-    mockNpmViewVersions.mockResolvedValue(['1.0.0', '1.1.0']);
-
-    const {runUpdate} = await import('./update.js');
-    await runUpdate({type: 'skill'});
-    expect(mockNpmViewVersions).toHaveBeenCalledTimes(1);
-  });
-
   it('should report no matching packages', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-old'},
       },
     });
 
     const {runUpdate} = await import('./update.js');
-    const result = await runUpdate({type: 'skill', name: 'nonexistent'});
+    const result = await runUpdate({name: 'nonexistent'});
     expect(result).toBe(0);
     expect(stderrOutput).toContain('No matching packages');
   });
 
-  it('should update lock entry and symlink', async () => {
+  it('should rebuild lock file after update', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-old'},
       },
     });
     mockNpmViewVersions.mockResolvedValue(['1.0.0', '1.1.0']);
 
     const {runUpdate} = await import('./update.js');
     await runUpdate();
-    expect(mockAddLockEntry).toHaveBeenCalled();
-    expect(mockEnsureSymlink).toHaveBeenCalled();
+    expect(mockDiscoverInstalledPackages).toHaveBeenCalledWith(mockPaths);
+    expect(mockBuildLockFile).toHaveBeenCalled();
   });
 
   it('should use singular form for 1 package', async () => {
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {version: '1.0.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-old'},
+        '@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-old'},
       },
     });
     mockNpmViewVersions.mockResolvedValue(['1.0.0', '1.1.0']);

@@ -12,10 +12,7 @@ const mockNpmSearch = vi.fn();
 const mockFromNpmName = vi.fn((npm: string) => {
   const prefix = '@amodalai/';
   if (!npm.startsWith(prefix)) throw new Error('Not amodal');
-  const rest = npm.slice(prefix.length);
-  const dash = rest.indexOf('-');
-  if (dash < 0) throw new Error('No type');
-  return {type: rest.slice(0, dash), name: rest.slice(dash + 1)};
+  return npm.slice(prefix.length);
 });
 
 vi.mock('../shared/repo-discovery.js', () => ({
@@ -76,7 +73,7 @@ describe('runSearch', () => {
     ]);
 
     const {runSearch} = await import('./search.js');
-    const result = await runSearch({type: 'connection'});
+    const result = await runSearch({tag: 'connection'});
     expect(result).toBe(0);
     expect(stdoutOutput).toContain('salesforce');
     expect(stdoutOutput).not.toContain('triage');
@@ -92,7 +89,7 @@ describe('runSearch', () => {
     expect(result).toBe(0);
     const parsed = JSON.parse(stdoutOutput);
     expect(parsed).toHaveLength(1);
-    expect(parsed[0].type).toBe('connection');
+    expect(parsed[0].name).toBe('connection-salesforce');
   });
 
   it('should handle no results', async () => {
@@ -139,7 +136,7 @@ describe('runSearch', () => {
     expect(result).toBe(0);
   });
 
-  it('should group results by type', async () => {
+  it('should list results with short names', async () => {
     mockNpmSearch.mockResolvedValue([
       {name: '@amodalai/connection-salesforce', version: '2.0.0', description: 'Salesforce'},
       {name: '@amodalai/skill-triage', version: '1.0.0', description: 'Triage'},
@@ -148,8 +145,8 @@ describe('runSearch', () => {
     const {runSearch} = await import('./search.js');
     const result = await runSearch({});
     expect(result).toBe(0);
-    expect(stdoutOutput).toContain('CONNECTION');
-    expect(stdoutOutput).toContain('SKILL');
+    expect(stdoutOutput).toContain('connection-salesforce');
+    expect(stdoutOutput).toContain('skill-triage');
   });
 
   it('should handle npm context failure', async () => {

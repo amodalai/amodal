@@ -8,6 +8,7 @@ import {describe, it, expect, vi, beforeEach} from 'vitest';
 
 const mockFindRepoRoot = vi.fn(() => '/test/repo');
 const mockListLockEntries = vi.fn();
+const mockFromNpmName = vi.fn((npm: string) => npm.replace('@amodalai/', ''));
 
 vi.mock('../shared/repo-discovery.js', () => ({
   findRepoRoot: mockFindRepoRoot,
@@ -15,10 +16,7 @@ vi.mock('../shared/repo-discovery.js', () => ({
 
 vi.mock('@amodalai/core', () => ({
   listLockEntries: mockListLockEntries,
-  parsePackageKey: vi.fn((key: string) => {
-    const [type, name] = key.split('/');
-    return {type, name};
-  }),
+  fromNpmName: mockFromNpmName,
 }));
 
 describe('runList', () => {
@@ -51,32 +49,32 @@ describe('runList', () => {
 
   it('should print entries as formatted table', async () => {
     mockListLockEntries.mockResolvedValue([
-      {key: 'connection/salesforce', type: 'connection', name: 'salesforce', entry: {version: '2.1.0', npm: '@amodalai/connection-salesforce', integrity: 'sha512-abc'}},
-      {key: 'skill/triage', type: 'skill', name: 'triage', entry: {version: '1.0.3', npm: '@amodalai/skill-triage', integrity: 'sha512-def'}},
+      {npmName: '@amodalai/connection-salesforce', entry: {version: '2.1.0', integrity: 'sha512-abc'}},
+      {npmName: '@amodalai/skill-triage', entry: {version: '1.0.3', integrity: 'sha512-def'}},
     ]);
 
     const {runList} = await import('./list.js');
     const result = await runList();
     expect(result).toBe(0);
-    expect(stdoutOutput).toContain('TYPE');
-    expect(stdoutOutput).toContain('salesforce');
-    expect(stdoutOutput).toContain('triage');
+    expect(stdoutOutput).toContain('NAME');
+    expect(stdoutOutput).toContain('connection-salesforce');
+    expect(stdoutOutput).toContain('skill-triage');
     expect(stderrOutput).toContain('2 packages installed');
   });
 
-  it('should filter by type', async () => {
+  it('should filter by name substring', async () => {
     mockListLockEntries.mockResolvedValue([]);
 
     const {runList} = await import('./list.js');
-    const result = await runList({type: 'connection'});
+    const result = await runList({filter: 'connection'});
     expect(result).toBe(0);
-    expect(mockListLockEntries).toHaveBeenCalledWith('/test/repo', 'connection');
-    expect(stderrOutput).toContain('No connection packages installed');
+    expect(mockListLockEntries).toHaveBeenCalledWith('/test/repo');
+    expect(stderrOutput).toContain('No packages matching "connection" installed');
   });
 
   it('should output JSON when json option set', async () => {
     mockListLockEntries.mockResolvedValue([
-      {key: 'connection/stripe', type: 'connection', name: 'stripe', entry: {version: '1.0.0', npm: '@amodalai/connection-stripe', integrity: 'sha512-xyz'}},
+      {npmName: '@amodalai/connection-stripe', entry: {version: '1.0.0', integrity: 'sha512-xyz'}},
     ]);
 
     const {runList} = await import('./list.js');
@@ -85,7 +83,7 @@ describe('runList', () => {
 
     const parsed = JSON.parse(stdoutOutput);
     expect(parsed).toHaveLength(1);
-    expect(parsed[0]).toMatchObject({type: 'connection', name: 'stripe', version: '1.0.0'});
+    expect(parsed[0]).toMatchObject({name: 'connection-stripe', version: '1.0.0'});
   });
 
   it('should return 1 when repo not found', async () => {
@@ -99,18 +97,9 @@ describe('runList', () => {
     expect(stderrOutput).toContain('Not found');
   });
 
-  it('should print "No packages installed" when empty after type filter', async () => {
-    mockListLockEntries.mockResolvedValue([]);
-
-    const {runList} = await import('./list.js');
-    const result = await runList({type: 'skill'});
-    expect(result).toBe(0);
-    expect(stderrOutput).toContain('No skill packages installed');
-  });
-
   it('should handle single package with correct count', async () => {
     mockListLockEntries.mockResolvedValue([
-      {key: 'connection/datadog', type: 'connection', name: 'datadog', entry: {version: '3.0.0', npm: '@amodalai/connection-datadog', integrity: 'sha512-ghi'}},
+      {npmName: '@amodalai/connection-datadog', entry: {version: '3.0.0', integrity: 'sha512-ghi'}},
     ]);
 
     const {runList} = await import('./list.js');
@@ -130,7 +119,7 @@ describe('runList', () => {
 
   it('should include integrity in JSON output', async () => {
     mockListLockEntries.mockResolvedValue([
-      {key: 'skill/analyze', type: 'skill', name: 'analyze', entry: {version: '1.0.0', npm: '@amodalai/skill-analyze', integrity: 'sha512-integrity-hash'}},
+      {npmName: '@amodalai/skill-analyze', entry: {version: '1.0.0', integrity: 'sha512-integrity-hash'}},
     ]);
 
     const {runList} = await import('./list.js');

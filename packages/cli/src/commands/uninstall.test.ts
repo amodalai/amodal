@@ -7,37 +7,32 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest';
 
 const mockFindRepoRoot = vi.fn(() => '/test/repo');
-const mockGetLockEntry = vi.fn();
 const mockGetNpmContextPaths = vi.fn();
-const mockMakePackageRef = vi.fn((type: string, name: string) => ({
-  type,
-  name,
-  key: `${type}/${name}`,
-  npmName: `@amodalai/${type}-${name}`,
-}));
+const mockToNpmName = vi.fn((name: string) => `@amodalai/${name}`);
 const mockNpmUninstall = vi.fn();
-const mockRemoveLockEntry = vi.fn();
-const mockToSymlinkName = vi.fn((type: string, name: string) => `${type}--${name}`);
+const mockEnsureNpmContext = vi.fn();
+const mockDiscoverInstalledPackages = vi.fn();
+const mockBuildLockFile = vi.fn();
 
-const mockUnlink = vi.fn();
-const mockStat = vi.fn();
+const mockReadFile = vi.fn();
+const mockWriteFile = vi.fn();
 
 vi.mock('../shared/repo-discovery.js', () => ({
   findRepoRoot: mockFindRepoRoot,
 }));
 
 vi.mock('@amodalai/core', () => ({
-  getLockEntry: mockGetLockEntry,
   getNpmContextPaths: mockGetNpmContextPaths,
-  makePackageRef: mockMakePackageRef,
+  toNpmName: mockToNpmName,
   npmUninstall: mockNpmUninstall,
-  removeLockEntry: mockRemoveLockEntry,
-  toSymlinkName: mockToSymlinkName,
+  ensureNpmContext: mockEnsureNpmContext,
+  discoverInstalledPackages: mockDiscoverInstalledPackages,
+  buildLockFile: mockBuildLockFile,
 }));
 
 vi.mock('node:fs/promises', () => ({
-  unlink: mockUnlink,
-  stat: mockStat,
+  readFile: mockReadFile,
+  writeFile: mockWriteFile,
 }));
 
 const mockPaths = {
@@ -55,11 +50,11 @@ describe('runUninstall', () => {
     vi.clearAllMocks();
     mockFindRepoRoot.mockReturnValue('/test/repo');
     mockGetNpmContextPaths.mockReturnValue(mockPaths);
-    mockGetLockEntry.mockResolvedValue({version: '1.0.0', npm: '@amodalai/connection-stripe', integrity: 'sha512-abc'});
     mockNpmUninstall.mockResolvedValue(undefined);
-    mockRemoveLockEntry.mockResolvedValue({lockVersion: 1, packages: {}});
-    mockUnlink.mockResolvedValue(undefined);
-    mockStat.mockRejectedValue(Object.assign(new Error('ENOENT'), {code: 'ENOENT'}));
+    mockEnsureNpmContext.mockResolvedValue(mockPaths);
+    mockDiscoverInstalledPackages.mockResolvedValue([]);
+    mockBuildLockFile.mockResolvedValue(undefined);
+    mockReadFile.mockRejectedValue(new Error('ENOENT')); // amodal.json not found by default
     stderrOutput = '';
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
       stderrOutput += String(chunk);
@@ -69,38 +64,19 @@ describe('runUninstall', () => {
 
   it('should uninstall a package successfully', async () => {
     const {runUninstall} = await import('./uninstall.js');
-    const result = await runUninstall({type: 'connection', name: 'stripe'});
+    const result = await runUninstall({name: 'connection-stripe'});
     expect(result).toBe(0);
     expect(mockNpmUninstall).toHaveBeenCalledWith(mockPaths, '@amodalai/connection-stripe');
-    expect(mockRemoveLockEntry).toHaveBeenCalledWith('/test/repo', 'connection', 'stripe');
-    expect(mockUnlink).toHaveBeenCalled();
-    expect(stderrOutput).toContain('Removed connection/stripe');
-  });
-
-  it('should return 1 when package not in lock file', async () => {
-    mockGetLockEntry.mockResolvedValue(null);
-
-    const {runUninstall} = await import('./uninstall.js');
-    const result = await runUninstall({type: 'connection', name: 'unknown'});
-    expect(result).toBe(1);
-    expect(stderrOutput).toContain('not installed');
-    expect(mockNpmUninstall).not.toHaveBeenCalled();
-  });
-
-  it('should handle symlink already gone (ENOENT)', async () => {
-    mockUnlink.mockRejectedValue(Object.assign(new Error('ENOENT'), {code: 'ENOENT'}));
-
-    const {runUninstall} = await import('./uninstall.js');
-    const result = await runUninstall({type: 'connection', name: 'stripe'});
-    expect(result).toBe(0);
-    expect(stderrOutput).toContain('Removed connection/stripe');
+    expect(mockDiscoverInstalledPackages).toHaveBeenCalledWith(mockPaths);
+    expect(mockBuildLockFile).toHaveBeenCalledWith('/test/repo', []);
+    expect(stderrOutput).toContain('Removed @amodalai/connection-stripe');
   });
 
   it('should return 1 when npm uninstall fails', async () => {
     mockNpmUninstall.mockRejectedValue(new Error('npm error'));
 
     const {runUninstall} = await import('./uninstall.js');
-    const result = await runUninstall({type: 'skill', name: 'triage'});
+    const result = await runUninstall({name: 'skill-triage'});
     expect(result).toBe(1);
     expect(stderrOutput).toContain('npm uninstall failed');
   });
@@ -111,52 +87,26 @@ describe('runUninstall', () => {
     });
 
     const {runUninstall} = await import('./uninstall.js');
-    const result = await runUninstall({type: 'connection', name: 'stripe'});
+    const result = await runUninstall({name: 'connection-stripe'});
     expect(result).toBe(1);
     expect(stderrOutput).toContain('Not found');
   });
 
-  it('should print note when override directory exists', async () => {
-    mockStat.mockResolvedValue({isDirectory: () => true});
-
-    const {runUninstall} = await import('./uninstall.js');
-    const result = await runUninstall({type: 'connection', name: 'stripe'});
-    expect(result).toBe(0);
-    expect(stderrOutput).toContain('local override directory still exists');
-  });
-
   it('should pass cwd to findRepoRoot', async () => {
     const {runUninstall} = await import('./uninstall.js');
-    await runUninstall({cwd: '/custom/dir', type: 'connection', name: 'test'});
+    await runUninstall({cwd: '/custom/dir', name: 'connection-test'});
     expect(mockFindRepoRoot).toHaveBeenCalledWith('/custom/dir');
   });
 
-  it('should warn but succeed when symlink removal fails with non-ENOENT error', async () => {
-    mockUnlink.mockRejectedValue(Object.assign(new Error('EPERM'), {code: 'EPERM'}));
+  it('should remove dependency from amodal.json when it exists', async () => {
+    mockReadFile.mockResolvedValue(JSON.stringify({
+      name: 'test',
+      dependencies: {'@amodalai/connection-stripe': '1.0.0', '@amodalai/soc-agent': '2.0.0'},
+    }));
 
     const {runUninstall} = await import('./uninstall.js');
-    const result = await runUninstall({type: 'connection', name: 'stripe'});
+    const result = await runUninstall({name: 'connection-stripe'});
     expect(result).toBe(0);
-    expect(stderrOutput).toContain('could not remove symlink');
-  });
-
-  it('should use correct override dir path with plural type', async () => {
-    mockStat.mockResolvedValue({isDirectory: () => true});
-
-    const {runUninstall} = await import('./uninstall.js');
-    await runUninstall({type: 'skill', name: 'triage'});
-    // Override dir: skills/triage
-    expect(mockStat).toHaveBeenCalledWith(
-      expect.stringContaining('skills/triage'),
-    );
-  });
-
-  it('should handle no override dir without error', async () => {
-    mockStat.mockRejectedValue(Object.assign(new Error('ENOENT'), {code: 'ENOENT'}));
-
-    const {runUninstall} = await import('./uninstall.js');
-    const result = await runUninstall({type: 'connection', name: 'stripe'});
-    expect(result).toBe(0);
-    expect(stderrOutput).not.toContain('override');
+    expect(mockWriteFile).toHaveBeenCalled();
   });
 });
