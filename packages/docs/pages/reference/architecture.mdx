@@ -108,8 +108,8 @@ The runtime reads your config directory directly from the filesystem. Changes to
 For production, run the runtime as a standalone server or in a Docker container:
 
 ```bash
-amodal serve          # run from local config
-amodal docker build   # build a Docker image
+amodal deploy serve          # run from local config
+amodal ops docker build      # build a Docker image
 ```
 
 The git repo is the source of truth. Everything about your agent — connections, skills, knowledge, automations, and config — lives in version-controlled files.

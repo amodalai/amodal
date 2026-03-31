@@ -1,8 +1,8 @@
 ---
-description: amodal connect & sync — add API connections and keep specs in sync.
+description: amodal pkg connect & sync — add API connections and keep specs in sync.
 ---
 
-# amodal connect & sync
+# amodal pkg connect & sync
 
 ## connect
 
@@ -10,12 +10,12 @@ Add a connection to your agent. Connections give the agent API access and docume
 
 ```bash
 # Install a pre-built plugin
-amodal connect slack
-amodal connect datadog
-amodal connect github
+amodal pkg connect slack
+amodal pkg connect datadog
+amodal pkg connect github
 
 # List available plugins
-amodal search --tag connection
+amodal pkg search --tag connection
 ```
 
 This installs the plugin package into `node_modules`. The resolver automatically surfaces its connections, skills, knowledge, and other contents alongside your local files.
@@ -26,13 +26,13 @@ Sync API specifications from remote sources. Useful for custom APIs or keeping s
 
 ```bash
 # Sync from an OpenAPI spec
-amodal sync --from https://api.example.com/openapi.json
+amodal pkg sync --from https://api.example.com/openapi.json
 
 # Sync from a GraphQL schema
-amodal sync --from https://api.example.com/graphql
+amodal pkg sync --from https://api.example.com/graphql
 
 # Check for drift without updating (useful in CI)
-amodal sync --check
+amodal pkg sync --check
 ```
 
 ### Drift Detection

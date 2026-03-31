@@ -103,78 +103,61 @@ Internal packages (not published to npm): `runtime-app` (Vite dev UI), `docs`, `
 
 ## CLI Commands
 
-### Development
+### Top-level
 
-Create, run, and inspect agents locally.
+| Command             | Description                             |
+| ------------------- | --------------------------------------- |
+| `amodal init`       | Scaffold a new agent project            |
+| `amodal dev`        | Start local dev server with hot reload  |
+| `amodal chat`       | Interactive chat session                |
+| `amodal validate`   | Validate agent configuration            |
+| `amodal inspect`    | Inspect agent config, tools, and skills |
+| `amodal eval`       | Run evaluation suites                   |
+| `amodal test-query` | Fire a one-off query against the agent  |
 
-| Command           | Description                             |
-| ----------------- | --------------------------------------- |
-| `amodal init`     | Scaffold a new agent project            |
-| `amodal dev`      | Start local dev server with hot reload  |
-| `amodal chat`     | Interactive chat session                |
-| `amodal validate` | Validate agent configuration            |
-| `amodal inspect`  | Inspect agent config, tools, and skills |
+### `amodal pkg` — Package management
 
-### Connections & Packages
+| Command                | Description                         |
+| ---------------------- | ----------------------------------- |
+| `amodal pkg connect`   | Add a connection (plugin or custom) |
+| `amodal pkg install`   | Install a package from the registry |
+| `amodal pkg uninstall` | Remove a package                    |
+| `amodal pkg update`    | Update packages or the admin agent  |
+| `amodal pkg list`      | List installed packages             |
+| `amodal pkg search`    | Search the marketplace              |
+| `amodal pkg diff`      | Show package changes                |
+| `amodal pkg publish`   | Publish a package to the registry   |
+| `amodal pkg link`      | Link project to platform app        |
+| `amodal pkg sync`      | Sync API specs from remote sources  |
 
-Add API connections and manage marketplace packages.
+### `amodal deploy` — Deployment lifecycle
 
-| Command            | Description                         |
-| ------------------ | ----------------------------------- |
-| `amodal connect`   | Add a connection (plugin or custom) |
-| `amodal sync`      | Sync API specs from remote sources  |
-| `amodal install`   | Install a package from the registry |
-| `amodal uninstall` | Remove a package                    |
-| `amodal update`    | Update packages or the admin agent  |
-| `amodal list`      | List installed packages             |
-| `amodal search`    | Search the marketplace              |
-| `amodal diff`      | Show package changes                |
-| `amodal publish`   | Publish a package to the registry   |
+| Command                  | Description                        |
+| ------------------------ | ---------------------------------- |
+| `amodal deploy push`     | Deploy to the Amodal platform      |
+| `amodal deploy build`    | Build agent snapshot               |
+| `amodal deploy serve`    | Start the runtime server           |
+| `amodal deploy status`   | Show deployment status             |
+| `amodal deploy list`     | List deployment history            |
+| `amodal deploy rollback` | Roll back to a previous deployment |
+| `amodal deploy promote`  | Promote a deployment to production |
 
-### Testing & Evaluation
+### `amodal ops` — Platform operations
 
-Validate agent behavior with evals and experiments.
+| Command                  | Description                                  |
+| ------------------------ | -------------------------------------------- |
+| `amodal ops secrets`     | Manage platform secrets                      |
+| `amodal ops docker`      | Generate Docker deployment files             |
+| `amodal ops automations` | List, pause, resume, and trigger automations |
+| `amodal ops audit`       | Review agent audit logs                      |
+| `amodal ops experiment`  | Compare models, prompts, or configs          |
 
-| Command             | Description                            |
-| ------------------- | -------------------------------------- |
-| `amodal eval`       | Run evaluation suites                  |
-| `amodal experiment` | Compare models, prompts, or configs    |
-| `amodal test-query` | Fire a one-off query against the agent |
+### `amodal auth` — Authentication
 
-### Deployment & Hosting
-
-Build, deploy, and manage production agents.
-
-| Command              | Description                        |
-| -------------------- | ---------------------------------- |
-| `amodal build`       | Build agent snapshot               |
-| `amodal deploy`      | Deploy to the Amodal platform      |
-| `amodal serve`       | Start the runtime server           |
-| `amodal docker`      | Generate Docker deployment files   |
-| `amodal status`      | Show deployment status             |
-| `amodal deployments` | List deployment history            |
-| `amodal promote`     | Promote a deployment to production |
-| `amodal rollback`    | Roll back to a previous deployment |
-
-### Platform
-
-Authentication, secrets, and project linking.
-
-| Command          | Description                    |
-| ---------------- | ------------------------------ |
-| `amodal login`   | Authenticate with the platform |
-| `amodal logout`  | Log out of the platform        |
-| `amodal link`    | Link project to platform app   |
-| `amodal secrets` | Manage platform secrets        |
-
-### Operations
-
-Monitor and manage running agents.
-
-| Command              | Description                                  |
-| -------------------- | -------------------------------------------- |
-| `amodal automations` | List, pause, resume, and trigger automations |
-| `amodal audit`       | Review agent audit logs                      |
+| Command              | Description                    |
+| -------------------- | ------------------------------ |
+| `amodal auth login`  | Authenticate with the platform |
+| `amodal auth logout` | Log out of the platform        |
 
 ## Providers
 
