@@ -22,7 +22,6 @@ import {
   existsSync,
   rmSync,
   mkdtempSync,
-  symlinkSync,
 } from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -53,12 +52,11 @@ function createRepo(dir: string): void {
 }
 
 /**
- * Simulate what `amodal install connection <name>` does on disk:
- * 1. Write the npm package files into amodal_packages/.npm/node_modules/
- * 2. Create the symlink at amodal_packages/connection--<name>
- * 3. Write the lock file entry
+ * Simulate what `amodal install connection-<name>` does on disk:
+ * 1. Write the package files into amodal_packages/.npm/node_modules/@amodalai/connection-<name>/connections/<name>/
+ * 2. Write the lock file entry (keyed by npm name)
  *
- * This is the same disk state that runInstallPkg + ensureSymlink produce.
+ * No symlinks — the resolver reads directly from node_modules.
  */
 function simulateInstallConnection(
   repoDir: string,
@@ -66,18 +64,13 @@ function simulateInstallConnection(
   files: Record<string, string>,
   version = '1.0.0',
 ): void {
+  const npmName = `@amodalai/connection-${name}`;
   const pkgsRoot = join(repoDir, 'amodal_packages');
-  const npmPkgDir = join(pkgsRoot, '.npm', 'node_modules', '@amodalai', `connection-${name}`);
-  mkdirSync(npmPkgDir, {recursive: true});
+  const connDir = join(pkgsRoot, '.npm', 'node_modules', '@amodalai', `connection-${name}`, 'connections', name);
+  mkdirSync(connDir, {recursive: true});
 
   for (const [fname, content] of Object.entries(files)) {
-    writeFileSync(join(npmPkgDir, fname), content);
-  }
-
-  // Create symlink (same as ensureSymlink)
-  const symlinkPath = join(pkgsRoot, `connection--${name}`);
-  if (!existsSync(symlinkPath)) {
-    symlinkSync(npmPkgDir, symlinkPath, 'dir');
+    writeFileSync(join(connDir, fname), content);
   }
 
   // Write / update lock file
@@ -86,11 +79,10 @@ function simulateInstallConnection(
   if (existsSync(lockPath)) {
     lock = JSON.parse(readFileSync(lockPath, 'utf-8')) as typeof lock;
   } else {
-    lock = {lockVersion: 1, packages: {}};
+    lock = {lockVersion: 2, packages: {}};
   }
-  lock.packages[`connection/${name}`] = {
+  lock.packages[npmName] = {
     version,
-    npm: `@amodalai/connection-${name}`,
     integrity: `sha256-test-${name}`,
   };
   writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
