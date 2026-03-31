@@ -10,13 +10,12 @@ import {
   fromNpmName,
   npmSearch,
 } from '@amodalai/core';
-import type {PackageType} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
 export interface SearchOptions {
   cwd?: string;
   query?: string;
-  type?: PackageType;
+  tag?: string;
   json?: boolean;
 }
 
@@ -42,7 +41,10 @@ export async function runSearch(options: SearchOptions = {}): Promise<number> {
   }
 
   // Build query
-  let query = options.type ? `@amodalai/${options.type}-` : '@amodalai/';
+  let query = '@amodalai/';
+  if (options.tag) {
+    query += `${options.tag}-`;
+  }
   if (options.query) {
     query += options.query;
   }
@@ -61,16 +63,10 @@ export async function runSearch(options: SearchOptions = {}): Promise<number> {
   // Filter to @amodalai/ packages only
   results = results.filter((r) => r.name.startsWith('@amodalai/'));
 
-  // Further filter by type if specified
-  if (options.type) {
-    results = results.filter((r) => {
-      try {
-        const parsed = fromNpmName(r.name);
-        return parsed.type === options.type;
-      } catch {
-        return false;
-      }
-    });
+  // Filter by tag if specified (match against npm name prefix)
+  if (options.tag) {
+    const prefix = `@amodalai/${options.tag}-`;
+    results = results.filter((r) => r.name.startsWith(prefix));
   }
 
   if (results.length === 0) {
@@ -79,53 +75,23 @@ export async function runSearch(options: SearchOptions = {}): Promise<number> {
   }
 
   if (options.json) {
-    const output = results.map((r) => {
-      let type: string | undefined;
-      let name: string | undefined;
-      try {
-        const parsed = fromNpmName(r.name);
-        type = parsed.type;
-        name = parsed.name;
-      } catch {
-        // Not a parseable amodal name
-      }
-      return {
-        npm: r.name,
-        version: r.version,
-        description: r.description,
-        type,
-        name,
-      };
-    });
+    const output = results.map((r) => ({
+      npm: r.name,
+      name: fromNpmName(r.name),
+      version: r.version,
+      description: r.description,
+    }));
     process.stdout.write(JSON.stringify(output, null, 2) + '\n');
     return 0;
   }
 
-  // Categorize results
-  const grouped = new Map<string, Array<{name: string; version: string; description: string; npm: string}>>();
-  for (const r of results) {
-    let category = 'other';
-    let pkgName = r.name;
-    try {
-      const parsed = fromNpmName(r.name);
-      category = parsed.type;
-      pkgName = parsed.name;
-    } catch {
-      // Not parseable
-    }
-    if (!grouped.has(category)) {
-      grouped.set(category, []);
-    }
-    grouped.get(category)!.push({name: pkgName, version: r.version, description: r.description, npm: r.name});
-  }
+  // Display results
+  const nameWidth = Math.max(4, ...results.map((r) => fromNpmName(r.name).length));
+  const versionWidth = Math.max(7, ...results.map((r) => r.version.length));
 
-  for (const [category, items] of grouped) {
-    process.stdout.write(`\n  ${category.toUpperCase()}\n`);
-    const nameWidth = Math.max(4, ...items.map((i) => i.name.length));
-    const versionWidth = Math.max(7, ...items.map((i) => i.version.length));
-    for (const item of items) {
-      process.stdout.write(`    ${item.name.padEnd(nameWidth)}   ${item.version.padEnd(versionWidth)}   ${item.description}\n`);
-    }
+  for (const r of results) {
+    const shortName = fromNpmName(r.name);
+    process.stdout.write(`  ${shortName.padEnd(nameWidth)}   ${r.version.padEnd(versionWidth)}   ${r.description}\n`);
   }
 
   process.stderr.write(`\n[search] ${results.length} package${results.length === 1 ? '' : 's'} found.\n`);
@@ -138,14 +104,14 @@ export const searchCommand: CommandModule = {
   builder: (yargs) =>
     yargs
       .positional('query', {type: 'string', describe: 'Search query'})
-      .option('type', {type: 'string', choices: ['connection', 'skill', 'automation', 'knowledge'] as const, describe: 'Filter by type'})
+      .option('tag', {type: 'string', describe: 'Filter by tag prefix (e.g., connection, skill)'})
       .option('json', {type: 'boolean', default: false, describe: 'Output as JSON'}),
   handler: async (argv) => {
     const code = await runSearch({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       query: argv['query'] as string | undefined,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      type: argv['type'] as PackageType | undefined,
+      tag: argv['tag'] as string | undefined,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       json: argv['json'] as boolean,
     });

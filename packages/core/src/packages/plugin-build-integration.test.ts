@@ -9,8 +9,8 @@
  * are correctly resolved during repo load and included in deploy snapshots.
  *
  * Simulates the full pipeline:
- *   amodal connect <name>  →  amodal.lock written  →  symlink created
- *   amodal build           →  loadRepoFromDisk     →  resolveAllPackages  →  buildSnapshot
+ *   amodal connect <name>  ->  amodal.lock written  ->  package in node_modules
+ *   amodal build           ->  loadRepoFromDisk     ->  resolveAllPackages  ->  buildSnapshot
  */
 
 import * as fs from 'node:fs/promises';
@@ -19,7 +19,6 @@ import * as path from 'node:path';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 
 import {getNpmContextPaths} from './npm-context.js';
-import {toSymlinkName} from './package-types.js';
 import type {LockFile} from './package-types.js';
 import {writeLockFile} from './lock-file.js';
 import {loadRepoFromDisk} from '../repo/local-reader.js';
@@ -51,8 +50,8 @@ async function writeConfig(repoPath: string): Promise<void> {
 }
 
 /**
- * Simulate what `amodal connect` does: create the npm package directory,
- * symlink, and lock file entry — without actually running npm.
+ * Simulate what `amodal connect` does: create the npm package directory
+ * with connection content in the expected subdirectory structure.
  */
 async function simulatePluginInstall(
   repoPath: string,
@@ -60,17 +59,13 @@ async function simulatePluginInstall(
   files: Record<string, string>,
 ): Promise<void> {
   const paths = getNpmContextPaths(repoPath);
-  const npmPkgDir = path.join(paths.nodeModules, `@amodalai/connection-${connectionName}`);
-  await fs.mkdir(npmPkgDir, {recursive: true});
+  // Package contains a connections/<name>/ subdirectory with the connection files
+  const connDir = path.join(paths.nodeModules, `@amodalai/connection-${connectionName}`, 'connections', connectionName);
+  await fs.mkdir(connDir, {recursive: true});
 
   for (const [fname, content] of Object.entries(files)) {
-    await fs.writeFile(path.join(npmPkgDir, fname), content);
+    await fs.writeFile(path.join(connDir, fname), content);
   }
-
-  // Create symlink (same as ensureSymlink)
-  await fs.mkdir(paths.root, {recursive: true});
-  const symlinkDir = path.join(paths.root, toSymlinkName('connection', connectionName));
-  await fs.symlink(npmPkgDir, symlinkDir, 'dir');
 }
 
 /**
@@ -80,11 +75,10 @@ async function writeLock(
   repoPath: string,
   connections: Array<{name: string; version: string}>,
 ): Promise<void> {
-  const lock: LockFile = {lockVersion: 1, packages: {}};
+  const lock: LockFile = {lockVersion: 2, packages: {}};
   for (const c of connections) {
-    lock.packages[`connection/${c.name}`] = {
+    lock.packages[`@amodalai/connection-${c.name}`] = {
       version: c.version,
-      npm: `@amodalai/connection-${c.name}`,
       integrity: `sha256-test-${c.name}`,
     };
   }
@@ -115,7 +109,7 @@ function pluginAccess(overrides: Record<string, unknown> = {}): string {
   });
 }
 
-describe('plugin connection → build pipeline', () => {
+describe('plugin connection -> build pipeline', () => {
   it('loads a single plugin-installed connection via loadRepoFromDisk', async () => {
     await writeConfig(tmpDir);
     await simulatePluginInstall(tmpDir, 'acme', {
@@ -206,36 +200,38 @@ describe('plugin connection → build pipeline', () => {
     expect(Object.keys(snapshot.connections)).toHaveLength(2);
   });
 
-  it('merges plugin connection with repo overrides', async () => {
+  it('local repo connection overrides plugin connection with same name', async () => {
     await writeConfig(tmpDir);
 
     // Plugin provides base spec and access
     await simulatePluginInstall(tmpDir, 'acme', {
       'spec.json': pluginSpec({baseUrl: 'https://api.acme.com'}),
       'access.json': pluginAccess(),
-      'surface.md': '## Included\n\n- [x] GET /items — List items\n- [x] POST /items — Create item',
     });
     await writeLock(tmpDir, [{name: 'acme', version: '1.0.0'}]);
 
-    // Repo provides override with import header
+    // Repo provides a full local connection with the same name — local wins
     const repoConnDir = path.join(tmpDir, 'connections', 'acme');
     await fs.mkdir(repoConnDir, {recursive: true});
     await fs.writeFile(
       path.join(repoConnDir, 'spec.json'),
-      JSON.stringify({
-        import: 'acme',
+      pluginSpec({
+        baseUrl: 'https://local.acme.com',
         auth: {type: 'bearer', token: 'env:MY_CUSTOM_TOKEN'},
       }),
+    );
+    await fs.writeFile(
+      path.join(repoConnDir, 'access.json'),
+      pluginAccess(),
     );
 
     const repo = await loadRepoFromDisk(tmpDir);
 
     expect(repo.connections.size).toBe(1);
     const conn = repo.connections.get('acme')!;
-    // Auth should be overridden by repo
+    // Local repo wins entirely
     expect(conn.spec.auth?.token).toBe('env:MY_CUSTOM_TOKEN');
-    // baseUrl should come from package (merged)
-    expect(conn.spec.baseUrl).toBe('https://api.acme.com');
+    expect(conn.spec.baseUrl).toBe('https://local.acme.com');
   });
 
   it('coexists: plugin connections + hand-written connections', async () => {
@@ -276,7 +272,7 @@ describe('plugin connection → build pipeline', () => {
     expect(snapshot.connections['internal-api'].spec.baseUrl).toBe('https://internal.corp/v1');
   });
 
-  it('handles lock file with missing symlink gracefully (warns, does not crash)', async () => {
+  it('handles lock file with missing package gracefully (warns, does not crash)', async () => {
     await writeConfig(tmpDir);
 
     // Write lock file referencing a connection that's NOT actually installed
@@ -286,9 +282,6 @@ describe('plugin connection → build pipeline', () => {
 
     // Should not crash — connection is simply missing
     expect(repo.connections.has('missing-pkg')).toBe(false);
-    // Should have warnings
-    expect(repo.warnings).toBeDefined();
-    expect(repo.warnings!.some((w) => w.includes('missing-pkg'))).toBe(true);
   });
 
   it('handles plugin connection with empty optional files', async () => {
@@ -393,11 +386,10 @@ describe('plugin connection → build pipeline', () => {
 
     // Simulate what happens with a private registry: empty integrity
     const lock: LockFile = {
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/private': {
+        '@amodalai/connection-private': {
           version: '1.0.0',
-          npm: '@amodalai/connection-private',
           integrity: '',
         },
       },

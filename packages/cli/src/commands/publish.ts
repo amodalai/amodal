@@ -4,31 +4,25 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {readFile, stat} from 'node:fs/promises';
+import {readFile, readdir, stat} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import * as path from 'node:path';
 import {promisify} from 'node:util';
 
 import type {CommandModule} from 'yargs';
-import {readPackageManifest} from '@amodalai/core';
 
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_REGISTRY = 'https://registry.amodalai.com';
+
+/** Known amodal directories that indicate a package has content. */
+const KNOWN_DIRS = ['connections', 'skills', 'automations', 'knowledge', 'stores', 'tools', 'pages', 'agents', 'evals'];
 
 export interface PublishOptions {
   cwd?: string;
   dryRun?: boolean;
   registry?: string;
 }
-
-const REQUIRED_FILES: Record<string, string[]> = {
-  connection: ['spec.json', 'surface.md'],
-  skill: ['SKILL.md'],
-  automation: [],
-  knowledge: [],
-  mcp: [],
-};
 
 /**
  * Publish a package to the registry.
@@ -40,59 +34,68 @@ export async function runPublish(options: PublishOptions = {}): Promise<number> 
 
   // Validate package.json exists
   const pkgJsonPath = path.join(cwd, 'package.json');
-  try {
-    await stat(pkgJsonPath);
-  } catch {
-    process.stderr.write('[publish] No package.json found in current directory.\n');
-    return 1;
-  }
-
-  // Read and validate manifest
-  let manifest;
-  try {
-    manifest = await readPackageManifest(cwd);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[publish] Invalid package: ${msg}\n`);
-    return 1;
-  }
-
-  // Check required files
-  const required = REQUIRED_FILES[manifest.type] ?? [];
-  const missingFiles: string[] = [];
-  for (const file of required) {
-    try {
-      await stat(path.join(cwd, file));
-    } catch {
-      missingFiles.push(file);
-    }
-  }
-
-  if (missingFiles.length > 0) {
-    process.stderr.write(`[publish] Missing required files: ${missingFiles.join(', ')}\n`);
-    return 1;
-  }
-
-  // Read package name and version
   let pkgName: string;
   let pkgVersion: string;
+  let manifestName: string;
+
   try {
     const content = await readFile(pkgJsonPath, 'utf-8');
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- config JSON
     const pkg = JSON.parse(content) as Record<string, unknown>;
     pkgName = String(pkg['name'] ?? '');
     pkgVersion = String(pkg['version'] ?? '');
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const amodal = pkg['amodal'] as Record<string, unknown> | undefined;
+    if (!amodal || typeof amodal !== 'object' || !amodal['name']) {
+      process.stderr.write('[publish] package.json must have an "amodal" block with a "name" field.\n');
+      return 1;
+    }
+    manifestName = String(amodal['name']);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(`[publish] Failed to read package.json: ${msg}\n`);
     return 1;
   }
 
+  // Warn if no known amodal directories found
+  let hasContent = false;
+  for (const dir of KNOWN_DIRS) {
+    try {
+      const s = await stat(path.join(cwd, dir));
+      if (s.isDirectory()) {
+        hasContent = true;
+        break;
+      }
+    } catch {
+      // Directory doesn't exist
+    }
+  }
+  if (!hasContent) {
+    process.stderr.write('[publish] Warning: no known amodal directories found (connections, skills, etc.).\n');
+  }
+
   if (options.dryRun) {
     process.stderr.write(`[publish] Dry run: would publish ${pkgName}@${pkgVersion}\n`);
-    process.stderr.write(`[publish]   Type: ${manifest.type}\n`);
-    process.stderr.write(`[publish]   Name: ${manifest.name}\n`);
+    process.stderr.write(`[publish]   Name: ${manifestName}\n`);
     process.stderr.write(`[publish]   Registry: ${registry}\n`);
+
+    // Show what content directories exist
+    const dirs: string[] = [];
+    for (const dir of KNOWN_DIRS) {
+      try {
+        const s = await stat(path.join(cwd, dir));
+        if (s.isDirectory()) {
+          const entries = await readdir(path.join(cwd, dir));
+          dirs.push(`${dir} (${entries.length})`);
+        }
+      } catch {
+        // skip
+      }
+    }
+    if (dirs.length > 0) {
+      process.stderr.write(`[publish]   Content: ${dirs.join(', ')}\n`);
+    }
     return 0;
   }
 

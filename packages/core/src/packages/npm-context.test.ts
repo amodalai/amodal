@@ -10,13 +10,12 @@ import * as path from 'node:path';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {
+  discoverInstalledPackages,
   ensureNpmContext,
   generatePackageJson,
-  getPackageDir,
   getNpmContextPaths,
 } from './npm-context.js';
 import type {LockFile} from './package-types.js';
-import {makePackageRef, toSymlinkName} from './package-types.js';
 
 let tmpDir: string;
 
@@ -61,8 +60,8 @@ describe('ensureNpmContext', () => {
     await ensureNpmContext(tmpDir);
     const paths = await ensureNpmContext(tmpDir);
     // Should not throw, and paths should be valid
-    const stat = await fs.stat(paths.npmDir);
-    expect(stat.isDirectory()).toBe(true);
+    const s = await fs.stat(paths.npmDir);
+    expect(s.isDirectory()).toBe(true);
   });
 
   it('preserves existing package.json', async () => {
@@ -79,16 +78,14 @@ describe('ensureNpmContext', () => {
 describe('generatePackageJson', () => {
   it('generates correct package.json from lock file', () => {
     const lock: LockFile = {
-      lockVersion: 1,
+      lockVersion: 2,
       packages: {
-        'connection/salesforce': {
+        '@amodalai/connection-salesforce': {
           version: '2.1.0',
-          npm: '@amodalai/connection-salesforce',
           integrity: 'sha256-abc',
         },
-        'skill/triage': {
+        '@amodalai/skill-triage': {
           version: '1.0.0',
-          npm: '@amodalai/skill-triage',
           integrity: 'sha256-def',
         },
       },
@@ -106,44 +103,46 @@ describe('generatePackageJson', () => {
   });
 
   it('handles empty lock file', () => {
-    const result = generatePackageJson({lockVersion: 1, packages: {}});
+    const result = generatePackageJson({lockVersion: 2, packages: {}});
     expect(result['dependencies']).toEqual({});
   });
 });
 
-describe('getPackageDir', () => {
-  it('returns symlink path when it exists and is a directory', async () => {
-    const ref = makePackageRef('connection', 'salesforce');
-    const paths = getNpmContextPaths(tmpDir);
-    await fs.mkdir(paths.root, {recursive: true});
+describe('discoverInstalledPackages', () => {
+  it('discovers packages in node_modules/@amodalai', async () => {
+    const paths = await ensureNpmContext(tmpDir);
+    const scopeDir = path.join(paths.nodeModules, '@amodalai');
 
-    // Create a real directory as the target
-    const targetDir = path.join(tmpDir, 'target');
-    await fs.mkdir(targetDir, {recursive: true});
+    // Create a fake installed package
+    const pkgDir = path.join(scopeDir, 'connection-salesforce');
+    await fs.mkdir(pkgDir, {recursive: true});
+    await fs.writeFile(
+      path.join(pkgDir, 'package.json'),
+      JSON.stringify({name: '@amodalai/connection-salesforce', version: '2.1.0'}),
+    );
 
-    const symlinkPath = path.join(paths.root, toSymlinkName('connection', 'salesforce'));
-    await fs.symlink(targetDir, symlinkPath, 'dir');
-
-    const result = await getPackageDir(tmpDir, ref);
-    expect(result).toBe(symlinkPath);
+    const discovered = await discoverInstalledPackages(paths);
+    expect(discovered).toHaveLength(1);
+    expect(discovered[0].npmName).toBe('@amodalai/connection-salesforce');
+    expect(discovered[0].version).toBe('2.1.0');
+    expect(discovered[0].packageDir).toBe(pkgDir);
   });
 
-  it('returns null when symlink does not exist', async () => {
-    const ref = makePackageRef('connection', 'salesforce');
-    const result = await getPackageDir(tmpDir, ref);
-    expect(result).toBeNull();
+  it('returns empty array when no packages installed', async () => {
+    const paths = await ensureNpmContext(tmpDir);
+    const discovered = await discoverInstalledPackages(paths);
+    expect(discovered).toEqual([]);
   });
 
-  it('returns null when symlink is broken', async () => {
-    const ref = makePackageRef('connection', 'salesforce');
-    const paths = getNpmContextPaths(tmpDir);
-    await fs.mkdir(paths.root, {recursive: true});
+  it('skips packages without version', async () => {
+    const paths = await ensureNpmContext(tmpDir);
+    const scopeDir = path.join(paths.nodeModules, '@amodalai');
 
-    const symlinkPath = path.join(paths.root, toSymlinkName('connection', 'salesforce'));
-    // Create symlink to non-existent target
-    await fs.symlink('/nonexistent/path', symlinkPath, 'dir');
+    // Create a package dir with no package.json
+    const pkgDir = path.join(scopeDir, 'broken-pkg');
+    await fs.mkdir(pkgDir, {recursive: true});
 
-    const result = await getPackageDir(tmpDir, ref);
-    expect(result).toBeNull();
+    const discovered = await discoverInstalledPackages(paths);
+    expect(discovered).toEqual([]);
   });
 });

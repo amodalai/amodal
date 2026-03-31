@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Amodal Labs, Inc.
+ * Copyright 2025 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
@@ -8,12 +8,8 @@ import {readFile, rename, writeFile, mkdir} from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {PackageError} from './package-error.js';
-import {
-  LockFileSchema,
-  packageKey,
-  parsePackageKey,
-} from './package-types.js';
-import type {LockEntry, LockFile, PackageType} from './package-types.js';
+import {LockFileSchema} from './package-types.js';
+import type {LockEntry, LockFile} from './package-types.js';
 
 const LOCK_FILENAME = 'amodal.lock';
 
@@ -83,67 +79,67 @@ export async function writeLockFile(repoPath: string, lock: LockFile): Promise<v
 }
 
 /**
- * Add or update a lock entry. Creates the lock file if needed.
+ * Add or update a lock entry by npm package name.
  */
 export async function addLockEntry(
   repoPath: string,
-  type: PackageType,
-  name: string,
+  npmName: string,
   entry: LockEntry,
 ): Promise<LockFile> {
-  const lock = (await readLockFile(repoPath)) ?? {lockVersion: 1, packages: {}};
-  const key = packageKey(type, name);
-  lock.packages[key] = entry;
+  const lock = (await readLockFile(repoPath)) ?? {lockVersion: 2 as const, packages: {}};
+  lock.packages[npmName] = entry;
   await writeLockFile(repoPath, lock);
   return lock;
 }
 
 /**
- * Remove a lock entry. Returns the updated lock file.
+ * Remove a lock entry by npm package name.
  */
 export async function removeLockEntry(
   repoPath: string,
-  type: PackageType,
-  name: string,
+  npmName: string,
 ): Promise<LockFile> {
-  const lock = (await readLockFile(repoPath)) ?? {lockVersion: 1, packages: {}};
-  const key = packageKey(type, name);
-  delete lock.packages[key];
+  const lock = (await readLockFile(repoPath)) ?? {lockVersion: 2 as const, packages: {}};
+  delete lock.packages[npmName];
   await writeLockFile(repoPath, lock);
   return lock;
 }
 
 /**
- * Get a single lock entry. Returns null if not found.
+ * Build a lock file from a list of discovered packages.
  */
-export async function getLockEntry(
+export async function buildLockFile(
   repoPath: string,
-  type: PackageType,
-  name: string,
-): Promise<LockEntry | null> {
-  const lock = await readLockFile(repoPath);
-  if (!lock) return null;
-  const key = packageKey(type, name);
-  return lock.packages[key] ?? null;
+  packages: Array<{npmName: string; version: string; integrity: string}>,
+): Promise<LockFile> {
+  const lock: LockFile = {lockVersion: 2, packages: {}};
+  for (const pkg of packages) {
+    lock.packages[pkg.npmName] = {version: pkg.version, integrity: pkg.integrity};
+  }
+  await writeLockFile(repoPath, lock);
+  return lock;
 }
 
 /**
- * List lock entries, optionally filtered by type.
+ * Get a single lock entry by npm name. Returns null if not found.
+ */
+export async function getLockEntry(
+  repoPath: string,
+  npmName: string,
+): Promise<LockEntry | null> {
+  const lock = await readLockFile(repoPath);
+  if (!lock) return null;
+  return lock.packages[npmName] ?? null;
+}
+
+/**
+ * List all lock entries.
  */
 export async function listLockEntries(
   repoPath: string,
-  type?: PackageType,
-): Promise<Array<{key: string; type: PackageType; name: string; entry: LockEntry}>> {
+): Promise<Array<{npmName: string; entry: LockEntry}>> {
   const lock = await readLockFile(repoPath);
   if (!lock) return [];
 
-  const results: Array<{key: string; type: PackageType; name: string; entry: LockEntry}> = [];
-
-  for (const [key, entry] of Object.entries(lock.packages)) {
-    const parsed = parsePackageKey(key);
-    if (type && parsed.type !== type) continue;
-    results.push({key, type: parsed.type, name: parsed.name, entry});
-  }
-
-  return results;
+  return Object.entries(lock.packages).map(([npmName, entry]) => ({npmName, entry}));
 }

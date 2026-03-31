@@ -6,32 +6,28 @@
 
 import type {CommandModule} from 'yargs';
 import {
-  addLockEntry,
+  buildLockFile,
+  discoverInstalledPackages,
   ensureNpmContext,
-  ensureSymlink,
-  makePackageRef,
+  fromNpmName,
   npmInstall,
   npmViewVersions,
-  parsePackageKey,
   readLockFile,
 } from '@amodalai/core';
-import type {PackageType} from '@amodalai/core';
 import * as semver from 'semver';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
 export interface UpdateOptions {
   cwd?: string;
-  type?: PackageType;
   name?: string;
   latest?: boolean;
   dryRun?: boolean;
 }
 
 interface UpdateTarget {
-  type: PackageType;
-  name: string;
-  currentVersion: string;
   npmName: string;
+  shortName: string;
+  currentVersion: string;
 }
 
 /**
@@ -58,20 +54,18 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<number> {
 
   // Build list of targets
   const targets: UpdateTarget[] = [];
-  for (const [key, entry] of Object.entries(lockFile.packages)) {
-    const parsed = parsePackageKey(key);
-    if (options.type && parsed.type !== options.type) continue;
-    if (options.name && parsed.name !== options.name) continue;
+  for (const [npmName, entry] of Object.entries(lockFile.packages)) {
+    const shortName = fromNpmName(npmName);
+    if (options.name && shortName !== options.name && npmName !== options.name) continue;
     targets.push({
-      type: parsed.type,
-      name: parsed.name,
+      npmName,
+      shortName,
       currentVersion: entry.version,
-      npmName: entry.npm,
     });
   }
 
   if (targets.length === 0) {
-    if (options.type || options.name) {
+    if (options.name) {
       process.stderr.write('[update] No matching packages found in lock file.\n');
     } else {
       process.stderr.write('[update] No packages installed.\n');
@@ -129,14 +123,7 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<number> {
   for (const {target, newVersion} of updates) {
     process.stderr.write(`[update] Updating ${target.npmName}: ${target.currentVersion} → ${newVersion}...\n`);
     try {
-      const ref = makePackageRef(target.type, target.name);
       const result = await npmInstall(paths, target.npmName, newVersion);
-      await addLockEntry(repoPath, target.type, target.name, {
-        version: result.version,
-        npm: target.npmName,
-        integrity: result.integrity,
-      });
-      await ensureSymlink(paths, ref);
       process.stderr.write(`[update] Updated ${target.npmName}@${result.version}\n`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -144,6 +131,10 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<number> {
       failures++;
     }
   }
+
+  // Rebuild lock file from what's actually installed
+  const discovered = await discoverInstalledPackages(paths);
+  await buildLockFile(repoPath, discovered);
 
   const successCount = updates.length - failures;
   if (failures > 0) {
@@ -156,18 +147,15 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<number> {
 }
 
 export const updateCommand: CommandModule = {
-  command: 'update [type] [name]',
+  command: 'update [name]',
   describe: 'Update installed packages',
   builder: (yargs) =>
     yargs
-      .positional('type', {type: 'string', choices: ['connection', 'skill', 'automation', 'knowledge'] as const, describe: 'Package type'})
-      .positional('name', {type: 'string', describe: 'Package name'})
+      .positional('name', {type: 'string', describe: 'Package name to update'})
       .option('latest', {type: 'boolean', default: false, describe: 'Allow major version updates'})
       .option('dry-run', {type: 'boolean', default: false, describe: 'Show what would be updated'}),
   handler: async (argv) => {
     const code = await runUpdate({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      type: argv['type'] as PackageType | undefined,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       name: argv['name'] as string | undefined,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion

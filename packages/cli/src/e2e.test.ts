@@ -157,12 +157,12 @@ describe('amodal CLI e2e', () => {
     it('defaults to json=false', async () => {
       const args = await parseArgs(listCommand, ['list']);
       expect(args['json']).toBe(false);
-      expect(args['type']).toBeUndefined();
+      expect(args['filter']).toBeUndefined();
     });
 
-    it('parses --type and --json', async () => {
-      const args = await parseArgs(listCommand, ['list', '--type', 'skill', '--json']);
-      expect(args['type']).toBe('skill');
+    it('parses --filter and --json', async () => {
+      const args = await parseArgs(listCommand, ['list', '--filter', 'skill', '--json']);
+      expect(args['filter']).toBe('skill');
       expect(args['json']).toBe(true);
     });
   });
@@ -170,17 +170,15 @@ describe('amodal CLI e2e', () => {
   // --- update ---
 
   describe('update', () => {
-    it('optional positionals default to undefined', async () => {
+    it('optional positional defaults to undefined', async () => {
       const args = await parseArgs(updateCommand, ['update']);
-      expect(args['type']).toBeUndefined();
       expect(args['name']).toBeUndefined();
       expect(args['latest']).toBe(false);
       expect(args['dryRun']).toBe(false);
     });
 
-    it('parses type and name', async () => {
-      const args = await parseArgs(updateCommand, ['update', 'connection', 'stripe']);
-      expect(args['type']).toBe('connection');
+    it('parses name', async () => {
+      const args = await parseArgs(updateCommand, ['update', 'stripe']);
       expect(args['name']).toBe('stripe');
     });
 
@@ -194,9 +192,8 @@ describe('amodal CLI e2e', () => {
   // --- diff ---
 
   describe('diff', () => {
-    it('parses type and name', async () => {
-      const args = await parseArgs(diffCommand, ['diff', 'skill', 'triage']);
-      expect(args['type']).toBe('skill');
+    it('parses name', async () => {
+      const args = await parseArgs(diffCommand, ['diff', 'triage']);
       expect(args['name']).toBe('triage');
     });
   });

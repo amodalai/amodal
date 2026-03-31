@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Amodal Labs, Inc.
+ * Copyright 2025 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
@@ -10,22 +10,25 @@ import * as path from 'node:path';
 import type {LoadedConnection} from '../repo/connection-types.js';
 import {parseConnection, parseSkill, parseKnowledge, parseAutomation} from '../repo/parsers.js';
 import type {LoadedAutomation, LoadedKnowledge, LoadedSkill} from '../repo/repo-types.js';
+import type {LoadedStore} from '../repo/store-types.js';
+import {parseStoreJson} from '../repo/store-loader.js';
+import type {LoadedTool} from '../repo/tool-types.js';
+import {loadTools} from '../repo/tool-loader.js';
 
-import {parseJsonImport, parseMarkdownFrontmatter} from './frontmatter.js';
-import {mergeAccessJson, mergeConcatenation, mergeEntities, mergeSpecJson, mergeSurface} from './merge-engine.js';
-import {readPackageFile} from './manifest-reader.js';
-import {getPackageDir} from './npm-context.js';
-import {makePackageRef, parsePackageKey} from './package-types.js';
-import type {LockFile, PackageType} from './package-types.js';
+import {getNpmContextPaths} from './npm-context.js';
+import type {LockFile} from './package-types.js';
+// isAmodalPackage available for future use
 
 /**
- * The result of resolving all installed + hand-written packages.
+ * The result of resolving all installed packages + local repo content.
  */
 export interface ResolvedPackages {
   connections: Map<string, LoadedConnection>;
   skills: LoadedSkill[];
   automations: LoadedAutomation[];
   knowledge: LoadedKnowledge[];
+  stores: LoadedStore[];
+  tools: LoadedTool[];
   warnings: string[];
 }
 
@@ -59,221 +62,169 @@ async function listSubdirs(dirPath: string): Promise<string[]> {
   }
 }
 
-function hasImportHeader(content: string): boolean {
-  // JSON import
-  if (content.trim().startsWith('{')) {
+async function listFiles(dirPath: string, ext?: string): Promise<string[]> {
+  try {
+    const entries = await readdir(dirPath, {withFileTypes: true});
+    return entries
+      .filter((e) => e.isFile() && (!ext || e.name.endsWith(ext)))
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
+// --- Loading from a single package directory ---
+
+async function loadConnectionsFromDir(
+  dir: string,
+  existing: Map<string, LoadedConnection>,
+  warnings: string[],
+): Promise<void> {
+  const connDir = path.join(dir, 'connections');
+  const subdirs = await listSubdirs(connDir);
+  for (const name of subdirs) {
+    if (existing.has(name)) continue; // Local wins
+    const connPath = path.join(connDir, name);
+    const specJson = await readOptionalFile(path.join(connPath, 'spec.json'));
+    const accessJson = await readOptionalFile(path.join(connPath, 'access.json'));
+    if (!specJson || !accessJson) {
+      warnings.push(`Connection ${name} missing spec.json or access.json in ${dir}`);
+      continue;
+    }
+    const surfaceMd = await readOptionalFile(path.join(connPath, 'surface.md')) ?? undefined;
+    const entitiesMd = await readOptionalFile(path.join(connPath, 'entities.md')) ?? undefined;
+    const rulesMd = await readOptionalFile(path.join(connPath, 'rules.md')) ?? undefined;
     try {
-      const {import: imp} = parseJsonImport(content);
-      return imp !== undefined;
-    } catch {
-      return false;
+      const conn = parseConnection(name, {specJson, accessJson, surfaceMd, entitiesMd, rulesMd}, connPath);
+      existing.set(name, conn);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Failed to parse connection ${name}: ${msg}`);
     }
   }
-  // Markdown import
-  const {frontmatter} = parseMarkdownFrontmatter(content);
-  return frontmatter !== null && typeof frontmatter['import'] === 'string';
 }
 
-// --- Connection resolution ---
-
-/**
- * Resolve a single connection by merging package + repo files.
- */
-export async function resolveConnection(
-  name: string,
-  repoDir: string | null,
-  packageDir: string | null,
-): Promise<LoadedConnection | null> {
-  if (!repoDir && !packageDir) return null;
-
-  const location = repoDir ?? packageDir!;
-
-  // Helper to read from package
-  async function readPkg(filename: string): Promise<string | null> {
-    if (!packageDir) return null;
-    return readPackageFile(packageDir, filename);
+async function loadSkillsFromDir(
+  dir: string,
+  existingNames: Set<string>,
+  skills: LoadedSkill[],
+  warnings: string[],
+): Promise<void> {
+  const skillDir = path.join(dir, 'skills');
+  const subdirs = await listSubdirs(skillDir);
+  for (const name of subdirs) {
+    if (existingNames.has(name)) continue;
+    const skillMd = await readOptionalFile(path.join(skillDir, name, 'SKILL.md'));
+    if (!skillMd) continue;
+    try {
+      const skill = parseSkill(skillMd, path.join(skillDir, name));
+      if (!skill) continue;
+      skills.push(skill);
+      existingNames.add(name);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Failed to parse skill ${name}: ${msg}`);
+    }
   }
-
-  // Helper to read from repo
-  async function readRepo(filename: string): Promise<string | null> {
-    if (!repoDir) return null;
-    return readOptionalFile(path.join(repoDir, filename));
-  }
-
-  // Resolve each file type with merge logic
-  const repoSpec = await readRepo('spec.json');
-  const pkgSpec = await readPkg('spec.json');
-  let specJson: string;
-  if (repoSpec && pkgSpec && hasImportHeader(repoSpec)) {
-    const merged = mergeSpecJson(pkgSpec, repoSpec);
-    specJson = JSON.stringify(merged);
-  } else if (repoSpec) {
-    specJson = repoSpec;
-  } else if (pkgSpec) {
-    specJson = pkgSpec;
-  } else {
-    return null; // spec.json is required
-  }
-
-  const repoAccess = await readRepo('access.json');
-  const pkgAccess = await readPkg('access.json');
-  let accessJson: string;
-  if (repoAccess && pkgAccess && hasImportHeader(repoAccess)) {
-    const merged = mergeAccessJson(pkgAccess, repoAccess);
-    accessJson = JSON.stringify(merged);
-  } else if (repoAccess) {
-    accessJson = repoAccess;
-  } else if (pkgAccess) {
-    accessJson = pkgAccess;
-  } else {
-    return null; // access.json is required
-  }
-
-  // surface.md (optional)
-  const repoSurface = await readRepo('surface.md');
-  const pkgSurface = await readPkg('surface.md');
-  let surfaceMd: string | undefined;
-  if (repoSurface && pkgSurface && hasImportHeader(repoSurface)) {
-    surfaceMd = mergeSurface(pkgSurface, repoSurface);
-  } else if (repoSurface) {
-    surfaceMd = repoSurface;
-  } else if (pkgSurface) {
-    surfaceMd = pkgSurface;
-  }
-
-  // entities.md (optional)
-  const repoEntities = await readRepo('entities.md');
-  const pkgEntities = await readPkg('entities.md');
-  let entitiesMd: string | undefined;
-  if (repoEntities && pkgEntities && hasImportHeader(repoEntities)) {
-    entitiesMd = mergeEntities(pkgEntities, repoEntities);
-  } else if (repoEntities) {
-    entitiesMd = repoEntities;
-  } else if (pkgEntities) {
-    entitiesMd = pkgEntities;
-  }
-
-  // rules.md (optional, concatenation)
-  const repoRules = await readRepo('rules.md');
-  const pkgRules = await readPkg('rules.md');
-  let rulesMd: string | undefined;
-  if (repoRules && pkgRules && hasImportHeader(repoRules)) {
-    rulesMd = mergeConcatenation(pkgRules, repoRules);
-  } else if (repoRules) {
-    rulesMd = repoRules;
-  } else if (pkgRules) {
-    rulesMd = pkgRules;
-  }
-
-  return parseConnection(name, {specJson, accessJson, surfaceMd, entitiesMd, rulesMd}, location);
 }
 
-// --- Skill resolution ---
-
-/**
- * Resolve a single skill by merging package + repo files.
- */
-export async function resolveSkill(
-  name: string,
-  repoDir: string | null,
-  packageDir: string | null,
-): Promise<LoadedSkill | null> {
-  if (!repoDir && !packageDir) return null;
-
-  const location = repoDir ?? packageDir!;
-
-  const repoContent = repoDir
-    ? await readOptionalFile(path.join(repoDir, 'SKILL.md'))
-    : null;
-  const pkgContent = packageDir
-    ? await readPackageFile(packageDir, 'SKILL.md')
-    : null;
-
-  let content: string | null = null;
-  if (repoContent && pkgContent && hasImportHeader(repoContent)) {
-    content = mergeConcatenation(pkgContent, repoContent);
-  } else if (repoContent) {
-    content = repoContent;
-  } else if (pkgContent) {
-    content = pkgContent;
+async function loadAutomationsFromDir(
+  dir: string,
+  existingNames: Set<string>,
+  automations: LoadedAutomation[],
+  warnings: string[],
+): Promise<void> {
+  const autoDir = path.join(dir, 'automations');
+  const files = await listFiles(autoDir);
+  for (const file of files) {
+    if (!file.endsWith('.json') && !file.endsWith('.md')) continue;
+    const name = file.replace(/\.(json|md)$/, '');
+    if (existingNames.has(name)) continue;
+    const content = await readOptionalFile(path.join(autoDir, file));
+    if (!content) continue;
+    try {
+      const auto = parseAutomation(content, name, path.join(autoDir, file));
+      automations.push(auto);
+      existingNames.add(name);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Failed to parse automation ${name}: ${msg}`);
+    }
   }
-
-  if (!content) return null;
-  return parseSkill(content, location);
 }
 
-// --- Automation resolution ---
-
-/**
- * Resolve a single automation by merging package + repo file.
- */
-export async function resolveAutomation(
-  name: string,
-  repoDir: string | null,
-  packageDir: string | null,
-): Promise<LoadedAutomation | null> {
-  if (!repoDir && !packageDir) return null;
-
-  const location = repoDir ?? packageDir!;
-
-  const repoContent = repoDir
-    ? (await readOptionalFile(path.join(repoDir, `${name}.json`)) ?? await readOptionalFile(path.join(repoDir, `${name}.md`)))
-    : null;
-  const pkgContent = packageDir
-    ? (await readPackageFile(packageDir, `${name}.json`).catch(() => null) ?? await readPackageFile(packageDir, `${name}.md`))
-    : null;
-
-  let content: string | null = null;
-  if (repoContent && pkgContent && hasImportHeader(repoContent)) {
-    content = mergeConcatenation(pkgContent, repoContent);
-  } else if (repoContent) {
-    content = repoContent;
-  } else if (pkgContent) {
-    content = pkgContent;
+async function loadKnowledgeFromDir(
+  dir: string,
+  existingNames: Set<string>,
+  knowledge: LoadedKnowledge[],
+  warnings: string[],
+): Promise<void> {
+  const kbDir = path.join(dir, 'knowledge');
+  const files = await listFiles(kbDir, '.md');
+  for (const file of files) {
+    const name = file.replace(/\.md$/, '');
+    if (existingNames.has(name)) continue;
+    const content = await readOptionalFile(path.join(kbDir, file));
+    if (!content) continue;
+    try {
+      const doc = parseKnowledge(content, name, path.join(kbDir, file));
+      knowledge.push(doc);
+      existingNames.add(name);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Failed to parse knowledge ${name}: ${msg}`);
+    }
   }
-
-  if (!content) return null;
-  return parseAutomation(content, name, location);
 }
 
-// --- Knowledge resolution ---
-
-/**
- * Resolve a single knowledge file by merging package + repo file.
- */
-export async function resolveKnowledge(
-  name: string,
-  repoDir: string | null,
-  packageDir: string | null,
-): Promise<LoadedKnowledge | null> {
-  if (!repoDir && !packageDir) return null;
-
-  const location = repoDir ?? packageDir!;
-
-  const repoContent = repoDir
-    ? await readOptionalFile(path.join(repoDir, `${name}.md`))
-    : null;
-  const pkgContent = packageDir
-    ? await readPackageFile(packageDir, `${name}.md`)
-    : null;
-
-  let content: string | null = null;
-  if (repoContent && pkgContent && hasImportHeader(repoContent)) {
-    content = mergeConcatenation(pkgContent, repoContent);
-  } else if (repoContent) {
-    content = repoContent;
-  } else if (pkgContent) {
-    content = pkgContent;
+async function loadStoresFromDir(
+  dir: string,
+  existingNames: Set<string>,
+  stores: LoadedStore[],
+  warnings: string[],
+): Promise<void> {
+  const storeDir = path.join(dir, 'stores');
+  const files = await listFiles(storeDir, '.json');
+  for (const file of files) {
+    const name = file.replace(/\.json$/, '');
+    if (existingNames.has(name)) continue;
+    const content = await readOptionalFile(path.join(storeDir, file));
+    if (!content) continue;
+    try {
+      const store = parseStoreJson(content, name, path.join(storeDir, file));
+      stores.push(store);
+      existingNames.add(name);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Failed to parse store ${name}: ${msg}`);
+    }
   }
+}
 
-  if (!content) return null;
-  return parseKnowledge(content, name, location);
+async function loadToolsFromDir(
+  dir: string,
+  existingNames: Set<string>,
+  tools: LoadedTool[],
+  warnings: string[],
+): Promise<void> {
+  try {
+    const loaded = await loadTools(dir);
+    for (const tool of loaded) {
+      if (existingNames.has(tool.name)) continue;
+      tools.push(tool);
+      existingNames.add(tool.name);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`Failed to load tools from ${dir}: ${msg}`);
+  }
 }
 
 // --- Full resolution ---
 
 /**
- * Resolve all packages: merge lock file packages with repo directories.
+ * Resolve all packages: scan installed packages in node_modules, then local repo.
+ * Local repo files always win over package files for the same name.
  */
 export async function resolveAllPackages(options: {
   repoPath: string;
@@ -286,129 +237,52 @@ export async function resolveAllPackages(options: {
   const skills: LoadedSkill[] = [];
   const automations: LoadedAutomation[] = [];
   const knowledge: LoadedKnowledge[] = [];
+  const stores: LoadedStore[] = [];
+  const tools: LoadedTool[] = [];
 
-  // Build union of names from lock file + repo directories
-  const connectionNames = new Set<string>();
+  // Track names to prevent duplicates (local wins over packages)
   const skillNames = new Set<string>();
   const automationNames = new Set<string>();
   const knowledgeNames = new Set<string>();
+  const storeNames = new Set<string>();
+  const toolNames = new Set<string>();
 
-  // From lock file
-  if (lockFile) {
-    for (const key of Object.keys(lockFile.packages)) {
-      const parsed = parsePackageKey(key);
-      switch (parsed.type) {
-        case 'connection':
-          connectionNames.add(parsed.name);
-          break;
-        case 'skill':
-          skillNames.add(parsed.name);
-          break;
-        case 'automation':
-          automationNames.add(parsed.name);
-          break;
-        case 'knowledge':
-          knowledgeNames.add(parsed.name);
-          break;
-        default:
-          break;
+  // 1. Load from local repo first (local always wins)
+  await loadConnectionsFromDir(repoPath, connections, warnings);
+  await loadSkillsFromDir(repoPath, skillNames, skills, warnings);
+  await loadAutomationsFromDir(repoPath, automationNames, automations, warnings);
+  await loadKnowledgeFromDir(repoPath, knowledgeNames, knowledge, warnings);
+  await loadStoresFromDir(repoPath, storeNames, stores, warnings);
+  await loadToolsFromDir(repoPath, toolNames, tools, warnings);
+
+  // 2. Load from installed packages (additive, local wins on conflicts)
+  if (lockFile && Object.keys(lockFile.packages).length > 0) {
+    const paths = getNpmContextPaths(repoPath);
+    const scopeDir = path.join(paths.nodeModules, '@amodalai');
+
+    if (await dirExists(scopeDir)) {
+      let packageDirs: string[];
+      try {
+        packageDirs = await listSubdirs(scopeDir);
+      } catch {
+        packageDirs = [];
+      }
+
+      for (const pkgDirName of packageDirs) {
+        const npmName = `@amodalai/${pkgDirName}`;
+        // Only load packages that are in the lock file
+        if (!lockFile.packages[npmName]) continue;
+
+        const pkgDir = path.join(scopeDir, pkgDirName);
+        await loadConnectionsFromDir(pkgDir, connections, warnings);
+        await loadSkillsFromDir(pkgDir, skillNames, skills, warnings);
+        await loadAutomationsFromDir(pkgDir, automationNames, automations, warnings);
+        await loadKnowledgeFromDir(pkgDir, knowledgeNames, knowledge, warnings);
+        await loadStoresFromDir(pkgDir, storeNames, stores, warnings);
+        await loadToolsFromDir(pkgDir, toolNames, tools, warnings);
       }
     }
   }
 
-  // From repo directories
-  const connDirs = await listSubdirs(path.join(repoPath, 'connections'));
-  for (const d of connDirs) connectionNames.add(d);
-
-  const skillDirs = await listSubdirs(path.join(repoPath, 'skills'));
-  for (const d of skillDirs) skillNames.add(d);
-
-  // For automations and knowledge, list .md files
-  const autoDir = path.join(repoPath, 'automations');
-  const knowledgeDir = path.join(repoPath, 'knowledge');
-
-  try {
-    const autoFiles = await readdir(autoDir);
-    for (const f of autoFiles) {
-      if (f.endsWith('.md')) automationNames.add(f.replace(/\.md$/, ''));
-      if (f.endsWith('.json')) automationNames.add(f.replace(/\.json$/, ''));
-    }
-  } catch {
-    // Directory doesn't exist
-  }
-
-  try {
-    const knowledgeFiles = await readdir(knowledgeDir);
-    for (const f of knowledgeFiles) {
-      if (f.endsWith('.md')) knowledgeNames.add(f.replace(/\.md$/, ''));
-    }
-  } catch {
-    // Directory doesn't exist
-  }
-
-  // Helper to get package directory for a name
-  async function getPkgDir(type: PackageType, name: string): Promise<string | null> {
-    const ref = makePackageRef(type, name);
-    const dir = await getPackageDir(repoPath, ref);
-    if (!dir && lockFile && lockFile.packages[ref.key]) {
-      warnings.push(`Package ${ref.key} is in lock file but not installed (broken symlink?)`);
-    }
-    return dir;
-  }
-
-  // Resolve connections
-  const connTasks = [...connectionNames].map(async (name) => {
-    const repoDir = path.join(repoPath, 'connections', name);
-    const repoDirExists = await dirExists(repoDir);
-    const pkgDir = await getPkgDir('connection', name);
-    const result = await resolveConnection(
-      name,
-      repoDirExists ? repoDir : null,
-      pkgDir,
-    );
-    if (result) connections.set(name, result);
-  });
-
-  // Resolve skills
-  const skillTasks = [...skillNames].map(async (name) => {
-    const repoDir = path.join(repoPath, 'skills', name);
-    const repoDirExists = await dirExists(repoDir);
-    const pkgDir = await getPkgDir('skill', name);
-    const result = await resolveSkill(
-      name,
-      repoDirExists ? repoDir : null,
-      pkgDir,
-    );
-    if (result) skills.push(result);
-  });
-
-  // Resolve automations
-  const autoTasks = [...automationNames].map(async (name) => {
-    const repoDir = path.join(repoPath, 'automations');
-    const repoDirExists = await dirExists(repoDir);
-    const pkgDir = await getPkgDir('automation', name);
-    const result = await resolveAutomation(
-      name,
-      repoDirExists ? repoDir : null,
-      pkgDir,
-    );
-    if (result) automations.push(result);
-  });
-
-  // Resolve knowledge
-  const knowledgeTasks = [...knowledgeNames].map(async (name) => {
-    const repoDir = path.join(repoPath, 'knowledge');
-    const repoDirExists = await dirExists(repoDir);
-    const pkgDir = await getPkgDir('knowledge', name);
-    const result = await resolveKnowledge(
-      name,
-      repoDirExists ? repoDir : null,
-      pkgDir,
-    );
-    if (result) knowledge.push(result);
-  });
-
-  await Promise.all([...connTasks, ...skillTasks, ...autoTasks, ...knowledgeTasks]);
-
-  return {connections, skills, automations, knowledge, warnings};
+  return {connections, skills, automations, knowledge, stores, tools, warnings};
 }

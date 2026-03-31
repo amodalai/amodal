@@ -4,33 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {unlink, stat} from 'node:fs/promises';
-import {join} from 'node:path';
-
+import {readFile, writeFile} from 'node:fs/promises';
+import * as path from 'node:path';
 import type {CommandModule} from 'yargs';
 import {
-  getLockEntry,
+  buildLockFile,
+  discoverInstalledPackages,
+  ensureNpmContext,
   getNpmContextPaths,
-  makePackageRef,
   npmUninstall,
-  removeConfigDep,
-  removeLockEntry,
-  toSymlinkName,
+  toNpmName,
 } from '@amodalai/core';
-import type {PackageType} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
-export interface UninstallOptions {
-  cwd?: string;
-  type: PackageType;
-  name: string;
-}
-
 /**
- * Uninstall a package: npm uninstall + remove lock entry + remove symlink.
+ * Uninstall a package: npm uninstall + rebuild lock file.
  * Returns 0 on success, 1 on error.
  */
-export async function runUninstall(options: UninstallOptions): Promise<number> {
+export async function runUninstall(options: {cwd?: string; name: string}): Promise<number> {
   let repoPath: string;
   try {
     repoPath = findRepoRoot(options.cwd);
@@ -40,68 +31,54 @@ export async function runUninstall(options: UninstallOptions): Promise<number> {
     return 1;
   }
 
-  const entry = await getLockEntry(repoPath, options.type, options.name);
-  if (!entry) {
-    process.stderr.write(`[uninstall] ${options.type}/${options.name} is not installed.\n`);
-    return 1;
-  }
-
+  const npmName = toNpmName(options.name);
   const paths = getNpmContextPaths(repoPath);
-  const ref = makePackageRef(options.type, options.name);
 
   try {
-    await npmUninstall(paths, ref.npmName);
+    await npmUninstall(paths, npmName);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(`[uninstall] npm uninstall failed: ${msg}\n`);
     return 1;
   }
 
-  await removeLockEntry(repoPath, options.type, options.name);
+  // Rebuild lock file from remaining packages
+  await ensureNpmContext(repoPath);
+  const discovered = await discoverInstalledPackages(paths);
+  await buildLockFile(repoPath, discovered);
 
   // Remove from amodal.json dependencies
   try {
-    await removeConfigDep(repoPath, options.type, options.name);
-  } catch {
-    // Non-fatal — the dependency may not have been in amodal.json
-  }
-
-  // Remove symlink (ignore if already gone)
-  const symlinkPath = join(paths.root, toSymlinkName(options.type, options.name));
-  try {
-    await unlink(symlinkPath);
-  } catch (err) {
+    const configPath = path.join(repoPath, 'amodal.json');
+    const configRaw = await readFile(configPath, 'utf-8');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- config JSON
+    const config = JSON.parse(configRaw) as Record<string, unknown>;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-      process.stderr.write(`[uninstall] Warning: could not remove symlink: ${symlinkPath}\n`);
+    const deps = (config['dependencies'] as Record<string, string>) ?? {};
+    delete deps[npmName];
+    if (Object.keys(deps).length > 0) {
+      config['dependencies'] = deps;
+    } else {
+      delete config['dependencies'];
     }
-  }
-
-  // Check for repo override directory
-  const overrideDir = join(repoPath, `${options.type}s`, options.name);
-  try {
-    const s = await stat(overrideDir);
-    if (s.isDirectory()) {
-      process.stderr.write(`[uninstall] Note: local override directory still exists: ${overrideDir}\n`);
-    }
+    await writeFile(configPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
   } catch {
-    // No override dir — nothing to note
+    // Non-fatal
   }
 
-  process.stderr.write(`[uninstall] Removed ${options.type}/${options.name}\n`);
+  process.stderr.write(`[uninstall] Removed ${npmName}\n`);
   return 0;
 }
 
 export const uninstallCommand: CommandModule = {
-  command: 'uninstall <type> <name>',
+  command: 'uninstall <name>',
   describe: 'Uninstall a package',
   builder: (yargs) =>
     yargs
-      .positional('type', {type: 'string', demandOption: true, choices: ['connection', 'skill', 'automation', 'knowledge'] as const, describe: 'Package type'})
       .positional('name', {type: 'string', demandOption: true, describe: 'Package name'}),
   handler: async (argv) => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    const code = await runUninstall({type: argv['type'] as PackageType, name: argv['name'] as string});
+    const code = await runUninstall({name: argv['name'] as string});
     process.exit(code);
   },
 };
