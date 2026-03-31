@@ -4,19 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {readFile, readdir, stat} from 'node:fs/promises';
+import {readFile, readdir, stat, writeFile} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
 import * as path from 'node:path';
 import {promisify} from 'node:util';
 
 import type {CommandModule} from 'yargs';
+import {KNOWN_CONTENT_DIRS} from '@amodalai/core';
 
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_REGISTRY = 'https://registry.amodalai.com';
-
-/** Known amodal directories that indicate a package has content. */
-const KNOWN_DIRS = ['connections', 'skills', 'automations', 'knowledge', 'stores', 'tools', 'pages', 'agents', 'evals'];
 
 export interface PublishOptions {
   cwd?: string;
@@ -58,44 +56,42 @@ export async function runPublish(options: PublishOptions = {}): Promise<number> 
     return 1;
   }
 
-  // Warn if no known amodal directories found
-  let hasContent = false;
-  for (const dir of KNOWN_DIRS) {
+  // Scan for known content directories and auto-populate `contains`
+  const contains: string[] = [];
+  for (const dir of KNOWN_CONTENT_DIRS) {
     try {
       const s = await stat(path.join(cwd, dir));
       if (s.isDirectory()) {
-        hasContent = true;
-        break;
+        const entries = await readdir(path.join(cwd, dir));
+        if (entries.length > 0) contains.push(dir);
       }
     } catch {
       // Directory doesn't exist
     }
   }
-  if (!hasContent) {
+
+  if (contains.length === 0) {
     process.stderr.write('[publish] Warning: no known amodal directories found (connections, skills, etc.).\n');
+  }
+
+  // Write `contains` into package.json before publishing
+  try {
+    const rawContent = await readFile(pkgJsonPath, 'utf-8');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- config JSON
+    const pkgObj = JSON.parse(rawContent) as Record<string, unknown>;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const amodal = pkgObj['amodal'] as Record<string, unknown>;
+    amodal['contains'] = contains;
+    await writeFile(pkgJsonPath, JSON.stringify(pkgObj, null, 2) + '\n', 'utf-8');
+  } catch {
+    // Non-fatal — publish will proceed without contains
   }
 
   if (options.dryRun) {
     process.stderr.write(`[publish] Dry run: would publish ${pkgName}@${pkgVersion}\n`);
     process.stderr.write(`[publish]   Name: ${manifestName}\n`);
+    process.stderr.write(`[publish]   Contains: ${contains.length > 0 ? contains.join(', ') : '(none)'}\n`);
     process.stderr.write(`[publish]   Registry: ${registry}\n`);
-
-    // Show what content directories exist
-    const dirs: string[] = [];
-    for (const dir of KNOWN_DIRS) {
-      try {
-        const s = await stat(path.join(cwd, dir));
-        if (s.isDirectory()) {
-          const entries = await readdir(path.join(cwd, dir));
-          dirs.push(`${dir} (${entries.length})`);
-        }
-      } catch {
-        // skip
-      }
-    }
-    if (dirs.length > 0) {
-      process.stderr.write(`[publish]   Content: ${dirs.join(', ')}\n`);
-    }
     return 0;
   }
 

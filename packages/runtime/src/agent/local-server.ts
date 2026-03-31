@@ -155,6 +155,20 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     });
   });
 
+  // Resolve resume session ID
+  let resumeSessionId = config.resumeSessionId;
+  if (resumeSessionId === 'latest') {
+    resumeSessionId = sessionStore.latest() ?? undefined;
+  }
+  if (resumeSessionId) {
+    process.stderr.write(`[dev] Resume session: ${resumeSessionId}\n`);
+  }
+
+  // Client config — tells the web UI which session to resume
+  app.get('/config', (_req, res) => {
+    res.json({ resumeSessionId: resumeSessionId ?? null });
+  });
+
   // Sessions endpoints
   app.get('/sessions', (req, res) => {
     const automationFilter = typeof req.query?.['automation'] === 'string' ? String(req.query['automation']) : undefined;

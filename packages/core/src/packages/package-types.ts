@@ -39,13 +39,34 @@ export type PackageAuth = z.infer<typeof PackageAuthSchema>;
 // --- Package manifest ---
 
 /**
+ * Known content directories that a package can contain.
+ * Used by `amodal publish` to auto-populate the `contains` field.
+ */
+export const KNOWN_CONTENT_DIRS = [
+  'connections',
+  'skills',
+  'automations',
+  'knowledge',
+  'stores',
+  'tools',
+  'pages',
+  'agents',
+  'evals',
+] as const;
+
+/**
  * Package manifest — lives in package.json under the "amodal" key.
- * Type is an optional tag for discovery, not a structural requirement.
- * A package can contain any combination of connections, skills, automations,
- * knowledge, stores, tools, pages, agents, and evals.
+ *
+ * A package can contain any combination of amodal directories.
+ * Two classification axes:
+ * - `contains`: structural — what kinds of content are in the package
+ *   (auto-populated by `amodal publish` from directory scan)
+ * - `tags`: topical — what domain/use-case the package is for
+ *   (user-curated for discovery)
  */
 export const PackageManifestSchema = z.object({
   name: z.string().min(1),
+  contains: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   description: z.string().optional(),
   // Connection-specific fields
