@@ -22,7 +22,6 @@ import { ConfigPromptPage } from '@/pages/config/ConfigPromptPage';
 import { ConfigSecretsPage } from '@/pages/config/ConfigSecretsPage';
 import { ConfigSystemPage } from '@/pages/config/ConfigSystemPage';
 import { ConfigFilesPage } from '@/pages/config/ConfigFilesPage';
-import { ConfigChatPage } from '@/pages/config/ConfigChatPage';
 
 export const router = createBrowserRouter([
   {
@@ -44,8 +43,7 @@ export const router = createBrowserRouter([
     path: '/config',
     element: <ConfigLayout />,
     children: [
-      { index: true, element: <ConfigChatPage /> },
-      { path: 'agent', element: <ConfigAgentPage /> },
+      { index: true, element: <ConfigAgentPage /> },
       { path: 'models', element: <ConfigModelsPage /> },
       { path: 'prompt', element: <ConfigPromptPage /> },
       { path: 'secrets', element: <ConfigSecretsPage /> },
