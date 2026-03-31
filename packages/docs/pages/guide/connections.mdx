@@ -7,8 +7,8 @@ description: Connections give the agent API access, documentation, and security 
 Each connection is a directory in `connections/` containing a spec, access rules, and optional documentation. Pre-built plugins come with everything maintained — you just provide credentials.
 
 ```bash
-amodal connect slack          # install a plugin
-amodal sync --from <url>      # sync from OpenAPI/GraphQL
+amodal pkg connect slack          # install a plugin
+amodal pkg sync --from <url>      # sync from OpenAPI/GraphQL
 ```
 
 ## Directory Structure
@@ -187,8 +187,8 @@ If `body.amount > 10000`, the tier escalates from `confirm` to `review`.
 ## Drift Detection
 
 ```bash
-amodal sync --check    # report drift without updating (CI-friendly)
-amodal sync            # update local specs from remote
+amodal pkg sync --check    # report drift without updating (CI-friendly)
+amodal pkg sync            # update local specs from remote
 ```
 
 ## Pre-built Plugins
@@ -196,9 +196,9 @@ amodal sync            # update local specs from remote
 50+ pre-built connection plugins are available for popular APIs like Slack, GitHub, Stripe, Datadog, Jira, and more. Browse and install them from the **[Amodal Marketplace](https://www.amodalai.com/marketplace)**, or install directly from the CLI:
 
 ```bash
-amodal connect slack
-amodal connect stripe
-amodal connect datadog
+amodal pkg connect slack
+amodal pkg connect stripe
+amodal pkg connect datadog
 ```
 
 For APIs not in the marketplace, create custom connections using the directory structure above with your own OpenAPI or GraphQL spec.

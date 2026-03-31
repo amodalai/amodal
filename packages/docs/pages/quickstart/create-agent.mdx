@@ -60,13 +60,13 @@ Install a pre-built plugin or create a custom connection:
 
 ```bash
 # Install a plugin (e.g., Slack, GitHub, Datadog)
-amodal connect slack
+amodal pkg connect slack
 
 # Or sync from an OpenAPI spec
-amodal sync --from https://api.example.com/openapi.json
+amodal pkg sync --from https://api.example.com/openapi.json
 ```
 
-When you run `amodal connect slack`, the CLI installs the `@amodalai/connection-slack` package. The resolver automatically surfaces the plugin's contents — spec, access rules, documentation, and more — alongside your local files. The package includes:
+When you run `amodal pkg connect slack`, the CLI installs the `@amodalai/connection-slack` package. The resolver automatically surfaces the plugin's contents — spec, access rules, documentation, and more — alongside your local files. The package includes:
 
 - **spec.json** — API endpoints, methods, parameters, auth config
 - **access.json** — field restrictions, action tiers, scoping rules

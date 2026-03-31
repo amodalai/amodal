@@ -37,7 +37,7 @@ The simplest automation is a prompt and a schedule:
 |------|-------------|
 | **cron** | On a schedule. Inferred automatically when `schedule` is present. Uses standard cron syntax. |
 | **webhook** | In response to an HTTP POST to the automation's webhook URL. The payload is injected into the prompt. |
-| **manual** | On-demand via CLI (`amodal automations trigger <name>`). Useful for testing. |
+| **manual** | On-demand via CLI (`amodal ops automations trigger <name>`). Useful for testing. |
 
 ## Complete Examples
 
@@ -106,7 +106,7 @@ Webhook automations respond to external events in real time. Each webhook automa
 After deploying, the runtime generates a webhook URL for each webhook-triggered automation:
 
 ```bash
-$ amodal automations list
+$ amodal ops automations list
 
   Name                 Trigger   Schedule       Status    Webhook URL
   ──────────────────── ───────── ────────────── ───────── ──────────────────────────────────────────
@@ -218,7 +218,7 @@ Output routing is always allowed, even when writes are disabled. Posting a summa
 
 ```bash
 # List all automations with their status and next run time
-$ amodal automations list
+$ amodal ops automations list
 
   Name                 Trigger   Schedule       Status    Next Run
   ──────────────────── ───────── ────────────── ───────── ──────────────────────
@@ -227,21 +227,21 @@ $ amodal automations list
   drift-detector       cron      0 6 * * 1      paused    —
 
 # Pause an automation (skips future runs until resumed)
-$ amodal automations pause drift-detector
+$ amodal ops automations pause drift-detector
   ✓ Paused "API Drift Detector" — will not run until resumed
 
 # Resume a paused automation
-$ amodal automations resume drift-detector
+$ amodal ops automations resume drift-detector
   ✓ Resumed "API Drift Detector" — next run: 2026-03-30 06:00 UTC
 
 # Manually trigger an automation (useful for testing)
-$ amodal automations trigger revenue-digest
+$ amodal ops automations trigger revenue-digest
   ✓ Triggered "Daily Revenue Digest"
   ℹ Run started — session auto_run_8k2mx4
   ℹ Streaming output to #finance-daily
 
 # View the log of recent automation runs
-$ amodal automations history revenue-digest
+$ amodal ops automations history revenue-digest
 
   Run ID           Started              Duration   Status     Output
   ──────────────── ──────────────────── ────────── ────────── ──────────

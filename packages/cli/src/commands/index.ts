@@ -8,69 +8,32 @@ import {initCommand} from './init.js';
 import {devCommand} from './dev.js';
 import {inspectCommand} from './inspect.js';
 import {validateCommand} from './validate.js';
-import {connectCommand} from './connect.js';
-import {installPkgCommand} from './install-pkg.js';
-import {uninstallCommand} from './uninstall.js';
-import {listCommand} from './list.js';
-import {updateCommand} from './update.js';
-import {diffCommand} from './diff.js';
-import {searchCommand} from './search.js';
-import {publishCommand} from './publish.js';
-import {loginCommand, logoutCommand} from './login.js';
-import {linkCommand} from './link.js';
-import {syncCommand} from './sync.js';
-import {secretsCommand} from './secrets.js';
-import {deployCommand} from './deploy.js';
-import {buildCommand} from './build.js';
-import {dockerCommand} from './docker.js';
-import {rollbackCommand} from './rollback.js';
-import {deploymentsCommand} from './deployments.js';
-import {promoteCommand} from './promote.js';
-import {serveCommand} from './serve.js';
-import {statusCommand} from './status.js';
 import {chatCommand} from './chat.js';
-import {auditCommand} from './audit.js';
 import {evalCommand} from './eval.js';
-import {experimentCommand} from './experiment.js';
 import {testQueryCommand} from './test-query.js';
-import {automationsCommand} from './automations.js';
+import {pkgCommand} from './groups/pkg.js';
+import {deployGroupCommand} from './groups/deploy.js';
+import {opsCommand} from './groups/ops.js';
+import {authCommand} from './groups/auth.js';
+
 /**
- * All amodal subcommands for flat registration on the root yargs instance.
+ * All amodal subcommands registered on the root yargs instance.
+ *
+ * Top-level: daily-driver commands (init, dev, chat, validate, inspect, eval, test)
+ * Groups: pkg, deploy, ops, auth
  */
 export const amodalCommands = [
-  // Project
+  // Top-level
   initCommand,
   devCommand,
-  inspectCommand,
-  validateCommand,
-  // Package management
-  connectCommand,
-  installPkgCommand,
-  uninstallCommand,
-  listCommand,
-  updateCommand,
-  diffCommand,
-  searchCommand,
-  publishCommand,
-  loginCommand,
-  logoutCommand,
-  linkCommand,
-  syncCommand,
-  // Platform
-  secretsCommand,
-  deployCommand,
-  buildCommand,
-  dockerCommand,
-  rollbackCommand,
-  deploymentsCommand,
-  promoteCommand,
-  serveCommand,
-  statusCommand,
   chatCommand,
-  auditCommand,
-  automationsCommand,
-  // Advanced
+  validateCommand,
+  inspectCommand,
   evalCommand,
-  experimentCommand,
   testQueryCommand,
+  // Groups
+  pkgCommand,
+  deployGroupCommand,
+  opsCommand,
+  authCommand,
 ];

@@ -24,26 +24,38 @@ npx amodal <command>
 | `inspect` | Show compiled context with token counts |
 | `build-manifest-types` | Generate TypeScript types from manifest |
 
-### Connections & Packages
+### Packages (`amodal pkg`)
 
 | Command | Description |
 |---------|-------------|
-| [`connect`](/cli/connect) | Add a connection (plugin or custom) |
-| [`sync`](/cli/connect) | Sync API specs from remote sources |
-| `install` | Install marketplace packages |
-| `uninstall` | Remove packages |
-| `list` | List installed items |
-| `update` | Update packages |
-| `diff` | Show package changes |
-| `search` | Search the marketplace |
-| `publish` | Publish to the registry |
+| [`pkg connect`](/cli/connect) | Add a connection (plugin or custom) |
+| [`pkg sync`](/cli/connect) | Sync API specs from remote sources |
+| `pkg install` | Install marketplace packages |
+| `pkg uninstall` | Remove packages |
+| `pkg list` | List installed items |
+| `pkg update` | Update packages |
+| `pkg diff` | Show package changes |
+| `pkg search` | Search the marketplace |
+| `pkg publish` | Publish to the registry |
+| `pkg link` | Link a local package for development |
+
+### Deploy (`amodal deploy`)
+
+| Command | Description |
+|---------|-------------|
+| `deploy push` | Deploy to the platform |
+| `deploy build` | Build a deployment snapshot |
+| `deploy serve` | Run from a snapshot file |
+| `deploy status` | Show deployment status |
+| `deploy list` | List deployments |
+| `deploy rollback` | Roll back to a previous deployment |
+| `deploy promote` | Promote a deployment |
 
 ### Runtime
 
 | Command | Description |
 |---------|-------------|
 | [`chat`](/cli/chat) | Interactive terminal chat with your agent |
-| `serve` | Run from a snapshot file |
 | `test-query` | Fire a one-off query against the agent |
 
 ### Testing & Evaluation
@@ -51,6 +63,22 @@ npx amodal <command>
 | Command | Description |
 |---------|-------------|
 | [`eval`](/cli/eval) | Run evaluation suites |
-| `experiment` | Compare models, prompts, or configs |
 | `test-query` | Test a single query |
+
+### Ops (`amodal ops`)
+
+| Command | Description |
+|---------|-------------|
+| `ops secrets` | Manage secrets |
+| `ops docker` | Docker image management |
+| `ops automations` | Manage automations |
+| `ops audit` | View audit logs |
+| `ops experiment` | Compare models, prompts, or configs |
+
+### Auth (`amodal auth`)
+
+| Command | Description |
+|---------|-------------|
+| `auth login` | Log in to the platform |
+| `auth logout` | Log out |
 

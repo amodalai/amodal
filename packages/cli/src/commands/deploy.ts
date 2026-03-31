@@ -148,8 +148,8 @@ export async function runDeploy(options: DeployOptions = {}): Promise<number> {
 }
 
 export const deployCommand: CommandModule = {
-  command: 'deploy',
-  describe: 'Deploy to the platform',
+  command: 'push',
+  describe: 'Push a deployment to the platform',
   builder: (yargs) =>
     yargs
       .option('message', {

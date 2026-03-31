@@ -58,7 +58,7 @@ export async function runDeployments(options: DeploymentsOptions = {}): Promise<
 }
 
 export const deploymentsCommand: CommandModule = {
-  command: 'deployments',
+  command: 'list',
   describe: 'List deployment history',
   builder: (yargs) =>
     yargs
