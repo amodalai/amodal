@@ -1,5 +1,16 @@
 # @amodalai/runtime-app
 
+## 0.1.11
+
+### Patch Changes
+
+- [#47](https://github.com/amodalai/amodal/pull/47) [`61ab675`](https://github.com/amodalai/amodal/commit/61ab67585161c751772c89126d2fa1e8fe03ce8a) Thanks [@gte620v](https://github.com/gte620v)! - Add file browser and editor to config screen
+
+- [#44](https://github.com/amodalai/amodal/pull/44) [`fe4785d`](https://github.com/amodalai/amodal/commit/fe4785d0106eb39583b64b282bb89522dcaf92ef) Thanks [@gte620v](https://github.com/gte620v)! - Unified connection and MCP view with per-connection health status
+
+- Updated dependencies []:
+  - @amodalai/react@0.1.11
+
 ## 0.1.10
 
 ### Patch Changes
