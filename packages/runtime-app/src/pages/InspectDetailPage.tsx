@@ -335,11 +335,18 @@ export function InspectDetailPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="max-w-3xl mx-auto px-6 py-6">
-          {/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- data shape matches inspectKind */}
-          {inspectKind === 'connections' && <ConnectionView data={data as unknown as ConnectionDetail} />}
-          {inspectKind === 'mcp' && <McpView data={data as unknown as McpDetail} />}
-          {inspectKind === 'skills' && <SkillView data={data as unknown as SkillDetail} />}
-          {inspectKind === 'knowledge' && <KnowledgeView data={data as unknown as KnowledgeDetail} />}
+          {/* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- data shape validated by kind field */}
+          {'kind' in data && data.kind === 'mcp' ? (
+            <McpView data={data as unknown as McpDetail} />
+          ) : inspectKind === 'connections' ? (
+            <ConnectionView data={data as unknown as ConnectionDetail} />
+          ) : inspectKind === 'mcp' ? (
+            <McpView data={data as unknown as McpDetail} />
+          ) : inspectKind === 'skills' ? (
+            <SkillView data={data as unknown as SkillDetail} />
+          ) : inspectKind === 'knowledge' ? (
+            <KnowledgeView data={data as unknown as KnowledgeDetail} />
+          ) : null}
           {/* eslint-enable @typescript-eslint/no-unsafe-type-assertion */}
         </div>
       </div>
