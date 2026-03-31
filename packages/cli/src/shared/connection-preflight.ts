@@ -227,8 +227,27 @@ export async function runConnectionPreflight(repoPath: string): Promise<Prefligh
 
   const results: LiveTestResult[] = [];
 
+  // Split connections by protocol
+  const restConnections: Array<[string, typeof repo.connections extends Map<string, infer V> ? V : never]> = [];
+  const mcpFromConnections: Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>}> = {};
+
+  for (const [name, conn] of repo.connections) {
+    if (conn.spec.protocol === 'mcp') {
+      mcpFromConnections[name] = {
+        transport: conn.spec.transport ?? 'stdio',
+        command: conn.spec.command,
+        args: conn.spec.args,
+        env: conn.spec.env,
+        url: conn.spec.url,
+        headers: conn.spec.headers,
+      };
+    } else {
+      restConnections.push([name, conn]);
+    }
+  }
+
   // Test REST connections in parallel
-  const restPromises = [...repo.connections.entries()].map(([name, conn]) =>
+  const restPromises = restConnections.map(([name, conn]) =>
     testRestConnection(name, conn.spec, envVars),
   );
   const restResults = await Promise.allSettled(restPromises);
@@ -238,9 +257,17 @@ export async function runConnectionPreflight(repoPath: string): Promise<Prefligh
     }
   }
 
-  // Test MCP servers
-  if (repo.mcpServers && Object.keys(repo.mcpServers).length > 0) {
-    const mcpResults = await testMcpServers(repo.mcpServers);
+  // Test MCP connections (from protocol:mcp connections + legacy mcp.servers)
+  const allMcpConfigs = {...mcpFromConnections};
+  if (repo.mcpServers) {
+    for (const [name, config] of Object.entries(repo.mcpServers)) {
+      if (!allMcpConfigs[name]) {
+        allMcpConfigs[name] = config;
+      }
+    }
+  }
+  if (Object.keys(allMcpConfigs).length > 0) {
+    const mcpResults = await testMcpServers(allMcpConfigs);
     results.push(...mcpResults);
   }
 
