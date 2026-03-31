@@ -15,7 +15,6 @@ Tests the agent's ability to investigate a revenue anomaly.
 
 ## Setup
 
-Tenant: test-tenant
 Context: Revenue dropped 30% yesterday compared to the weekly average.
 
 ## Query
@@ -39,7 +38,6 @@ Context: Revenue dropped 30% yesterday compared to the weekly average.
 | `name` | Filename without `.md` | Eval identifier |
 | `title` | `# Eval: Title` heading | Display name |
 | `description` | Text between heading and first `##` | What the eval tests |
-| `setup.tenant` | `Tenant:` line in `## Setup` | Tenant to use |
 | `setup.context` | `Context:` line in `## Setup` | Background context |
 | `query` | Content of `## Query` (without quotes) | The user message to test |
 | `assertions` | `## Assertions` list items | Quality criteria |

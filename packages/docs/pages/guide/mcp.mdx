@@ -8,7 +8,28 @@ Amodal supports the [Model Context Protocol](https://modelcontextprotocol.io) fo
 
 ## Configuration
 
-Define MCP servers in `amodal.json`:
+The recommended way to define an MCP server is as a [connection](/guide/connections) with `"protocol": "mcp"` in its `spec.json`:
+
+```
+connections/github/
+└── spec.json
+```
+
+```json
+{
+  "protocol": "mcp",
+  "transport": "stdio",
+  "command": "uvx",
+  "args": ["mcp-server-github"],
+  "env": { "GITHUB_TOKEN": "env:GITHUB_TOKEN" }
+}
+```
+
+This gives you all the benefits of the connections directory — `surface.md` documentation, `rules.md` business rules, and a unified view in the admin UI. MCP connections do not require `access.json`.
+
+### Legacy: amodal.json
+
+MCP servers can also be defined in the `mcp.servers` block of `amodal.json`. This still works but the connection-directory approach above is preferred:
 
 ```json
 {
@@ -39,12 +60,14 @@ Define MCP servers in `amodal.json`:
 | Transport | Config | Use Case |
 |-----------|--------|----------|
 | `stdio` | `command`, `args`, `env` | Local tools via child process |
-| `sse` | `url` | Server-Sent Events over HTTP |
-| `http` | `url`, `trust` | Streamable HTTP transport |
+| `sse` | `url`, `headers` | Server-Sent Events over HTTP |
+| `http` | `url`, `trust`, `headers` | Streamable HTTP transport |
+
+The `headers` field is optional. Use it for authenticated MCP servers that require a Bearer token or other HTTP headers.
 
 ## Tool Discovery
 
-MCP tools are automatically discovered when servers connect. Tools are namespaced with the server name to avoid collisions:
+MCP tools are automatically discovered when servers connect. Tools are namespaced with the server name (or connection directory name) to avoid collisions:
 
 ```
 github__create_issue
@@ -71,23 +94,36 @@ amodal inspect   # shows all discovered tools including MCP
 - **Graceful shutdown** — servers are cleaned up when the runtime stops
 - **Environment variables** — use `env:VAR_NAME` pattern for credentials
 
-## Example: GitHub MCP
+## Example: GitHub MCP (Connection Directory)
 
 ```json
+// connections/github/spec.json
 {
-  "mcp": {
-    "servers": {
-      "github": {
-        "transport": "stdio",
-        "command": "uvx",
-        "args": ["mcp-server-github"],
-        "env": {
-          "GITHUB_TOKEN": "env:GITHUB_TOKEN"
-        }
-      }
-    }
+  "protocol": "mcp",
+  "transport": "stdio",
+  "command": "uvx",
+  "args": ["mcp-server-github"],
+  "env": {
+    "GITHUB_TOKEN": "env:GITHUB_TOKEN"
   }
 }
 ```
 
 This gives the agent access to GitHub tools (create issues, list PRs, read files, etc.) via the GitHub MCP server.
+
+## Example: Authenticated HTTP MCP
+
+```json
+// connections/internal-tools/spec.json
+{
+  "protocol": "mcp",
+  "transport": "http",
+  "url": "https://tools.internal.acme.com/mcp",
+  "headers": {
+    "Authorization": "env:INTERNAL_TOOLS_TOKEN"
+  },
+  "trust": true
+}
+```
+
+Use `headers` to pass Bearer tokens or API keys to authenticated MCP servers.

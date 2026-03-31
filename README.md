@@ -17,7 +17,7 @@ my-agent/
 ├── amodal.json          # Agent config — models, providers, settings
 ├── skills/              # What the agent can do (markdown)
 ├── knowledge/           # What the agent knows (markdown)
-├── connections/         # External service credentials (JSON)
+├── connections/         # External service connections — REST APIs and MCP servers
 ├── stores/              # Persistent state schemas (JSON)
 ├── pages/               # Custom UI surfaces beyond chat
 ├── automations/         # Event-triggered tasks
@@ -97,32 +97,84 @@ These four packages are published to npm and versioned together:
 | [`@amodalai/core`](./packages/core)       | Agent SDK — ReAct loop, tools, skills, knowledge, providers | Anyone building on or extending the runtime |
 | [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores     | Anyone self-hosting the agent server        |
 | [`@amodalai/amodal`](./packages/cli)      | CLI — chat, deploy, init, connect, eval                     | Every developer using the platform          |
-| [`@amodalai/react`](./packages/react)     | React hooks, components, and embeddable chat widget         | ISVs embedding the agent in their product   |
+| [`@amodalai/react`](./packages/react)     | React hooks, components, chat widget, and embeddable UI     | ISVs embedding the agent in their product   |
 
 Internal packages (not published to npm): `runtime-app` (Vite dev UI), `docs`, `test-utils`.
 
 ## CLI Commands
 
-| Command            | Description                             |
-| ------------------ | --------------------------------------- |
-| `amodal init`      | Scaffold a new agent project            |
-| `amodal dev`       | Start local dev server with hot reload  |
-| `amodal chat`      | Interactive chat session                |
-| `amodal connect`   | Manage external service connections     |
-| `amodal eval`      | Run evaluation suites                   |
-| `amodal validate`  | Validate agent configuration            |
-| `amodal build`     | Build agent snapshot                    |
-| `amodal inspect`   | Inspect agent config, tools, and skills |
-| `amodal install`   | Install a plugin package                |
-| `amodal uninstall` | Remove a plugin package                 |
-| `amodal publish`   | Publish plugins to marketplace          |
-| `amodal search`    | Search repo contents                    |
-| `amodal diff`      | Compare configurations                  |
-| `amodal audit`     | Review agent audit logs                 |
-| `amodal docker`    | Generate Docker deployment files        |
-| `amodal serve`     | Start the runtime server                |
+### Development
 
-See the [full CLI reference](https://docs.amodalai.com/cli) for cloud and platform commands (`deploy`, `login`, `secrets`, `promote`, `rollback`, and more).
+Create, run, and inspect agents locally.
+
+| Command           | Description                             |
+| ----------------- | --------------------------------------- |
+| `amodal init`     | Scaffold a new agent project            |
+| `amodal dev`      | Start local dev server with hot reload  |
+| `amodal chat`     | Interactive chat session                |
+| `amodal validate` | Validate agent configuration            |
+| `amodal inspect`  | Inspect agent config, tools, and skills |
+
+### Connections & Packages
+
+Add API connections and manage marketplace packages.
+
+| Command            | Description                         |
+| ------------------ | ----------------------------------- |
+| `amodal connect`   | Add a connection (plugin or custom) |
+| `amodal sync`      | Sync API specs from remote sources  |
+| `amodal install`   | Install a package from the registry |
+| `amodal uninstall` | Remove a package                    |
+| `amodal update`    | Update packages or the admin agent  |
+| `amodal list`      | List installed packages             |
+| `amodal search`    | Search the marketplace              |
+| `amodal diff`      | Show package changes                |
+| `amodal publish`   | Publish a package to the registry   |
+
+### Testing & Evaluation
+
+Validate agent behavior with evals and experiments.
+
+| Command             | Description                            |
+| ------------------- | -------------------------------------- |
+| `amodal eval`       | Run evaluation suites                  |
+| `amodal experiment` | Compare models, prompts, or configs    |
+| `amodal test-query` | Fire a one-off query against the agent |
+
+### Deployment & Hosting
+
+Build, deploy, and manage production agents.
+
+| Command              | Description                        |
+| -------------------- | ---------------------------------- |
+| `amodal build`       | Build agent snapshot               |
+| `amodal deploy`      | Deploy to the Amodal platform      |
+| `amodal serve`       | Start the runtime server           |
+| `amodal docker`      | Generate Docker deployment files   |
+| `amodal status`      | Show deployment status             |
+| `amodal deployments` | List deployment history            |
+| `amodal promote`     | Promote a deployment to production |
+| `amodal rollback`    | Roll back to a previous deployment |
+
+### Platform
+
+Authentication, secrets, and project linking.
+
+| Command          | Description                    |
+| ---------------- | ------------------------------ |
+| `amodal login`   | Authenticate with the platform |
+| `amodal logout`  | Log out of the platform        |
+| `amodal link`    | Link project to platform app   |
+| `amodal secrets` | Manage platform secrets        |
+
+### Operations
+
+Monitor and manage running agents.
+
+| Command              | Description                                  |
+| -------------------- | -------------------------------------------- |
+| `amodal automations` | List, pause, resume, and trigger automations |
+| `amodal audit`       | Review agent audit logs                      |
 
 ## Providers
 
