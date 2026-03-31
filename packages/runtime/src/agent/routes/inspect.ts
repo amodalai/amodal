@@ -56,10 +56,13 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
           }))
         : [];
 
-      // Check REST connection health in parallel
+      // Check connection health in parallel (REST only — MCP health checked via McpManager)
       const connectionEntries = Array.from(repo.connections.entries());
       const healthChecks = await Promise.allSettled(
         connectionEntries.map(async ([name, conn]) => {
+          if (conn.spec.protocol === 'mcp' || !conn.spec.baseUrl) {
+            return {name, status: 'connected' as const, error: undefined};
+          }
           const health = await checkRestHealth(conn.spec.baseUrl, conn.spec.testPath);
           return {name, status: health.ok ? 'connected' as const : 'error' as const, error: health.error};
         }),

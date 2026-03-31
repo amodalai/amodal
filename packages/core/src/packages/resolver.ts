@@ -86,16 +86,34 @@ async function loadConnectionsFromDir(
     if (existing.has(name)) continue; // Local wins
     const connPath = path.join(connDir, name);
     const specJson = await readOptionalFile(path.join(connPath, 'spec.json'));
-    const accessJson = await readOptionalFile(path.join(connPath, 'access.json'));
-    if (!specJson || !accessJson) {
-      warnings.push(`Connection ${name} missing spec.json or access.json in ${dir}`);
+    if (!specJson) {
+      warnings.push(`Connection ${name} missing spec.json in ${dir}`);
       continue;
     }
+
+    // Check if this is an MCP connection (access.json not required)
+    let isMcp = false;
+    try {
+      const parsed: unknown = JSON.parse(specJson);
+      if (parsed && typeof parsed === 'object' && 'protocol' in parsed) {
+         
+        isMcp = (parsed as Record<string, unknown>)['protocol'] === 'mcp';
+      }
+    } catch {
+      // Will fail properly in parseConnection
+    }
+
+    const accessJson = await readOptionalFile(path.join(connPath, 'access.json'));
+    if (!isMcp && !accessJson) {
+      warnings.push(`Connection ${name} missing access.json in ${dir}`);
+      continue;
+    }
+
     const surfaceMd = await readOptionalFile(path.join(connPath, 'surface.md')) ?? undefined;
     const entitiesMd = await readOptionalFile(path.join(connPath, 'entities.md')) ?? undefined;
     const rulesMd = await readOptionalFile(path.join(connPath, 'rules.md')) ?? undefined;
     try {
-      const conn = parseConnection(name, {specJson, accessJson, surfaceMd, entitiesMd, rulesMd}, connPath);
+      const conn = parseConnection(name, {specJson, accessJson: accessJson ?? '{"endpoints":{}}', surfaceMd, entitiesMd, rulesMd}, connPath);
       existing.set(name, conn);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

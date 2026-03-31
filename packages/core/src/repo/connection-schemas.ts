@@ -10,11 +10,14 @@ import {z} from 'zod';
  * Schema for spec.json — the structural layer of a connection.
  */
 export const ConnectionSpecSchema = z.object({
-  baseUrl: z.string().min(1),
+  /** Connection protocol. Defaults to 'rest' for backward compat. */
+  protocol: z.enum(['rest', 'mcp']).default('rest'),
+  // --- REST fields ---
+  baseUrl: z.string().min(1).optional(),
   specUrl: z.string().min(1).optional(),
   /** Relative path to test during validate (e.g. "/me", "/v1/status"). Appended to baseUrl. */
   testPath: z.string().optional(),
-  format: z.enum(['openapi', 'graphql', 'grpc', 'rest', 'aws-api']),
+  format: z.enum(['openapi', 'graphql', 'grpc', 'rest', 'aws-api']).optional(),
   auth: z
     .object({
       type: z.string().min(1),
@@ -37,6 +40,14 @@ export const ConnectionSpecSchema = z.object({
       exclude_paths: z.array(z.string()).optional(),
     })
     .optional(),
+  // --- MCP fields ---
+  transport: z.enum(['stdio', 'sse', 'http']).optional(),
+  command: z.string().optional(),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string()).optional(),
+  url: z.string().optional(),
+  headers: z.record(z.string()).optional(),
+  trust: z.boolean().optional(),
 });
 
 export type ConnectionSpec = z.infer<typeof ConnectionSpecSchema>;

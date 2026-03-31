@@ -250,16 +250,43 @@ export class AgentSessionManager {
   }
 
   /**
-   * Initialize MCP servers for a session if the repo has MCP config.
+   * Initialize MCP servers for a session.
+   * Sources: connections with protocol=mcp, plus legacy amodal.json mcp.servers block.
    */
   private async initMcp(session: AgentSession, repo: AmodalRepo): Promise<void> {
-    if (!repo.mcpServers || Object.keys(repo.mcpServers).length === 0) {
+    const mcpServers: Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean}> = {};
+
+    // Build MCP configs from connections with protocol: "mcp"
+    for (const [name, conn] of repo.connections) {
+      if (conn.spec.protocol === 'mcp') {
+        mcpServers[name] = {
+          transport: conn.spec.transport ?? 'stdio',
+          command: conn.spec.command,
+          args: conn.spec.args,
+          env: conn.spec.env,
+          url: conn.spec.url,
+          headers: conn.spec.headers,
+          trust: conn.spec.trust,
+        };
+      }
+    }
+
+    // Merge legacy amodal.json mcp.servers block
+    if (repo.mcpServers) {
+      for (const [name, config] of Object.entries(repo.mcpServers)) {
+        if (!mcpServers[name]) {
+          mcpServers[name] = config;
+        }
+      }
+    }
+
+    if (Object.keys(mcpServers).length === 0) {
       return;
     }
 
     const manager = new McpManager();
     try {
-      await manager.startServers(repo.mcpServers);
+      await manager.startServers(mcpServers);
       if (manager.connectedCount > 0) {
         session.mcpManager = manager;
       }
