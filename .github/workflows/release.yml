@@ -42,37 +42,45 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # Create a GitHub Release only when changesets actually published packages.
-      # Use the published version from changesets output, not from package.json on disk.
+      # Create a GitHub Release after changesets runs.
+      # We read the version from package.json directly instead of relying on
+      # changesets' published output, which can be unreliable with --no-git-tag.
       - name: Create GitHub Release
-        if: steps.changesets.outputs.published == 'true'
+        if: steps.changesets.outputs.hasChangesets == 'false'
         uses: actions/github-script@v7
         with:
           script: |
-            const packages = JSON.parse('${{ steps.changesets.outputs.publishedPackages }}');
-            const corePkg = packages.find(p => p.name === '@amodalai/core');
-            if (!corePkg) {
-              console.log('No @amodalai/core in published packages, skipping release');
-              return;
-            }
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('packages/core/package.json', 'utf8'));
+            const version = pkg.version;
+            const tag = `v${version}`;
 
-            const tag = `v${corePkg.version}`;
-
-            // Check if tag already exists
+            // Check if release already exists
             try {
-              await github.rest.git.getRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${tag}` });
-              console.log(`Tag ${tag} already exists, skipping`);
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              console.log(`Release ${tag} already exists, skipping`);
               return;
             } catch (e) {
-              // Tag doesn't exist, create it
+              // Release doesn't exist, create it
             }
 
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/${tag}`,
-              sha: context.sha,
-            });
+            // Create tag if needed
+            try {
+              await github.rest.git.getRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${tag}` });
+              console.log(`Tag ${tag} already exists`);
+            } catch (e) {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/tags/${tag}`,
+                sha: context.sha,
+              });
+              console.log(`Created tag ${tag}`);
+            }
 
             await github.rest.repos.createRelease({
               owner: context.repo.owner,
