@@ -1,5 +1,16 @@
 # @amodalai/amodal
 
+## 0.1.13
+
+### Patch Changes
+
+- [#55](https://github.com/amodalai/amodal/pull/55) [`125be18`](https://github.com/amodalai/amodal/commit/125be187872d3091b2ee240054145bcd0fb3a088) Thanks [@gte620v](https://github.com/gte620v)! - Fix "Cannot GET /" in `amodal dev`: move runtime-app from optional peer dependency to a real dependency and use Node module resolution to find the SPA assets.
+
+- Updated dependencies []:
+  - @amodalai/core@0.1.13
+  - @amodalai/runtime@0.1.13
+  - @amodalai/runtime-app@0.1.13
+
 ## 0.1.12
 
 ### Patch Changes
