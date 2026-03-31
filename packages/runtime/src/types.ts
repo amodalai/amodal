@@ -115,6 +115,7 @@ export interface SSEToolCallResultEvent {
   tool_id: string;
   status: 'success' | 'error';
   result?: string;
+  parameters?: Record<string, unknown>;
   duration_ms?: number;
   error?: string;
   timestamp: string;

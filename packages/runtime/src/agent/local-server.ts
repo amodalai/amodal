@@ -170,7 +170,14 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       res.status(404).json({error: 'Session not found'});
       return;
     }
-    // Convert LLMMessage[] to the format the CLI expects
+    // Convert LLMMessage[] to the format the UI expects
+    const isTextBlock = (b: unknown): b is {type: 'text'; text: string} =>
+      typeof b === 'object' && b !== null && 'type' in b && 'text' in b &&
+      (b as {type: unknown}).type === 'text' && typeof (b as {text: unknown}).text === 'string';
+    const isToolUseBlock = (b: unknown): b is {type: 'tool_use'; id: string; name: string; input: Record<string, unknown>} =>
+      typeof b === 'object' && b !== null && 'type' in b &&
+      (b as {type: unknown}).type === 'tool_use' && 'name' in b;
+
     const messages = persisted.conversationHistory.map((msg: unknown) => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted LLMMessage
       const m = msg as {role: string; content: unknown};
@@ -178,17 +185,53 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         return {role: 'user', text: typeof m.content === 'string' ? m.content : ''};
       }
       if (m.role === 'assistant') {
-        // Assistant content is LLMResponseBlock[] — extract text
         const blocks = Array.isArray(m.content) ? m.content : [];
-        const isTextBlock = (b: unknown): b is {type: 'text'; text: string} =>
-          typeof b === 'object' && b !== null && 'type' in b && 'text' in b &&
-          (b as {type: unknown}).type === 'text' && typeof (b as {text: unknown}).text === 'string';
         const text = blocks.filter(isTextBlock).map((b) => b.text).join('');
-        return {role: 'assistant', text};
+        const toolCalls = blocks.filter(isToolUseBlock).map((b) => ({
+          toolId: b.id,
+          toolName: b.name,
+          parameters: b.input ?? {},
+          status: 'success' as const,
+        }));
+        return {role: 'assistant', text, toolCalls: toolCalls.length > 0 ? toolCalls : undefined};
       }
       return {role: m.role, text: ''};
     });
     res.json({session_id: persisted.id, messages});
+  });
+
+  app.patch('/session/:id', express.json(), (req, res) => {
+    const sessionId = req.params['id'] ?? '';
+    const body: unknown = req.body;
+    if (!body || typeof body !== 'object' || !('title' in body) || typeof (body as Record<string, unknown>)['title'] !== 'string') {
+      res.status(400).json({error: 'title (string) is required'});
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated above
+    const title = (body as Record<string, unknown>)['title'] as string;
+    const updated = sessionStore.updateTitle(sessionId, title);
+    if (!updated) {
+      res.status(404).json({error: 'Session not found'});
+      return;
+    }
+    // Also update in-memory session if active
+    const activeSession = sessionManager.get(sessionId);
+    if (activeSession) {
+      activeSession.title = title;
+    }
+    res.json({ok: true});
+  });
+
+  app.delete('/session/:id', (req, res) => {
+    const sessionId = req.params['id'] ?? '';
+    // Destroy in-memory session if active
+    sessionManager.destroy(sessionId);
+    const deleted = sessionStore.delete(sessionId);
+    if (!deleted) {
+      res.status(404).json({error: 'Session not found'});
+      return;
+    }
+    res.json({ok: true});
   });
 
   // File browser/editor

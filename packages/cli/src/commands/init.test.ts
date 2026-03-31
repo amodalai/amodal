@@ -52,18 +52,14 @@ describe('runInit', () => {
     expect(config['models']['main']['provider']).toBe('anthropic');
   });
 
-  it('should write starter skill', async () => {
+  it('should not write starter files into directories', async () => {
     await runInit({cwd: tempDir});
 
-    const skill = readFileSync(join(tempDir, 'skills', 'SKILL.md'), 'utf-8');
-    expect(skill).toContain('general-analysis');
-  });
-
-  it('should write starter knowledge', async () => {
-    await runInit({cwd: tempDir});
-
-    const knowledge = readFileSync(join(tempDir, 'knowledge', 'domain.md'), 'utf-8');
-    expect(knowledge).toContain('Domain Knowledge');
+    // Directories should exist but be empty — no fake/mock content
+    expect(existsSync(join(tempDir, 'skills'))).toBe(true);
+    expect(existsSync(join(tempDir, 'skills', 'SKILL.md'))).toBe(false);
+    expect(existsSync(join(tempDir, 'knowledge'))).toBe(true);
+    expect(existsSync(join(tempDir, 'knowledge', 'domain.md'))).toBe(false);
   });
 
   it('should skip if config already exists', async () => {

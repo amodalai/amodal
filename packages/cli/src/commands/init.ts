@@ -8,8 +8,6 @@ import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import type {CommandModule} from 'yargs';
 import {generateConfigTemplate} from '../templates/config-template.js';
-import {generateSkillTemplate} from '../templates/skill-template.js';
-import {generateKnowledgeTemplate} from '../templates/knowledge-template.js';
 
 export interface InitOptions {
   cwd?: string;
@@ -47,18 +45,6 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
 
   // Write amodal.json at repo root
   writeFileSync(configPath, generateConfigTemplate({name, provider}));
-
-  // Write starter skill
-  writeFileSync(
-    join(cwd, 'skills', 'SKILL.md'),
-    generateSkillTemplate(),
-  );
-
-  // Write starter knowledge
-  writeFileSync(
-    join(cwd, 'knowledge', 'domain.md'),
-    generateKnowledgeTemplate(),
-  );
 
   // Write .gitignore if it doesn't exist
   const gitignorePath = join(cwd, '.gitignore');

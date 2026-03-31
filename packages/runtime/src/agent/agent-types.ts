@@ -52,6 +52,7 @@ export interface AgentSession {
   id: string;
   runtime: SessionRuntime;
   appId: string;
+  title?: string;
   conversationHistory: LLMMessage[];
   createdAt: number;
   lastAccessedAt: number;

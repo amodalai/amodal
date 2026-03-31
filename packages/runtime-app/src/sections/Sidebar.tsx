@@ -4,17 +4,117 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { SquarePen, MessageSquare, Database, Zap, FileText, Plug, Sparkles, BookOpen, ChevronRight, Loader2, Cable } from 'lucide-react';
+import { SquarePen, MessageSquare, Database, Zap, FileText, Plug, Sparkles, BookOpen, ChevronRight, Loader2, Cable, Pencil, Trash2 } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { cn } from '@/lib/utils';
 import type { PageConfig } from 'virtual:amodal-manifest';
 
 interface SessionSummary {
   id: string;
+  title?: string;
   summary: string;
   lastAccessedAt: number;
+}
+
+function DeleteConfirmModal({ sessionName, onConfirm, onCancel }: { sessionName: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-700 p-5 max-w-sm mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-200 mb-2">Delete session?</h3>
+        <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
+          &ldquo;{sessionName}&rdquo; will be permanently deleted.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium rounded-md bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">
+            Cancel
+          </button>
+          <button onClick={onConfirm} className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-500 transition-colors">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SessionItem({ session, isActive, onNavigate, onDelete }: { session: SessionSummary; isActive: boolean; onNavigate: (id: string) => void; onDelete: (id: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditValue(session.title ?? session.summary);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }, [session.title, session.summary]);
+
+  const saveTitle = useCallback(() => {
+    const trimmed = editValue.trim();
+    setEditing(false);
+    if (!trimmed || trimmed === session.summary) return;
+    fetch(`/session/${encodeURIComponent(session.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: trimmed }),
+    }).catch(() => {});
+    session.title = trimmed;
+    session.summary = trimmed;
+  }, [editValue, session]);
+
+  if (editing) {
+    return (
+      <div className="px-3 py-[5px]">
+        <input
+          ref={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={saveTitle}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') saveTitle();
+            if (e.key === 'Escape') setEditing(false);
+          }}
+          className="w-full text-[12px] px-1.5 py-0.5 rounded border border-indigo-500/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
+          autoFocus
+        />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => onNavigate(session.id)}
+        className={cn(
+          'group flex items-center gap-2 w-full px-3 py-[6px] rounded-md text-[12px] text-left transition-colors duration-150 truncate',
+          isActive
+            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+            : 'text-gray-400 dark:text-white/40 hover:text-gray-700 dark:hover:text-white/70 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
+        )}
+      >
+        <MessageSquare className="h-3 w-3 shrink-0 opacity-40" />
+        <span className="truncate flex-1">{session.summary}</span>
+        <Pencil
+          className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40 hover:!opacity-80 transition-opacity"
+          onClick={startEdit}
+        />
+        <Trash2
+          className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40 hover:!opacity-80 text-red-400 transition-opacity"
+          onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+        />
+      </button>
+      {confirmDelete && (
+        <DeleteConfirmModal
+          sessionName={session.summary}
+          onConfirm={() => { setConfirmDelete(false); onDelete(session.id); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+    </>
+  );
 }
 
 function NavItem({ to, children, end }: { to: string; children: React.ReactNode; end?: boolean }) {
@@ -184,24 +284,20 @@ export function Sidebar() {
               Recent
             </SectionLabel>
             <div className="space-y-0.5">
-              {sessions.map((s) => {
-                const isActive = location.search.includes(s.id);
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => { void navigate(`/?resume=${s.id}`); }}
-                    className={cn(
-                      'flex items-center gap-2 w-full px-3 py-[6px] rounded-md text-[12px] text-left transition-colors duration-150 truncate',
-                      isActive
-                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                        : 'text-gray-400 dark:text-white/40 hover:text-gray-700 dark:hover:text-white/70 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
-                    )}
-                  >
-                    <MessageSquare className="h-3 w-3 shrink-0 opacity-40" />
-                    <span className="truncate">{s.summary}</span>
-                  </button>
-                );
-              })}
+              {sessions.map((s) => (
+                <SessionItem
+                  key={s.id}
+                  session={s}
+                  isActive={location.search.includes(s.id)}
+                  onNavigate={(id) => { void navigate(`/?resume=${id}`); }}
+                  onDelete={(id) => {
+                    fetch(`/session/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+                    setSessions((prev) => prev.filter((sess) => sess.id !== id));
+                    // If we just deleted the active session, go to new chat
+                    if (location.search.includes(id)) { void navigate('/'); }
+                  }}
+                />
+              ))}
             </div>
           </>
         )}
