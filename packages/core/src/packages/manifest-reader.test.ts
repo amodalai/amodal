@@ -30,16 +30,16 @@ describe('readPackageManifest', () => {
         name: '@amodalai/connection-salesforce',
         version: '2.1.0',
         amodal: {
-          type: 'connection',
           name: 'salesforce',
+          tags: ['connection'],
           auth: {type: 'bearer', envVars: {TOKEN: 'desc'}},
           testEndpoints: ['GET /test'],
         },
       }),
     );
     const manifest = await readPackageManifest(tmpDir);
-    expect(manifest.type).toBe('connection');
     expect(manifest.name).toBe('salesforce');
+    expect(manifest.tags).toEqual(['connection']);
   });
 
   it('reads valid skill manifest', async () => {
@@ -47,11 +47,11 @@ describe('readPackageManifest', () => {
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         name: '@amodalai/skill-triage',
-        amodal: {type: 'skill', name: 'triage', requiredEntities: ['opportunity']},
+        amodal: {name: 'triage', tags: ['skill']},
       }),
     );
     const manifest = await readPackageManifest(tmpDir);
-    expect(manifest.type).toBe('skill');
+    expect(manifest.name).toBe('triage');
   });
 
   it('throws on missing package.json', async () => {
@@ -66,12 +66,12 @@ describe('readPackageManifest', () => {
     await expect(readPackageManifest(tmpDir)).rejects.toThrow(PackageError);
   });
 
-  it('throws on invalid manifest', async () => {
+  it('throws on invalid manifest (missing required name)', async () => {
     await fs.writeFile(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         name: 'test',
-        amodal: {type: 'invalid_type', name: 'x'},
+        amodal: {tags: ['something']},
       }),
     );
     await expect(readPackageManifest(tmpDir)).rejects.toThrow(PackageError);
@@ -80,6 +80,26 @@ describe('readPackageManifest', () => {
   it('throws on invalid JSON', async () => {
     await fs.writeFile(path.join(tmpDir, 'package.json'), 'not json');
     await expect(readPackageManifest(tmpDir)).rejects.toThrow(PackageError);
+  });
+
+  it('reads old v1 manifest with type field (backward compat)', async () => {
+    await fs.writeFile(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: '@amodalai/connection-stripe',
+        version: '1.0.0',
+        amodal: {
+          type: 'connection',
+          name: 'stripe',
+          auth: {type: 'api_key', headers: {'Authorization': 'Bearer {{API_KEY}}'}},
+          testEndpoints: ['GET /v1/customers?limit=1'],
+        },
+      }),
+    );
+    const manifest = await readPackageManifest(tmpDir);
+    expect(manifest.name).toBe('stripe');
+    // type field is silently stripped by zod
+    expect('type' in manifest).toBe(false);
   });
 });
 

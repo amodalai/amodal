@@ -18,7 +18,7 @@ import yargs from 'yargs/yargs';
 import type {ArgumentsCamelCase, CommandModule} from 'yargs';
 
 import {connectCommand} from './commands/connect.js';
-import {installPkgCommand, parseInstallArgs} from './commands/install-pkg.js';
+import {installPkgCommand} from './commands/install-pkg.js';
 import {uninstallCommand} from './commands/uninstall.js';
 import {listCommand} from './commands/list.js';
 import {updateCommand} from './commands/update.js';
@@ -119,35 +119,18 @@ describe('amodal CLI e2e', () => {
       expect(args['packages']).toEqual([]);
     });
 
-    it('variadic positional captures type/name pairs', async () => {
-      const args = await parseArgs(installPkgCommand, ['install', 'connection', 'salesforce', 'skill', 'triage']);
-      expect(args['packages']).toEqual(['connection', 'salesforce', 'skill', 'triage']);
-    });
-
-    it('parseInstallArgs converts pairs to typed objects', () => {
-      const result = parseInstallArgs(['connection', 'salesforce', 'skill', 'triage']);
-      expect(result).toEqual([
-        {type: 'connection', name: 'salesforce'},
-        {type: 'skill', name: 'triage'},
-      ]);
-    });
-
-    it('parseInstallArgs rejects invalid types', () => {
-      expect(() => parseInstallArgs(['invalid', 'test'])).toThrow('Invalid package type');
-    });
-
-    it('parseInstallArgs rejects incomplete pairs', () => {
-      expect(() => parseInstallArgs(['connection'])).toThrow('incomplete pair');
+    it('variadic positional captures package names', async () => {
+      const args = await parseArgs(installPkgCommand, ['install', 'alert-enrichment', 'soc-agent']);
+      expect(args['packages']).toEqual(['alert-enrichment', 'soc-agent']);
     });
   });
 
   // --- uninstall ---
 
   describe('uninstall', () => {
-    it('parses type and name positionals', async () => {
-      const args = await parseArgs(uninstallCommand, ['uninstall', 'connection', 'stripe']);
-      expect(args['type']).toBe('connection');
-      expect(args['name']).toBe('stripe');
+    it('parses name positional', async () => {
+      const args = await parseArgs(uninstallCommand, ['uninstall', 'connection-stripe']);
+      expect(args['name']).toBe('connection-stripe');
     });
   });
 
@@ -157,12 +140,12 @@ describe('amodal CLI e2e', () => {
     it('defaults to json=false', async () => {
       const args = await parseArgs(listCommand, ['list']);
       expect(args['json']).toBe(false);
-      expect(args['type']).toBeUndefined();
+      expect(args['filter']).toBeUndefined();
     });
 
-    it('parses --type and --json', async () => {
-      const args = await parseArgs(listCommand, ['list', '--type', 'skill', '--json']);
-      expect(args['type']).toBe('skill');
+    it('parses --filter and --json', async () => {
+      const args = await parseArgs(listCommand, ['list', '--filter', 'skill', '--json']);
+      expect(args['filter']).toBe('skill');
       expect(args['json']).toBe(true);
     });
   });
@@ -170,17 +153,15 @@ describe('amodal CLI e2e', () => {
   // --- update ---
 
   describe('update', () => {
-    it('optional positionals default to undefined', async () => {
+    it('optional positional defaults to undefined', async () => {
       const args = await parseArgs(updateCommand, ['update']);
-      expect(args['type']).toBeUndefined();
       expect(args['name']).toBeUndefined();
       expect(args['latest']).toBe(false);
       expect(args['dryRun']).toBe(false);
     });
 
-    it('parses type and name', async () => {
-      const args = await parseArgs(updateCommand, ['update', 'connection', 'stripe']);
-      expect(args['type']).toBe('connection');
+    it('parses name', async () => {
+      const args = await parseArgs(updateCommand, ['update', 'stripe']);
       expect(args['name']).toBe('stripe');
     });
 
@@ -194,9 +175,8 @@ describe('amodal CLI e2e', () => {
   // --- diff ---
 
   describe('diff', () => {
-    it('parses type and name', async () => {
-      const args = await parseArgs(diffCommand, ['diff', 'skill', 'triage']);
-      expect(args['type']).toBe('skill');
+    it('parses name', async () => {
+      const args = await parseArgs(diffCommand, ['diff', 'triage']);
       expect(args['name']).toBe('triage');
     });
   });

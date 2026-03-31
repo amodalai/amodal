@@ -4,22 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {join} from 'node:path';
+
 import type {CommandModule} from 'yargs';
 import {
   ensureNpmContext,
+  fromNpmName,
   getLockEntry,
-  makePackageRef,
+  getNpmContextPaths,
   npmView,
   readPackageFile,
   listPackageFiles,
-  getPackageDir,
+  toNpmName,
 } from '@amodalai/core';
-import type {PackageType} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
 export interface DiffOptions {
   cwd?: string;
-  type: PackageType;
   name: string;
 }
 
@@ -38,19 +39,20 @@ export async function runDiff(options: DiffOptions): Promise<number> {
   }
 
   const paths = await ensureNpmContext(repoPath);
-  const ref = makePackageRef(options.type, options.name);
+  const npmName = toNpmName(options.name);
+  const shortName = fromNpmName(npmName);
 
   // Check if installed
-  const lockEntry = await getLockEntry(repoPath, options.type, options.name);
+  const lockEntry = await getLockEntry(repoPath, npmName);
   if (!lockEntry) {
-    process.stderr.write(`[diff] Package ${ref.key} is not installed.\n`);
+    process.stderr.write(`[diff] Package ${npmName} is not installed.\n`);
     return 1;
   }
 
   // Get latest version info
   let latestVersion: string;
   try {
-    const viewResult = await npmView(paths, ref.npmName);
+    const viewResult = await npmView(paths, npmName);
     latestVersion = viewResult.version;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -59,18 +61,15 @@ export async function runDiff(options: DiffOptions): Promise<number> {
   }
 
   if (latestVersion === lockEntry.version) {
-    process.stderr.write(`[diff] ${ref.npmName}@${lockEntry.version} is already the latest version.\n`);
+    process.stderr.write(`[diff] ${npmName}@${lockEntry.version} is already the latest version.\n`);
     return 0;
   }
 
-  process.stderr.write(`[diff] Comparing ${ref.npmName}: ${lockEntry.version} (installed) → ${latestVersion} (latest)\n`);
+  process.stderr.write(`[diff] Comparing ${npmName}: ${lockEntry.version} (installed) → ${latestVersion} (latest)\n`);
 
   // Get installed package directory
-  const packageDir = await getPackageDir(repoPath, ref);
-  if (!packageDir) {
-    process.stderr.write(`[diff] Package ${ref.key} is in lock file but not installed on disk.\n`);
-    return 1;
-  }
+  const contextPaths = getNpmContextPaths(repoPath);
+  const packageDir = join(contextPaths.nodeModules, npmName);
 
   // List installed files
   let installedFiles: string[];
@@ -81,7 +80,7 @@ export async function runDiff(options: DiffOptions): Promise<number> {
   }
 
   // Print diff report
-  process.stdout.write(`\n  ${ref.npmName}\n`);
+  process.stdout.write(`\n  ${npmName}\n`);
   process.stdout.write(`  Installed: ${lockEntry.version}\n`);
   process.stdout.write(`  Latest:    ${latestVersion}\n\n`);
 
@@ -124,20 +123,19 @@ export async function runDiff(options: DiffOptions): Promise<number> {
     }
   }
 
-  process.stdout.write(`\n  Run \`amodal update ${options.type} ${options.name}\` to upgrade.\n\n`);
+  process.stdout.write(`\n  Run \`amodal update ${shortName}\` to upgrade.\n\n`);
   return 0;
 }
 
 export const diffCommand: CommandModule = {
-  command: 'diff <type> <name>',
+  command: 'diff <name>',
   describe: 'Show diff between installed and latest version',
   builder: (yargs) =>
     yargs
-      .positional('type', {type: 'string', demandOption: true, choices: ['connection', 'skill', 'automation', 'knowledge'] as const, describe: 'Package type'})
       .positional('name', {type: 'string', demandOption: true, describe: 'Package name'}),
   handler: async (argv) => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    const code = await runDiff({type: argv['type'] as PackageType, name: argv['name'] as string});
+    const code = await runDiff({name: argv['name'] as string});
     process.exit(code);
   },
 };

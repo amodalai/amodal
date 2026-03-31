@@ -8,14 +8,13 @@ import {readFile, writeFile} from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {PackageError} from './package-error.js';
-import type {PackageType} from './package-types.js';
-import {packageKey} from './package-types.js';
 
 const CONFIG_FILENAME = 'amodal.json';
 
 /**
  * Read the dependencies map from amodal.json.
  * Returns an empty record if no dependencies field exists.
+ * Keys are npm package names (e.g., "@amodalai/alert-enrichment").
  */
 export async function readConfigDeps(repoPath: string): Promise<Record<string, string>> {
   const configPath = path.join(repoPath, CONFIG_FILENAME);
@@ -34,12 +33,11 @@ export async function readConfigDeps(repoPath: string): Promise<Record<string, s
 
 /**
  * Add or update a dependency in amodal.json.
- * Writes a caret range (^version) by default.
+ * Key is the npm package name (e.g., "@amodalai/alert-enrichment").
  */
 export async function addConfigDep(
   repoPath: string,
-  type: PackageType,
-  name: string,
+  npmName: string,
   version: string,
 ): Promise<void> {
   const configPath = path.join(repoPath, CONFIG_FILENAME);
@@ -54,8 +52,7 @@ export async function addConfigDep(
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   const deps = (raw['dependencies'] as Record<string, string>) ?? {};
-  const key = packageKey(type, name);
-  deps[key] = `^${version}`;
+  deps[npmName] = `^${version}`;
   raw['dependencies'] = deps;
 
   await writeFile(configPath, JSON.stringify(raw, null, 2) + '\n', 'utf-8');
@@ -66,8 +63,7 @@ export async function addConfigDep(
  */
 export async function removeConfigDep(
   repoPath: string,
-  type: PackageType,
-  name: string,
+  npmName: string,
 ): Promise<void> {
   const configPath = path.join(repoPath, CONFIG_FILENAME);
   let raw: Record<string, unknown>;
@@ -81,8 +77,7 @@ export async function removeConfigDep(
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   const deps = (raw['dependencies'] as Record<string, string>) ?? {};
-  const key = packageKey(type, name);
-  delete deps[key];
+  delete deps[npmName];
 
   if (Object.keys(deps).length > 0) {
     raw['dependencies'] = deps;

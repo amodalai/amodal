@@ -10,18 +10,15 @@ const mockFindRepoRoot = vi.fn(() => '/test/repo');
 const mockEnsureNpmContext = vi.fn();
 const mockNpmInstall = vi.fn();
 const mockAddLockEntry = vi.fn();
-const mockEnsureSymlink = vi.fn();
 const mockGetLockEntry = vi.fn();
-const mockGetPackageDir = vi.fn();
+const mockGetNpmContextPaths = vi.fn();
 const mockReadPackageManifest = vi.fn();
-const mockMakePackageRef = vi.fn((type: string, name: string) => ({
-  type,
-  name,
-  key: `${type}/${name}`,
-  npmName: `@amodalai/${type}-${name}`,
-}));
+const mockToNpmName = vi.fn((name: string) => `@amodalai/connection-${name}`);
 const mockFindMissingEnvVars = vi.fn();
 const mockUpsertEnvEntries = vi.fn();
+const mockAddConfigDep = vi.fn();
+const mockDiscoverInstalledPackages = vi.fn();
+const mockBuildLockFile = vi.fn();
 
 const mockPromptForCredentials = vi.fn();
 const mockTestConnection = vi.fn();
@@ -37,13 +34,15 @@ vi.mock('@amodalai/core', () => ({
   ensureNpmContext: mockEnsureNpmContext,
   npmInstall: mockNpmInstall,
   addLockEntry: mockAddLockEntry,
-  ensureSymlink: mockEnsureSymlink,
   getLockEntry: mockGetLockEntry,
-  getPackageDir: mockGetPackageDir,
+  getNpmContextPaths: mockGetNpmContextPaths,
   readPackageManifest: mockReadPackageManifest,
-  makePackageRef: mockMakePackageRef,
+  toNpmName: mockToNpmName,
   findMissingEnvVars: mockFindMissingEnvVars,
   upsertEnvEntries: mockUpsertEnvEntries,
+  addConfigDep: mockAddConfigDep,
+  discoverInstalledPackages: mockDiscoverInstalledPackages,
+  buildLockFile: mockBuildLockFile,
 }));
 
 vi.mock('../auth/index.js', () => ({
@@ -65,7 +64,6 @@ const mockPaths = {
 };
 
 const bearerManifest = {
-  type: 'connection' as const,
   name: 'stripe',
   auth: {
     type: 'bearer' as const,
@@ -75,7 +73,6 @@ const bearerManifest = {
 };
 
 const apiKeyManifest = {
-  type: 'connection' as const,
   name: 'datadog',
   auth: {
     type: 'api_key' as const,
@@ -86,7 +83,6 @@ const apiKeyManifest = {
 };
 
 const oauth2Manifest = {
-  type: 'connection' as const,
   name: 'salesforce',
   auth: {
     type: 'oauth2' as const,
@@ -99,7 +95,6 @@ const oauth2Manifest = {
 };
 
 const noAuthManifest = {
-  type: 'connection' as const,
   name: 'public-api',
   testEndpoints: ['https://api.example.com/health'],
 };
@@ -113,11 +108,13 @@ describe('runConnect', () => {
     mockEnsureNpmContext.mockResolvedValue(mockPaths);
     mockGetLockEntry.mockResolvedValue(null); // fresh install by default
     mockNpmInstall.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
-    mockAddLockEntry.mockResolvedValue({lockVersion: 1, packages: {}});
-    mockEnsureSymlink.mockResolvedValue('/test/repo/.amodal/packages/connection--test');
-    mockGetPackageDir.mockResolvedValue('/test/repo/.amodal/packages/connection--test');
+    mockAddLockEntry.mockResolvedValue({lockVersion: 2, packages: {}});
+    mockGetNpmContextPaths.mockReturnValue(mockPaths);
     mockFindMissingEnvVars.mockResolvedValue([]);
     mockUpsertEnvEntries.mockResolvedValue(undefined);
+    mockAddConfigDep.mockResolvedValue(undefined);
+    mockDiscoverInstalledPackages.mockResolvedValue([]);
+    mockBuildLockFile.mockResolvedValue(undefined);
     mockPromptForCredentials.mockResolvedValue({credentials: {}, summary: 'Set 1 credential'});
     mockTestConnection.mockResolvedValue({connectionName: 'test', results: [], allPassed: true});
     stderrOutput = '';
@@ -185,7 +182,7 @@ describe('runConnect', () => {
   });
 
   it('should skip install on reconnect', async () => {
-    mockGetLockEntry.mockResolvedValue({version: '1.0.0', npm: '@amodalai/connection-stripe', integrity: 'sha512-abc'});
+    mockGetLockEntry.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
     mockReadPackageManifest.mockResolvedValue(bearerManifest);
 
     const {runConnect} = await import('./connect.js');
@@ -196,7 +193,7 @@ describe('runConnect', () => {
   });
 
   it('should skip credential prompt on reconnect when vars present', async () => {
-    mockGetLockEntry.mockResolvedValue({version: '1.0.0', npm: '@amodalai/connection-stripe', integrity: 'sha512-abc'});
+    mockGetLockEntry.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
     mockReadPackageManifest.mockResolvedValue(bearerManifest);
     mockFindMissingEnvVars.mockResolvedValue([]);
 
@@ -207,7 +204,7 @@ describe('runConnect', () => {
   });
 
   it('should re-prompt on reconnect with force', async () => {
-    mockGetLockEntry.mockResolvedValue({version: '1.0.0', npm: '@amodalai/connection-stripe', integrity: 'sha512-abc'});
+    mockGetLockEntry.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
     mockReadPackageManifest.mockResolvedValue(bearerManifest);
 
     const {runConnect} = await import('./connect.js');
@@ -280,15 +277,6 @@ describe('runConnect', () => {
     expect(stderrOutput).toContain('Auth cancelled');
   });
 
-  it('should return 1 when package dir not found', async () => {
-    mockGetPackageDir.mockResolvedValue(null);
-
-    const {runConnect} = await import('./connect.js');
-    const result = await runConnect({name: 'stripe'});
-    expect(result).toBe(1);
-    expect(stderrOutput).toContain('Could not find installed package directory');
-  });
-
   it('should return 1 when user cancels bearer auth', async () => {
     mockReadPackageManifest.mockResolvedValue(bearerManifest);
     mockPromptForCredentials.mockResolvedValue({
@@ -303,7 +291,7 @@ describe('runConnect', () => {
   });
 
   it('should prompt for missing vars on reconnect without force', async () => {
-    mockGetLockEntry.mockResolvedValue({version: '1.0.0', npm: '@amodalai/connection-stripe', integrity: 'sha512-abc'});
+    mockGetLockEntry.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
     mockReadPackageManifest.mockResolvedValue(bearerManifest);
     mockFindMissingEnvVars.mockResolvedValue(['STRIPE_API_KEY']);
 

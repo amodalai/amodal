@@ -30,12 +30,12 @@ const minimalConfig = JSON.stringify({
   },
 });
 
-const validSpec = JSON.stringify({
+const _validSpec = JSON.stringify({
   baseUrl: 'https://api.example.com',
   format: 'openapi',
 });
 
-const validAccess = JSON.stringify({
+const _validAccess = JSON.stringify({
   endpoints: {
     'GET /items': {returns: ['item']},
     'PUT /items/{id}': {returns: ['item'], confirm: true},
@@ -45,7 +45,7 @@ const validAccess = JSON.stringify({
   ],
 });
 
-const surfaceMd = `# Surface: Example
+const _surfaceMd = `# Surface: Example
 
 ## Included Endpoints
 
@@ -69,12 +69,12 @@ Analyze items and provide insights.
 - Always cite evidence.
 `;
 
-const knowledgeMd = `# Knowledge: Domain Rules
+const _knowledgeMd = `# Knowledge: Domain Rules
 
 Items older than 30 days need review.
 `;
 
-const automationMd = `# Automation: Daily Check
+const _automationMd = `# Automation: Daily Check
 
 Schedule: daily at 8:00 AM
 
@@ -110,6 +110,22 @@ Context: viewing item page
 - Should NOT recommend deletion
 `;
 
+/**
+ * Default mock for resolveAllPackages that returns empty results.
+ * This is needed because loadRepoFromDisk always calls resolveAllPackages now.
+ */
+function mockEmptyResolve(): void {
+  mockResolveAllPackages.mockResolvedValue({
+    connections: new Map(),
+    skills: [],
+    automations: [],
+    knowledge: [],
+    stores: [],
+    tools: [],
+    warnings: [],
+  });
+}
+
 describe('loadRepoFromDisk', () => {
   afterEach(() => {
     mockFs.restore();
@@ -122,6 +138,8 @@ describe('loadRepoFromDisk', () => {
     mockFs({
       '/repo/amodal.json': minimalConfig,
     });
+    mockReadLockFile.mockResolvedValue(null);
+    mockEmptyResolve();
 
     const repo = await loadRepoFromDisk('/repo');
     expect(repo.source).toBe('local');
@@ -135,20 +153,46 @@ describe('loadRepoFromDisk', () => {
     expect(repo.evals).toEqual([]);
   });
 
-  it('loads a full repo', async () => {
+  it('loads a full repo via resolveAllPackages', async () => {
     mockFs({
       '/repo/amodal.json': minimalConfig,
-      '/repo/connections/example-api/spec.json': validSpec,
-      '/repo/connections/example-api/access.json': validAccess,
-      '/repo/connections/example-api/surface.md': surfaceMd,
-      '/repo/connections/example-api/entities.md': '# Entities\n\n### Item\nA thing.',
-      '/repo/connections/example-api/rules.md': '# Rules\n\n- Rule one.',
-      '/repo/skills/test-skill/SKILL.md': skillMd,
       '/repo/agents/main.md': '# Agent Override: Main\n\nBe direct.',
       '/repo/agents/simple.md': '# Agent Override: Simple\n\nReturn full data.',
-      '/repo/knowledge/domain-rules.md': knowledgeMd,
-      '/repo/automations/daily-check.md': automationMd,
       '/repo/evals/stale-item.md': evalMd,
+    });
+
+    const mockConnections = new Map([
+      ['example-api', {
+        name: 'example-api',
+        spec: {format: 'openapi', baseUrl: 'https://api.example.com'},
+        access: {
+          endpoints: {
+            'GET /items': {returns: ['item']},
+            'PUT /items/{id}': {returns: ['item'], confirm: true},
+          },
+        },
+        surface: [
+          {method: 'GET', path: '/items', description: 'List items.'},
+          {method: 'PUT', path: '/items/{id}', description: 'Update an item.'},
+        ],
+        entities: 'Item\nA thing.',
+        rules: 'Rule one.',
+        location: '/repo/connections/example-api',
+      }],
+    ]);
+    const mockSkills = [{name: 'Test Skill', trigger: 'User asks about items.', description: '', body: 'body', location: '/repo/skills/test-skill'}];
+    const mockKnowledge = [{name: 'domain-rules', title: 'Domain Rules', body: 'Items older than 30 days need review.', location: '/repo/knowledge/domain-rules.md'}];
+    const mockAutomations = [{name: 'daily-check', title: 'Daily Check', schedule: 'daily at 8:00 AM', location: '/repo/automations/daily-check.md'}];
+
+    mockReadLockFile.mockResolvedValue(null);
+    mockResolveAllPackages.mockResolvedValue({
+      connections: mockConnections,
+      skills: mockSkills,
+      automations: mockAutomations,
+      knowledge: mockKnowledge,
+      stores: [],
+      tools: [],
+      warnings: [],
     });
 
     const repo = await loadRepoFromDisk('/repo');
@@ -157,37 +201,26 @@ describe('loadRepoFromDisk', () => {
     expect(repo.config.name).toBe('test-app');
     expect(repo.config.models.main.provider).toBe('anthropic');
 
-    // Connections
+    // Connections (from resolver)
     expect(repo.connections.size).toBe(1);
-    const conn = repo.connections.get('example-api')!;
-    expect(conn.spec.format).toBe('openapi');
-    expect(conn.access.endpoints['GET /items']).toBeDefined();
-    expect(conn.surface).toHaveLength(2);
-    expect(conn.entities).toContain('Item');
-    expect(conn.rules).toContain('Rule one');
 
-    // Skills
+    // Skills (from resolver)
     expect(repo.skills).toHaveLength(1);
     expect(repo.skills[0].name).toBe('Test Skill');
-    expect(repo.skills[0].trigger).toBe('User asks about items.');
 
-    // Agents
+    // Agents (always loaded from disk)
     expect(repo.agents.main).toContain('Be direct');
     expect(repo.agents.simple).toContain('Return full data');
 
-    // Knowledge
+    // Knowledge (from resolver)
     expect(repo.knowledge).toHaveLength(1);
-    expect(repo.knowledge[0].title).toBe('Domain Rules');
 
-    // Automations
+    // Automations (from resolver)
     expect(repo.automations).toHaveLength(1);
-    expect(repo.automations[0].title).toBe('Daily Check');
-    expect(repo.automations[0].schedule).toBe('daily at 8:00 AM');
 
-    // Evals
+    // Evals (always loaded from disk)
     expect(repo.evals).toHaveLength(1);
     expect(repo.evals[0].title).toBe('Stale Item');
-    expect(repo.evals[0].assertions).toHaveLength(2);
   });
 
   it('throws CONFIG_NOT_FOUND for missing repo path', async () => {
@@ -230,141 +263,72 @@ describe('loadRepoFromDisk', () => {
     }
   });
 
-  it('throws CONFIG_NOT_FOUND for missing spec.json in connection', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-      '/repo/connections/broken/access.json': validAccess,
-    });
-
-    try {
-      await loadRepoFromDisk('/repo');
-      expect.fail('should have thrown');
-    } catch (err) {
-      expect(err).toBeInstanceOf(RepoError);
-      expect((err as RepoError).code).toBe('CONFIG_NOT_FOUND');
-      expect((err as RepoError).message).toContain('spec.json');
-    }
-  });
-
-  it('throws CONFIG_NOT_FOUND for missing access.json in connection', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-      '/repo/connections/broken/spec.json': validSpec,
-    });
-
-    try {
-      await loadRepoFromDisk('/repo');
-      expect.fail('should have thrown');
-    } catch (err) {
-      expect(err).toBeInstanceOf(RepoError);
-      expect((err as RepoError).code).toBe('CONFIG_NOT_FOUND');
-      expect((err as RepoError).message).toContain('access.json');
-    }
-  });
-
-  it('loads multiple connections', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-      '/repo/connections/api-one/spec.json': validSpec,
-      '/repo/connections/api-one/access.json': validAccess,
-      '/repo/connections/api-two/spec.json': validSpec,
-      '/repo/connections/api-two/access.json': validAccess,
-    });
-
-    const repo = await loadRepoFromDisk('/repo');
-    expect(repo.connections.size).toBe(2);
-    expect(repo.connections.has('api-one')).toBe(true);
-    expect(repo.connections.has('api-two')).toBe(true);
-  });
-
-  it('skips skills with unrecognized format', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-      '/repo/skills/valid/SKILL.md': skillMd,
-      '/repo/skills/invalid/SKILL.md': 'Just some random text.',
-    });
-
-    const repo = await loadRepoFromDisk('/repo');
-    expect(repo.skills).toHaveLength(1);
-    expect(repo.skills[0].name).toBe('Test Skill');
-  });
-
   it('handles missing agents directory', async () => {
     mockFs({
       '/repo/amodal.json': minimalConfig,
     });
+    mockReadLockFile.mockResolvedValue(null);
+    mockEmptyResolve();
 
     const repo = await loadRepoFromDisk('/repo');
     expect(repo.agents.main).toBeUndefined();
     expect(repo.agents.simple).toBeUndefined();
   });
 
-  it('loads multiple knowledge files', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-      '/repo/knowledge/rules-a.md': '# Knowledge: Rules A\n\nRule A content.',
-      '/repo/knowledge/rules-b.md': '# Knowledge: Rules B\n\nRule B content.',
-    });
-
-    const repo = await loadRepoFromDisk('/repo');
-    expect(repo.knowledge).toHaveLength(2);
-    const names = repo.knowledge.map((k) => k.name);
-    expect(names).toContain('rules-a');
-    expect(names).toContain('rules-b');
-  });
-
   // --- Package resolution integration tests ---
 
-  it('uses resolver when lock file has packages', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-    });
-
-    const mockConnections = new Map([['test-api', {spec: {}, access: {}, surface: [], entities: [], rules: []}]]);
-    const mockSkills = [{name: 'Test Skill', description: '', body: 'body', location: '/pkg'}];
-
-    mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
-      packages: {'connection/test-api': {version: '1.0.0', npm: '@amodalai/connection-test-api', integrity: 'sha512-abc'}},
-    });
-    mockResolveAllPackages.mockResolvedValue({
-      connections: mockConnections,
-      skills: mockSkills,
-      automations: [],
-      knowledge: [],
-      warnings: [],
-    });
-
-    const repo = await loadRepoFromDisk('/repo');
-    expect(mockResolveAllPackages).toHaveBeenCalledOnce();
-    expect(repo.connections).toBe(mockConnections);
-    expect(repo.skills).toBe(mockSkills);
-    expect(repo.warnings).toBeUndefined();
-  });
-
-  it('uses direct load when lock file has empty packages', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-    });
-
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
-
-    const repo = await loadRepoFromDisk('/repo');
-    expect(mockResolveAllPackages).not.toHaveBeenCalled();
-    expect(repo.connections.size).toBe(0);
-    expect(repo.skills).toEqual([]);
-  });
-
-  it('uses direct load when no lock file exists', async () => {
+  it('always calls resolveAllPackages', async () => {
     mockFs({
       '/repo/amodal.json': minimalConfig,
     });
 
     mockReadLockFile.mockResolvedValue(null);
+    mockEmptyResolve();
 
     const repo = await loadRepoFromDisk('/repo');
-    expect(mockResolveAllPackages).not.toHaveBeenCalled();
+    expect(mockResolveAllPackages).toHaveBeenCalledOnce();
     expect(repo.connections.size).toBe(0);
+    expect(repo.skills).toEqual([]);
+  });
+
+  it('passes lock file to resolveAllPackages when present', async () => {
+    mockFs({
+      '/repo/amodal.json': minimalConfig,
+    });
+
+    const lockFile = {
+      lockVersion: 2,
+      packages: {'@amodalai/connection-test-api': {version: '1.0.0', integrity: 'sha512-abc'}},
+    };
+    const mockConnections = new Map([['test-api', {spec: {}, access: {}, surface: [], entities: [], rules: []}]]);
+
+    mockReadLockFile.mockResolvedValue(lockFile);
+    mockResolveAllPackages.mockResolvedValue({
+      connections: mockConnections,
+      skills: [],
+      automations: [],
+      knowledge: [],
+      stores: [],
+      tools: [],
+      warnings: [],
+    });
+
+    const repo = await loadRepoFromDisk('/repo');
+    expect(mockResolveAllPackages).toHaveBeenCalledExactlyOnceWith({repoPath: '/repo', lockFile});
+    expect(repo.connections).toBe(mockConnections);
+    expect(repo.warnings).toBeUndefined();
+  });
+
+  it('passes null lock file to resolveAllPackages when no lock file', async () => {
+    mockFs({
+      '/repo/amodal.json': minimalConfig,
+    });
+
+    mockReadLockFile.mockResolvedValue(null);
+    mockEmptyResolve();
+
+    await loadRepoFromDisk('/repo');
+    expect(mockResolveAllPackages).toHaveBeenCalledWith({repoPath: '/repo', lockFile: null});
   });
 
   it('propagates resolver warnings', async () => {
@@ -373,19 +337,21 @@ describe('loadRepoFromDisk', () => {
     });
 
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
-      packages: {'skill/triage': {version: '1.0.0', npm: '@amodalai/skill-triage', integrity: 'sha512-abc'}},
+      lockVersion: 2,
+      packages: {'@amodalai/skill-triage': {version: '1.0.0', integrity: 'sha512-abc'}},
     });
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
       automations: [],
       knowledge: [],
-      warnings: ['Package skill/triage is in lock file but not installed (broken symlink?)'],
+      stores: [],
+      tools: [],
+      warnings: ['Package @amodalai/skill-triage is in lock file but not installed'],
     });
 
     const repo = await loadRepoFromDisk('/repo');
-    expect(repo.warnings).toEqual(['Package skill/triage is in lock file but not installed (broken symlink?)']);
+    expect(repo.warnings).toEqual(['Package @amodalai/skill-triage is in lock file but not installed']);
   });
 
   it('loads agents and evals from disk even with packages', async () => {
@@ -396,14 +362,16 @@ describe('loadRepoFromDisk', () => {
     });
 
     mockReadLockFile.mockResolvedValue({
-      lockVersion: 1,
-      packages: {'connection/api': {version: '1.0.0', npm: '@amodalai/connection-api', integrity: 'sha512-abc'}},
+      lockVersion: 2,
+      packages: {'@amodalai/connection-api': {version: '1.0.0', integrity: 'sha512-abc'}},
     });
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
       automations: [],
       knowledge: [],
+      stores: [],
+      tools: [],
       warnings: [],
     });
 
@@ -413,15 +381,17 @@ describe('loadRepoFromDisk', () => {
     expect(repo.evals[0].title).toBe('Stale Item');
   });
 
-  it('falls back to direct load when lock file read fails', async () => {
+  it('falls back to null lock file when lock file read fails', async () => {
     mockFs({
       '/repo/amodal.json': minimalConfig,
     });
 
     mockReadLockFile.mockRejectedValue(new Error('corrupt lock file'));
+    mockEmptyResolve();
 
     const repo = await loadRepoFromDisk('/repo');
-    expect(mockResolveAllPackages).not.toHaveBeenCalled();
+    // resolveAllPackages is still called with null lock file
+    expect(mockResolveAllPackages).toHaveBeenCalledWith({repoPath: '/repo', lockFile: null});
     expect(repo.connections.size).toBe(0);
   });
 });

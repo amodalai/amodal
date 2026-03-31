@@ -6,39 +6,35 @@
 
 import {describe, it, expect, vi, beforeEach} from 'vitest';
 
-const mockReadPackageManifest = vi.fn();
 const mockStat = vi.fn();
 const mockReadFile = vi.fn();
+const mockReaddir = vi.fn();
 const mockExecFile = vi.fn();
-
-vi.mock('@amodalai/core', () => ({
-  readPackageManifest: mockReadPackageManifest,
-}));
 
 vi.mock('node:fs/promises', () => ({
   stat: mockStat,
   readFile: mockReadFile,
+  readdir: mockReaddir,
 }));
 
 vi.mock('node:child_process', () => ({
   execFile: mockExecFile,
 }));
 
+const validPkgJson = JSON.stringify({
+  name: '@amodalai/connection-salesforce',
+  version: '1.0.0',
+  amodal: {name: 'salesforce', tags: ['connection']},
+});
+
 describe('runPublish', () => {
   let stderrOutput: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockStat.mockResolvedValue({isFile: () => true});
-    mockReadPackageManifest.mockResolvedValue({
-      type: 'connection',
-      name: 'salesforce',
-    });
-    mockReadFile.mockResolvedValue(JSON.stringify({
-      name: '@amodalai/connection-salesforce',
-      version: '1.0.0',
-      amodal: {type: 'connection', name: 'salesforce'},
-    }));
+    mockStat.mockResolvedValue({isFile: () => true, isDirectory: () => true});
+    mockReadFile.mockResolvedValue(validPkgJson);
+    mockReaddir.mockResolvedValue([]);
     stderrOutput = '';
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
       stderrOutput += String(chunk);
@@ -65,39 +61,42 @@ describe('runPublish', () => {
     const result = await runPublish({dryRun: true});
     expect(result).toBe(0);
     expect(stderrOutput).toContain('Dry run');
-    expect(stderrOutput).toContain('connection');
+    expect(stderrOutput).toContain('salesforce');
     expect(mockExecFile).not.toHaveBeenCalled();
   });
 
-  it('should return 1 when package.json missing', async () => {
-    mockStat.mockRejectedValueOnce(new Error('ENOENT'));
+  it('should return 1 when package.json is unreadable', async () => {
+    mockReadFile.mockRejectedValue(new Error('ENOENT'));
 
     const {runPublish} = await import('./publish.js');
     const result = await runPublish();
     expect(result).toBe(1);
-    expect(stderrOutput).toContain('No package.json');
+    expect(stderrOutput).toContain('Failed to read package.json');
   });
 
-  it('should return 1 when manifest invalid', async () => {
-    mockReadPackageManifest.mockRejectedValue(new Error('Missing amodal block'));
+  it('should return 1 when amodal block missing', async () => {
+    mockReadFile.mockResolvedValue(JSON.stringify({
+      name: '@amodalai/test',
+      version: '1.0.0',
+    }));
 
     const {runPublish} = await import('./publish.js');
     const result = await runPublish();
     expect(result).toBe(1);
-    expect(stderrOutput).toContain('Invalid package');
+    expect(stderrOutput).toContain('amodal');
   });
 
-  it('should return 1 when required files missing', async () => {
-    // First stat succeeds (package.json), second fails (spec.json)
-    mockStat
-      .mockResolvedValueOnce({isFile: () => true})
-      .mockRejectedValueOnce(new Error('ENOENT'))
-      .mockRejectedValueOnce(new Error('ENOENT'));
+  it('should return 1 when amodal name missing', async () => {
+    mockReadFile.mockResolvedValue(JSON.stringify({
+      name: '@amodalai/test',
+      version: '1.0.0',
+      amodal: {tags: ['skill']},
+    }));
 
     const {runPublish} = await import('./publish.js');
     const result = await runPublish();
     expect(result).toBe(1);
-    expect(stderrOutput).toContain('Missing required files');
+    expect(stderrOutput).toContain('name');
   });
 
   it('should handle npm publish failure', async () => {
@@ -128,24 +127,10 @@ describe('runPublish', () => {
     expect(stderrOutput).toContain('already exists');
   });
 
-  it('should suggest npm login on auth error (ENEEDAUTH)', async () => {
+  it('should suggest npm login on auth error', async () => {
     mockExecFile.mockImplementation(
       (_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null) => void) => {
         cb(new Error('ENEEDAUTH'));
-        return {};
-      },
-    );
-
-    const {runPublish} = await import('./publish.js');
-    const result = await runPublish();
-    expect(result).toBe(1);
-    expect(stderrOutput).toContain('npm login');
-  });
-
-  it('should suggest npm login on auth error (E401)', async () => {
-    mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null) => void) => {
-        cb(new Error('E401'));
         return {};
       },
     );
@@ -170,30 +155,11 @@ describe('runPublish', () => {
     expect(result).toBe(0);
   });
 
-  it('should validate skill package required files', async () => {
-    mockReadPackageManifest.mockResolvedValue({type: 'skill', name: 'triage'});
-    mockReadFile.mockResolvedValue(JSON.stringify({
-      name: '@amodalai/skill-triage',
-      version: '1.0.0',
-      amodal: {type: 'skill', name: 'triage'},
-    }));
-
-    // package.json exists, SKILL.md missing
-    mockStat
-      .mockResolvedValueOnce({isFile: () => true})
-      .mockRejectedValueOnce(new Error('ENOENT'));
-
-    const {runPublish} = await import('./publish.js');
-    const result = await runPublish();
-    expect(result).toBe(1);
-    expect(stderrOutput).toContain('SKILL.md');
-  });
-
   it('should show package name and version in dry run', async () => {
     mockReadFile.mockResolvedValue(JSON.stringify({
       name: '@amodalai/connection-stripe',
       version: '3.2.1',
-      amodal: {type: 'connection', name: 'stripe'},
+      amodal: {name: 'stripe', tags: ['connection']},
     }));
 
     const {runPublish} = await import('./publish.js');

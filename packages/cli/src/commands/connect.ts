@@ -9,15 +9,17 @@ import {join} from 'node:path';
 import type {CommandModule} from 'yargs';
 import prompts from 'prompts';
 import {
+  addConfigDep,
   addLockEntry,
+  buildLockFile,
+  discoverInstalledPackages,
   ensureNpmContext,
-  ensureSymlink,
   findMissingEnvVars,
   getLockEntry,
-  getPackageDir,
-  makePackageRef,
+  getNpmContextPaths,
   npmInstall,
   readPackageManifest,
+  toNpmName,
   upsertEnvEntries,
 } from '@amodalai/core';
 import type {PackageAuth} from '@amodalai/core';
@@ -46,21 +48,23 @@ export async function runConnect(options: ConnectOptions): Promise<number> {
   }
 
   const paths = await ensureNpmContext(repoPath);
-  const existing = await getLockEntry(repoPath, 'connection', options.name);
+  const npmName = toNpmName(options.name);
+  const existing = await getLockEntry(repoPath, npmName);
   const isReconnect = existing !== null;
 
   // Step 1: Install if fresh
   if (!isReconnect) {
-    const ref = makePackageRef('connection', options.name);
-    process.stderr.write(`[connect] Installing ${ref.npmName}...\n`);
+    process.stderr.write(`[connect] Installing ${npmName}...\n`);
     try {
-      const result = await npmInstall(paths, ref.npmName);
-      await addLockEntry(repoPath, 'connection', options.name, {
+      const result = await npmInstall(paths, npmName);
+      await addLockEntry(repoPath, npmName, {
         version: result.version,
-        npm: ref.npmName,
         integrity: result.integrity,
       });
-      await ensureSymlink(paths, ref);
+      await addConfigDep(repoPath, npmName, result.version);
+      // Rebuild lock file from what's actually installed
+      const discovered = await discoverInstalledPackages(paths);
+      await buildLockFile(repoPath, discovered);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[connect] Install failed: ${msg}\n`);
@@ -71,12 +75,8 @@ export async function runConnect(options: ConnectOptions): Promise<number> {
   }
 
   // Step 2: Read manifest
-  const ref = makePackageRef('connection', options.name);
-  const packageDir = await getPackageDir(repoPath, ref);
-  if (!packageDir) {
-    process.stderr.write(`[connect] Could not find installed package directory for ${options.name}.\n`);
-    return 1;
-  }
+  const contextPaths = getNpmContextPaths(repoPath);
+  const packageDir = join(contextPaths.nodeModules, npmName);
 
   let manifest;
   try {
@@ -87,14 +87,9 @@ export async function runConnect(options: ConnectOptions): Promise<number> {
     return 1;
   }
 
-  if (manifest.type !== 'connection') {
-    process.stderr.write(`[connect] Package ${options.name} is not a connection (type: ${manifest.type}).\n`);
-    return 1;
-  }
-
   // Step 3: Auth flow
   const envFilePath = join(repoPath, '.env');
-  const auth: PackageAuth | undefined = manifest['auth'];
+  const auth: PackageAuth | undefined = manifest.auth;
 
   if (!auth) {
     process.stderr.write('[connect] No authentication required.\n');
@@ -107,7 +102,7 @@ export async function runConnect(options: ConnectOptions): Promise<number> {
   }
 
   // Step 4: Test connection
-  const testEndpoints = manifest['testEndpoints'];
+  const testEndpoints = manifest.testEndpoints;
   if (testEndpoints && testEndpoints.length > 0) {
     process.stderr.write('[connect] Testing connection...\n');
     const report = await testConnection({

@@ -19,16 +19,44 @@ export interface BuiltPage {
  * React is expected to be available on window.React (provided by the SPA).
  */
 export async function buildPages(repoPath: string): Promise<{pages: BuiltPage[]; outDir: string}> {
-  const pagesDir = join(repoPath, 'pages');
-  if (!existsSync(pagesDir)) {
-    return {pages: [], outDir: ''};
+  // Collect page entries: {name, entryPath} — local pages override package pages
+  const pageFileExt = /\.(tsx|jsx|ts|js)$/;
+  const pageEntries = new Map<string, string>();
+
+  // 1. Scan installed packages for pages (lower priority)
+  const scopeDir = join(repoPath, 'amodal_packages', '.npm', 'node_modules', '@amodalai');
+  if (existsSync(scopeDir)) {
+    try {
+      const pkgDirs = readdirSync(scopeDir, {withFileTypes: true}).filter((e) => e.isDirectory());
+      for (const pkgDir of pkgDirs) {
+        const pkgPagesDir = join(scopeDir, pkgDir.name, 'pages');
+        if (!existsSync(pkgPagesDir)) continue;
+        const pkgFiles = readdirSync(pkgPagesDir, {withFileTypes: true}).filter(
+          (e) => e.isFile() && pageFileExt.test(e.name),
+        );
+        for (const f of pkgFiles) {
+          const name = f.name.replace(pageFileExt, '');
+          pageEntries.set(name, join(pkgPagesDir, f.name));
+        }
+      }
+    } catch {
+      // Ignore errors reading package dirs
+    }
   }
 
-  const files = readdirSync(pagesDir, {withFileTypes: true})
-    .filter((e) => e.isFile() && /\.(tsx|jsx|ts|js)$/.test(e.name))
-    .map((e) => e.name);
+  // 2. Scan local pages/ directory (higher priority — overwrites package entries)
+  const pagesDir = join(repoPath, 'pages');
+  if (existsSync(pagesDir)) {
+    const localFiles = readdirSync(pagesDir, {withFileTypes: true}).filter(
+      (e) => e.isFile() && pageFileExt.test(e.name),
+    );
+    for (const f of localFiles) {
+      const name = f.name.replace(pageFileExt, '');
+      pageEntries.set(name, join(pagesDir, f.name));
+    }
+  }
 
-  if (files.length === 0) {
+  if (pageEntries.size === 0) {
     return {pages: [], outDir: ''};
   }
 
@@ -37,9 +65,7 @@ export async function buildPages(repoPath: string): Promise<{pages: BuiltPage[];
 
   const pages: BuiltPage[] = [];
 
-  for (const file of files) {
-    const name = file.replace(/\.(tsx|jsx|ts|js)$/, '');
-    const entryPath = join(pagesDir, file);
+  for (const [name, entryPath] of pageEntries) {
     const outputPath = join(outDir, `${name}.js`);
 
     // Create a wrapper that imports the page and registers it globally

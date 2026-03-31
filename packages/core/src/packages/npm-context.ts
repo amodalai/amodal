@@ -1,21 +1,16 @@
 /**
  * @license
- * Copyright 2026 Amodal Labs, Inc.
+ * Copyright 2025 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
 import {execFile} from 'node:child_process';
-import {mkdir, readlink, stat, symlink, unlink, writeFile} from 'node:fs/promises';
+import {mkdir, readdir, stat, writeFile} from 'node:fs/promises';
 import * as path from 'node:path';
 import {promisify} from 'node:util';
 
 import {PackageError} from './package-error.js';
-import {
-  makePackageRef,
-  parsePackageKey,
-  toSymlinkName,
-} from './package-types.js';
-import type {LockFile, PackageRef} from './package-types.js';
+import type {LockFile} from './package-types.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -164,92 +159,14 @@ export async function npmUninstall(
  */
 export function generatePackageJson(lockFile: LockFile): Record<string, unknown> {
   const dependencies: Record<string, string> = {};
-  for (const [, entry] of Object.entries(lockFile.packages)) {
-    dependencies[entry.npm] = entry.version;
+  for (const [npmName, entry] of Object.entries(lockFile.packages)) {
+    dependencies[npmName] = entry.version;
   }
   return {
     name: 'amodal-packages',
     private: true,
     dependencies,
   };
-}
-
-/**
- * Create or repair a symlink from the clean path to the npm node_modules path.
- */
-export async function ensureSymlink(
-  paths: NpmContextPaths,
-  ref: PackageRef,
-): Promise<string> {
-  const symlinkDir = path.join(paths.root, toSymlinkName(ref.type, ref.name));
-  const target = path.join(paths.nodeModules, ref.npmName);
-
-  // Verify target exists
-  try {
-    await stat(target);
-  } catch {
-    throw new PackageError('SYMLINK_FAILED', `Package not installed: ${ref.npmName}`);
-  }
-
-  // Remove existing symlink if broken or wrong target
-  try {
-    const existingTarget = await readlink(symlinkDir);
-    if (existingTarget === target) return symlinkDir;
-    await unlink(symlinkDir);
-  } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-      // Try to remove it anyway
-      try {
-        await unlink(symlinkDir);
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-  }
-
-  try {
-    await symlink(target, symlinkDir, 'dir');
-  } catch (err) {
-    throw new PackageError('SYMLINK_FAILED', `Failed to create symlink: ${symlinkDir}`, err);
-  }
-
-  return symlinkDir;
-}
-
-/**
- * Create symlinks for all packages in a lock file.
- */
-export async function ensureAllSymlinks(
-  paths: NpmContextPaths,
-  lockFile: LockFile,
-): Promise<void> {
-  const tasks = Object.keys(lockFile.packages).map((key) => {
-    const parsed = parsePackageKey(key);
-    const ref = makePackageRef(parsed.type, parsed.name);
-    return ensureSymlink(paths, ref);
-  });
-  await Promise.all(tasks);
-}
-
-/**
- * Get the resolved package directory for an installed package.
- * Returns null if the package is not installed or the symlink is broken.
- */
-export async function getPackageDir(
-  repoPath: string,
-  ref: PackageRef,
-): Promise<string | null> {
-  const paths = getNpmContextPaths(repoPath);
-  const symlinkDir = path.join(paths.root, toSymlinkName(ref.type, ref.name));
-
-  try {
-    const targetStat = await stat(symlinkDir);
-    if (targetStat.isDirectory()) return symlinkDir;
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -297,4 +214,52 @@ async function readInstalledVersion(
   }
 
   return {version, integrity};
+}
+
+/**
+ * Discovered package from node_modules scan.
+ */
+export interface DiscoveredPackage {
+  npmName: string;
+  version: string;
+  integrity: string;
+  packageDir: string;
+}
+
+/**
+ * Scan node_modules/@amodalai/* to discover all installed amodal packages.
+ * Used after npm install to rebuild the lock file from what's actually installed.
+ */
+export async function discoverInstalledPackages(
+  paths: NpmContextPaths,
+): Promise<DiscoveredPackage[]> {
+  const scopeDir = path.join(paths.nodeModules, '@amodalai');
+
+  let entries: string[];
+  try {
+    entries = await readdir(scopeDir);
+  } catch {
+    return [];
+  }
+
+  const results: DiscoveredPackage[] = [];
+
+  for (const entry of entries) {
+    const packageDir = path.join(scopeDir, entry);
+    const npmName = `@amodalai/${entry}`;
+
+    try {
+      const s = await stat(packageDir);
+      if (!s.isDirectory()) continue;
+    } catch {
+      continue;
+    }
+
+    const {version, integrity} = await readInstalledVersion(paths, npmName);
+    if (!version) continue;
+
+    results.push({npmName, version, integrity, packageDir});
+  }
+
+  return results;
 }

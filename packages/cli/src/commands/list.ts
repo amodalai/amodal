@@ -5,13 +5,12 @@
  */
 
 import type {CommandModule} from 'yargs';
-import {listLockEntries} from '@amodalai/core';
-import type {PackageType} from '@amodalai/core';
+import {fromNpmName, listLockEntries} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
 export interface ListOptions {
   cwd?: string;
-  type?: PackageType;
+  filter?: string;
   json?: boolean;
 }
 
@@ -29,11 +28,17 @@ export async function runList(options: ListOptions = {}): Promise<number> {
     return 1;
   }
 
-  const entries = await listLockEntries(repoPath, options.type);
+  let entries = await listLockEntries(repoPath);
+
+  // Optional string filter on npm name
+  if (options.filter) {
+    const f = options.filter.toLowerCase();
+    entries = entries.filter((e) => e.npmName.toLowerCase().includes(f));
+  }
 
   if (entries.length === 0) {
-    if (options.type) {
-      process.stderr.write(`[list] No ${options.type} packages installed.\n`);
+    if (options.filter) {
+      process.stderr.write(`[list] No packages matching "${options.filter}" installed.\n`);
     } else {
       process.stderr.write('[list] No packages installed.\n');
     }
@@ -42,10 +47,9 @@ export async function runList(options: ListOptions = {}): Promise<number> {
 
   if (options.json) {
     const output = entries.map((e) => ({
-      type: e.type,
-      name: e.name,
+      name: fromNpmName(e.npmName),
+      npmName: e.npmName,
       version: e.entry.version,
-      npm: e.entry.npm,
       integrity: e.entry.integrity,
     }));
     process.stdout.write(JSON.stringify(output, null, 2) + '\n');
@@ -53,25 +57,25 @@ export async function runList(options: ListOptions = {}): Promise<number> {
   }
 
   // Formatted table
-  const typeWidth = Math.max(4, ...entries.map((e) => e.type.length));
-  const nameWidth = Math.max(4, ...entries.map((e) => e.name.length));
+  const names = entries.map((e) => fromNpmName(e.npmName));
+  const nameWidth = Math.max(4, ...names.map((n) => n.length));
+  const npmWidth = Math.max(3, ...entries.map((e) => e.npmName.length));
   const versionWidth = Math.max(7, ...entries.map((e) => e.entry.version.length));
 
   const header = [
-    'TYPE'.padEnd(typeWidth),
     'NAME'.padEnd(nameWidth),
     'VERSION'.padEnd(versionWidth),
-    'NPM',
+    'NPM'.padEnd(npmWidth),
   ].join('   ');
 
   process.stdout.write(header + '\n');
 
-  for (const e of entries) {
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
     const row = [
-      e.type.padEnd(typeWidth),
-      e.name.padEnd(nameWidth),
+      names[i].padEnd(nameWidth),
       e.entry.version.padEnd(versionWidth),
-      e.entry.npm,
+      e.npmName.padEnd(npmWidth),
     ].join('   ');
     process.stdout.write(row + '\n');
   }
@@ -85,11 +89,11 @@ export const listCommand: CommandModule = {
   describe: 'List installed packages',
   builder: (yargs) =>
     yargs
-      .option('type', {type: 'string', choices: ['connection', 'skill', 'automation', 'knowledge'] as const, describe: 'Filter by type'})
+      .option('filter', {type: 'string', describe: 'Filter by name substring'})
       .option('json', {type: 'boolean', default: false, describe: 'Output as JSON'}),
   handler: async (argv) => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    const code = await runList({type: argv['type'] as PackageType | undefined, json: argv['json'] as boolean});
+    const code = await runList({filter: argv['filter'] as string | undefined, json: argv['json'] as boolean});
     process.exit(code);
   },
 };

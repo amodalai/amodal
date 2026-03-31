@@ -130,7 +130,7 @@ describe('runInspect', () => {
 
   // Resolved package tests
   it('should show resolved packages when resolved flag set', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map([['salesforce', {surface: [{}, {}, {}], spec: {auth: {type: 'bearer'}}}]]),
       skills: [{name: 'triage', body: 'Triage methodology content'}],
@@ -149,7 +149,7 @@ describe('runInspect', () => {
   });
 
   it('should filter by scope', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map([
         ['salesforce', {surface: [{}, {}], spec: {auth: {type: 'bearer'}}}],
@@ -180,7 +180,7 @@ describe('runInspect', () => {
   });
 
   it('should show resolution warnings', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
@@ -198,7 +198,7 @@ describe('runInspect', () => {
   });
 
   it('should show connection details in resolved view', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map([['crm', {surface: [{}, {}], spec: {auth: {type: 'oauth2'}}}]]),
       skills: [],
@@ -216,7 +216,7 @@ describe('runInspect', () => {
   });
 
   it('should show skill body length in resolved view', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 1, packages: {}});
+    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [{name: 'investigate', body: 'A'.repeat(500)}],
