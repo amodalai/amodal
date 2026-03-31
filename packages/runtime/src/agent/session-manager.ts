@@ -21,6 +21,23 @@ import type {RuntimeTelemetryEvent, CustomToolExecutor, CustomShellExecutor, Sto
 import type {AgentSession} from './agent-types.js';
 import {fetchUserContext} from './user-context-fetcher.js';
 
+/**
+ * Resolve env: references in a string record.
+ * "env:VAR_NAME" → process.env.VAR_NAME value
+ */
+function resolveEnvRefs(record: Record<string, string>): Record<string, string> {
+  const resolved: Record<string, string> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (value.startsWith('env:')) {
+      const envVar = value.slice(4);
+      resolved[key] = process.env[envVar] ?? '';
+    } else {
+      resolved[key] = value;
+    }
+  }
+  return resolved;
+}
+
 export type TelemetrySink = (event: RuntimeTelemetryEvent) => void;
 
 export interface AgentSessionManagerOptions {
@@ -307,19 +324,23 @@ export class AgentSessionManager {
    * Initialize MCP servers for a session.
    * Sources: connections with protocol=mcp, plus legacy amodal.json mcp.servers block.
    */
+   
   private async initMcp(session: AgentSession, repo: AmodalRepo): Promise<void> {
     const mcpServers: Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean}> = {};
 
     // Build MCP configs from connections with protocol: "mcp"
     for (const [name, conn] of repo.connections) {
       if (conn.spec.protocol === 'mcp') {
+        // Resolve env: references in headers and env
+        const resolvedHeaders = conn.spec.headers ? resolveEnvRefs(conn.spec.headers) : undefined;
+        const resolvedEnv = conn.spec.env ? resolveEnvRefs(conn.spec.env) : undefined;
         mcpServers[name] = {
           transport: conn.spec.transport ?? 'stdio',
           command: conn.spec.command,
           args: conn.spec.args,
-          env: conn.spec.env,
+          env: resolvedEnv,
           url: conn.spec.url,
-          headers: conn.spec.headers,
+          headers: resolvedHeaders,
           trust: conn.spec.trust,
         };
       }

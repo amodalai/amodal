@@ -233,13 +233,20 @@ export async function runConnectionPreflight(repoPath: string): Promise<Prefligh
 
   for (const [name, conn] of repo.connections) {
     if (conn.spec.protocol === 'mcp') {
+      // Resolve env: references in headers
+      const resolvedHeaders: Record<string, string> = {};
+      if (conn.spec.headers) {
+        for (const [k, v] of Object.entries(conn.spec.headers)) {
+          resolvedHeaders[k] = v.startsWith('env:') ? (envVars.get(v.slice(4)) ?? process.env[v.slice(4)] ?? '') : v;
+        }
+      }
       mcpFromConnections[name] = {
         transport: conn.spec.transport ?? 'stdio',
         command: conn.spec.command,
         args: conn.spec.args,
         env: conn.spec.env,
         url: conn.spec.url,
-        headers: conn.spec.headers,
+        headers: Object.keys(resolvedHeaders).length > 0 ? resolvedHeaders : undefined,
       };
     } else {
       restConnections.push([name, conn]);
