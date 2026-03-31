@@ -1,5 +1,16 @@
 # @amodalai/amodal
 
+## 0.1.12
+
+### Patch Changes
+
+- [#53](https://github.com/amodalai/amodal/pull/53) [`d645049`](https://github.com/amodalai/amodal/commit/d6450493413c4ae506d22438e0e5e4bfe5484f9a) Thanks [@gte620v](https://github.com/gte620v)! - Add admin agent for config chat. Fetched from registry, cached at ~/.amodal/admin-agent/. Config section defaults to admin chat. Update via `amodal update --admin-agent`.
+
+- Updated dependencies [[`d645049`](https://github.com/amodalai/amodal/commit/d6450493413c4ae506d22438e0e5e4bfe5484f9a)]:
+  - @amodalai/core@0.1.12
+  - @amodalai/runtime@0.1.12
+  - @amodalai/runtime-app@0.1.12
+
 ## 0.1.11
 
 ### Patch Changes
