@@ -125,13 +125,8 @@ export async function runChat(options: ChatOptions): Promise<void> {
   const {waitUntilExit} = render(
     createElement(ChatApp, {
       baseUrl,
-<<<<<<< Updated upstream
-      tenantId,
-      resumeSessionId: resumeId,
-=======
       appId,
-      resumeSessionId: options.resume,
->>>>>>> Stashed changes
+      resumeSessionId: resumeId,
       fullscreen: options.fullscreen,
     }),
   );

@@ -181,15 +181,6 @@ describe('ProposeKBUpdateInvocation', () => {
     expect(result.llmContent).toContain('Application ID not configured');
   });
 
-  it('execute() returns error when applicationId missing for application-scope proposal', async () => {
-    const cfg = makeConfig({ applicationId: undefined });
-    const invocation = createInvocation(makeParams({ scope: 'application' }), cfg);
-    const result = await invocation.execute(new AbortController().signal);
-
-    expect(result.error).toBeDefined();
-    expect(result.llmContent).toContain('Application ID not configured');
-  });
-
   it('execute() returns error for update action without document_id', async () => {
     const invocation = createInvocation(
       makeParams({ action: 'update', document_id: undefined }),

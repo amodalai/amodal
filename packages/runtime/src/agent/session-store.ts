@@ -10,7 +10,7 @@ import type {AgentSession} from './agent-types.js';
 
 interface PersistedSession {
   id: string;
-  tenantId: string;
+  appId: string;
   conversationHistory: unknown[];
   createdAt: number;
   lastAccessedAt: number;
@@ -57,7 +57,7 @@ export class SessionStore {
     this.ensureDir();
     const data: PersistedSession = {
       id: session.id,
-      tenantId: session.tenantId,
+      appId: session.appId,
       conversationHistory: session.conversationHistory,
       createdAt: session.createdAt,
       lastAccessedAt: session.lastAccessedAt,
@@ -85,10 +85,10 @@ export class SessionStore {
   /**
    * List all persisted sessions, newest first.
    */
-  list(): Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number; summary: string; automationName?: string}> {
+  list(): Array<{id: string; appId: string; createdAt: number; lastAccessedAt: number; summary: string; automationName?: string}> {
     if (!existsSync(this.dir)) return [];
     const files = readdirSync(this.dir).filter((f) => f.endsWith('.json'));
-    const sessions: Array<{id: string; tenantId: string; createdAt: number; lastAccessedAt: number; summary: string; automationName?: string}> = [];
+    const sessions: Array<{id: string; appId: string; createdAt: number; lastAccessedAt: number; summary: string; automationName?: string}> = [];
 
     for (const file of files) {
       try {
@@ -103,7 +103,7 @@ export class SessionStore {
         const summary = firstUserMsg ? firstUserMsg.content.slice(0, 80) : 'Untitled';
         sessions.push({
           id: data.id,
-          tenantId: data.tenantId,
+          appId: data.appId,
           createdAt: data.createdAt,
           lastAccessedAt: data.lastAccessedAt,
           summary,

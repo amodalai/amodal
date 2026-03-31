@@ -440,7 +440,7 @@ describe('PlatformClient', () => {
       expect(docs).toEqual(API_RESPONSE_DOCS);
     });
 
-    it('fetches application-scope documents using /api/applications/ path', async () => {
+    it('fetches application-scope documents and preserves scope metadata', async () => {
       let capturedUrl = '';
       globalThis.fetch = vi.fn(
         async (input: RequestInfo | URL) => {
