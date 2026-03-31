@@ -6,6 +6,7 @@
 
 import type {CommandModule} from 'yargs';
 import {existsSync} from 'node:fs';
+import {createRequire} from 'node:module';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createLocalServer} from '@amodalai/runtime';
@@ -42,15 +43,19 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
   try {
     let staticAppDir: string | undefined;
 
-    // Use pre-built static assets for the SPA for the SPA.
+    // Use pre-built static assets for the SPA.
     // Vite dev middleware is only used inside the monorepo with `pnpm dev`.
     const scriptDir = path.dirname(fileURLToPath(import.meta.url));
     const candidates = [
       // esbuild bundle: bundle/app/
       path.resolve(scriptDir, 'app'),
-      // global/local install: <pkg root>/node_modules/@amodalai/runtime-app/dist/
-      path.resolve(scriptDir, '..', '..', '..', 'node_modules', '@amodalai', 'runtime-app', 'dist'),
     ];
+
+    // Resolve @amodalai/runtime-app via Node module resolution (works regardless of install layout)
+    const require = createRequire(import.meta.url);
+    const runtimeAppPkg = require.resolve('@amodalai/runtime-app/package.json');
+    candidates.push(path.join(path.dirname(runtimeAppPkg), 'dist'));
+
     for (const dir of candidates) {
       if (existsSync(path.join(dir, 'index.html'))) {
         process.stderr.write('[dev] Serving pre-built runtime app\n');

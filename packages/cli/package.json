@@ -38,15 +38,8 @@
     "react": "^19.2.4",
     "semver": "^7.6.0",
     "yargs": "^17.7.2",
+    "@amodalai/runtime-app": "workspace:*",
     "zod": "^4.3.6"
-  },
-  "peerDependencies": {
-    "@amodalai/runtime-app": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@amodalai/runtime-app": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
