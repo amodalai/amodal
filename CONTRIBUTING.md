@@ -46,8 +46,7 @@ This is a monorepo managed with pnpm workspaces:
 | `packages/core` | Agent runtime core — config, tools, providers, security |
 | `packages/runtime` | HTTP server for repo and platform modes |
 | `packages/cli` | Command-line interface |
-| `packages/react` | React bindings and hooks |
-| `packages/chat-widget` | Embeddable chat widget |
+| `packages/react` | React bindings, hooks, and embeddable chat widget |
 | `packages/runtime-app` | Runtime admin UI (private) |
 | `packages/docs` | Documentation site (private) |
 | `packages/test-utils` | Shared test utilities (private) |
@@ -66,7 +65,7 @@ We use [Changesets](https://github.com/changesets/changesets) to manage versioni
 
 ### When to add a changeset
 
-Add one if your PR changes any published package (`core`, `runtime`, `react`, `chat-widget`). Skip it for changes that only touch docs, CI, tests, or internal tooling.
+Add one if your PR changes any published package (`core`, `runtime`, `react`, `cli`). Skip it for changes that only touch docs, CI, tests, or internal tooling.
 
 ### How to add a changeset
 

@@ -24,6 +24,10 @@ connections/my-api/
 
 ## spec.json
 
+Connections support two protocols: **REST** (the default) for HTTP APIs, and **MCP** for [Model Context Protocol](/guide/mcp) tool servers.
+
+### REST Connection
+
 ```json
 {
   "baseUrl": "https://api.example.com",
@@ -48,15 +52,39 @@ connections/my-api/
 }
 ```
 
+### MCP Connection
+
+```json
+{
+  "protocol": "mcp",
+  "transport": "stdio",
+  "command": "uvx",
+  "args": ["mcp-server-github"],
+  "env": { "GITHUB_TOKEN": "env:GITHUB_TOKEN" }
+}
+```
+
+MCP connections do not require `access.json`, `baseUrl`, or `format`. See [MCP Servers](/guide/mcp) for full details on transports and configuration.
+
+### Fields
+
 | Field | Description |
 |-------|-------------|
-| `baseUrl` | API base URL (required) |
+| `protocol` | `"rest"` (default) or `"mcp"` |
+| `baseUrl` | API base URL (required for REST) |
 | `specUrl` | URL to the API spec document (optional) |
 | `testPath` | Relative path appended to baseUrl for `validate` health checks (optional, e.g. `"/me"`) |
-| `format` | `"openapi"`, `"graphql"`, or `"grpc"` |
-| `auth.type` | `"bearer"`, `"api_key"`, `"oauth2"`, `"basic"`, `"header"` |
-| `sync` | Auto-sync settings and drift notification |
-| `filter` | Include/exclude endpoints by tag or path glob |
+| `format` | `"openapi"`, `"graphql"`, `"grpc"`, `"rest"`, or `"aws-api"` (REST only) |
+| `auth.type` | `"bearer"`, `"api_key"`, `"oauth2"`, `"basic"`, `"header"` (REST only) |
+| `sync` | Auto-sync settings and drift notification (REST only) |
+| `filter` | Include/exclude endpoints by tag or path glob (REST only) |
+| `transport` | `"stdio"`, `"sse"`, or `"http"` (MCP only) |
+| `command` | Command to spawn (MCP stdio only) |
+| `args` | Command arguments (MCP stdio only) |
+| `env` | Environment variables (MCP stdio only) |
+| `url` | Server URL (MCP sse/http only) |
+| `headers` | HTTP headers, e.g. for auth (MCP sse/http only) |
+| `trust` | Trust unsigned responses (MCP http only) |
 
 ## access.json
 

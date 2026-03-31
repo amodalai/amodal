@@ -9,16 +9,18 @@ Everything that defines your agent lives in your repo root. The runtime reads th
 ```
 my-agent/
 ├── amodal.json                  ← root config: name, models, sandbox, MCP
-├── connections/                 ← API connections (plugins or custom)
+├── connections/                 ← REST APIs and MCP servers
 │   ├── slack/
 │   │   ├── spec.json            ← API source, auth, entities, sync config
 │   │   ├── access.json          ← field restrictions, action tiers, scoping
 │   │   ├── surface.md           ← (optional) endpoint documentation
 │   │   ├── entities.md          ← (optional) entity definitions
 │   │   └── rules.md             ← (optional) business rules
-│   └── internal-api/
-│       ├── spec.json
-│       └── access.json
+│   ├── internal-api/
+│   │   ├── spec.json
+│   │   └── access.json
+│   └── github/                  ← MCP connection (no access.json needed)
+│       └── spec.json
 ├── skills/                      ← Markdown reasoning frameworks
 │   └── triage/
 │       └── SKILL.md
@@ -54,7 +56,7 @@ my-agent/
 | File/Directory | What It Does | Docs |
 |---------------|-------------|------|
 | `amodal.json` | Agent identity, models, sandbox, MCP servers | [amodal.json](/guide/config) |
-| `connections/` | API credentials + docs + access rules | [Connections](/guide/connections) |
+| `connections/` | REST API and MCP server connections | [Connections](/guide/connections) |
 | `skills/` | Expert reasoning frameworks | [Skills](/guide/skills) |
 | `knowledge/` | Domain knowledge documents | [Knowledge Base](/guide/knowledge-base) |
 | `tools/` | Custom tool handlers with code | [Tools](/guide/tools) |
@@ -63,7 +65,7 @@ my-agent/
 | `automations/` | Scheduled/triggered agent runs | [Automations](/guide/automations) |
 | `evals/` | Test cases and assertions | [Evals](/guide/evals) |
 | `agents/` | Custom subagents + built-in agent overrides | [Agents](/guide/agents) |
-| MCP in `amodal.json` | External tool servers via Model Context Protocol | [MCP Servers](/guide/mcp) |
+| MCP servers | Defined as connections or in `amodal.json` | [MCP Servers](/guide/mcp) |
 
 ## Hot Reload
 

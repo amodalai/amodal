@@ -66,20 +66,17 @@ amodal connect slack
 amodal sync --from https://api.example.com/openapi.json
 ```
 
-When you run `amodal connect slack`, the CLI installs the `@amodalai/connection-slack` plugin and scaffolds a connection directory with everything the agent needs to understand and use the Slack API:
+When you run `amodal connect slack`, the CLI installs the `@amodalai/connection-slack` package. The resolver automatically surfaces the plugin's contents — spec, access rules, documentation, and more — alongside your local files. The package includes:
 
-```
-connections/slack/
-├── spec.json       ← API endpoints, methods, parameters
-├── access.json     ← auth config (token reference, scopes)
-├── surface.md      ← natural-language overview of what the API can do
-├── entities.md     ← key entities (channels, users, messages, threads)
-└── rules.md        ← usage constraints (rate limits, read-only by default)
-```
+- **spec.json** — API endpoints, methods, parameters, auth config
+- **access.json** — field restrictions, action tiers, scoping rules
+- **surface.md** — natural-language overview of what the API can do
+- **entities.md** — key entities (channels, users, messages, threads)
+- **rules.md** — usage constraints (rate limits, read-only by default)
 
-The `surface.md` and `entities.md` files are what make this different from a raw OpenAPI spec. They teach the agent *when* to use the API and *what the data means* — in plain English. You can edit these files to customize behavior. For example, adding a line to `rules.md` like "Never post to #general without explicit confirmation" will change how the agent behaves.
+The `surface.md` and `entities.md` files are what make this different from a raw OpenAPI spec. They teach the agent *when* to use the API and *what the data means* — in plain English. To customize behavior, create a local `connections/slack/` directory and add your own files — local files always take precedence over package files. For example, adding a `rules.md` with "Never post to #general without explicit confirmation" will override the default rules.
 
-You will be prompted to provide your Slack Bot Token, which is stored encrypted in `access.json` (or read from an environment variable reference).
+You will be prompted to provide your Slack Bot Token, which is stored as an environment variable reference (e.g., `env:SLACK_BOT_TOKEN`).
 
 ## 4. Start the dev server
 
