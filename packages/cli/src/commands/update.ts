@@ -148,21 +148,49 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<number> {
 
 export const updateCommand: CommandModule = {
   command: 'update [name]',
-  describe: 'Update installed packages',
+  describe: 'Update packages. Use --all for all packages, --admin-agent for the admin agent, or specify a name.',
   builder: (yargs) =>
     yargs
       .positional('name', {type: 'string', describe: 'Package name to update'})
+      .option('all', {type: 'boolean', default: false, describe: 'Update all installed packages'})
+      .option('admin-agent', {type: 'boolean', default: false, describe: 'Update the global admin agent cache'})
       .option('latest', {type: 'boolean', default: false, describe: 'Allow major version updates'})
       .option('dry-run', {type: 'boolean', default: false, describe: 'Show what would be updated'}),
   handler: async (argv) => {
-    const code = await runUpdate({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      name: argv['name'] as string | undefined,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      latest: argv['latest'] as boolean,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      dryRun: argv['dryRun'] as boolean,
-    });
-    process.exit(code);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const name = argv['name'] as string | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const all = argv['all'] as boolean;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const adminAgent = argv['adminAgent'] as boolean;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const latest = argv['latest'] as boolean;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const dryRun = argv['dryRun'] as boolean;
+
+    // Must specify at least one target
+    if (!name && !all && !adminAgent) {
+      process.stderr.write('Usage: amodal update <name> | --all | --admin-agent\n');
+      process.stderr.write('  <name>          Update a specific package\n');
+      process.stderr.write('  --all           Update all installed packages\n');
+      process.stderr.write('  --admin-agent   Update the global admin agent\n');
+      process.stderr.write('  Flags can be combined: amodal update --all --admin-agent\n');
+      process.exit(1);
+    }
+
+    let failures = 0;
+
+    // Update admin agent if requested
+    if (adminAgent) {
+      const {updateAdminAgentCommand} = await import('./admin.js');
+      failures += await updateAdminAgentCommand();
+    }
+
+    // Update packages if requested
+    if (name || all) {
+      failures += await runUpdate({name, latest, dryRun});
+    }
+
+    process.exit(failures > 0 ? 1 : 0);
   },
 };

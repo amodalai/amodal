@@ -4,70 +4,55 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type {CommandModule} from 'yargs';
+import {readFile} from 'node:fs/promises';
+import * as path from 'node:path';
 import {
   fetchAdminAgent,
   getAdminAgentVersion,
-  getAdminCacheDir,
-  resolveAdminAgent,
 } from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
-export const adminCommand: CommandModule = {
-  command: 'admin <action>',
-  describe: 'Manage the admin agent',
-  builder: (yargs) =>
-    yargs
-      .command(
-        'update',
-        'Update the admin agent to the latest version from the registry',
-        {},
-        async () => {
-          process.stderr.write('[admin] Fetching latest admin agent...\n');
-          try {
-            const dir = await fetchAdminAgent();
-            const version = await getAdminAgentVersion(dir);
-            process.stderr.write(`[admin] Updated to v${version ?? 'unknown'} at ${dir}\n`);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            process.stderr.write(`[admin] Update failed: ${msg}\n`);
-            process.exit(1);
-          }
-        },
-      )
-      .command(
-        'status',
-        'Show admin agent status and location',
-        {},
-        async () => {
-          let repoPath: string | undefined;
-          try {
-            repoPath = findRepoRoot();
-          } catch {
-            // Not in a repo
-          }
+/**
+ * Update the global admin agent cache from the registry.
+ * Called by `amodal update --admin-agent`.
+ */
+export async function updateAdminAgentCommand(): Promise<number> {
+  // Check if amodal.json overrides the admin agent
+  let repoPath: string | undefined;
+  try {
+    repoPath = findRepoRoot();
+  } catch {
+    // Not in a repo — that's fine
+  }
 
-          const dir = await resolveAdminAgent(repoPath);
-          if (!dir) {
-            process.stderr.write('[admin] Admin agent not installed.\n');
-            process.stderr.write('[admin] Run `amodal admin update` to fetch it.\n');
-            return;
-          }
+  if (repoPath) {
+    try {
+      const configRaw = await readFile(path.join(repoPath, 'amodal.json'), 'utf-8');
+      const parsed: unknown = JSON.parse(configRaw);
+      if (parsed && typeof parsed === 'object' && 'adminAgent' in parsed) {
+         
+        const adminPath = (parsed as Record<string, unknown>)['adminAgent'];
+        if (typeof adminPath === 'string') {
+          process.stderr.write(`[update] Admin agent is overridden in amodal.json (adminAgent: "${adminPath}").\n`);
+          process.stderr.write('[update] The global cache is not used. Update your local copy directly.\n');
+          return 1;
+        }
+      }
+    } catch {
+      // No config or parse error — proceed
+    }
+  }
 
-          const version = await getAdminAgentVersion(dir);
-          process.stderr.write(`[admin] Version: ${version ?? 'unknown'}\n`);
-          process.stderr.write(`[admin] Location: ${dir}\n`);
-
-          const cacheDir = getAdminCacheDir();
-          if (dir === cacheDir) {
-            process.stderr.write('[admin] Source: global cache\n');
-          } else {
-            process.stderr.write('[admin] Source: custom override\n');
-          }
-        },
-      )
-      .demandCommand(1, 'Specify an action: update, status'),
-  handler: () => {
-    // Handled by subcommands
-  },
-};
+  process.stderr.write('[update] Fetching latest admin agent from registry...\n');
+  try {
+    const dir = await fetchAdminAgent();
+    const version = await getAdminAgentVersion(dir);
+    process.stderr.write(`[update] Admin agent updated to v${version ?? 'unknown'}\n`);
+    process.stderr.write(`[update] Cached at ${dir}\n`);
+    return 0;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[update] Admin agent update failed: ${msg}\n`);
+    return 1;
+  }
+}

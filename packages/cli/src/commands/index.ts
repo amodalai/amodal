@@ -34,8 +34,6 @@ import {evalCommand} from './eval.js';
 import {experimentCommand} from './experiment.js';
 import {testQueryCommand} from './test-query.js';
 import {automationsCommand} from './automations.js';
-import {adminCommand} from './admin.js';
-
 /**
  * All amodal subcommands for flat registration on the root yargs instance.
  */
@@ -71,8 +69,6 @@ export const amodalCommands = [
   chatCommand,
   auditCommand,
   automationsCommand,
-  // Admin
-  adminCommand,
   // Advanced
   evalCommand,
   experimentCommand,
