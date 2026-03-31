@@ -36,12 +36,9 @@ export function buildPlatformConfigParams(
     params.platformApiKey = sdkConfig.platform.apiKey;
   }
 
-  // Application and tenant IDs
+  // Application ID
   if (sdkConfig.applicationId) {
     params.applicationId = sdkConfig.applicationId;
-  }
-  if (sdkConfig.tenantId) {
-    params.tenantId = sdkConfig.tenantId;
   }
 
   // Agent context from SDK config (may be auto-detected from org)

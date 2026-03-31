@@ -15,7 +15,7 @@ function makeSessionManager(): AgentSessionManager {
     size: 0,
     create: vi.fn(async () => ({
       id: 'inspect-session',
-      tenantId: '__inspect__',
+      appId: '__inspect__',
       runtime: {
         compiledContext: {
           systemPrompt: 'You are a test agent.',

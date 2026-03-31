@@ -201,15 +201,15 @@ describe('runEvalSuite', () => {
     expect(result.totalFailed).toBe(0);
   });
 
-  it('passes tenant from setup to query provider', async () => {
+  it('passes app from setup to query provider', async () => {
     const queryFn = vi.fn().mockResolvedValue({response: 'ok', toolCalls: []});
     const queryProvider: EvalQueryProvider = {query: queryFn};
     const judgeProvider: JudgeProvider = {
       judge: vi.fn().mockResolvedValue('PASS: ok'),
     };
 
-    const ev = makeEval('tenanted');
-    ev.setup = {tenant: 'tenant-abc'};
+    const ev = makeEval('with-app');
+    ev.setup = {app: 'app-abc'};
     const repo = makeRepo([ev]);
 
     const gen = runEvalSuite(repo, {queryProvider, judgeProvider});
@@ -218,6 +218,6 @@ describe('runEvalSuite', () => {
       if (next.done) break;
     }
 
-    expect(queryFn).toHaveBeenCalledWith('What is 1+1?', 'tenant-abc');
+    expect(queryFn).toHaveBeenCalledWith('What is 1+1?', 'app-abc');
   });
 });

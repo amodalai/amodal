@@ -70,11 +70,11 @@ export async function runEval(options: EvalOptions): Promise<void> {
 
     // Create query provider that hits the local server
     const queryProvider: EvalQueryProvider = {
-      query: async (message: string, tenantId?: string) => {
+      query: async (message: string, appId?: string) => {
         const response = await fetch(`${baseUrl}/chat`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({message, tenant_id: tenantId ?? 'eval-runner'}),
+          body: JSON.stringify({message, app_id: appId ?? 'eval-runner'}),
         });
 
         const text = await response.text();
@@ -142,7 +142,7 @@ export async function runEval(options: EvalOptions): Promise<void> {
         const response = await fetch(`${baseUrl}/chat`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({message: prompt, tenant_id: 'eval-judge', session_id: `judge-${Date.now()}`}),
+          body: JSON.stringify({message: prompt, app_id: 'eval-judge', session_id: `judge-${Date.now()}`}),
         });
         const text = await response.text();
         let result = '';

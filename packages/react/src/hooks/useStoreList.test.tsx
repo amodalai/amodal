@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} tenantId="t1">
+    <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} appId="t1">
       {children}
     </AmodalProvider>
   );
@@ -27,8 +27,8 @@ describe('useStoreList', () => {
       http.get(`${RUNTIME_TEST_URL}/api/stores/active-alerts`, () =>
         HttpResponse.json({
           documents: [
-            { key: 'a', tenantId: 'local', store: 'active-alerts', version: 1, payload: { id: 'a', severity: 'P1' }, meta: { computedAt: '2026-01-01', stale: false } },
-            { key: 'b', tenantId: 'local', store: 'active-alerts', version: 1, payload: { id: 'b', severity: 'P2' }, meta: { computedAt: '2026-01-01', stale: false } },
+            { key: 'a', appId: 'local', store: 'active-alerts', version: 1, payload: { id: 'a', severity: 'P1' }, meta: { computedAt: '2026-01-01', stale: false } },
+            { key: 'b', appId: 'local', store: 'active-alerts', version: 1, payload: { id: 'b', severity: 'P2' }, meta: { computedAt: '2026-01-01', stale: false } },
           ],
           total: 2,
           hasMore: false,

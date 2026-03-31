@@ -9,7 +9,7 @@ import { streamSSE, streamSSEGet } from './sse-client';
 
 export interface RuntimeClientOptions {
   runtimeUrl: string;
-  tenantId: string;
+  appId: string;
   getToken?: () => string | Promise<string> | null | undefined;
 }
 
@@ -19,12 +19,12 @@ export interface RuntimeClientOptions {
  */
 export class RuntimeClient {
   private readonly runtimeUrl: string;
-  private readonly tenantId: string;
+  private readonly appId: string;
   private readonly getToken?: () => string | Promise<string> | null | undefined;
 
   constructor(options: RuntimeClientOptions) {
     this.runtimeUrl = options.runtimeUrl.replace(/\/$/, '');
-    this.tenantId = options.tenantId;
+    this.appId = options.appId;
     this.getToken = options.getToken;
   }
 
@@ -53,7 +53,7 @@ export class RuntimeClient {
     const url = `${this.runtimeUrl}/chat`;
     const body: Record<string, unknown> = {
       message,
-      tenant_id: this.tenantId,
+      app_id: this.appId,
     };
     if (options?.sessionId) {
       body['session_id'] = options.sessionId;
@@ -75,17 +75,17 @@ export class RuntimeClient {
    */
   async startTask(
     prompt: string,
-    tenantToken?: string,
+    appToken?: string,
   ): Promise<{ task_id: string }> {
     const url = `${this.runtimeUrl}/task`;
     const headers = await this.authHeaders();
 
     const body: Record<string, unknown> = {
       prompt,
-      tenant_id: this.tenantId,
+      app_id: this.appId,
     };
-    if (tenantToken) {
-      body['tenant_token'] = tenantToken;
+    if (appToken) {
+      body['app_token'] = appToken;
     }
 
     const response = await fetch(url, {

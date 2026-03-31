@@ -90,7 +90,7 @@ describe('AgentSessionManager', () => {
   it('should create a session', async () => {
     const session = await manager.create('tenant-1');
     expect(session.id).toBeTruthy();
-    expect(session.tenantId).toBe('tenant-1');
+    expect(session.appId).toBe('tenant-1');
     expect(session.conversationHistory).toEqual([]);
     expect(manager.size).toBe(1);
   });

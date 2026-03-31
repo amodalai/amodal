@@ -17,7 +17,7 @@ export interface ChatOptions {
   cwd?: string;
   url?: string;
   config?: string;
-  tenantId?: string;
+  appId?: string;
   port?: number;
   resume?: string;
   fullscreen?: boolean;
@@ -32,7 +32,7 @@ export interface ChatOptions {
  *   (default)         → boot from the local repo
  */
 export async function runChat(options: ChatOptions): Promise<void> {
-  const tenantId = options.tenantId ?? 'cli-user';
+  const appId = options.appId ?? 'cli-user';
 
   // Mode 1: Connect to a remote server
   if (options.url) {
@@ -42,7 +42,7 @@ export async function runChat(options: ChatOptions): Promise<void> {
     const {waitUntilExit} = render(
       createElement(ChatApp, {
         baseUrl,
-        tenantId,
+        appId,
         resumeSessionId: options.resume,
         fullscreen: options.fullscreen,
       }),
@@ -125,8 +125,13 @@ export async function runChat(options: ChatOptions): Promise<void> {
   const {waitUntilExit} = render(
     createElement(ChatApp, {
       baseUrl,
+<<<<<<< Updated upstream
       tenantId,
       resumeSessionId: resumeId,
+=======
+      appId,
+      resumeSessionId: options.resume,
+>>>>>>> Stashed changes
       fullscreen: options.fullscreen,
     }),
   );
@@ -147,9 +152,9 @@ export const chatCommand: CommandModule = {
         type: 'string',
         describe: 'Path to resolved-config.json snapshot',
       })
-      .option('tenant-id', {
+      .option('app-id', {
         type: 'string',
-        describe: 'Tenant ID for the session',
+        describe: 'App ID for the session',
       })
       .option('port', {
         type: 'number',
@@ -171,7 +176,7 @@ export const chatCommand: CommandModule = {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       config: argv['config'] as string | undefined,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      tenantId: argv['tenantId'] as string | undefined,
+      appId: argv['appId'] as string | undefined,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       port: argv['port'] as number | undefined,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion

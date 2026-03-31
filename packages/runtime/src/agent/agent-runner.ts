@@ -607,7 +607,7 @@ async function executeStorePut(
 
   try {
     const result = await session.storeBackend.put(
-      session.tenantId,
+      session.appId,
       store.name,
       key,
       args,
@@ -638,7 +638,7 @@ async function executeQueryStore(
   try {
     if (key) {
       // Single document lookup
-      const doc = await session.storeBackend.get(session.tenantId, storeName, key);
+      const doc = await session.storeBackend.get(session.appId, storeName, key);
       if (!doc) {
         return {output: JSON.stringify({found: false, key})};
       }
@@ -646,7 +646,7 @@ async function executeQueryStore(
     }
 
     // List with optional filtering
-    const result = await session.storeBackend.list(session.tenantId, storeName, {
+    const result = await session.storeBackend.list(session.appId, storeName, {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       filter: args['filter'] as Record<string, unknown> | undefined,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tool args from LLM

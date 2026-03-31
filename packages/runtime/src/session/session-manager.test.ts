@@ -181,7 +181,8 @@ describe('SessionManager', () => {
         apiKey: 'ak_test-key',
         orgId: 'org-123',
         applicationId: 'app-456',
-        tenantId: 'ten-789',
+
+
         authMethod: 'api_key' as const,
       };
 
@@ -197,7 +198,8 @@ describe('SessionManager', () => {
       expect(lastCall['platformApiUrl']).toBe('http://localhost:4000');
       expect(lastCall['platformApiKey']).toBe('ak_test-key');
       expect(lastCall['applicationId']).toBe('app-456');
-      expect(lastCall['tenantId']).toBe('ten-789');
+
+
 
       await authManager.shutdown();
     });
@@ -220,7 +222,6 @@ describe('SessionManager', () => {
         token: 'jwt.token.here',
         orgId: 'org-jwt',
         applicationId: 'app-jwt',
-        tenantId: 'tenant-jwt',
         authMethod: 'platform_jwt' as const,
       };
 
@@ -235,7 +236,6 @@ describe('SessionManager', () => {
       expect(platform['apiUrl']).toBe('http://localhost:4000');
       expect(platform['apiKey']).toBe('jwt.token.here');
       expect(sdkConfig['applicationId']).toBe('app-jwt');
-      expect(sdkConfig['tenantId']).toBe('tenant-jwt');
       // base_prompt and agent_context fetched from application during SDK initialize
 
       // Verify Config was NOT called directly (AgentSDK creates it internally)
@@ -264,7 +264,8 @@ describe('SessionManager', () => {
         apiKey: 'ak_test-key',
         orgId: 'org-123',
         applicationId: 'app-456',
-        tenantId: 'ten-789',
+
+
         authMethod: 'api_key' as const,
       };
 
@@ -294,7 +295,6 @@ describe('SessionManager', () => {
       const auth = {
         orgId: 'org-jwt',
         applicationId: 'app-jwt',
-        tenantId: 'tenant-jwt',
         authMethod: 'platform_jwt' as const,
       };
 
@@ -310,7 +310,6 @@ describe('SessionManager', () => {
       expect(lastCall['platformApiUrl']).toBe('http://localhost:4000');
       expect(lastCall['platformApiKey']).toBeUndefined();
       expect(lastCall['applicationId']).toBe('app-jwt');
-      expect(lastCall['tenantId']).toBe('tenant-jwt');
 
       await authManager.shutdown();
     });
@@ -332,7 +331,6 @@ describe('SessionManager', () => {
         token: 'jwt.token.here',
         orgId: 'org-1',
         applicationId: 'app-1',
-        tenantId: 'ten-1',
         authMethod: 'platform_jwt' as const,
       };
 
@@ -437,7 +435,6 @@ describe('SessionManager', () => {
       apiKey: 'ak_test-key',
       orgId: 'org-1',
       applicationId: 'app-1',
-      tenantId: 'ten-1',
       authMethod: 'api_key' as const,
     };
 
@@ -483,20 +480,18 @@ describe('SessionManager', () => {
       const result = await mgr.hydrate('conv-1', undefined, {
         orgId: 'org-1',
         applicationId: 'app-1',
-        tenantId: 'ten-1',
         authMethod: 'api_key',
       });
       expect(result).toBeNull();
       await mgr.shutdown();
     });
 
-    it('returns null when auth has no tenantId', async () => {
+    it('returns null when auth has no applicationId', async () => {
       const { mgr } = makeHydrateManager();
       const result = await mgr.hydrate('conv-1', undefined, {
         token: 'ak_test',
         orgId: 'org-1',
-        applicationId: 'app-1',
-        tenantId: '',
+        applicationId: '',
         authMethod: 'api_key',
       });
       expect(result).toBeNull();
@@ -530,7 +525,7 @@ describe('SessionManager', () => {
       const { mgr } = makeHydrateManager();
       const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: 'conv-1', tenant_id: 'ten-1', messages: [], status: 'active' }),
+        json: async () => ({ id: 'conv-1', app_id: 'app-1', messages: [], status: 'active' }),
       } as Response);
 
       const result = await mgr.hydrate('conv-1', undefined, platformAuth);
@@ -545,7 +540,7 @@ describe('SessionManager', () => {
         ok: true,
         json: async () => ({
           id: 'conv-original',
-          tenant_id: 'ten-1',
+          app_id: 'app-1',
           messages: storedMessages,
           status: 'active',
         }),
@@ -567,7 +562,7 @@ describe('SessionManager', () => {
         ok: true,
         json: async () => ({
           id: 'conv-history',
-          tenant_id: 'ten-1',
+          app_id: 'app-1',
           messages: storedMessages,
           status: 'active',
         }),
@@ -591,7 +586,7 @@ describe('SessionManager', () => {
         ok: true,
         json: async () => ({
           id: 'conv-acc',
-          tenant_id: 'ten-1',
+          app_id: 'app-1',
           messages: storedMessages,
           status: 'active',
         }),
@@ -623,7 +618,7 @@ describe('SessionManager', () => {
       // Resolve the fetch
       resolveJson({
         id: 'conv-dedup',
-        tenant_id: 'ten-1',
+        app_id: 'app-1',
         messages: storedMessages,
         status: 'active',
       });

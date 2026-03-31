@@ -592,10 +592,10 @@ describe('amodal CLI e2e', () => {
       expect(args['message']).toBe('What is the status?');
     });
 
-    it('parses --tenant-id and --port', async () => {
-      const args = await parseArgs(testQueryCommand, ['test-query', 'hello', '--tenant-id', 't-123', '--port', '3001']);
+    it('parses --app-id and --port', async () => {
+      const args = await parseArgs(testQueryCommand, ['test-query', 'hello', '--app-id', 't-123', '--port', '3001']);
       expect(args['message']).toBe('hello');
-      expect(args['tenantId']).toBe('t-123');
+      expect(args['appId']).toBe('t-123');
       expect(args['port']).toBe(3001);
     });
   });

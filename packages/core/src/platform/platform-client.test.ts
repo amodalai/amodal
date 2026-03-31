@@ -440,7 +440,7 @@ describe('PlatformClient', () => {
       expect(docs).toEqual(API_RESPONSE_DOCS);
     });
 
-    it('fetches tenant-scope documents using /api/tenants/ path', async () => {
+    it('fetches application-scope documents using /api/applications/ path', async () => {
       let capturedUrl = '';
       globalThis.fetch = vi.fn(
         async (input: RequestInfo | URL) => {
@@ -448,8 +448,8 @@ describe('PlatformClient', () => {
             typeof input === 'string' ? input : input.toString();
           return new Response(JSON.stringify([{
             ...API_RESPONSE_DOCS[0],
-            scope_type: 'tenant',
-            scope_id: 'ten-456',
+            scope_type: 'application',
+            scope_id: 'app-456',
           }]), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
@@ -458,12 +458,12 @@ describe('PlatformClient', () => {
       ) as typeof fetch;
 
       const client = new PlatformClient(VALID_CONFIG);
-      const docs = await client.fetchDocuments('tenant', 'ten-456');
+      const docs = await client.fetchDocuments('application', 'app-456');
 
       expect(capturedUrl).toBe(
-        'https://platform.example.com/api/tenants/ten-456/documents',
+        'https://platform.example.com/api/applications/app-456/documents',
       );
-      expect(docs[0]?.scope_type).toBe('tenant');
+      expect(docs[0]?.scope_type).toBe('application');
     });
 
     it('returns documents with scope_type as-is from API', async () => {
@@ -573,10 +573,10 @@ describe('PlatformClient', () => {
       }) as typeof fetch;
 
       const client = new PlatformClient(VALID_CONFIG);
-      await client.searchDocuments('tenant', 'ten-1', 'threat');
+      await client.searchDocuments('application', 'app-1', 'threat');
 
       expect(capturedUrl).toContain('search=threat');
-      expect(capturedUrl).toContain('/api/tenants/ten-1/documents');
+      expect(capturedUrl).toContain('/api/applications/app-1/documents');
     });
   });
 
@@ -673,7 +673,7 @@ describe('PlatformClient', () => {
       { name: 'API_KEY', value: 'sk-secret-123' },
     ];
 
-    it('constructs correct URL with encoded tenantId', async () => {
+    it('constructs correct URL with encoded appId', async () => {
       let capturedUrl = '';
       globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
         capturedUrl = typeof input === 'string' ? input : input.toString();
@@ -684,10 +684,10 @@ describe('PlatformClient', () => {
       }) as typeof fetch;
 
       const client = new PlatformClient(VALID_CONFIG);
-      await client.resolveSecrets('ten 456');
+      await client.resolveSecrets('app 456');
 
       expect(capturedUrl).toBe(
-        'https://platform.example.com/api/tenants/ten%20456/secrets/resolve',
+        'https://platform.example.com/api/applications/app%20456/secrets/resolve',
       );
     });
 

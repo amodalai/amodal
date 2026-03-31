@@ -104,7 +104,7 @@ export function resolveExploreModel(
       return {
         provider,
         model,
-        // Inherit credentials from the default explore model so tenant creds flow through
+        // Inherit credentials from the default explore model so app creds flow through
         credentials: config.model.credentials,
       };
     }

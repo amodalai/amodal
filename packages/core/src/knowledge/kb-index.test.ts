@@ -75,14 +75,14 @@ describe('buildKnowledgeIndex', () => {
 
 describe('formatKnowledgeIndex', () => {
   it('returns no-connections guidance when no documents', () => {
-    const result = formatKnowledgeIndex([], []);
+    const result = formatKnowledgeIndex([]);
     expect(result).toContain('# Knowledge Base');
     expect(result).toContain('No knowledge base documents are available');
     expect(result).toContain('no connections have been configured');
   });
 
-  it('formats org-only KB index', () => {
-    const orgDocs = [
+  it('formats app KB index', () => {
+    const appDocs = [
       makeDoc({
         id: 'doc-1',
         title: 'API Docs',
@@ -90,100 +90,76 @@ describe('formatKnowledgeIndex', () => {
         tags: ['api-docs', 'endpoints'],
       }),
     ];
-    const result = formatKnowledgeIndex(orgDocs, []);
+    const result = formatKnowledgeIndex(appDocs);
     expect(result).toContain('# Available Knowledge Base');
     expect(result).toContain('load_knowledge');
     expect(result).toContain('## Application Knowledge (1 document)');
     expect(result).toContain('| API Docs | Methodology | api-docs, endpoints | doc-1 |');
-    expect(result).not.toContain('## Tenant Knowledge');
   });
 
-  it('formats segment-only KB index', () => {
-    const segDocs = [
-      makeDoc({
-        scope_type: 'tenant',
-        id: 'doc-s1',
-        title: 'Zone Layout',
-        category: 'team',
-        tags: ['zones'],
-      }),
-    ];
-    const result = formatKnowledgeIndex([], segDocs);
-    expect(result).toContain('## Tenant Knowledge (1 document)');
-    expect(result).toContain('| Zone Layout | Team | zones | doc-s1 |');
-    expect(result).not.toContain('## Application Knowledge');
-  });
-
-  it('formats both org and segment KB index', () => {
-    const orgDocs = [
+  it('formats multiple app docs', () => {
+    const appDocs = [
       makeDoc({ id: 'doc-o1', title: 'Org Doc', category: 'methodology' }),
-    ];
-    const segDocs = [
       makeDoc({
-        scope_type: 'tenant',
         id: 'doc-s1',
         title: 'Seg Doc',
         category: 'incident_history',
       }),
     ];
-    const result = formatKnowledgeIndex(orgDocs, segDocs);
+    const result = formatKnowledgeIndex(appDocs);
     expect(result).toContain('## Application Knowledge');
-    expect(result).toContain('## Tenant Knowledge');
-    const orgIdx = result.indexOf('## Application Knowledge');
-    const segIdx = result.indexOf('## Tenant Knowledge');
-    expect(orgIdx).toBeLessThan(segIdx);
+    expect(result).toContain('| Org Doc |');
+    expect(result).toContain('| Seg Doc |');
   });
 
   it('shows dash for docs with no tags', () => {
-    const orgDocs = [
+    const appDocs = [
       makeDoc({ id: 'doc-1', title: 'No Tags', category: 'methodology', tags: [] }),
     ];
-    const result = formatKnowledgeIndex(orgDocs, []);
+    const result = formatKnowledgeIndex(appDocs);
     expect(result).toContain('| No Tags | Methodology | - | doc-1 |');
   });
 
   it('pluralizes document count correctly', () => {
-    const orgDocs = [
+    const appDocs = [
       makeDoc({ id: 'doc-1', title: 'A', category: 'methodology' }),
       makeDoc({ id: 'doc-2', title: 'B', category: 'system_docs' }),
     ];
-    const result = formatKnowledgeIndex(orgDocs, []);
+    const result = formatKnowledgeIndex(appDocs);
     expect(result).toContain('## Application Knowledge (2 documents)');
   });
 
   it('singular for one document', () => {
-    const orgDocs = [
+    const appDocs = [
       makeDoc({ id: 'doc-1', title: 'A', category: 'methodology' }),
     ];
-    const result = formatKnowledgeIndex(orgDocs, []);
+    const result = formatKnowledgeIndex(appDocs);
     expect(result).toContain('(1 document)');
     expect(result).not.toContain('(1 documents)');
   });
 
   it('includes table headers', () => {
-    const orgDocs = [
+    const appDocs = [
       makeDoc({ id: 'doc-1', title: 'Test', category: 'methodology' }),
     ];
-    const result = formatKnowledgeIndex(orgDocs, []);
+    const result = formatKnowledgeIndex(appDocs);
     expect(result).toContain('| Title | Category | Tags | ID |');
     expect(result).toContain('| --- | --- | --- | --- |');
   });
 
-  it('maps new category display names correctly', () => {
-    const orgDocs = [
+  it('maps category display names correctly', () => {
+    const appDocs = [
       makeDoc({ id: '1', title: 'A', category: 'system_docs' }),
       makeDoc({ id: '2', title: 'B', category: 'methodology' }),
       makeDoc({ id: '3', title: 'C', category: 'patterns' }),
       makeDoc({ id: '4', title: 'D', category: 'false_positives' }),
       makeDoc({ id: '5', title: 'E', category: 'response_procedures' }),
+      makeDoc({ id: '6', title: 'F', category: 'environment' }),
+      makeDoc({ id: '7', title: 'G', category: 'baselines' }),
+      makeDoc({ id: '8', title: 'H', category: 'team' }),
+      makeDoc({ id: '9', title: 'I', category: 'incident_history' }),
     ];
-    const segDocs = [
-      makeDoc({ id: '6', scope_type: 'tenant', title: 'F', category: 'environment' }),
-      makeDoc({ id: '7', scope_type: 'tenant', title: 'G', category: 'baselines' }),
-      makeDoc({ id: '8', scope_type: 'tenant', title: 'H', category: 'team' }),
-      makeDoc({ id: '9', scope_type: 'tenant', title: 'I', category: 'incident_history' }),
-    ];
-    const result = formatKnowledgeIndex(orgDocs, segDocs);
+    const result = formatKnowledgeIndex(appDocs);
     expect(result).toContain('System Documentation');
     expect(result).toContain('Methodology');
     expect(result).toContain('Patterns');
@@ -191,22 +167,6 @@ describe('formatKnowledgeIndex', () => {
     expect(result).toContain('Response Procedures');
     expect(result).toContain('Environment');
     expect(result).toContain('Baselines');
-    expect(result).toContain('Team');
-    expect(result).toContain('Incident History');
-  });
-
-  it('displays current categories correctly', () => {
-    const orgDocs = [
-      makeDoc({ id: '1', title: 'A', category: 'methodology' }),
-      makeDoc({ id: '2', title: 'B', category: 'system_docs' }),
-    ];
-    const segDocs = [
-      makeDoc({ id: '3', scope_type: 'tenant', title: 'C', category: 'team' }),
-      makeDoc({ id: '4', scope_type: 'tenant', title: 'D', category: 'incident_history' }),
-    ];
-    const result = formatKnowledgeIndex(orgDocs, segDocs);
-    expect(result).toContain('Methodology');
-    expect(result).toContain('System Documentation');
     expect(result).toContain('Team');
     expect(result).toContain('Incident History');
   });

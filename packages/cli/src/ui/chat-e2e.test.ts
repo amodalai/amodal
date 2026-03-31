@@ -52,7 +52,7 @@ function sendChatAndCollectActions(
 ): Promise<ChatAction[]> {
   return new Promise((resolve, reject) => {
     const actions: ChatAction[] = [];
-    const body = JSON.stringify({message, tenant_id: 'test'});
+    const body = JSON.stringify({message, app_id: 'test'});
 
     const req = http.request(
       {

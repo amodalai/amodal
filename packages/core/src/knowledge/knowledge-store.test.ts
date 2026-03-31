@@ -34,11 +34,11 @@ const appDocs: KBDocument[] = [
   makeDoc({ id: 'org-6', title: 'Wireless Protocols', tags: ['wireless-protocols'] }),
 ];
 
-const tenantDocs: KBDocument[] = [
+const extraAppDocs: KBDocument[] = [
   makeDoc({
     id: 'seg-1',
     title: 'Facility Zones',
-    scope_type: 'tenant',
+    scope_type: 'application',
     scope_id: 'seg-acme',
     tags: ['zones', 'local-baselines'],
     category: 'team',
@@ -46,7 +46,7 @@ const tenantDocs: KBDocument[] = [
   makeDoc({
     id: 'seg-2',
     title: 'Team Context',
-    scope_type: 'tenant',
+    scope_type: 'application',
     scope_id: 'seg-acme',
     tags: ['team-context'],
     category: 'team',
@@ -54,7 +54,7 @@ const tenantDocs: KBDocument[] = [
   makeDoc({
     id: 'seg-3',
     title: 'Local Baselines',
-    scope_type: 'tenant',
+    scope_type: 'application',
     scope_id: 'seg-acme',
     tags: ['local-baselines'],
   }),
@@ -63,7 +63,7 @@ const tenantDocs: KBDocument[] = [
 let store: KnowledgeStore;
 
 beforeEach(() => {
-  store = new KnowledgeStore(appDocs, tenantDocs);
+  store = new KnowledgeStore([...appDocs, ...extraAppDocs]);
 });
 
 describe('KnowledgeStore', () => {
@@ -82,12 +82,11 @@ describe('KnowledgeStore', () => {
     it('returns formatted markdown index', () => {
       const result = store.getFormattedIndex();
       expect(result).toContain('# Available Knowledge Base');
-      expect(result).toContain('## Application Knowledge (6 documents)');
-      expect(result).toContain('## Tenant Knowledge (3 documents)');
+      expect(result).toContain('## Application Knowledge (9 documents)');
     });
 
     it('returns no-connections message when no docs', () => {
-      const emptyStore = new KnowledgeStore([], []);
+      const emptyStore = new KnowledgeStore([]);
       expect(emptyStore.getFormattedIndex()).toContain('No knowledge base documents are available');
     });
   });
@@ -136,9 +135,9 @@ describe('KnowledgeStore', () => {
     });
 
     it('filters by scope when specified', () => {
-      const docs = store.loadByTags(['local-baselines'], 'tenant');
+      const docs = store.loadByTags(['local-baselines'], 'application');
       expect(docs).toHaveLength(2);
-      expect(docs.every((d) => d.scope_type === 'tenant')).toBe(true);
+      expect(docs.every((d) => d.scope_type === 'application')).toBe(true);
     });
 
     it('returns docs from both scopes when scope not specified', () => {
@@ -195,9 +194,9 @@ describe('KnowledgeStore', () => {
     });
 
     it('filters by scope when specified', () => {
-      const docs = store.loadByCategory(['team'], 'tenant');
+      const docs = store.loadByCategory(['team'], 'application');
       expect(docs).toHaveLength(2);
-      expect(docs.every((d) => d.scope_type === 'tenant')).toBe(true);
+      expect(docs.every((d) => d.scope_type === 'application')).toBe(true);
     });
 
     it('returns docs from both scopes when scope not specified', () => {
@@ -266,10 +265,10 @@ describe('KnowledgeStore', () => {
     it('respects scope filter with tags', () => {
       const docs = store.loadForSkill({
         tags: ['local-baselines'],
-        scope: 'tenant',
+        scope: 'application',
       });
       expect(docs).toHaveLength(2);
-      expect(docs.every((d) => d.scope_type === 'tenant')).toBe(true);
+      expect(docs.every((d) => d.scope_type === 'application')).toBe(true);
     });
 
     it('defaults scope to all when undefined', () => {
@@ -320,13 +319,9 @@ describe('KnowledgeStore', () => {
     });
   });
 
-  describe('getAppDocuments / getTenantDocuments', () => {
+  describe('getAppDocuments', () => {
     it('returns app docs', () => {
-      expect(store.getAppDocuments()).toHaveLength(6);
-    });
-
-    it('returns tenant docs', () => {
-      expect(store.getTenantDocuments()).toHaveLength(3);
+      expect(store.getAppDocuments()).toHaveLength(9);
     });
   });
 

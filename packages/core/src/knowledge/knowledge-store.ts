@@ -20,27 +20,25 @@ import { buildKnowledgeIndex, formatKnowledgeIndex } from './kb-index.js';
  */
 export class KnowledgeStore {
   private readonly appDocs: KBDocument[];
-  private readonly tenantDocs: KBDocument[];
   private readonly allDocsById: Map<string, KBDocument>;
   private readonly loadedIds: Set<string> = new Set();
 
-  constructor(appDocs: KBDocument[], tenantDocs: KBDocument[]) {
+  constructor(appDocs: KBDocument[]) {
     this.appDocs = appDocs;
-    this.tenantDocs = tenantDocs;
     this.allDocsById = new Map<string, KBDocument>();
-    for (const doc of [...appDocs, ...tenantDocs]) {
+    for (const doc of appDocs) {
       this.allDocsById.set(doc.id, doc);
     }
   }
 
   /** All index entries (compact, no body). */
   getIndex(): KBIndexEntry[] {
-    return buildKnowledgeIndex([...this.appDocs, ...this.tenantDocs]);
+    return buildKnowledgeIndex(this.appDocs);
   }
 
   /** Formatted KB index suitable for the system prompt. */
   getFormattedIndex(): string {
-    return formatKnowledgeIndex(this.appDocs, this.tenantDocs);
+    return formatKnowledgeIndex(this.appDocs);
   }
 
   /** Load specific documents by ID. Marks them as loaded. */
@@ -148,19 +146,12 @@ export class KnowledgeStore {
     return this.appDocs;
   }
 
-  /** Get tenant-level documents. */
-  getTenantDocuments(): KBDocument[] {
-    return this.tenantDocs;
-  }
-
   /** Check whether a specific document has been loaded. */
   isLoaded(id: string): boolean {
     return this.loadedIds.has(id);
   }
 
-  private getDocsForScope(scope?: ScopeType): KBDocument[] {
-    if (scope === 'application') return this.appDocs;
-    if (scope === 'tenant') return this.tenantDocs;
-    return [...this.appDocs, ...this.tenantDocs];
+  private getDocsForScope(_scope?: ScopeType): KBDocument[] {
+    return this.appDocs;
   }
 }

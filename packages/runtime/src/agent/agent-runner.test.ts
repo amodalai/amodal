@@ -29,7 +29,7 @@ vi.mock('@amodalai/core', async (importOriginal) => {
 function makeSession(overrides?: Partial<AgentSession>): AgentSession {
   return {
     id: 'session-1',
-    tenantId: 'tenant-1',
+    appId: 'tenant-1',
     conversationHistory: [],
     createdAt: Date.now(),
     lastAccessedAt: Date.now(),

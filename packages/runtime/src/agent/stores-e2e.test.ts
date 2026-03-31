@@ -169,7 +169,7 @@ describe('Stores E2E', () => {
 
       app = express();
       app.use(express.json());
-      app.use(createStoresRouter({repo, storeBackend: backend, tenantId: 'local'}));
+      app.use(createStoresRouter({repo, storeBackend: backend, appId: 'local'}));
     });
 
     afterAll(async () => {
@@ -293,7 +293,7 @@ describe('Stores E2E', () => {
       const session = {
         id: 'stores-e2e-session',
         runtime,
-        tenantId: 'e2e-tenant',
+        appId: 'e2e-tenant',
         conversationHistory: [],
         createdAt: Date.now(),
         lastAccessedAt: Date.now(),
@@ -429,7 +429,7 @@ describe('Stores E2E', () => {
       const session = {
         id: 'tools-check-session',
         runtime,
-        tenantId: 'test',
+        appId: 'test',
         conversationHistory: [],
         createdAt: Date.now(),
         lastAccessedAt: Date.now(),
@@ -490,7 +490,7 @@ describe('Stores E2E', () => {
       const express = (await import('express')).default;
       const testApp = express();
       testApp.use(express.json());
-      testApp.use(createStoresRouter({repo, storeBackend: backend, tenantId: 'local'}));
+      testApp.use(createStoresRouter({repo, storeBackend: backend, appId: 'local'}));
 
       // GET /api/stores — should show correct counts
       const storesRes = await request(testApp).get('/api/stores');

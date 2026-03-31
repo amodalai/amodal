@@ -158,7 +158,6 @@ function startPlatformApi(port: number): ChildProcess {
 interface OnboardingResult {
   org: {id: string};
   app: {id: string};
-  tenant: {id: string};
   api_key: {id: string; key: string};
 }
 
@@ -318,7 +317,7 @@ describe('E2E Commands: Platform API', () => {
     platformProc = startPlatformApi(platformPort);
     await waitForServer(`${baseUrl}/api/health`, 60000);
 
-    // Onboard to create org + app + tenant + API key
+    // Onboard to create org + app + API key
     const result = await onboard(baseUrl);
     apiKey = result.api_key.key;
 
@@ -517,7 +516,7 @@ describe('E2E Commands: Runtime', () => {
     const resp = await fetch(`http://127.0.0.1:${localPort}/chat`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message: 'Hello', tenant_id: 'e2e-cmd-test'}),
+      body: JSON.stringify({message: 'Hello', app_id: 'e2e-cmd-test'}),
     });
 
     expect(resp.ok).toBe(true);

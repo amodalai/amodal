@@ -311,7 +311,8 @@ describe('runMessage', () => {
       auditClient: { log: mockLog },
       appId: 'app-1',
       token: 'tok-1',
-      tenantId: 'tenant-1',
+
+
       orgId: 'org-1',
     };
 
@@ -332,7 +333,7 @@ describe('runMessage', () => {
     expect(details['status']).toBe('completed');
     expect(details['message']).toBe('do something');
     expect(details['response']).toBe('Done');
-    expect(details['tenant_id']).toBe('tenant-1');
+    expect(details['app_id']).toBe('app-1');
     expect(details['org_id']).toBe('org-1');
     expect(details['turns']).toBe(2);
     const toolCalls = details['tool_calls'] as Array<Record<string, unknown>>;
@@ -768,7 +769,8 @@ describe('streamMessage', () => {
       auditClient: { log: mockLog },
       appId: 'app-1',
       token: 'tok-1',
-      tenantId: 'tenant-1',
+
+
       orgId: 'org-1',
     };
 
@@ -786,7 +788,7 @@ describe('streamMessage', () => {
     expect(details['status']).toBe('completed');
     expect(details['message']).toBe('triage please');
     expect(details['response']).toBe('skill loaded');
-    expect(details['tenant_id']).toBe('tenant-1');
+    expect(details['app_id']).toBe('app-1');
     expect(details['org_id']).toBe('org-1');
     expect(details['skills_activated']).toEqual(['triage']);
     const toolCalls = details['tool_calls'] as Array<Record<string, unknown>>;

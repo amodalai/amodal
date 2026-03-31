@@ -20,7 +20,7 @@ import { getProposeKnowledgeDefinition } from '../tools/definitions/amodal-tools
  */
 export interface ProposeKnowledgeParams {
   action: 'create' | 'update';
-  scope: 'application' | 'tenant';
+  scope: 'application';
   document_id?: string;
   title: string;
   category: 'system_docs' | 'methodology' | 'patterns' | 'false_positives' | 'response_procedures' | 'environment' | 'baselines' | 'team' | 'incident_history' | 'working_memory';
@@ -78,17 +78,11 @@ class ProposeKnowledgeInvocation extends BaseToolInvocation<
       };
     }
 
-    // Resolve scope_id from applicationId/tenantId
-    const scopeId =
-      this.params.scope === 'application'
-        ? this.config.getApplicationId()
-        : this.config.getTenantId();
+    // Resolve scope_id from applicationId
+    const scopeId = this.config.getApplicationId();
 
     if (!scopeId) {
-      const errorMessage =
-        this.params.scope === 'application'
-          ? 'Application ID not configured. Cannot propose application-level updates.'
-          : 'Tenant ID not configured. Cannot propose tenant-level updates.';
+      const errorMessage = 'Application ID not configured. Cannot propose application-level updates.';
       return {
         llmContent: `Error: ${errorMessage}`,
         returnDisplay: `Error: ${errorMessage}`,

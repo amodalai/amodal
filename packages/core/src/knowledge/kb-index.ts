@@ -46,21 +46,16 @@ const CATEGORY_DISPLAY_NAMES: Record<DocumentCategory, string> = {
 
 /**
  * Format KB documents as a compact index table for the system prompt.
- * Groups by scope (application / tenant) and shows title, category, tags, and ID.
+ * Shows title, category, tags, and ID.
  * The agent can then use `load_knowledge` to fetch full bodies on demand.
  */
 export function formatKnowledgeIndex(
   appDocs: KBDocument[],
-  tenantDocs: KBDocument[],
 ): string {
   const sections: string[] = [];
 
   if (appDocs.length > 0) {
     sections.push(formatScopeIndex('Application', appDocs));
-  }
-
-  if (tenantDocs.length > 0) {
-    sections.push(formatScopeIndex('Tenant', tenantDocs));
   }
 
   if (sections.length === 0) {

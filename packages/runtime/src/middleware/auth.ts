@@ -19,7 +19,6 @@ export interface AuthContext {
   token?: string;
   orgId: string;
   applicationId: string;
-  tenantId: string;
   authMethod: 'api_key' | 'platform_jwt';
   actor?: string;
 }
@@ -36,16 +35,13 @@ export interface AuthMiddlewareOptions {
 interface CacheEntry {
   orgId: string;
   applicationId: string;
-  tenantId: string;
   expiresAt: number;
 }
 
 interface MeResponse {
   org?: { id?: string } | null;
   app?: { id?: string } | null;
-  tenant?: { id?: string } | null;
   apps?: Array<{ id?: string }>;
-  tenants?: Array<{ id?: string }>;
 }
 
 const AUTH_CONTEXT_KEY = 'authContext';
@@ -105,7 +101,6 @@ export function createAuthMiddleware(
           token,
           orgId: cached.orgId,
           applicationId: cached.applicationId,
-          tenantId: cached.tenantId,
           authMethod: 'api_key',
         };
         next();
@@ -149,7 +144,6 @@ export function createAuthMiddleware(
             token,
             orgId: claims.org_id,
             applicationId: claims.app_id,
-            tenantId: claims.tenant_id,
             authMethod: 'platform_jwt',
             ...(claims.actor ? { actor: claims.actor } : {}),
           };
@@ -167,12 +161,12 @@ export function createAuthMiddleware(
 
 /**
  * Validate an API key by calling the platform API's /api/me endpoint.
- * Returns org/app/tenant context if valid, null if invalid.
+ * Returns org/app context if valid, null if invalid.
  */
 async function validateKey(
   platformApiUrl: string,
   apiKey: string,
-): Promise<{ orgId: string; applicationId: string; tenantId: string } | null> {
+): Promise<{ orgId: string; applicationId: string } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
 
@@ -195,8 +189,7 @@ async function validateKey(
     // Prefer singular fields, fall back to arrays
     const orgId = data.org?.id ?? '';
     const applicationId = data.app?.id ?? data.apps?.[0]?.id ?? '';
-    const tenantId = data.tenant?.id ?? data.tenants?.[0]?.id ?? '';
-    return { orgId, applicationId, tenantId };
+    return { orgId, applicationId };
   } catch {
     clearTimeout(timer);
     throw new Error('Platform API unreachable');

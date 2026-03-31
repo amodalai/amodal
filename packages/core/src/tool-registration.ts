@@ -56,11 +56,11 @@ export async function registerAmodalTools(
   const stores = ctx.getStores();
   const storeBackend = ctx.getStoreBackend();
   if (stores.length > 0 && storeBackend) {
-    const tenantId = ctx.getTenantId() ?? 'default';
+    const appId = ctx.getApplicationId() ?? 'default';
     for (const store of stores) {
-      registry.registerTool(new StoreWriteTool(store, storeBackend, tenantId, messageBus));
+      registry.registerTool(new StoreWriteTool(store, storeBackend, appId, messageBus));
     }
-    registry.registerTool(new StoreQueryTool(stores, storeBackend, tenantId, messageBus));
+    registry.registerTool(new StoreQueryTool(stores, storeBackend, appId, messageBus));
   }
 }
 

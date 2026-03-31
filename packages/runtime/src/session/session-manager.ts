@@ -77,10 +77,10 @@ const ASK_USER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
  * Manages per-request sessions: creates Config + GeminiClient + Scheduler
  * instances, tracks them by ID, and cleans up expired sessions.
  */
-/** Shape returned by GET /api/tenants/:tenantId/sessions/:sessionId */
+/** Shape returned by GET /api/applications/:appId/sessions/:sessionId */
 interface StoredSessionRecord {
   id: string;
-  tenant_id: string;
+  app_id: string;
   messages: SessionMessage[];
   status: string;
   model?: string;
@@ -114,7 +114,7 @@ export class SessionManager {
   /**
    * Create a new session with optional role override and auth context.
    * When auth context is provided, the session is configured with
-   * the caller's API key and org/app/tenant context.
+   * the caller's API key and org/app context.
    */
   async create(role?: string, auth?: AuthContext, sessionType?: string, pinnedModel?: { provider: string; model: string }, deployId?: string): Promise<ManagedSession> {
     const sessionId = randomUUID();
@@ -147,7 +147,7 @@ export class SessionManager {
     // Platform session: use AgentSDK to fetch KB docs, org details, secrets
     if (auth?.token && this.platformApiUrl) {
       process.stderr.write(
-        `[SESSION] Creating platform session: app=${auth.applicationId}, tenant=${auth.tenantId}, ` +
+        `[SESSION] Creating platform session: app=${auth.applicationId}, ` +
         `org=${auth.orgId}, key=${auth.token.slice(0, 12)}..., sessionType=${sessionType ?? '(none)'}\n`,
       );
       const sdk = new AgentSDK(
@@ -157,7 +157,6 @@ export class SessionManager {
             apiKey: auth.token, // JWT or ak_ key — both work as Bearer tokens
           },
           applicationId: auth.applicationId,
-          tenantId: auth.tenantId,
           // base_prompt and agent_context fetched from application record during SDK initialize
           activeRole: role,
           sessionType,
@@ -174,7 +173,6 @@ export class SessionManager {
       if (auth && this.platformApiUrl) {
         sessionParams.platformApiUrl = this.platformApiUrl;
         sessionParams.applicationId = auth.applicationId;
-        sessionParams.tenantId = auth.tenantId;
         if (auth.apiKey) {
           sessionParams.platformApiKey = auth.apiKey;
         }
@@ -184,7 +182,7 @@ export class SessionManager {
       await config.initialize();
     }
 
-    // Inject tenant secrets as process env vars so shell_exec commands can
+    // Inject app secrets as process env vars so shell_exec commands can
     // reference them (e.g. $API_BASE_URL in curl commands). The shell execution
     // service inherits process.env for child processes.
     // Also add secret names to the sanitization allowlist — without this,
@@ -199,9 +197,9 @@ export class SessionManager {
         `and the seed has run.\n`,
       );
     }
-    // Tenant secrets are available to tools via session-scoped getSessionEnv()
+    // App secrets are available to tools via session-scoped getSessionEnv()
     // (through ToolContext). They are NOT injected into process.env to prevent
-    // cross-tenant secret leakage in multi-session runtimes.
+    // cross-app secret leakage in multi-session runtimes.
     const secrets = connections['_secrets'];
     if (secrets && typeof secrets === 'object') {
       const secretCount = Object.keys(secrets).length;
@@ -353,17 +351,17 @@ export class SessionManager {
         const upstream = config.getUpstreamConfig();
         const toolRegistry = upstream.getToolRegistry();
         const messageBus = config.getMessageBus();
-        const tenantId = config.getTenantId() ?? 'default';
+        const appId = config.getAppId() ?? 'default';
 
         for (const store of stores) {
           toolRegistry.registerTool(
             // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tool types match upstream interface
-            new StoreWriteTool(store, storeBackend, tenantId, messageBus) as never,
+            new StoreWriteTool(store, storeBackend, appId, messageBus) as never,
           );
         }
         toolRegistry.registerTool(
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-          new StoreQueryTool(stores, storeBackend, tenantId, messageBus) as never,
+          new StoreQueryTool(stores, storeBackend, appId, messageBus) as never,
         );
         // Refresh the GeminiClient's tool list so the LLM sees the new tools
         await geminiClient.setTools();
@@ -433,7 +431,7 @@ export class SessionManager {
   ): Promise<ManagedSession | null> {
     // Guard: need platform API and auth to fetch stored conversation
     if (!this.platformApiUrl) return null;
-    if (!auth?.tenantId || !auth.token) return null;
+    if (!auth?.applicationId || !auth.token) return null;
 
     // Deduplicate concurrent hydration requests for the same conversation
     const pending = this.pendingHydrations.get(conversationId);
@@ -456,7 +454,7 @@ export class SessionManager {
     sessionType?: string,
   ): Promise<ManagedSession | null> {
     // Fetch stored conversation from platform-api
-    const url = `${this.platformApiUrl}/api/tenants/${auth!.tenantId}/sessions/${conversationId}`;
+    const url = `${this.platformApiUrl}/api/applications/${auth!.applicationId}/sessions/${conversationId}`;
     let record: StoredSessionRecord;
     try {
       const controller = new AbortController();

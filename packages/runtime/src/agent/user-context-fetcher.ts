@@ -16,7 +16,7 @@ import type {ConnectionsMap} from '@amodalai/core';
  */
 export async function fetchUserContext(
   repo: AmodalRepo,
-  tenantToken: string,
+  appToken: string,
   connectionsMap: ConnectionsMap,
 ): Promise<Record<string, unknown>> {
   const spec = repo.config.userContext;
@@ -44,7 +44,7 @@ export async function fetchUserContext(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${tenantToken}`,
+    'Authorization': `Bearer ${appToken}`,
   };
 
   const controller = new AbortController();

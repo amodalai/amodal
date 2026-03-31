@@ -8,16 +8,13 @@ import type { KBDocument, DocumentCategory } from './kb-types.js';
 
 /**
  * Display order and names for document categories.
- * Application-level first, then tenant-level.
  */
 const CATEGORY_ORDER: DocumentCategory[] = [
-  // Application-level categories
   'system_docs',
   'methodology',
   'patterns',
   'false_positives',
   'response_procedures',
-  // Tenant-level categories
   'environment',
   'baselines',
   'team',
@@ -71,7 +68,6 @@ function formatDocsByCategory(docs: KBDocument[]): string {
  */
 export function formatKnowledgeBase(
   appDocs: KBDocument[],
-  tenantDocs: KBDocument[],
 ): string {
   const sections: string[] = [];
 
@@ -79,16 +75,7 @@ export function formatKnowledgeBase(
     const appContent = formatDocsByCategory(appDocs);
     if (appContent) {
       sections.push(
-        `# Application Knowledge\n(product-level domain expertise, shared across all tenants)\n\n${appContent}`,
-      );
-    }
-  }
-
-  if (tenantDocs.length > 0) {
-    const tenantContent = formatDocsByCategory(tenantDocs);
-    if (tenantContent) {
-      sections.push(
-        `# Tenant Knowledge\n(specific to this deployment)\n\n${tenantContent}`,
+        `# Application Knowledge\n(application-level domain expertise)\n\n${appContent}`,
       );
     }
   }

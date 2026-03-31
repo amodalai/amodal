@@ -58,7 +58,7 @@ function makeRepo(automations: LoadedAutomation[]): AmodalRepo {
 const mockSession = {
   id: 'test-session',
   runtime: {} as AgentSession['runtime'],
-  tenantId: 'test',
+  appId: 'test',
   conversationHistory: [],
   createdAt: Date.now(),
   lastAccessedAt: Date.now(),

@@ -145,8 +145,8 @@ export const BundleDependenciesSchema = z.object({
 export const SkillKnowledgeDepsSchema = z.object({
   /** Docs matching any of these tags are auto-loaded on skill activation. */
   tags: z.array(z.string().min(1)).optional(),
-  /** Restrict to a specific scope, or 'all' for both application and tenant. Default: 'all'. */
-  scope: z.enum(['application', 'tenant', 'all']).optional(),
+  /** Restrict to a specific scope, or 'all'. Default: 'all'. */
+  scope: z.enum(['application', 'all']).optional(),
 });
 
 /**

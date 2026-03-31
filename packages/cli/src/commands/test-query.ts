@@ -11,7 +11,7 @@ import {findRepoRoot} from '../shared/repo-discovery.js';
 export interface TestQueryOptions {
   cwd?: string;
   message: string;
-  tenantId?: string;
+  appId?: string;
   port?: number;
 }
 
@@ -30,7 +30,7 @@ export async function runTestQuery(options: TestQueryOptions): Promise<void> {
   }
 
   const port = options.port ?? 0; // 0 = random available port
-  const tenantId = options.tenantId ?? 'test-user';
+  const appId = options.appId ?? 'test-user';
 
   process.stderr.write(`[test-query] Loading repo from ${repoPath}\n`);
 
@@ -52,7 +52,7 @@ export async function runTestQuery(options: TestQueryOptions): Promise<void> {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         message: options.message,
-        tenant_id: tenantId,
+        app_id: appId,
       }),
     });
 
@@ -108,9 +108,9 @@ export const testQueryCommand: CommandModule = {
         demandOption: true,
         describe: 'The message to send',
       })
-      .option('tenant-id', {
+      .option('app-id', {
         type: 'string',
-        describe: 'Tenant ID to use for the query',
+        describe: 'App ID to use for the query',
       })
       .option('port', {
         type: 'number',
@@ -120,10 +120,10 @@ export const testQueryCommand: CommandModule = {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const message = argv['message'] as string;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    const tenantId = argv['tenant-id'] as string | undefined;
+    const appId = argv['app-id'] as string | undefined;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const port = argv['port'] as number | undefined;
 
-    await runTestQuery({message, tenantId, port});
+    await runTestQuery({message, appId, port});
   },
 };

@@ -105,7 +105,7 @@ async function runToolViaAgentRunner(
   const session = {
     id: 'ml-session',
     runtime,
-    tenantId: 'test',
+    appId: 'test',
     conversationHistory: [],
     createdAt: Date.now(),
     lastAccessedAt: Date.now(),

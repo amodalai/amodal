@@ -47,7 +47,7 @@ function resolveAuthTemplate(
 /**
  * Expand `$VAR_NAME` references in a string from the session-scoped env map.
  * LLMs commonly write `$CUSTOMER_APP_ID` in endpoint paths; these are
- * tenant secrets available via the session's connection credentials.
+ * app secrets available via the session's connection credentials.
  */
 function expandEnvVars(input: string, sessionEnv: Record<string, string>): string {
   return input.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_match, name: string) => {

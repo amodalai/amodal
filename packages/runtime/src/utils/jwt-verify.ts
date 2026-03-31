@@ -15,7 +15,6 @@ export interface JWTVerifierOptions {
 export interface PlatformJWTClaims {
   org_id: string;
   app_id: string;
-  tenant_id: string;
   actor?: string;
 }
 
@@ -39,8 +38,6 @@ export function createJWTVerifier(
         org_id: (payload['org_id'] as string) ?? '',
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
         app_id: (payload['app_id'] as string) ?? '',
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        tenant_id: (payload['tenant_id'] as string) ?? '',
         ...(actor ? { actor } : {}),
       };
     } catch {

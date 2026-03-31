@@ -50,7 +50,7 @@ export class PGLiteStoreBackend implements StoreBackend {
     // Create tables
     await this.db.exec(`
       CREATE TABLE IF NOT EXISTS store_documents (
-        tenant_id TEXT NOT NULL,
+        app_id TEXT NOT NULL,
         store TEXT NOT NULL,
         key TEXT NOT NULL,
         version INTEGER NOT NULL DEFAULT 1,
@@ -59,11 +59,11 @@ export class PGLiteStoreBackend implements StoreBackend {
         expires_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (tenant_id, store, key)
+        PRIMARY KEY (app_id, store, key)
       );
 
       CREATE INDEX IF NOT EXISTS idx_store_documents_store
-        ON store_documents (tenant_id, store);
+        ON store_documents (app_id, store);
 
       CREATE INDEX IF NOT EXISTS idx_store_documents_expires
         ON store_documents (expires_at)
@@ -71,7 +71,7 @@ export class PGLiteStoreBackend implements StoreBackend {
 
       CREATE TABLE IF NOT EXISTS store_document_versions (
         id SERIAL PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
+        app_id TEXT NOT NULL,
         store TEXT NOT NULL,
         key TEXT NOT NULL,
         version INTEGER NOT NULL,
@@ -81,16 +81,16 @@ export class PGLiteStoreBackend implements StoreBackend {
       );
 
       CREATE INDEX IF NOT EXISTS idx_store_versions_lookup
-        ON store_document_versions (tenant_id, store, key, version DESC);
+        ON store_document_versions (app_id, store, key, version DESC);
     `);
   }
 
-  async get(tenantId: string, store: string, key: string): Promise<StoreDocument | null> {
+  async get(appId: string, store: string, key: string): Promise<StoreDocument | null> {
     const result = await this.db.query(
-      `SELECT key, tenant_id, store, version, payload, meta, expires_at
+      `SELECT key, app_id, store, version, payload, meta, expires_at
        FROM store_documents
-       WHERE tenant_id = $1 AND store = $2 AND key = $3`,
-      [tenantId, store, key],
+       WHERE app_id = $1 AND store = $2 AND key = $3`,
+      [appId, store, key],
     );
 
     if (result.rows.length === 0) return null;
@@ -100,7 +100,7 @@ export class PGLiteStoreBackend implements StoreBackend {
   }
 
   async put(
-    tenantId: string,
+    appId: string,
     store: string,
     key: string,
     payload: Record<string, unknown>,
@@ -124,8 +124,8 @@ export class PGLiteStoreBackend implements StoreBackend {
     // Check for existing document
     const existing = await this.db.query(
       `SELECT version, payload, meta FROM store_documents
-       WHERE tenant_id = $1 AND store = $2 AND key = $3`,
-      [tenantId, store, key],
+       WHERE app_id = $1 AND store = $2 AND key = $3`,
+      [appId, store, key],
     );
 
     if (existing.rows.length > 0) {
@@ -135,21 +135,21 @@ export class PGLiteStoreBackend implements StoreBackend {
       // Save old version to history if configured
       if (maxVersions && maxVersions > 0) {
         await this.db.query(
-          `INSERT INTO store_document_versions (tenant_id, store, key, version, payload, meta)
+          `INSERT INTO store_document_versions (app_id, store, key, version, payload, meta)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [tenantId, store, key, oldVersion, JSON.stringify(existing.rows[0].payload), JSON.stringify(existing.rows[0].meta)],
+          [appId, store, key, oldVersion, JSON.stringify(existing.rows[0].payload), JSON.stringify(existing.rows[0].meta)],
         );
 
         // Prune old versions beyond the limit
         await this.db.query(
           `DELETE FROM store_document_versions
-           WHERE tenant_id = $1 AND store = $2 AND key = $3
+           WHERE app_id = $1 AND store = $2 AND key = $3
              AND version <= (
                SELECT COALESCE(MAX(version), 0) - $4
                FROM store_document_versions
-               WHERE tenant_id = $1 AND store = $2 AND key = $3
+               WHERE app_id = $1 AND store = $2 AND key = $3
              )`,
-          [tenantId, store, key, maxVersions],
+          [appId, store, key, maxVersions],
         );
       }
 
@@ -157,8 +157,8 @@ export class PGLiteStoreBackend implements StoreBackend {
       await this.db.query(
         `UPDATE store_documents
          SET version = $4, payload = $5, meta = $6, expires_at = $7, updated_at = NOW()
-         WHERE tenant_id = $1 AND store = $2 AND key = $3`,
-        [tenantId, store, key, newVersion, JSON.stringify(payload), JSON.stringify(fullMeta), expiresAt],
+         WHERE app_id = $1 AND store = $2 AND key = $3`,
+        [appId, store, key, newVersion, JSON.stringify(payload), JSON.stringify(fullMeta), expiresAt],
       );
 
       return {stored: true, key, version: newVersion, previousVersion: oldVersion};
@@ -166,23 +166,23 @@ export class PGLiteStoreBackend implements StoreBackend {
 
     // Insert new document
     await this.db.query(
-      `INSERT INTO store_documents (tenant_id, store, key, version, payload, meta, expires_at)
+      `INSERT INTO store_documents (app_id, store, key, version, payload, meta, expires_at)
        VALUES ($1, $2, $3, 1, $4, $5, $6)`,
-      [tenantId, store, key, JSON.stringify(payload), JSON.stringify(fullMeta), expiresAt],
+      [appId, store, key, JSON.stringify(payload), JSON.stringify(fullMeta), expiresAt],
     );
 
     return {stored: true, key, version: 1};
   }
 
   async list(
-    tenantId: string,
+    appId: string,
     store: string,
     options: StoreListOptions = {},
   ): Promise<StoreListResult> {
     const {filter, sort, limit = 100, offset = 0, includeStale = false} = options;
 
-    let where = 'WHERE tenant_id = $1 AND store = $2';
-    const params: unknown[] = [tenantId, store];
+    let where = 'WHERE app_id = $1 AND store = $2';
+    const params: unknown[] = [appId, store];
     let paramIndex = 3;
 
     // Exclude expired docs unless includeStale
@@ -217,7 +217,7 @@ export class PGLiteStoreBackend implements StoreBackend {
 
     // Fetch documents
     const result = await this.db.query(
-      `SELECT key, tenant_id, store, version, payload, meta, expires_at
+      `SELECT key, app_id, store, version, payload, meta, expires_at
        FROM store_documents ${where} ${orderBy}
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       [...params, limit, offset],
@@ -232,33 +232,33 @@ export class PGLiteStoreBackend implements StoreBackend {
     };
   }
 
-  async delete(tenantId: string, store: string, key: string): Promise<boolean> {
+  async delete(appId: string, store: string, key: string): Promise<boolean> {
     // Delete history too
     await this.db.query(
-      `DELETE FROM store_document_versions WHERE tenant_id = $1 AND store = $2 AND key = $3`,
-      [tenantId, store, key],
+      `DELETE FROM store_document_versions WHERE app_id = $1 AND store = $2 AND key = $3`,
+      [appId, store, key],
     );
 
     const result = await this.db.query(
-      `DELETE FROM store_documents WHERE tenant_id = $1 AND store = $2 AND key = $3`,
-      [tenantId, store, key],
+      `DELETE FROM store_documents WHERE app_id = $1 AND store = $2 AND key = $3`,
+      [appId, store, key],
     );
 
     return (result.affectedRows ?? 0) > 0;
   }
 
-  async history(tenantId: string, store: string, key: string): Promise<StoreDocument[]> {
+  async history(appId: string, store: string, key: string): Promise<StoreDocument[]> {
     const result = await this.db.query(
-      `SELECT key, $1::text AS tenant_id, store, version, payload, meta
+      `SELECT key, $1::text AS app_id, store, version, payload, meta
        FROM store_document_versions
-       WHERE tenant_id = $1 AND store = $2 AND key = $3
+       WHERE app_id = $1 AND store = $2 AND key = $3
        ORDER BY version DESC`,
-      [tenantId, store, key],
+      [appId, store, key],
     );
 
     return result.rows.map((row: Record<string, unknown>) => ({
       key: String(row['key']),
-      tenantId: String(row['tenant_id']),
+      appId: String(row['app_id']),
       store: String(row['store']),
       version: Number(row['version']),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
@@ -268,9 +268,9 @@ export class PGLiteStoreBackend implements StoreBackend {
     }));
   }
 
-  async purgeExpired(tenantId: string, store?: string): Promise<number> {
-    let query = `DELETE FROM store_documents WHERE tenant_id = $1 AND expires_at IS NOT NULL AND expires_at <= NOW()`;
-    const params: unknown[] = [tenantId];
+  async purgeExpired(appId: string, store?: string): Promise<number> {
+    let query = `DELETE FROM store_documents WHERE app_id = $1 AND expires_at IS NOT NULL AND expires_at <= NOW()`;
+    const params: unknown[] = [appId];
 
     if (store) {
       query += ` AND store = $2`;
@@ -298,7 +298,7 @@ export class PGLiteStoreBackend implements StoreBackend {
 
     return {
       key: String(row['key']),
-      tenantId: String(row['tenant_id']),
+      appId: String(row['app_id']),
       store: String(row['store']),
       version: Number(row['version']),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion

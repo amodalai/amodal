@@ -315,7 +315,7 @@ A $150K enterprise deal in proposal stage with no activity for 20 days.
 
 ## Setup
 
-Tenant: tenant_demo
+App: app_demo
 Context: viewing deal page for deal_123
 
 ## Query
@@ -333,7 +333,7 @@ Context: viewing deal page for deal_123
     expect(ev.name).toBe('stale-enterprise');
     expect(ev.title).toBe('Stale Enterprise Deal');
     expect(ev.description).toContain('$150K enterprise deal');
-    expect(ev.setup.tenant).toBe('tenant_demo');
+    expect(ev.setup.app).toBe('app_demo');
     expect(ev.setup.context).toBe('viewing deal page for deal_123');
     expect(ev.query).toBe("What's going on with this deal?");
     expect(ev.assertions).toHaveLength(4);
@@ -359,7 +359,7 @@ A simple test.
 - Should respond with a greeting
 `;
     const ev = parseEval(content, 'simple', '/evals/simple.md');
-    expect(ev.setup.tenant).toBeUndefined();
+    expect(ev.setup.app).toBeUndefined();
     expect(ev.setup.context).toBeUndefined();
     expect(ev.query).toBe('Hello');
     expect(ev.assertions).toHaveLength(1);

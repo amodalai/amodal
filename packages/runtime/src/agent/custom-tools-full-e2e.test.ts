@@ -245,7 +245,7 @@ describe('Full E2E: Local custom tool through agent runner', () => {
     const session = {
       id: 'e2e-session-1',
       runtime,
-      tenantId: 'test-tenant',
+      appId: 'test-tenant',
       conversationHistory: [],
       createdAt: Date.now(),
       lastAccessedAt: Date.now(),
@@ -336,7 +336,7 @@ describe('Full E2E: Local custom tool through agent runner', () => {
     const session = {
       id: 'e2e-session-2',
       runtime,
-      tenantId: 'test',
+      appId: 'test',
       conversationHistory: [],
       createdAt: Date.now(),
       lastAccessedAt: Date.now(),

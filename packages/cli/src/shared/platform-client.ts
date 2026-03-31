@@ -181,34 +181,34 @@ export class PlatformClient {
   }
 
   /**
-   * Upload a snapshot and deploy it (without repo files).
+   * Upload a snapshot and deploy it.
    */
   async uploadSnapshot(snapshot: DeploySnapshot, options: {
     environment?: string;
+    appId?: string;
   } = {}): Promise<SnapshotDeploymentMeta> {
     return this.request<SnapshotDeploymentMeta>('POST', '/api/snapshot-deployments', {
       snapshot,
       environment: options.environment ?? 'production',
+      appId: options.appId,
     });
   }
 
   /**
-   * Deploy with repo files — uploads snapshot + repo tarball.
-   * The server builds the runtime-app and uploads to R2.
+   * Trigger a runtime-app build on the build server.
+   * Sends the repo tarball to the build server which builds the SPA and uploads to R2.
    */
-  async deployWithRepo(
-    snapshot: DeploySnapshot,
+  async triggerBuild(
+    buildServerUrl: string,
+    appId: string,
+    deployId: string,
     repoTarball: import('node:fs').ReadStream,
-    options: { environment?: string; appId?: string } = {},
-  ): Promise<SnapshotDeploymentMeta> {
-    const url = `${this.baseUrl}/api/snapshot-deployments`;
+  ): Promise<void> {
+    const url = `${buildServerUrl}/build`;
 
     const formData = new FormData();
-    formData.append('snapshot', JSON.stringify(snapshot));
-    formData.append('environment', options.environment ?? 'production');
-    if (options.appId) {
-      formData.append('appId', options.appId);
-    }
+    formData.append('appId', appId);
+    formData.append('deployId', deployId);
 
     // Convert ReadStream to Blob for FormData
     const chunks: Uint8Array[] = [];
@@ -219,41 +219,25 @@ export class PlatformClient {
     const blob = new Blob(chunks, {type: 'application/gzip'});
     formData.append('repo', blob, 'repo.tar.gz');
 
-    let resp = await fetch(url, {
+    const resp = await fetch(url, {
       method: 'POST',
       headers: {Authorization: `Bearer ${this.apiKey}`},
       body: formData,
     });
 
-    // Auto-refresh on 401
-    if (resp.status === 401) {
-      const refreshed = await this.tryRefreshToken();
-      if (refreshed) {
-        // Re-read the tarball - can't reuse the stream
-        resp = await fetch(url, {
-          method: 'POST',
-          headers: {Authorization: `Bearer ${this.apiKey}`},
-          body: formData,
-        });
-      }
-    }
-
     if (!resp.ok) {
       let detail = '';
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        const errBody = await resp.json() as {error?: string};
-        detail = errBody.error ? `: ${errBody.error}` : '';
+        const errBody = await resp.json() as {error?: string; message?: string};
+        detail = errBody.message ?? errBody.error ?? '';
       } catch { /* ignore */ }
-      throw new Error(`Platform API POST /api/snapshot-deployments failed (${resp.status})${detail}`);
+      throw new Error(`Build server failed (${resp.status}): ${detail}`);
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    return resp.json() as Promise<SnapshotDeploymentMeta>;
   }
 
   /**
-   * List deployments for the authenticated tenant.
+   * List deployments for the authenticated app.
    */
   async listDeployments(options: {
     environment?: string;

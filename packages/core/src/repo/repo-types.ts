@@ -107,7 +107,7 @@ export interface LoadedEval {
   name: string;
   title: string;
   description: string;
-  setup: {tenant?: string; context?: string};
+  setup: {app?: string; context?: string};
   query: string;
   assertions: Array<{text: string; negated: boolean}>;
   raw: string;

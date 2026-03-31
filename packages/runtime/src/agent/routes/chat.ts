@@ -18,13 +18,13 @@ import type {SSEEvent} from '../../types.js';
  * When provided, called instead of sessionManager.create().
  * Receives the Express request and response (for auth context access).
  */
-export type SessionCreator = (req: Request, res: Response, tenantId: string, tenantToken?: string) => Promise<AgentSession>;
+export type SessionCreator = (req: Request, res: Response, appId: string, appToken?: string) => Promise<AgentSession>;
 
 /**
  * Optional hook for hydrating a session from external storage.
  * Called when session_id is provided but not found in memory.
  */
-export type SessionHydrator = (req: Request, res: Response, sessionId: string, tenantId: string) => Promise<AgentSession | null>;
+export type SessionHydrator = (req: Request, res: Response, sessionId: string, appId: string) => Promise<AgentSession | null>;
 
 /**
  * Optional hook called after each agent turn completes.
@@ -34,7 +34,7 @@ export type TurnCompleteHandler = (session: AgentSession, req: Request, res: Res
 
 export interface ChatRouterOptions {
   sessionManager: AgentSessionManager;
-  /** Optional session creator hook — used by hosted runtime to inject tenant config from platform API */
+  /** Optional session creator hook — used by hosted runtime to inject app config from platform API */
   sessionCreator?: SessionCreator;
   /** Optional session hydrator — called when session_id not found in memory (e.g., load from platform API) */
   sessionHydrator?: SessionHydrator;
@@ -57,7 +57,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       return;
     }
 
-    const {message, session_id, tenant_id, tenant_token} = parsed.data;
+    const {message, session_id, app_id, app_token} = parsed.data;
 
     // SSE headers
     res.writeHead(200, {
@@ -72,7 +72,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     // Try hydration if session not in memory
     if (!session && session_id && options.sessionHydrator) {
       try {
-        session = await options.sessionHydrator(req, res, session_id, tenant_id) ?? undefined;
+        session = await options.sessionHydrator(req, res, session_id, app_id) ?? undefined;
       } catch {
         // Hydration failed — fall through to create new session
       }
@@ -81,8 +81,8 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     if (!session) {
       try {
         session = options.sessionCreator
-          ? await options.sessionCreator(req, res, tenant_id, tenant_token)
-          : await options.sessionManager.create(tenant_id, tenant_token);
+          ? await options.sessionCreator(req, res, app_id, app_token)
+          : await options.sessionManager.create(app_id, app_token);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         writeSSE(res, {type: SSEEventType.Error, message: errMsg, timestamp: ts()});

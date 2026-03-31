@@ -59,7 +59,7 @@ function makeSession(): AgentSession {
       outputPipeline: {process: vi.fn()},
       compiledContext: {systemPrompt: '', tokenUsage: {total: 0, used: 0, remaining: 0, sectionBreakdown: {}}, sections: []},
     },
-    tenantId: 'test-tenant',
+    appId: 'test-tenant',
     conversationHistory: [],
     createdAt: Date.now(),
     lastAccessedAt: Date.now(),

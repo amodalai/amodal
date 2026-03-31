@@ -18,7 +18,7 @@ function App() {
   return (
     <ChatWidget
       endpoint="https://your-runtime.example.com"
-      tenantId="your-tenant-id"
+      appId="your-app-id"
     />
   );
 }

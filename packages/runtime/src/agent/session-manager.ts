@@ -86,14 +86,14 @@ export class AgentSessionManager {
   /**
    * Create a new session, optionally fetching user context for role extraction.
    */
-  async create(tenantId: string, tenantToken?: string): Promise<AgentSession> {
+  async create(appId: string, appToken?: string): Promise<AgentSession> {
     let userRoles: string[] = [];
 
     // Fetch user context if configured
-    if (this.repo.config.userContext && tenantToken) {
+    if (this.repo.config.userContext && appToken) {
       try {
         const connectionsMap = this.getConnectionsMap();
-        const userData = await fetchUserContext(this.repo, tenantToken, connectionsMap);
+        const userData = await fetchUserContext(this.repo, appToken, connectionsMap);
         userRoles = extractRoles(userData);
       } catch {
         // Degraded but functional — empty roles
@@ -102,7 +102,7 @@ export class AgentSessionManager {
 
     const runtime = setupSession({
       repo: this.repo,
-      userId: tenantId,
+      userId: appId,
       userRoles,
       isDelegated: false,
       telemetrySink: this.telemetrySink,
@@ -114,7 +114,7 @@ export class AgentSessionManager {
     const session: AgentSession = {
       id: randomUUID(),
       runtime,
-      tenantId,
+      appId,
       conversationHistory: [],
       createdAt: Date.now(),
       lastAccessedAt: Date.now(),
@@ -136,10 +136,10 @@ export class AgentSessionManager {
    * Create a session from a specific repo (e.g., enriched with tenant credentials).
    * Used by hosted runtime when tenant-specific config is fetched from the platform API.
    */
-  async createFromRepo(repo: AmodalRepo, tenantId: string): Promise<AgentSession> {
+  async createFromRepo(repo: AmodalRepo, appId: string): Promise<AgentSession> {
     const runtime = setupSession({
       repo,
-      userId: tenantId,
+      userId: appId,
       userRoles: [],
       isDelegated: false,
       telemetrySink: this.telemetrySink,
@@ -151,7 +151,7 @@ export class AgentSessionManager {
     const session: AgentSession = {
       id: randomUUID(),
       runtime,
-      tenantId,
+      appId,
       conversationHistory: [],
       createdAt: Date.now(),
       lastAccessedAt: Date.now(),

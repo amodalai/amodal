@@ -475,7 +475,7 @@ export interface StoreDocumentMeta {
 
 export interface StoreDocument {
   key: string;
-  tenantId: string;
+  appId: string;
   store: string;
   version: number;
   payload: Record<string, unknown>;

@@ -11,7 +11,7 @@ import type {AmodalRepo, StoreBackend} from '@amodalai/core';
 export interface StoreRouterOptions {
   repo: AmodalRepo;
   storeBackend: StoreBackend;
-  tenantId: string;
+  appId: string;
 }
 
 /**
@@ -23,14 +23,14 @@ export interface StoreRouterOptions {
  */
 export function createStoresRouter(options: StoreRouterOptions): Router {
   const router = Router();
-  const {repo, storeBackend, tenantId} = options;
+  const {repo, storeBackend, appId} = options;
 
   // List all store definitions with document counts
   router.get('/api/stores', async (_req: Request, res: Response) => {
     try {
       const stores = await Promise.all(
         repo.stores.map(async (store) => {
-          const result = await storeBackend.list(tenantId, store.name, {limit: 0});
+          const result = await storeBackend.list(appId, store.name, {limit: 0});
           return {
             name: store.name,
             entity: store.entity,
@@ -75,7 +75,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
     const offset = req.query['offset'] ? Number(req.query['offset']) : 0;
 
     try {
-      const result = await storeBackend.list(tenantId, storeName, {
+      const result = await storeBackend.list(appId, storeName, {
         filter,
         sort,
         limit,
@@ -101,7 +101,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
     }
 
     try {
-      const document = await storeBackend.get(tenantId, storeName, key);
+      const document = await storeBackend.get(appId, storeName, key);
       if (!document) {
         res.status(404).json({error: `Document "${key}" not found in store "${storeName}"`});
         return;
@@ -110,7 +110,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
       // Include history if the store has versioning configured
       let history: unknown[] = [];
       if (store.history) {
-        history = await storeBackend.history(tenantId, storeName, key);
+        history = await storeBackend.history(appId, storeName, key);
       }
 
       res.json({document, history});
@@ -148,7 +148,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
     });
 
     try {
-      const result = await storeBackend.put(tenantId, storeName, key, payload, {});
+      const result = await storeBackend.put(appId, storeName, key, payload, {});
       res.status(201).json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

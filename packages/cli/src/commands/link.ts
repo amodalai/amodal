@@ -23,6 +23,7 @@ export interface ProjectLink {
   appId: string;
   appName: string;
   platformUrl: string;
+  buildServerUrl?: string;
 }
 
 export interface LinkOptions {
@@ -83,8 +84,6 @@ interface MeResponse {
   orgs: Array<{id: string; name: string}>;
   app: {id: string; name: string} | null;
   apps: Array<{id: string; name: string}>;
-  tenant: {id: string; name: string} | null;
-  tenants: Array<{id: string; name: string}>;
 }
 
 /**

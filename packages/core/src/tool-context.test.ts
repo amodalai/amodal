@@ -10,14 +10,14 @@ import { KnowledgeStore } from './knowledge/knowledge-store.js';
 
 describe('ToolContext', () => {
   it('should be implementable as a plain object', () => {
-    const store = new KnowledgeStore([], []);
+    const store = new KnowledgeStore([]);
 
     const ctx: ToolContext = {
       getSessionId: () => 'test-session',
       getPlatformApiUrl: () => 'https://example.com',
       getPlatformApiKey: () => 'test-key',
       getApplicationId: () => 'app-1',
-      getTenantId: () => 'tenant-1',
+      getAppId: () => 'app-1',
       getAuditLogger: () => undefined,
       getConnections: () => ({}),
       getKnowledgeStore: () => store,

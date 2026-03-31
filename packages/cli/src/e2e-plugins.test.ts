@@ -170,11 +170,11 @@ async function stripeDeleteCustomer(id: string): Promise<void> {
 async function sendChat(
   port: number,
   message: string,
-  tenantId: string,
+  appId: string,
   timeoutMs = 90000,
 ): Promise<Array<Record<string, unknown>>> {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({message, tenant_id: tenantId});
+    const body = JSON.stringify({message, app_id: appId});
     const req = http.request(
       {
         hostname: '127.0.0.1',
