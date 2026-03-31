@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Sun, Moon, Settings, Bot, Cpu, KeyRound, FileText, Server, ArrowLeft, FolderCode } from 'lucide-react';
+import { Sun, Moon, Settings, Bot, Cpu, KeyRound, FileText, Server, ArrowLeft, FolderCode, MessageSquare } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { cn } from '@/lib/utils';
 
@@ -146,6 +146,10 @@ export function ConfigLayout() {
 
             <div className="space-y-0.5">
               <ConfigNavItem to="/config" end>
+                <MessageSquare className="h-4 w-4 shrink-0" />
+                Chat
+              </ConfigNavItem>
+              <ConfigNavItem to="/config/agent">
                 <Bot className="h-4 w-4 shrink-0" />
                 Agent
               </ConfigNavItem>

@@ -83,8 +83,8 @@ describe('amodal CLI e2e', () => {
   // --- Registration ---
 
   describe('command registration', () => {
-    it('exports all 30 commands', () => {
-      expect(amodalCommands).toHaveLength(30);
+    it('exports all 31 commands', () => {
+      expect(amodalCommands).toHaveLength(31);
     });
 
     it('all commands have valid structure', () => {
