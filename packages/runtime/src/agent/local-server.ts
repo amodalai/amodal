@@ -112,20 +112,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   const sessionStore = new SessionStore(config.repoPath);
   sessionStoreRef = sessionStore;
 
-  // Resolve resume session ID
-  let resumeSessionId = config.resumeSessionId;
-  if (resumeSessionId === 'latest') {
-    resumeSessionId = sessionStore.latest() ?? undefined;
-  }
-  if (resumeSessionId) {
-    process.stderr.write(`[dev] Resume session: ${resumeSessionId}\n`);
-  }
-
-  // Client config — tells the web UI which session to resume
-  app.get('/config', (_req, res) => {
-    res.json({ resumeSessionId: resumeSessionId ?? null });
-  });
-
   // Full agent config for the config page
   app.get('/api/config', (_req, res) => {
     const repoData = sessionManager.getRepo();
