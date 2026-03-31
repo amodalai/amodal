@@ -47,10 +47,13 @@ export function buildConnectionsMap(
   const result: ConnectionsMap = {};
 
   for (const [name, conn] of connections) {
+    // Skip MCP connections — they use MCP tools, not the request tool
+    if (conn.spec.protocol === 'mcp') continue;
+
     const connCredentials = credentials?.[name];
     const auth = buildAuthHeaders(conn, connCredentials);
 
-    const resolvedBaseUrl = resolveEnvRef(conn.spec.baseUrl, connCredentials);
+    const resolvedBaseUrl = resolveEnvRef(conn.spec.baseUrl ?? '', connCredentials);
 
     const entry: Record<string, unknown> = {
       base_url: resolvedBaseUrl,
