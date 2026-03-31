@@ -14,6 +14,7 @@ import {LocalShellExecutor} from './shell-executor-local.js';
 import {ConfigWatcher} from './config-watcher.js';
 import {ProactiveRunner} from './proactive/proactive-runner.js';
 import {createChatRouter} from './routes/chat.js';
+import {createAdminChatRouter} from './routes/admin-chat.js';
 import {createTaskRouter} from './routes/task.js';
 import {createInspectRouter} from './routes/inspect.js';
 import {createAutomationRouter} from './routes/automations.js';
@@ -214,6 +215,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     },
   }));
   app.use(createTaskRouter({sessionManager}));
+  app.use(createAdminChatRouter({sessionManager}));
   app.use(createInspectRouter({sessionManager, repoPath: config.repoPath}));
   app.use(createAutomationRouter({runner}));
   app.use(createWebhookRouter({runner, webhookSecret: config.webhookSecret}));

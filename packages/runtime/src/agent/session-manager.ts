@@ -14,6 +14,8 @@ import {
   buildConnectionsMap,
   PlatformTelemetrySink,
   McpManager,
+  ensureAdminAgent,
+  loadAdminAgent,
 } from '@amodalai/core';
 import type {RuntimeTelemetryEvent, CustomToolExecutor, CustomShellExecutor, StoreBackend} from '@amodalai/core';
 import type {AgentSession} from './agent-types.js';
@@ -127,6 +129,58 @@ export class AgentSessionManager {
 
     // Start MCP servers if configured (non-blocking)
     await this.initMcp(session, this.repo);
+
+    this.sessions.set(session.id, session);
+    return session;
+  }
+
+  /**
+   * Create an admin session for the config chat.
+   * Uses admin agent skills/knowledge but the user's connections.
+   */
+  async createAdminSession(): Promise<AgentSession> {
+    // Resolve and load admin agent
+    const agentDir = await ensureAdminAgent(this.repo.origin);
+    const adminContent = await loadAdminAgent(agentDir);
+
+    // Build a modified repo: admin skills/knowledge + user connections
+    const adminRepo: AmodalRepo = {
+      ...this.repo,
+      skills: adminContent.skills,
+      knowledge: adminContent.knowledge,
+      agents: {
+        main: adminContent.agentPrompt ?? undefined,
+        simple: undefined,
+        subagents: [],
+      },
+      // Keep user connections so admin can validate/test them
+      // Keep stores so admin can see store definitions
+      // Clear automations — admin doesn't need them
+      automations: [],
+    };
+
+    const runtime = setupSession({
+      repo: adminRepo,
+      userId: 'admin',
+      userRoles: ['admin'],
+      isDelegated: false,
+      telemetrySink: this.telemetrySink,
+    });
+
+    const planModeManager = new PlanModeManager();
+    const exploreConfig = prepareExploreConfig(runtime);
+
+    const session: AgentSession = {
+      id: randomUUID(),
+      runtime,
+      appId: 'admin',
+      conversationHistory: [],
+      createdAt: Date.now(),
+      lastAccessedAt: Date.now(),
+      planModeManager,
+      exploreConfig,
+      shellExecutor: this.shellExecutor,
+    };
 
     this.sessions.set(session.id, session);
     return session;
