@@ -87,7 +87,7 @@ async function testRestConnection(
 ): Promise<LiveTestResult> {
   const start = Date.now();
   try {
-    let baseUrl = spec.baseUrl;
+    let baseUrl = spec.baseUrl ?? '';
     if (baseUrl.startsWith('env:')) {
       baseUrl = resolveEnvToken(baseUrl, envVars);
     }
