@@ -1,5 +1,20 @@
 # @amodalai/amodal
 
+## 0.1.14
+
+### Patch Changes
+
+- [#61](https://github.com/amodalai/amodal/pull/61) [`f4d5b06`](https://github.com/amodalai/amodal/commit/f4d5b062f738b105568966e6bc51dc1745afe277) Thanks [@gte620v](https://github.com/gte620v)! - Group CLI commands under pkg, deploy, ops, and auth subcommands. 35 top-level commands → 11 entries.
+
+- [#57](https://github.com/amodalai/amodal/pull/57) [`67b8faa`](https://github.com/amodalai/amodal/commit/67b8faaa2e18084b78c5ed29fdbf7467583f4a8d) Thanks [@gte620v](https://github.com/gte620v)! - Fix "Cannot GET /" in `amodal dev`: move runtime-app from optional peer dependency to a real dependency and use Node module resolution to find the SPA assets.
+
+- [#60](https://github.com/amodalai/amodal/pull/60) [`ca4285d`](https://github.com/amodalai/amodal/commit/ca4285d545290ef6c61b0b39d7cfce7ca19e236c) Thanks [@gte620v](https://github.com/gte620v)! - Session rename/delete, rich tool call cards, admin chat split pane, suppress OpenTelemetry warning, init cleanup.
+
+- Updated dependencies [[`ca4285d`](https://github.com/amodalai/amodal/commit/ca4285d545290ef6c61b0b39d7cfce7ca19e236c)]:
+  - @amodalai/runtime@0.1.14
+  - @amodalai/runtime-app@0.1.14
+  - @amodalai/core@0.1.14
+
 ## 0.1.13
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @amodalai/runtime
 
+## 0.1.14
+
+### Patch Changes
+
+- [#60](https://github.com/amodalai/amodal/pull/60) [`ca4285d`](https://github.com/amodalai/amodal/commit/ca4285d545290ef6c61b0b39d7cfce7ca19e236c) Thanks [@gte620v](https://github.com/gte620v)! - Session rename/delete, rich tool call cards, admin chat split pane, suppress OpenTelemetry warning, init cleanup.
+
+- Updated dependencies []:
+  - @amodalai/core@0.1.14
+
 ## 0.1.13
 
 ### Patch Changes
