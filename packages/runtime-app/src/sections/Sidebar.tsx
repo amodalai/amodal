@@ -63,7 +63,7 @@ function CollapsibleSection({ label, icon, children, count }: { label: string; i
   );
 }
 
-function InfoItem({ icon, label, to, status }: { icon: React.ReactNode; label: string; to: string; status?: 'connected' | 'error' | 'connecting' | 'disconnected' | 'unknown' }) {
+function InfoItem({ icon, label, to, status, badge }: { icon: React.ReactNode; label: string; to: string; status?: 'connected' | 'error' | 'connecting' | 'disconnected' | 'unknown'; badge?: string }) {
   return (
     <NavLink
       to={to}
@@ -78,6 +78,11 @@ function InfoItem({ icon, label, to, status }: { icon: React.ReactNode; label: s
     >
       {icon}
       <span className="flex-1 truncate">{label}</span>
+      {badge && (
+        <span className="text-[11px] text-gray-400 dark:text-white/30 tabular-nums bg-gray-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded-full">
+          {badge}
+        </span>
+      )}
       {status && (
         <div className={cn('h-1.5 w-1.5 rounded-full shrink-0',
           status === 'connected' ? 'bg-emerald-400' :
@@ -251,7 +256,7 @@ export function Sidebar() {
               <InfoItem key={conn.name} icon={<Plug className="h-3 w-3 shrink-0 text-emerald-500/40" />} label={conn.name} to={`/inspect/connections/${encodeURIComponent(conn.name)}`} status={conn.status} />
             ))}
             {mcpServers.map((mcp) => (
-              <InfoItem key={`mcp-${mcp.name}`} icon={<Cable className="h-3 w-3 shrink-0 text-violet-500/40" />} label={mcp.name} to={`/inspect/mcp/${encodeURIComponent(mcp.name)}`} status={mcp.status} />
+              <InfoItem key={`mcp-${mcp.name}`} icon={<Cable className="h-3 w-3 shrink-0 text-violet-500/40" />} label={mcp.name} to={`/inspect/mcp/${encodeURIComponent(mcp.name)}`} status={mcp.status} badge={mcp.toolCount > 0 ? `${mcp.toolCount} tools` : undefined} />
             ))}
           </CollapsibleSection>
         )}

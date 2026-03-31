@@ -111,12 +111,46 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
   });
 
   /** Connection detail by name — reads repo directly, no session needed. */
-  router.get('/inspect/connections/:name', (_req: Request, res: Response) => {
+  router.get('/inspect/connections/:name', async (_req: Request, res: Response) => {
     const repo = options.sessionManager.getRepo();
-    const conn = repo.connections.get(_req.params['name'] ?? '');
+    const connName = _req.params['name'] ?? '';
+    const conn = repo.connections.get(connName);
 
     if (!conn) {
       res.status(404).json({error: {code: 'NOT_FOUND', message: 'Connection not found'}});
+      return;
+    }
+
+    // MCP connections defined in connections/ folder — return tools from MCP manager
+    if (conn.spec.protocol === 'mcp') {
+      try {
+        const mcpManager = await options.sessionManager.getInspectMcpManager();
+        const serverInfo = mcpManager?.getServerInfo().find((s) => s.name === connName);
+        const allTools = mcpManager?.getDiscoveredTools() ?? [];
+        const serverTools = allTools
+          .filter((t) => t.serverName === connName)
+          .map((t) => ({
+            name: t.originalName,
+            qualifiedName: t.name,
+            description: t.description,
+            parameters: t.parameters,
+          }));
+
+        res.json({
+          name: connName,
+          kind: 'mcp',
+          status: serverInfo?.status ?? 'unknown',
+          error: serverInfo?.error ?? null,
+          transport: conn.spec.transport ?? 'unknown',
+          command: conn.spec.command ?? null,
+          url: conn.spec.url ?? null,
+          tools: serverTools,
+          location: conn.location,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.status(500).json({error: {code: 'INSPECT_FAILED', message: msg}});
+      }
       return;
     }
 

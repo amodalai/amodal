@@ -11,7 +11,7 @@ import { RuntimeProvider } from '@/contexts/RuntimeContext';
 import { router } from '@/router';
 
 const RUNTIME_URL = window.location.origin;
-const TENANT_ID = 'local';
+const APP_ID = 'local';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,7 +25,7 @@ const queryClient = new QueryClient({
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AmodalProvider runtimeUrl={RUNTIME_URL} tenantId={TENANT_ID}>
+      <AmodalProvider runtimeUrl={RUNTIME_URL} appId={APP_ID}>
         <RuntimeProvider runtimeUrl={RUNTIME_URL}>
           <RouterProvider router={router} />
         </RuntimeProvider>
