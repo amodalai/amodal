@@ -22,6 +22,8 @@ import type {
   LLMMessage,
 } from '@amodalai/core';
 import type {LoadedTool, LoadedStore} from '@amodalai/core';
+import path from 'node:path';
+import {readFile, writeFile, mkdir} from 'node:fs/promises';
 import {resolveKey} from '../stores/key-resolver.js';
 import type {AgentSession} from './agent-types.js';
 import type {SSEEvent, SSESubagentEvent} from '../types.js';
@@ -374,6 +376,34 @@ function buildTools(session: AgentSession): LLMToolDefinition[] {
     });
   }
 
+  // Admin repo file tools (local repos only)
+  if (session.appId === 'admin' && session.runtime.repo.source === 'local') {
+    tools.push({
+      name: 'read_repo_file',
+      description: 'Read a file from the agent repo. Path is relative to repo root. Only allowed in: skills/, knowledge/, connections/.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {type: 'string', description: 'File path relative to repo root (e.g. "knowledge/formatting-rules.md")'},
+        },
+        required: ['path'],
+      },
+    });
+
+    tools.push({
+      name: 'write_repo_file',
+      description: 'Create or update a file in the agent repo. Use this to add behavioral rules, knowledge documents, or skill updates based on user feedback. Path is relative to repo root. Only allowed in: skills/, knowledge/, connections/*/rules.md, connections/*/surface.md, connections/*/entities.md.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {type: 'string', description: 'File path relative to repo root (e.g. "knowledge/formatting-rules.md")'},
+          content: {type: 'string', description: 'Full file content to write'},
+        },
+        required: ['path', 'content'],
+      },
+    });
+  }
+
   return tools;
 }
 
@@ -406,6 +436,10 @@ async function executeTool(
       return {result: await executePlanModeExit(session)};
     case 'shell_exec':
       return {result: await executeShellExecTool(session, args, signal)};
+    case 'read_repo_file':
+      return {result: await executeReadRepoFile(session, args)};
+    case 'write_repo_file':
+      return {result: await executeWriteRepoFile(session, args)};
     case 'query_store':
       return {result: await executeQueryStore(session, args)};
     default: {
@@ -1078,6 +1112,101 @@ async function* processStream(
   }
 
   return {content, hasToolUse, toolResults, usage: turnUsage};
+}
+
+// ---------------------------------------------------------------------------
+// Admin repo file tools
+// ---------------------------------------------------------------------------
+
+/** Allowed path patterns for admin file operations. */
+const ALLOWED_REPO_PATHS = [
+  /^skills\//,
+  /^knowledge\//,
+  /^connections\/[^/]+\/rules\.md$/,
+  /^connections\/[^/]+\/surface\.md$/,
+  /^connections\/[^/]+\/entities\.md$/,
+];
+
+/** @internal Exported for testing */
+export function isAllowedRepoPath(relPath: string): boolean {
+  return ALLOWED_REPO_PATHS.some((re) => re.test(relPath));
+}
+
+/** @internal Exported for testing */
+export function validateRepoFilePath(
+  session: AgentSession,
+  rawPath: string,
+): {error: string} | {resolved: string; relative: string} {
+  if (!rawPath || rawPath.startsWith('/')) {
+    return {error: 'Path must be relative to the repo root (no leading /)'};
+  }
+  if (rawPath.includes('..')) {
+    return {error: 'Path traversal (..) is not allowed'};
+  }
+  if (session.appId !== 'admin' || session.runtime.repo.source !== 'local') {
+    return {error: 'write_repo_file/read_repo_file is only available in local admin sessions'};
+  }
+
+  const normalized = path.normalize(rawPath);
+  if (!isAllowedRepoPath(normalized)) {
+    return {error: `Path "${normalized}" is not in an allowed directory. Allowed: skills/, knowledge/, connections/*/rules.md, connections/*/surface.md, connections/*/entities.md`};
+  }
+
+  const resolved = path.resolve(session.runtime.repo.origin, normalized);
+  if (!resolved.startsWith(session.runtime.repo.origin)) {
+    return {error: 'Resolved path escapes the repo directory'};
+  }
+
+  return {resolved, relative: normalized};
+}
+
+/** @internal Exported for testing */
+export async function executeReadRepoFile(
+  session: AgentSession,
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const rawPath = String(args['path'] ?? '');
+  const validation = validateRepoFilePath(session, rawPath);
+
+  if ('error' in validation) {
+    return {error: validation.error};
+  }
+
+  try {
+    const content = await readFile(validation.resolved, 'utf-8');
+    return {output: content};
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'ENOENT') {
+      return {error: `File not found: ${validation.relative}`};
+    }
+    return {error: err instanceof Error ? err.message : String(err)};
+  }
+}
+
+/** @internal Exported for testing */
+export async function executeWriteRepoFile(
+  session: AgentSession,
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const rawPath = String(args['path'] ?? '');
+  const content = String(args['content'] ?? '');
+  const validation = validateRepoFilePath(session, rawPath);
+
+  if ('error' in validation) {
+    return {error: validation.error};
+  }
+
+  if (!content) {
+    return {error: 'Content must not be empty'};
+  }
+
+  try {
+    await mkdir(path.dirname(validation.resolved), {recursive: true});
+    await writeFile(validation.resolved, content, 'utf-8');
+    return {output: `Wrote ${validation.relative} (${String(content.length)} bytes)`};
+  } catch (err) {
+    return {error: err instanceof Error ? err.message : String(err)};
+  }
 }
 
 function processTextOutput(session: AgentSession, text: string): string {
