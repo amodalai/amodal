@@ -74,16 +74,38 @@ describe('isAllowedRepoPath', () => {
     expect(isAllowedRepoPath('knowledge/deep/nested/doc.md')).toBe(true);
   });
 
-  it('allows connections/*/rules.md', () => {
+  it('allows connections/ paths', () => {
     expect(isAllowedRepoPath('connections/slack/rules.md')).toBe(true);
-  });
-
-  it('allows connections/*/surface.md', () => {
     expect(isAllowedRepoPath('connections/github/surface.md')).toBe(true);
+    expect(isAllowedRepoPath('connections/stripe/entities.md')).toBe(true);
+    expect(isAllowedRepoPath('connections/slack/spec.json')).toBe(true);
+    expect(isAllowedRepoPath('connections/slack/access.json')).toBe(true);
   });
 
-  it('allows connections/*/entities.md', () => {
-    expect(isAllowedRepoPath('connections/stripe/entities.md')).toBe(true);
+  it('allows pages/ paths', () => {
+    expect(isAllowedRepoPath('pages/dashboard.tsx')).toBe(true);
+    expect(isAllowedRepoPath('pages/price-tracker.tsx')).toBe(true);
+  });
+
+  it('allows automations/ paths', () => {
+    expect(isAllowedRepoPath('automations/daily-digest.json')).toBe(true);
+  });
+
+  it('allows stores/ paths', () => {
+    expect(isAllowedRepoPath('stores/price-data.json')).toBe(true);
+  });
+
+  it('allows tools/ paths', () => {
+    expect(isAllowedRepoPath('tools/fetch-prices/tool.json')).toBe(true);
+    expect(isAllowedRepoPath('tools/fetch-prices/handler.ts')).toBe(true);
+  });
+
+  it('allows evals/ paths', () => {
+    expect(isAllowedRepoPath('evals/triage-accuracy.md')).toBe(true);
+  });
+
+  it('allows agents/ paths', () => {
+    expect(isAllowedRepoPath('agents/explore/AGENT.md')).toBe(true);
   });
 
   it('rejects top-level files', () => {
@@ -95,12 +117,14 @@ describe('isAllowedRepoPath', () => {
     expect(isAllowedRepoPath('src/index.ts')).toBe(false);
   });
 
-  it('rejects connections/*/spec.json', () => {
-    expect(isAllowedRepoPath('connections/slack/spec.json')).toBe(false);
+  it('rejects .env', () => {
+    expect(isAllowedRepoPath('.env')).toBe(false);
   });
 
-  it('rejects connections/*/access.json', () => {
-    expect(isAllowedRepoPath('connections/slack/access.json')).toBe(false);
+  it('rejects blocked filenames even inside allowed dirs', () => {
+    expect(isAllowedRepoPath('tools/.env')).toBe(false);
+    expect(isAllowedRepoPath('pages/amodal.json')).toBe(false);
+    expect(isAllowedRepoPath('skills/package.json')).toBe(false);
   });
 });
 
@@ -170,6 +194,24 @@ describe('executeWriteRepoFile', () => {
       content: '# Formatting Skill',
     });
     expect(result.output).toContain('Wrote skills/formatting/SKILL.md');
+  });
+
+  it('writes a page file', async () => {
+    const session = makeAdminSession(tmpDir);
+    const result = await executeWriteRepoFile(session, {
+      path: 'pages/price-dashboard.tsx',
+      content: 'export default function PriceDashboard() { return <div>Prices</div>; }',
+    });
+    expect(result.output).toContain('Wrote pages/price-dashboard.tsx');
+  });
+
+  it('writes an automation file', async () => {
+    const session = makeAdminSession(tmpDir);
+    const result = await executeWriteRepoFile(session, {
+      path: 'automations/fetch-prices.json',
+      content: JSON.stringify({ title: 'Fetch Prices', schedule: '0 * * * *', prompt: 'Fetch latest prices' }),
+    });
+    expect(result.output).toContain('Wrote automations/fetch-prices.json');
   });
 
   it('rejects writes to disallowed paths', async () => {

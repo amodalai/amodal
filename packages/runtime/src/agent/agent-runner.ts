@@ -380,7 +380,7 @@ function buildTools(session: AgentSession): LLMToolDefinition[] {
   if (session.appId === 'admin' && session.runtime.repo.source === 'local') {
     tools.push({
       name: 'read_repo_file',
-      description: 'Read a file from the agent repo. Path is relative to repo root. Only allowed in: skills/, knowledge/, connections/.',
+      description: 'Read a file from the agent repo. Path is relative to repo root. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.',
       parameters: {
         type: 'object',
         properties: {
@@ -392,7 +392,7 @@ function buildTools(session: AgentSession): LLMToolDefinition[] {
 
     tools.push({
       name: 'write_repo_file',
-      description: 'Create or update a file in the agent repo. Use this to add behavioral rules, knowledge documents, or skill updates based on user feedback. Path is relative to repo root. Only allowed in: skills/, knowledge/, connections/*/rules.md, connections/*/surface.md, connections/*/entities.md.',
+      description: 'Create or update a file in the agent repo. Use this to add skills, knowledge, pages, automations, tools, store schemas, evals, connection docs, or agent overrides. Path is relative to repo root. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.',
       parameters: {
         type: 'object',
         properties: {
@@ -1118,18 +1118,33 @@ async function* processStream(
 // Admin repo file tools
 // ---------------------------------------------------------------------------
 
-/** Allowed path patterns for admin file operations. */
-const ALLOWED_REPO_PATHS = [
-  /^skills\//,
-  /^knowledge\//,
-  /^connections\/[^/]+\/rules\.md$/,
-  /^connections\/[^/]+\/surface\.md$/,
-  /^connections\/[^/]+\/entities\.md$/,
+/** Allowed directory prefixes for admin file operations. */
+const ALLOWED_REPO_DIRS = [
+  'skills/',
+  'knowledge/',
+  'connections/',
+  'stores/',
+  'pages/',
+  'automations/',
+  'evals/',
+  'agents/',
+  'tools/',
+];
+
+/** Files that must never be written by the admin agent. */
+const BLOCKED_FILENAMES = [
+  '.env',
+  'amodal.json',
+  'package.json',
+  'pnpm-lock.yaml',
+  'tsconfig.json',
 ];
 
 /** @internal Exported for testing */
 export function isAllowedRepoPath(relPath: string): boolean {
-  return ALLOWED_REPO_PATHS.some((re) => re.test(relPath));
+  const basename = path.basename(relPath);
+  if (BLOCKED_FILENAMES.includes(basename)) return false;
+  return ALLOWED_REPO_DIRS.some((dir) => relPath.startsWith(dir));
 }
 
 /** @internal Exported for testing */
@@ -1149,7 +1164,7 @@ export function validateRepoFilePath(
 
   const normalized = path.normalize(rawPath);
   if (!isAllowedRepoPath(normalized)) {
-    return {error: `Path "${normalized}" is not in an allowed directory. Allowed: skills/, knowledge/, connections/*/rules.md, connections/*/surface.md, connections/*/entities.md`};
+    return {error: `Path "${normalized}" is not in an allowed directory. Allowed: ${ALLOWED_REPO_DIRS.join(', ')}. Blocked files: ${BLOCKED_FILENAMES.join(', ')}`};
   }
 
   const resolved = path.resolve(session.runtime.repo.origin, normalized);
