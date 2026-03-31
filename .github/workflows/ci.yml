@@ -53,3 +53,13 @@ jobs:
         with:
           node-version: "22"
       - run: pnpm build
+
+  docs:
+    name: Docs Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          node-version: "22"
+      - run: pnpm --filter @amodalai/docs run build
