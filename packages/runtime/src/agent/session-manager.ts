@@ -14,10 +14,29 @@ import {
   buildConnectionsMap,
   PlatformTelemetrySink,
   McpManager,
+  ensureAdminAgent,
+  loadAdminAgent,
 } from '@amodalai/core';
 import type {RuntimeTelemetryEvent, CustomToolExecutor, CustomShellExecutor, StoreBackend} from '@amodalai/core';
 import type {AgentSession} from './agent-types.js';
 import {fetchUserContext} from './user-context-fetcher.js';
+
+/**
+ * Resolve env: references in a string record.
+ * "env:VAR_NAME" → process.env.VAR_NAME value
+ */
+function resolveEnvRefs(record: Record<string, string>): Record<string, string> {
+  const resolved: Record<string, string> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (value.startsWith('env:')) {
+      const envVar = value.slice(4);
+      resolved[key] = process.env[envVar] ?? '';
+    } else {
+      resolved[key] = value;
+    }
+  }
+  return resolved;
+}
 
 export type TelemetrySink = (event: RuntimeTelemetryEvent) => void;
 
@@ -127,6 +146,58 @@ export class AgentSessionManager {
 
     // Start MCP servers if configured (non-blocking)
     await this.initMcp(session, this.repo);
+
+    this.sessions.set(session.id, session);
+    return session;
+  }
+
+  /**
+   * Create an admin session for the config chat.
+   * Uses admin agent skills/knowledge but the user's connections.
+   */
+  async createAdminSession(): Promise<AgentSession> {
+    // Resolve and load admin agent
+    const agentDir = await ensureAdminAgent(this.repo.origin);
+    const adminContent = await loadAdminAgent(agentDir);
+
+    // Build a modified repo: admin skills/knowledge + user connections
+    const adminRepo: AmodalRepo = {
+      ...this.repo,
+      skills: adminContent.skills,
+      knowledge: adminContent.knowledge,
+      agents: {
+        main: adminContent.agentPrompt ?? undefined,
+        simple: undefined,
+        subagents: [],
+      },
+      // Keep user connections so admin can validate/test them
+      // Keep stores so admin can see store definitions
+      // Clear automations — admin doesn't need them
+      automations: [],
+    };
+
+    const runtime = setupSession({
+      repo: adminRepo,
+      userId: 'admin',
+      userRoles: ['admin'],
+      isDelegated: false,
+      telemetrySink: this.telemetrySink,
+    });
+
+    const planModeManager = new PlanModeManager();
+    const exploreConfig = prepareExploreConfig(runtime);
+
+    const session: AgentSession = {
+      id: randomUUID(),
+      runtime,
+      appId: 'admin',
+      conversationHistory: [],
+      createdAt: Date.now(),
+      lastAccessedAt: Date.now(),
+      planModeManager,
+      exploreConfig,
+      shellExecutor: this.shellExecutor,
+    };
 
     this.sessions.set(session.id, session);
     return session;
@@ -253,19 +324,23 @@ export class AgentSessionManager {
    * Initialize MCP servers for a session.
    * Sources: connections with protocol=mcp, plus legacy amodal.json mcp.servers block.
    */
+   
   private async initMcp(session: AgentSession, repo: AmodalRepo): Promise<void> {
     const mcpServers: Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean}> = {};
 
     // Build MCP configs from connections with protocol: "mcp"
     for (const [name, conn] of repo.connections) {
       if (conn.spec.protocol === 'mcp') {
+        // Resolve env: references in headers and env
+        const resolvedHeaders = conn.spec.headers ? resolveEnvRefs(conn.spec.headers) : undefined;
+        const resolvedEnv = conn.spec.env ? resolveEnvRefs(conn.spec.env) : undefined;
         mcpServers[name] = {
           transport: conn.spec.transport ?? 'stdio',
           command: conn.spec.command,
           args: conn.spec.args,
-          env: conn.spec.env,
+          env: resolvedEnv,
           url: conn.spec.url,
-          headers: conn.spec.headers,
+          headers: resolvedHeaders,
           trust: conn.spec.trust,
         };
       }

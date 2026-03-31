@@ -111,3 +111,6 @@ export * from './mcp/index.js';
 
 // AgentSDK
 export { AgentSDK } from './sdk.js';
+
+// Admin agent
+export * from './admin/index.js';

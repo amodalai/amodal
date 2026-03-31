@@ -34,7 +34,6 @@ import {evalCommand} from './eval.js';
 import {experimentCommand} from './experiment.js';
 import {testQueryCommand} from './test-query.js';
 import {automationsCommand} from './automations.js';
-
 /**
  * All amodal subcommands for flat registration on the root yargs instance.
  */
