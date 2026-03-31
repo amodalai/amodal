@@ -52,13 +52,9 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
     ];
 
     // Resolve @amodalai/runtime-app via Node module resolution (works regardless of install layout)
-    try {
-      const require = createRequire(import.meta.url);
-      const runtimeAppPkg = require.resolve('@amodalai/runtime-app/package.json');
-      candidates.push(path.join(path.dirname(runtimeAppPkg), 'dist'));
-    } catch {
-      // runtime-app not installed — skip
-    }
+    const require = createRequire(import.meta.url);
+    const runtimeAppPkg = require.resolve('@amodalai/runtime-app/package.json');
+    candidates.push(path.join(path.dirname(runtimeAppPkg), 'dist'));
 
     for (const dir of candidates) {
       if (existsSync(path.join(dir, 'index.html'))) {
