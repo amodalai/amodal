@@ -27,6 +27,7 @@ interface EvalRunSummary {
   totalFailed: number;
   totalDurationMs: number;
   totalCostMicros: number;
+  totalCostNoCacheMicros?: number;
   label?: string;
   triggeredBy: string;
   createdAt: string;
@@ -59,6 +60,18 @@ function formatRelativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
+function CacheSavingsBadge({ cost }: { cost: CostInfo }) {
+  if (!cost.estimatedCostNoCacheMicros || cost.estimatedCostNoCacheMicros <= cost.estimatedCostMicros) return null;
+  const savedMicros = cost.estimatedCostNoCacheMicros - cost.estimatedCostMicros;
+  const pct = Math.round((savedMicros / cost.estimatedCostNoCacheMicros) * 100);
+  if (pct < 1) return null;
+  return (
+    <span className="text-emerald-400 font-mono text-[10px]" title={`Saved ${formatCost(savedMicros)} via prompt caching (${pct}% cheaper)`}>
+      -{pct}%
+    </span>
+  );
+}
+
 function PassRateBadge({ rate }: { rate: number }) {
   const pct = Math.round(rate * 100);
   const color = pct === 100 ? 'text-emerald-400' : pct >= 90 ? 'text-blue-400' : pct >= 80 ? 'text-amber-400' : 'text-red-400';
@@ -78,8 +91,11 @@ interface AssertionResult {
 
 interface CostInfo {
   estimatedCostMicros: number;
+  estimatedCostNoCacheMicros?: number;
   inputTokens: number;
   outputTokens: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
 }
 
 interface EvalResultDetail {
@@ -134,6 +150,7 @@ function EvalResultCard({ result: r }: { result: RunResult }) {
                 J:{formatCost(r.result.judgeCost.estimatedCostMicros)}
               </span>
             )}
+            {r.result.queryCost && <CacheSavingsBadge cost={r.result.queryCost} />}
           </>
         )}
         <span className={cn('ml-auto font-semibold',
@@ -449,7 +466,14 @@ function SuitesTab({ suites, runs, onRunComplete }: { suites: EvalSuite[]; runs:
                       <span className="text-gray-400 dark:text-zinc-600 ml-1 text-xs">({run.totalPassed}/{run.totalPassed + run.totalFailed})</span>
                     </td>
                     <td className="px-4 py-2.5 text-right text-gray-400 dark:text-zinc-500">{formatDuration(run.totalDurationMs)}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-400 dark:text-zinc-500 font-mono text-xs">{formatCost(run.totalCostMicros)}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-400 dark:text-zinc-500 font-mono text-xs">
+                      {formatCost(run.totalCostMicros)}
+                      {run.totalCostNoCacheMicros && run.totalCostNoCacheMicros > run.totalCostMicros && (
+                        <span className="text-emerald-400 ml-1" title={`Without caching: ${formatCost(run.totalCostNoCacheMicros)}`}>
+                          -{Math.round(((run.totalCostNoCacheMicros - run.totalCostMicros) / run.totalCostNoCacheMicros) * 100)}%
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-right text-gray-400 dark:text-zinc-500 text-xs">{formatRelativeTime(run.createdAt)}</td>
                   </tr>
                 ))}

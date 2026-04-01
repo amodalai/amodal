@@ -67,6 +67,8 @@ export async function* runAgentTurn(
   let turns = 0;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let totalCacheReadTokens = 0;
+  let totalCacheCreationTokens = 0;
 
   while (turns < MAX_TURNS) {
     if (signal.aborted) {
@@ -100,6 +102,8 @@ export async function* runAgentTurn(
         if (streamUsage) {
           totalInputTokens += streamUsage.inputTokens;
           totalOutputTokens += streamUsage.outputTokens;
+          totalCacheReadTokens += streamUsage.cacheReadInputTokens ?? 0;
+          totalCacheCreationTokens += streamUsage.cacheCreationInputTokens ?? 0;
         }
 
         if (hasToolUse && toolResults.length > 0) {
@@ -184,6 +188,8 @@ export async function* runAgentTurn(
       if (response.usage) {
         totalInputTokens += response.usage.inputTokens;
         totalOutputTokens += response.usage.outputTokens;
+        totalCacheReadTokens += response.usage.cacheReadInputTokens ?? 0;
+        totalCacheCreationTokens += response.usage.cacheCreationInputTokens ?? 0;
       }
 
       if (hasToolUse && toolResults.length > 0) {
@@ -210,7 +216,13 @@ export async function* runAgentTurn(
   const doneEvent: SSEEvent = {
     type: SSEEventType.Done,
     timestamp: ts(),
-    usage: totalInputTokens > 0 ? {input_tokens: totalInputTokens, output_tokens: totalOutputTokens, cached_tokens: 0, total_tokens: totalInputTokens + totalOutputTokens} : undefined,
+    usage: totalInputTokens > 0 || totalCacheReadTokens > 0 ? {
+      input_tokens: totalInputTokens,
+      output_tokens: totalOutputTokens,
+      cached_tokens: totalCacheReadTokens,
+      cache_creation_tokens: totalCacheCreationTokens,
+      total_tokens: totalInputTokens + totalOutputTokens + totalCacheReadTokens + totalCacheCreationTokens,
+    } : undefined,
   };
   yield doneEvent;
 }
@@ -955,11 +967,11 @@ async function* processStream(
   stream: AsyncGenerator<LLMStreamEvent>,
   session: AgentSession,
   signal: AbortSignal,
-): AsyncGenerator<SSEEvent, {content: LLMResponseBlock[]; hasToolUse: boolean; toolResults: LLMToolResultMessage[]; usage?: {inputTokens: number; outputTokens: number}}> {
+): AsyncGenerator<SSEEvent, {content: LLMResponseBlock[]; hasToolUse: boolean; toolResults: LLMToolResultMessage[]; usage?: {inputTokens: number; outputTokens: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number}}> {
   const content: LLMResponseBlock[] = [];
   const toolResults: LLMToolResultMessage[] = [];
   let hasToolUse = false;
-  let turnUsage: {inputTokens: number; outputTokens: number} | undefined;
+  let turnUsage: {inputTokens: number; outputTokens: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number} | undefined;
 
   // Accumulate text and tool call data from stream events
   let currentText = '';

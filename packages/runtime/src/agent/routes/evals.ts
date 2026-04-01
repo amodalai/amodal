@@ -23,13 +23,20 @@ export interface EvalRouterOptions {
  * Run a query against /chat and stream events back to the eval client.
  * Returns the accumulated response, tool calls, and usage.
  */
+interface QueryUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+}
+
 async function streamQuery(
   baseUrl: string,
   message: string,
   evalRes: Response,
   evalName: string,
   appId?: string,
-): Promise<{response: string; toolCalls: Array<{name: string; parameters: Record<string, unknown>}>; toolResults: string[]; usage?: {inputTokens: number; outputTokens: number}}> {
+): Promise<{response: string; toolCalls: Array<{name: string; parameters: Record<string, unknown>}>; toolResults: string[]; usage?: QueryUsage}> {
   const chatRes = await fetch(`${baseUrl}/chat`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -41,7 +48,7 @@ async function streamQuery(
   let fullResponse = '';
   const toolCalls: Array<{name: string; parameters: Record<string, unknown>}> = [];
   const toolResults: string[] = [];
-  let usage: {inputTokens: number; outputTokens: number} | undefined;
+  let usage: QueryUsage | undefined;
 
   for (const line of lines) {
     if (!line.startsWith('data: ')) continue;
@@ -65,9 +72,14 @@ async function streamQuery(
         writeSSE(evalRes, {type: 'agent_tool_result', evalName, toolName: event['tool_name'] ?? 'request', status: event['status'], durationMs: event['duration_ms']});
       } else if (eventType === 'done' && event['usage']) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        const u = event['usage'] as {input_tokens: number; output_tokens: number};
-        if (u.input_tokens > 0 || u.output_tokens > 0) {
-          usage = {inputTokens: u.input_tokens, outputTokens: u.output_tokens};
+        const u = event['usage'] as {input_tokens: number; output_tokens: number; cached_tokens?: number; cache_creation_tokens?: number};
+        if (u.input_tokens > 0 || u.output_tokens > 0 || (u.cached_tokens ?? 0) > 0) {
+          usage = {
+            inputTokens: u.input_tokens,
+            outputTokens: u.output_tokens,
+            ...(u.cached_tokens ? {cacheReadInputTokens: u.cached_tokens} : {}),
+            ...(u.cache_creation_tokens ? {cacheCreationInputTokens: u.cache_creation_tokens} : {}),
+          };
         }
       }
     } catch {
@@ -237,7 +249,10 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
         const assertions = await judgeAllAssertions(enriched, ev.assertions, judgeProvider);
         const passed = assertions.every((a) => a.passed);
 
-        const queryCost = usage ? computeEvalCost(usage.inputTokens, usage.outputTokens, modelInfo.model) : undefined;
+        const queryCost = usage ? computeEvalCost(
+          usage.inputTokens, usage.outputTokens, modelInfo.model,
+          usage.cacheReadInputTokens, usage.cacheCreationInputTokens,
+        ) : undefined;
         const judgeInputUsed = judgeProvider.totalInputTokens - judgeInputBefore;
         const judgeOutputUsed = judgeProvider.totalOutputTokens - judgeOutputBefore;
         const judgeCost = judgeInputUsed > 0 ? computeEvalCost(judgeInputUsed, judgeOutputUsed, modelInfo.model) : undefined;
