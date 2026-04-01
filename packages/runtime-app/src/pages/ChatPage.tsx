@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import type { FormEvent } from 'react';
-import { Send, Loader2, CheckCircle2, XCircle, Wrench, Pencil, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Send, Square, Loader2, CheckCircle2, XCircle, Wrench, Pencil, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { useAmodalChat } from '@amodalai/react';
@@ -340,7 +340,7 @@ export function ChatPage() {
   const urlResumeId = searchParams.get('resume');
   const activeResumeId = useMemo(() => urlResumeId ?? serverResumeId, [urlResumeId, serverResumeId]);
 
-  const { messages, send, isStreaming, activeToolCalls, respondToConfirmation, usage, sessionId } = useAmodalChat({
+  const { messages, send, stop, isStreaming, activeToolCalls, respondToConfirmation, usage, sessionId } = useAmodalChat({
     initialSessionId: activeResumeId,
   });
   const [input, setInput] = useState('');
@@ -526,13 +526,23 @@ export function ChatPage() {
             className="w-full resize-none rounded-xl bg-white dark:bg-zinc-800/80 border border-gray-300 dark:border-zinc-700/60 px-4 py-3 pr-12 text-[14px] text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 outline-none focus:border-blue-600/60 focus:ring-1 focus:ring-blue-600/20 transition-colors disabled:opacity-50 overflow-y-auto"
             style={{ minHeight: '48px', maxHeight: '160px' }}
           />
-          <button
-            type="submit"
-            disabled={isStreaming || input.trim().length === 0}
-            className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-blue-700 text-white flex items-center justify-center hover:bg-blue-600 transition-colors disabled:opacity-20 disabled:hover:bg-blue-700"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={stop}
+              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-gray-500 dark:bg-zinc-600 text-white flex items-center justify-center hover:bg-gray-400 dark:hover:bg-zinc-500 transition-colors"
+            >
+              <Square className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={input.trim().length === 0}
+              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-blue-700 text-white flex items-center justify-center hover:bg-blue-600 transition-colors disabled:opacity-20 disabled:hover:bg-blue-700"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          )}
         </form>
         {(usage.inputTokens > 0 || usage.outputTokens > 0) && (
           <div className="max-w-3xl mx-auto mt-1.5 text-[11px] text-gray-400 dark:text-zinc-600 font-mono text-right">

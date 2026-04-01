@@ -53,7 +53,7 @@ export function ConfigModelsPage() {
                       <span className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
                         {m.model.replace(/-\d{8}$/, '')}
                       </span>
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-blue-600/10 text-blue-800 dark:text-blue-400 font-medium">
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-600/10 text-blue-800 dark:text-blue-400 font-medium">
                         {key}
                       </span>
                     </div>

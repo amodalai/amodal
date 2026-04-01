@@ -17,7 +17,7 @@ const ENUM_COLORS = [
   'bg-red-100 dark:bg-red-500/10 text-red-800 dark:text-red-400',
   'bg-purple-100 dark:bg-purple-500/10 text-purple-800 dark:text-purple-400',
   'bg-pink-100 dark:bg-pink-500/10 text-pink-800 dark:text-pink-400',
-  'bg-indigo-100 dark:bg-blue-600/10 text-indigo-800 dark:text-blue-400',
+  'bg-blue-100 dark:bg-blue-600/10 text-blue-800 dark:text-blue-400',
   'bg-orange-100 dark:bg-orange-500/10 text-orange-800 dark:text-orange-400',
   'bg-teal-100 dark:bg-teal-500/10 text-teal-800 dark:text-teal-400',
   'bg-cyan-100 dark:bg-cyan-500/10 text-cyan-800 dark:text-cyan-400',

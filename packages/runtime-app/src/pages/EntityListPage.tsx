@@ -48,7 +48,7 @@ export function EntityListPage() {
   return (
     <div className="max-w-[1200px] mx-auto px-6 pt-8 pb-12">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-9 w-9 rounded-lg bg-indigo-100 dark:bg-blue-600/10 flex items-center justify-center">
+        <div className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-600/10 flex items-center justify-center">
           <Database className="h-5 w-5 text-blue-700 dark:text-blue-400" />
         </div>
         <div>
