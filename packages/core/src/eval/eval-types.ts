@@ -23,7 +23,14 @@ export interface EvalCostInfo {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /** Tokens served from prompt cache (90% cheaper than base input). */
+  cacheReadInputTokens?: number;
+  /** Tokens written to prompt cache (25% more expensive than base input). */
+  cacheCreationInputTokens?: number;
+  /** Actual estimated cost accounting for cache pricing. */
   estimatedCostMicros: number;
+  /** Hypothetical cost if caching were disabled (all input at base price). */
+  estimatedCostNoCacheMicros?: number;
 }
 
 /**

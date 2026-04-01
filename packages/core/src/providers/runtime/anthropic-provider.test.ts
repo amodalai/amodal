@@ -106,7 +106,9 @@ describe('AnthropicRuntimeProvider', () => {
     await provider.chat(makeRequest({systemPrompt: 'Be concise.'}));
 
     expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({system: 'Be concise.'}),
+      expect.objectContaining({
+        system: [{type: 'text', text: 'Be concise.', cache_control: {type: 'ephemeral'}}],
+      }),
     );
   });
 
@@ -126,7 +128,7 @@ describe('AnthropicRuntimeProvider', () => {
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        tools: [{name: 'my_tool', description: 'does stuff', input_schema: {type: 'object'}}],
+        tools: [{name: 'my_tool', description: 'does stuff', input_schema: {type: 'object'}, cache_control: {type: 'ephemeral'}}],
       }),
     );
   });

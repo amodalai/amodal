@@ -12,12 +12,12 @@ import type {AmodalRepo} from '@amodalai/core';
 const DEBOUNCE_MS = 300;
 
 /**
- * Watches the `.amodal/` directory for changes and reloads the repo.
+ * Watches agent config directories for changes and reloads the repo.
  */
 export class ConfigWatcher {
   private readonly repoPath: string;
   private readonly onChange: (repo: AmodalRepo) => void;
-  private watcher: FSWatcher | null = null;
+  private watchers: FSWatcher[] = [];
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(repoPath: string, onChange: (repo: AmodalRepo) => void) {
@@ -26,19 +26,32 @@ export class ConfigWatcher {
   }
 
   start(): void {
-    if (this.watcher) {
+    if (this.watchers.length > 0) {
       return;
     }
 
-    const configDir = join(this.repoPath, '.amodal');
+    const targets = [
+      'amodal.json',
+      'skills',
+      'knowledge',
+      'connections',
+      'tools',
+      'evals',
+      'stores',
+      'pages',
+      'automations',
+    ];
 
-    try {
-      this.watcher = watch(configDir, {recursive: true}, (_eventType, _filename) => {
-        this.scheduleReload();
-      });
-    } catch {
-      // Directory might not exist yet or watching might not be supported
-      process.stderr.write('[ConfigWatcher] Failed to start watching .amodal/ directory\n');
+    for (const target of targets) {
+      const targetPath = join(this.repoPath, target);
+      try {
+        const w = watch(targetPath, {recursive: true}, (_eventType, _filename) => {
+          this.scheduleReload();
+        });
+        this.watchers.push(w);
+      } catch {
+        // Directory or file might not exist yet
+      }
     }
   }
 
@@ -47,10 +60,10 @@ export class ConfigWatcher {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
-    if (this.watcher) {
-      this.watcher.close();
-      this.watcher = null;
+    for (const w of this.watchers) {
+      w.close();
     }
+    this.watchers = [];
   }
 
   private scheduleReload(): void {

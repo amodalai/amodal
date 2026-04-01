@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type {LLMChatResponse} from './runtime-provider-types.js';
+import type {LLMChatResponse, LLMUsage} from './runtime-provider-types.js';
 
 /**
  * Events emitted during streamed LLM responses.
@@ -45,5 +45,5 @@ export interface LLMStreamToolUseEnd {
 export interface LLMStreamMessageEnd {
   type: 'message_end';
   stopReason: LLMChatResponse['stopReason'];
-  usage?: {inputTokens: number; outputTokens: number};
+  usage?: LLMUsage;
 }

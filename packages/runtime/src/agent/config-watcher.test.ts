@@ -48,16 +48,22 @@ describe('ConfigWatcher', () => {
     vi.useRealTimers();
   });
 
-  it('should start watching the .amodal directory', async () => {
+  it('should watch agent config dirs, not .amodal/', async () => {
     const {ConfigWatcher} = await import('./config-watcher.js');
     const watcher = new ConfigWatcher('/repo', onChange);
     watcher.start();
 
-    expect(fs.watch).toHaveBeenCalledWith(
-      '/repo/.amodal',
-      {recursive: true},
-      expect.any(Function),
-    );
+    // Should have called watch multiple times (one per target that doesn't throw)
+    expect(vi.mocked(fs.watch).mock.calls.length).toBeGreaterThan(1);
+
+    // Verify paths include amodal.json, skills, connections
+    const paths = vi.mocked(fs.watch).mock.calls.map((c) => c[0]);
+    expect(paths).toContainEqual('/repo/amodal.json');
+    expect(paths).toContainEqual('/repo/skills');
+    expect(paths).toContainEqual('/repo/connections');
+
+    // Should NOT watch .amodal
+    expect(paths).not.toContainEqual('/repo/.amodal');
 
     watcher.stop();
   });
@@ -66,9 +72,10 @@ describe('ConfigWatcher', () => {
     const {ConfigWatcher} = await import('./config-watcher.js');
     const watcher = new ConfigWatcher('/repo', onChange);
     watcher.start();
+    const callCount = vi.mocked(fs.watch).mock.calls.length;
     watcher.start();
 
-    expect(fs.watch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fs.watch).mock.calls.length).toBe(callCount);
     watcher.stop();
   });
 
@@ -84,7 +91,7 @@ describe('ConfigWatcher', () => {
     const watcher = new ConfigWatcher('/repo', onChange);
     watcher.start();
 
-    // Get the callback that was passed to watch()
+    // Get the callback from the first watch() call
     const watchCall = vi.mocked(fs.watch).mock.calls[0] as unknown[];
     const callback = watchCall?.[2] as ((event: string, filename: string) => void) | undefined;
 
