@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Fragment, useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
 import { CheckCircle2, XCircle, FlaskConical, Loader2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -473,16 +473,30 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
 /*  EvalCard                                                            */
 /* ------------------------------------------------------------------ */
 
-function EvalCard({
+export function EvalCard({
   suite,
   models,
   history,
+  hideModelSelector,
+  autoRunTrigger,
+  expandOverride,
 }: {
   suite: EvalSuite;
   models: AvailableModel[];
   history: EvalHistoryEntry[];
+  hideModelSelector?: boolean;
+  autoRunTrigger?: number;
+  expandOverride?: boolean | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const lastAutoRun = useRef(0);
+
+  // Respond to parent expand all / collapse all
+  useEffect(() => {
+    if (expandOverride !== undefined && expandOverride !== null) {
+      setExpanded(expandOverride);
+    }
+  }, [expandOverride]);
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [timeout, setTimeoutVal] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
@@ -492,12 +506,12 @@ function EvalCard({
   const [results, setResults] = useState<CompareResult[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  // Pre-select first model on initial open
+  // Pre-select first model: immediately when hideModelSelector, otherwise on first expand
   useEffect(() => {
-    if (expanded && selectedModels.size === 0 && models.length > 0) {
+    if (selectedModels.size === 0 && models.length > 0 && (hideModelSelector || expanded)) {
       setSelectedModels(new Set([`${models[0].provider}/${models[0].model}`]));
     }
-  }, [expanded, models, selectedModels.size]);
+  }, [expanded, models, selectedModels.size, hideModelSelector]);
 
   const toggleModel = (key: string) => {
     setSelectedModels((prev) => {
@@ -516,7 +530,7 @@ function EvalCard({
     setSelectedModels(new Set());
   };
 
-  const handleRun = async () => {
+  const handleRun = useCallback(async () => {
     setIsRunning(true);
     setResults([]);
 
@@ -536,18 +550,45 @@ function EvalCard({
 
     setCurrentRunningModel(null);
     setIsRunning(false);
-  };
+  }, [suite.name, timeout, models, selectedModels]);
+
+  // Auto-run when triggered by parent (e.g., Run All)
+  useEffect(() => {
+    if (autoRunTrigger && autoRunTrigger > 0 && autoRunTrigger !== lastAutoRun.current && !isRunning && selectedModels.size > 0) {
+      lastAutoRun.current = autoRunTrigger;
+      void handleRun();
+    }
+  }, [autoRunTrigger, isRunning, selectedModels.size, handleRun]);
 
   const selectedCount = selectedModels.size;
   const colCount = Math.min(Math.max(models.length, 3), 5);
 
+  // Determine overall pass/fail from results (for suite mode styling)
+  const allPassed = results.length > 0 && results.every((r) => r.passed && !r.error);
+  const anyFailed = results.length > 0 && results.some((r) => !r.passed || r.error);
+  const hasSuiteResult = hideModelSelector && results.length > 0 && !isRunning;
+
+  const borderColor = hasSuiteResult
+    ? allPassed ? 'border-emerald-500/40' : 'border-red-500/40'
+    : 'border-gray-200 dark:border-zinc-800';
+
+  // Icon: spinner when running, green/red beaker in suite mode with results, default otherwise
+  let headerIcon = <FlaskConical className="h-4 w-4 text-indigo-500/60 shrink-0" />;
+  if (isRunning) {
+    headerIcon = <Loader2 className="h-4 w-4 animate-spin text-indigo-400 shrink-0" />;
+  } else if (hasSuiteResult && allPassed) {
+    headerIcon = <FlaskConical className="h-4 w-4 text-emerald-400 shrink-0" />;
+  } else if (hasSuiteResult && anyFailed) {
+    headerIcon = <FlaskConical className="h-4 w-4 text-red-400 shrink-0" />;
+  }
+
   return (
-    <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+    <div className={cn('border rounded-lg overflow-hidden transition-colors', borderColor)}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors"
       >
-        <FlaskConical className="h-4 w-4 text-indigo-500/60 shrink-0" />
+        {headerIcon}
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-gray-900 dark:text-zinc-200">{suite.title || suite.name}</div>
           {suite.description && (
@@ -584,47 +625,51 @@ function EvalCard({
           </div>
 
           {/* Model selector grid */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Models</div>
-              <button onClick={selectAll} className="text-[10px] text-indigo-400 hover:text-indigo-300">all</button>
-              <button onClick={selectNone} className="text-[10px] text-indigo-400 hover:text-indigo-300">none</button>
+          {!hideModelSelector && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Models</div>
+                <button onClick={selectAll} className="text-[10px] text-indigo-400 hover:text-indigo-300">all</button>
+                <button onClick={selectNone} className="text-[10px] text-indigo-400 hover:text-indigo-300">none</button>
+              </div>
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+                {models.map((m) => {
+                  const key = `${m.provider}/${m.model}`;
+                  const selected = selectedModels.has(key);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => toggleModel(key)}
+                      className={cn(
+                        'px-2 py-1.5 rounded text-xs font-medium border transition-colors text-center truncate',
+                        selected
+                          ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-400'
+                          : 'border-gray-200 dark:border-zinc-700/50 text-gray-400 dark:text-zinc-500 hover:border-gray-300 dark:hover:border-zinc-600',
+                      )}
+                    >
+                      {m.label || m.model.replace(/-\d{8}$/, '')}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
-              {models.map((m) => {
-                const key = `${m.provider}/${m.model}`;
-                const selected = selectedModels.has(key);
-                return (
-                  <button
-                    key={key}
-                    onClick={() => toggleModel(key)}
-                    className={cn(
-                      'px-2 py-1.5 rounded text-xs font-medium border transition-colors text-center truncate',
-                      selected
-                        ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-400'
-                        : 'border-gray-200 dark:border-zinc-700/50 text-gray-400 dark:text-zinc-500 hover:border-gray-300 dark:hover:border-zinc-600',
-                    )}
-                  >
-                    {m.label || m.model.replace(/-\d{8}$/, '')}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          )}
 
           {/* Timeout slider */}
-          <div className="flex items-center gap-3">
-            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Timeout</div>
-            <input
-              type="range"
-              min={20}
-              max={300}
-              value={timeout}
-              onChange={(e) => setTimeoutVal(Number(e.target.value))}
-              className="flex-1 h-1 accent-indigo-500"
-            />
-            <span className="text-xs text-gray-400 dark:text-zinc-500 tabular-nums w-10 text-right">{timeout}s</span>
-          </div>
+          {!hideModelSelector && (
+            <div className="flex items-center gap-3">
+              <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Timeout</div>
+              <input
+                type="range"
+                min={20}
+                max={300}
+                value={timeout}
+                onChange={(e) => setTimeoutVal(Number(e.target.value))}
+                className="flex-1 h-1 accent-indigo-500"
+              />
+              <span className="text-xs text-gray-400 dark:text-zinc-500 tabular-nums w-10 text-right">{timeout}s</span>
+            </div>
+          )}
 
           {/* Run button */}
           <button
@@ -697,7 +742,7 @@ function EvalCard({
 /*  SuitesTab                                                           */
 /* ------------------------------------------------------------------ */
 
-function SuitesTab({ suites }: { suites: EvalSuite[] }) {
+export function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll }: { suites: EvalSuite[]; hideModelSelector?: boolean; runAllTrigger?: number; expandAll?: boolean | null }) {
   const [models, setModels] = useState<AvailableModel[]>([]);
   const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
 
@@ -746,6 +791,9 @@ function SuitesTab({ suites }: { suites: EvalSuite[] }) {
           suite={suite}
           models={models}
           history={historyMap[suite.name] ?? []}
+          hideModelSelector={hideModelSelector}
+          autoRunTrigger={runAllTrigger}
+          expandOverride={expandAll}
         />
       ))}
     </div>
@@ -756,8 +804,9 @@ function SuitesTab({ suites }: { suites: EvalSuite[] }) {
 /*  Main Page                                                          */
 /* ------------------------------------------------------------------ */
 
-export function EvalsPage() {
+export function ModelArenaPage() {
   const [suites, setSuites] = useState<EvalSuite[]>([]);
+  const [expandAll, setExpandAll] = useState<boolean | null>(null);
 
   const loadSuites = useCallback(() => {
     fetch('/api/evals/suites')
@@ -778,25 +827,28 @@ export function EvalsPage() {
     <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
-        <div className="flex items-center gap-2 mb-4">
-          <FlaskConical className="h-5 w-5 text-indigo-500" />
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Evals</h1>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="h-5 w-5 text-indigo-500" />
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Model Arena</h1>
+          </div>
+          {suites.length > 0 && (
+            <div className="flex items-center gap-2 text-[11px]">
+              <button onClick={() => setExpandAll(true)} className="text-indigo-400 hover:text-indigo-300 transition-colors">expand all</button>
+              <span className="text-gray-300 dark:text-zinc-700">/</span>
+              <button onClick={() => setExpandAll(false)} className="text-indigo-400 hover:text-indigo-300 transition-colors">collapse all</button>
+            </div>
+          )}
         </div>
-
-        {/* Single tab header */}
-        <div className="flex gap-1">
-          <button
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
-          >
-            Eval Suites
-          </button>
-        </div>
+        <p className="text-xs text-gray-400 dark:text-zinc-500 max-w-2xl mb-0">
+          Compare how different models perform on your eval suite. Select models, run them side by side, and compare quality, speed, and cost. Use this to find the best model for your use case or to validate a model swap before deploying.
+        </p>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="max-w-4xl mx-auto px-6 py-6">
-          <SuitesTab suites={suites} />
+          <SuitesTab suites={suites} expandAll={expandAll} />
         </div>
       </div>
     </div>
