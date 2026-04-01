@@ -479,15 +479,24 @@ export function EvalCard({
   history,
   hideModelSelector,
   autoRunTrigger,
+  expandOverride,
 }: {
   suite: EvalSuite;
   models: AvailableModel[];
   history: EvalHistoryEntry[];
   hideModelSelector?: boolean;
   autoRunTrigger?: number;
+  expandOverride?: boolean | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const lastAutoRun = useRef(0);
+
+  // Respond to parent expand all / collapse all
+  useEffect(() => {
+    if (expandOverride !== undefined && expandOverride !== null) {
+      setExpanded(expandOverride);
+    }
+  }, [expandOverride]);
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [timeout, setTimeoutVal] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
@@ -733,7 +742,7 @@ export function EvalCard({
 /*  SuitesTab                                                           */
 /* ------------------------------------------------------------------ */
 
-export function SuitesTab({ suites, hideModelSelector, runAllTrigger }: { suites: EvalSuite[]; hideModelSelector?: boolean; runAllTrigger?: number }) {
+export function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll }: { suites: EvalSuite[]; hideModelSelector?: boolean; runAllTrigger?: number; expandAll?: boolean | null }) {
   const [models, setModels] = useState<AvailableModel[]>([]);
   const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
 
@@ -784,6 +793,7 @@ export function SuitesTab({ suites, hideModelSelector, runAllTrigger }: { suites
           history={historyMap[suite.name] ?? []}
           hideModelSelector={hideModelSelector}
           autoRunTrigger={runAllTrigger}
+          expandOverride={expandAll}
         />
       ))}
     </div>
