@@ -806,6 +806,7 @@ export function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll 
 
 export function ModelArenaPage() {
   const [suites, setSuites] = useState<EvalSuite[]>([]);
+  const [expandAll, setExpandAll] = useState<boolean | null>(null);
 
   const loadSuites = useCallback(() => {
     fetch('/api/evals/suites')
@@ -826,9 +827,18 @@ export function ModelArenaPage() {
     <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
-        <div className="flex items-center gap-2 mb-1">
-          <FlaskConical className="h-5 w-5 text-indigo-500" />
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Model Arena</h1>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="h-5 w-5 text-indigo-500" />
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Model Arena</h1>
+          </div>
+          {suites.length > 0 && (
+            <div className="flex items-center gap-2 text-[11px]">
+              <button onClick={() => setExpandAll(true)} className="text-indigo-400 hover:text-indigo-300 transition-colors">expand all</button>
+              <span className="text-gray-300 dark:text-zinc-700">/</span>
+              <button onClick={() => setExpandAll(false)} className="text-indigo-400 hover:text-indigo-300 transition-colors">collapse all</button>
+            </div>
+          )}
         </div>
         <p className="text-xs text-gray-400 dark:text-zinc-500 max-w-2xl mb-0">
           Compare how different models perform on your eval suite. Select models, run them side by side, and compare quality, speed, and cost. Use this to find the best model for your use case or to validate a model swap before deploying.
@@ -838,7 +848,7 @@ export function ModelArenaPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="max-w-4xl mx-auto px-6 py-6">
-          <SuitesTab suites={suites} />
+          <SuitesTab suites={suites} expandAll={expandAll} />
         </div>
       </div>
     </div>
