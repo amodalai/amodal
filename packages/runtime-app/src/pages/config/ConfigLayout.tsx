@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
 import { Sun, Moon, Settings, Bot, Cpu, KeyRound, FileText, Server, ArrowLeft, FolderCode, MessageSquare, PanelRightOpen, PanelRightClose, FlaskConical } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { AdminChatPanel } from './ConfigChatPage';
@@ -77,9 +77,6 @@ export function ConfigLayout() {
   const { dark, toggle } = useTheme();
   const connectionStatus = useConnectionStatus();
   const [chatOpen, setChatOpen] = useState(false);
-  const location = useLocation();
-  // Don't show the toggle when already on the chat page
-  const isOnChatPage = location.pathname === '/config' || location.pathname === '/config/';
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-white dark:bg-[#0a0a0f]">
@@ -109,20 +106,6 @@ export function ConfigLayout() {
           >
             <Settings className="h-4 w-4" />
           </NavLink>
-          {!isOnChatPage && (
-            <button
-              onClick={() => setChatOpen((v) => !v)}
-              className={cn(
-                'h-8 w-8 rounded-lg flex items-center justify-center transition-colors',
-                chatOpen
-                  ? 'text-indigo-500 dark:text-indigo-400 bg-indigo-500/10'
-                  : 'text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06]',
-              )}
-              title={chatOpen ? 'Close admin chat' : 'Open admin chat'}
-            >
-              {chatOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-            </button>
-          )}
           <button
             onClick={toggle}
             className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
@@ -165,10 +148,6 @@ export function ConfigLayout() {
 
             <div className="space-y-0.5">
               <ConfigNavItem to="/config" end>
-                <MessageSquare className="h-4 w-4 shrink-0" />
-                Chat
-              </ConfigNavItem>
-              <ConfigNavItem to="/config/agent">
                 <Bot className="h-4 w-4 shrink-0" />
                 Agent
               </ConfigNavItem>
@@ -196,18 +175,39 @@ export function ConfigLayout() {
                 <Server className="h-4 w-4 shrink-0" />
                 System
               </ConfigNavItem>
+
+              <div className="mt-3 mb-1 px-3 pt-3 border-t border-gray-200 dark:border-white/[0.06]">
+                <span className="text-[10px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">Tools</span>
+              </div>
+
+              <button
+                onClick={() => setChatOpen((v) => !v)}
+                className={cn(
+                  'flex items-center gap-2.5 w-full px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
+                  chatOpen
+                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium'
+                    : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
+                )}
+              >
+                <MessageSquare className="h-4 w-4 shrink-0" />
+                Admin Agent
+                {chatOpen
+                  ? <PanelRightClose className="h-3.5 w-3.5 ml-auto" />
+                  : <PanelRightOpen className="h-3.5 w-3.5 ml-auto" />
+                }
+              </button>
             </div>
           </nav>
         </aside>
 
-        <main className={cn('overflow-auto bg-white dark:bg-[#0a0a0f] scrollbar-thin', chatOpen && !isOnChatPage ? 'w-[60%]' : 'flex-1')}>
+        <main className={cn('overflow-auto bg-white dark:bg-[#0a0a0f] scrollbar-thin', chatOpen ? 'w-[60%]' : 'flex-1')}>
           <Outlet />
         </main>
 
-        {chatOpen && !isOnChatPage && (
+        {chatOpen && (
           <div className="w-[40%] border-l border-gray-200 dark:border-white/[0.06] flex flex-col">
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17]">
-              <span className="text-[11px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">Admin Chat</span>
+              <span className="text-[11px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">Admin Agent</span>
               <button
                 onClick={() => setChatOpen(false)}
                 className="text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60"
