@@ -28,7 +28,11 @@ const raw: unknown = JSON.parse(readFileSync(new URL('../../package.json', impor
 if (typeof raw !== 'object' || raw === null || !('version' in raw) || typeof raw.version !== 'string') {
   throw new Error('Failed to read version from package.json');
 }
-const pkgVersion = raw.version;
+// Detect source build: pnpm-workspace.yaml exists at repo root (4 levels up from dist/src/main.js)
+const isSourceBuild = (() => {
+  try { return readFileSync(new URL('../../../../pnpm-workspace.yaml', import.meta.url), 'utf-8').length > 0; } catch { return false; }
+})();
+const pkgVersion = raw.version + (isSourceBuild ? '-dev' : '');
 
 const cli = yargs(hideBin(process.argv))
   .scriptName('amodal')

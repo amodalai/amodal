@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Sun, Moon, Settings, Bot, Cpu, KeyRound, FileText, Server, ArrowLeft, FolderCode, MessageSquare, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { Sun, Moon, Settings, Bot, Cpu, KeyRound, FileText, Server, ArrowLeft, FolderCode, MessageSquare, PanelRightOpen, PanelRightClose, FlaskConical } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { AdminChatPanel } from './ConfigChatPage';
 import { cn } from '@/lib/utils';
@@ -166,6 +166,10 @@ export function ConfigLayout() {
               <ConfigNavItem to="/config/files">
                 <FolderCode className="h-4 w-4 shrink-0" />
                 Files
+              </ConfigNavItem>
+              <ConfigNavItem to="/config/evals">
+                <FlaskConical className="h-4 w-4 shrink-0" />
+                Evals
               </ConfigNavItem>
               <ConfigNavItem to="/config/system">
                 <Server className="h-4 w-4 shrink-0" />
