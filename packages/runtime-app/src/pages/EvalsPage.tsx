@@ -90,7 +90,6 @@ interface EvalResultDetail {
   error?: string;
   queryCost?: CostInfo;
   judgeCost?: CostInfo;
-  cost?: CostInfo; // legacy
 }
 
 interface RunResult {
@@ -125,9 +124,9 @@ function EvalResultCard({ result: r }: { result: RunResult }) {
         {r.result && (
           <>
             <span className="text-gray-400 dark:text-zinc-600 ml-1">{formatDuration(r.result.durationMs)}</span>
-            {(r.result.queryCost || r.result.cost) && (
+            {r.result.queryCost && (
               <span className="text-gray-400 dark:text-zinc-600 font-mono text-[10px]" title="Query cost">
-                Q:{formatCost((r.result.queryCost ?? r.result.cost)!.estimatedCostMicros)}{ }
+                Q:{formatCost(r.result.queryCost.estimatedCostMicros)}
               </span>
             )}
             {r.result.judgeCost && (
