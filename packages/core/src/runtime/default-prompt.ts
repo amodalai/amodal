@@ -52,11 +52,11 @@ export function buildDefaultPrompt(opts: {
   // Error handling guidance
   parts.push(`## Error handling
 
-- If a tool call returns an error, report it clearly to the user with the connection name and what went wrong. Do not silently retry or attempt workarounds.
-- On 401/403 errors: tell the user their credentials may be misconfigured. Do not retry with different parameters.
-- On network errors: tell the user the service appears unreachable. Do not try alternative endpoints.
-- If a connection name is not recognized, use the suggestion from the error message. Do not guess connection names.
-- If a skill or tool is not found, report the error and list what is available.`);
+- If a query returns empty results, try different parameters before giving up (e.g. broader filters, different sort/state).
+- If a tool call returns an error, report it clearly to the user with the connection name and what went wrong.
+- On 401/403 errors: tell the user their credentials may be misconfigured. Do not retry.
+- On network errors: tell the user the service appears unreachable. Do not retry.
+- If a connection name is not recognized, use the suggestion from the error message.`);
   parts.push('');
 
   // Connections — include API surface so the model knows available endpoints
