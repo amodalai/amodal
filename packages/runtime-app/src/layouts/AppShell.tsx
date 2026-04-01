@@ -72,7 +72,7 @@ export function AppShell() {
             <span className="font-semibold tracking-tight text-[15px] text-gray-900 dark:text-white/90">amodal</span>
             {name && (
               <>
-                <span className="text-gray-300 dark:text-white/20">/</span>
+                <span className="text-gray-300 dark:text-white/60">/</span>
                 <span className="text-[13px] text-gray-500 dark:text-white/50 font-medium">{name}</span>
               </>
             )}
@@ -81,20 +81,20 @@ export function AppShell() {
         <div className="flex items-center gap-3">
           <Link
             to="/config"
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
             title="Configuration"
           >
             <Settings className="h-4 w-4" />
           </Link>
           <button
             onClick={toggle}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           {model && (
-            <span className="text-[11px] text-gray-400 dark:text-white/25 font-mono">{model.replace(/-\d{8}$/, '')}</span>
+            <span className="text-[11px] text-gray-400 dark:text-white/45 font-mono">{model.replace(/-\d{8}$/, '')}</span>
           )}
           <div className="flex items-center gap-2">
             <div className={`h-2 w-2 rounded-full ${
@@ -102,7 +102,7 @@ export function AppShell() {
               connectionStatus === 'checking' ? 'bg-amber-400 animate-pulse' :
               'bg-red-400'
             }`} />
-            <span className="text-[11px] text-gray-400 dark:text-white/40 font-medium tracking-wide uppercase">
+            <span className="text-[11px] text-gray-400 dark:text-white/60 font-medium tracking-wide uppercase">
               {connectionStatus === 'connected' ? 'Connected' :
                connectionStatus === 'checking' ? 'Connecting' :
                'Disconnected'}

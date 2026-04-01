@@ -48,8 +48,8 @@ export function EntityListPage() {
   return (
     <div className="max-w-[1200px] mx-auto px-6 pt-8 pb-12">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-9 w-9 rounded-lg bg-indigo-100 dark:bg-indigo-500/10 flex items-center justify-center">
-          <Database className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+        <div className="h-9 w-9 rounded-lg bg-indigo-100 dark:bg-blue-600/10 flex items-center justify-center">
+          <Database className="h-5 w-5 text-blue-700 dark:text-blue-400" />
         </div>
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-zinc-200">{store.entity.name}</h1>

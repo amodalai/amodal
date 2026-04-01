@@ -62,7 +62,7 @@ function ConfigNavItem({ to, children, end }: { to: string; children: React.Reac
         cn(
           'flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
           isActive
-            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium'
+            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400 font-medium'
             : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
         )
       }
@@ -99,7 +99,7 @@ export function ConfigLayout() {
             <span className="font-semibold tracking-tight text-[15px] text-gray-900 dark:text-white/90">amodal</span>
             {name && (
               <>
-                <span className="text-gray-300 dark:text-white/20">/</span>
+                <span className="text-gray-300 dark:text-white/60">/</span>
                 <span className="text-[13px] text-gray-500 dark:text-white/50 font-medium">{name}</span>
               </>
             )}
@@ -108,20 +108,20 @@ export function ConfigLayout() {
         <div className="flex items-center gap-3">
           <NavLink
             to="/config"
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 transition-colors"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-600/10 transition-colors"
             title="Configuration"
           >
             <Settings className="h-4 w-4" />
           </NavLink>
           <button
             onClick={toggle}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           {model && (
-            <span className="text-[11px] text-gray-400 dark:text-white/25 font-mono">{model.replace(/-\d{8}$/, '')}</span>
+            <span className="text-[11px] text-gray-400 dark:text-white/45 font-mono">{model.replace(/-\d{8}$/, '')}</span>
           )}
           <div className="flex items-center gap-2">
             <div className={`h-2 w-2 rounded-full ${
@@ -129,7 +129,7 @@ export function ConfigLayout() {
               connectionStatus === 'checking' ? 'bg-amber-400 animate-pulse' :
               'bg-red-400'
             }`} />
-            <span className="text-[11px] text-gray-400 dark:text-white/40 font-medium tracking-wide uppercase">
+            <span className="text-[11px] text-gray-400 dark:text-white/60 font-medium tracking-wide uppercase">
               {connectionStatus === 'connected' ? 'Connected' :
                connectionStatus === 'checking' ? 'Connecting' :
                'Disconnected'}
@@ -150,7 +150,7 @@ export function ConfigLayout() {
             </NavLink>
 
             <div className="px-3 pt-5 pb-1.5">
-              <span className="text-[10px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">Configuration</span>
+              <span className="text-[10px] font-semibold text-gray-400 dark:text-white/45 uppercase tracking-widest">Configuration</span>
             </div>
 
             <div className="space-y-0.5">
@@ -192,7 +192,7 @@ export function ConfigLayout() {
               </ConfigNavItem>
 
               <div className="mt-3 mb-1 px-3 pt-3 border-t border-gray-200 dark:border-white/[0.06]">
-                <span className="text-[10px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">Tools</span>
+                <span className="text-[10px] font-semibold text-gray-400 dark:text-white/45 uppercase tracking-widest">Tools</span>
               </div>
 
               <button
@@ -200,7 +200,7 @@ export function ConfigLayout() {
                 className={cn(
                   'flex items-center gap-2.5 w-full px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
                   chatOpen
-                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium'
+                    ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400 font-medium'
                     : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
                 )}
               >
@@ -222,10 +222,10 @@ export function ConfigLayout() {
         {chatOpen && (
           <div className="w-[40%] border-l border-gray-200 dark:border-white/[0.06] flex flex-col">
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17]">
-              <span className="text-[11px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">Admin Agent</span>
+              <span className="text-[11px] font-semibold text-gray-400 dark:text-white/45 uppercase tracking-widest">Admin Agent</span>
               <button
                 onClick={() => setChatOpen(false)}
-                className="text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60"
+                className="text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80"
               >
                 <PanelRightClose className="h-3.5 w-3.5" />
               </button>
