@@ -497,12 +497,12 @@ export function EvalCard({
   const [results, setResults] = useState<CompareResult[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  // Pre-select first model on initial open
+  // Pre-select first model: immediately when hideModelSelector, otherwise on first expand
   useEffect(() => {
-    if (expanded && selectedModels.size === 0 && models.length > 0) {
+    if (selectedModels.size === 0 && models.length > 0 && (hideModelSelector || expanded)) {
       setSelectedModels(new Set([`${models[0].provider}/${models[0].model}`]));
     }
-  }, [expanded, models, selectedModels.size]);
+  }, [expanded, models, selectedModels.size, hideModelSelector]);
 
   const toggleModel = (key: string) => {
     setSelectedModels((prev) => {
