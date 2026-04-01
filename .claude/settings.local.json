@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(curl -s \"https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching\")",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

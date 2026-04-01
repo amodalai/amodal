@@ -35,6 +35,10 @@ See README "Developing from Source" section for linking the CLI to a local build
 
 ## Key architecture notes
 
-- `packages/runtime/src/agent/agent-runner.ts` has its own `buildTools()` and `executeTool()` — does NOT use the upstream gemini-cli-core tool registry for execution
-- The upstream `@google/gemini-cli-core` has built-in file tools (write_file, edit, etc.) but they are not wired in — we use our own scoped file tools instead
-- Admin sessions swap in admin skills/knowledge while keeping the user's connections (`sessionManager.createAdminSession()`)
+- All LLM calls go through the upstream `@google/gemini-cli-core` GeminiClient, even for non-Google providers (Anthropic, OpenAI, etc.) — our `MultiProviderContentGenerator` adapts them
+- Tools are registered on the upstream `ToolRegistry` — amodal tools (`request`, `load_knowledge`, `present`, stores), custom tools (from `tools/`), and MCP tools are all registered there
+- Admin file tools (`read_repo_file`, `write_repo_file`, `delete_repo_file`) are in `packages/runtime/src/session/admin-file-tools.ts` with path validation
+- Admin sessions swap repo skills/knowledge with admin content while keeping user connections (`sessionManager.createAdminSession()`)
+- The system prompt is built by `buildDefaultPrompt()` in `packages/core/src/runtime/default-prompt.ts` — includes skills, knowledge bodies, connection API surface docs, field guidance, scope labels
+- MCP connections are shared across sessions via `sharedMcpManager` on the SessionManager — not reconnected per session
+- Eval judge uses direct LLM calls (`createRuntimeProvider`) instead of the full session/agent loop
