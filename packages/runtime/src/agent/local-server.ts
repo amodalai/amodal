@@ -21,12 +21,14 @@ import {createAutomationRouter} from './routes/automations.js';
 import {createWebhookRouter} from './routes/webhooks.js';
 import {createStoresRouter} from './routes/stores.js';
 import {createFilesRouter} from './routes/files.js';
+import {createEvalRouter} from './routes/evals.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {LocalServerConfig} from './agent-types.js';
 import type {ServerInstance} from '../server.js';
 import {createPGLiteStoreBackend} from '../stores/pglite-store-backend.js';
 import type {StoreBackend, LLMMessage} from '@amodalai/core';
 import {SessionStore} from './session-store.js';
+import {EvalStore} from './eval-store.js';
 import {buildPages} from './page-builder.js';
 
 /**
@@ -236,6 +238,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // File browser/editor
   app.use(createFilesRouter({repoPath: config.repoPath}));
+
+  // Evals
+  const evalStore = new EvalStore(config.repoPath);
+  app.use(createEvalRouter({sessionManager, evalStore, repoPath: config.repoPath, getPort: () => config.port}));
 
   // Routes
   app.use(createChatRouter({
