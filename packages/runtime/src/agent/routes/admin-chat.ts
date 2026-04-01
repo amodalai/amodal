@@ -14,6 +14,7 @@ import type {SSEEvent} from '../../types.js';
 
 export interface AdminChatRouterOptions {
   sessionManager: SessionManager;
+  getPort?: () => number | null;
 }
 
 function writeSSE(res: Response, event: SSEEvent): void {
@@ -51,7 +52,7 @@ export function createAdminChatRouter(options: AdminChatRouterOptions): Router {
       let session = sessionId ? options.sessionManager.get(sessionId) : undefined;
       if (!session) {
         try {
-          session = await options.sessionManager.createAdminSession();
+          session = await options.sessionManager.createAdminSession(options.getPort);
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           writeSSE(res, {type: SSEEventType.Error, message: `Admin agent unavailable: ${errMsg}`, timestamp: ts()});

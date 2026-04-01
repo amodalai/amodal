@@ -216,3 +216,41 @@ export function createDeleteRepoFileTool(repoRoot: string) {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Internal API tool — lets admin query the local runtime's own endpoints
+// ---------------------------------------------------------------------------
+
+export function createInternalApiTool(getPort: () => number | null) {
+  return createToolAdapter({
+    name: 'internal_api',
+    description: `Query the amodal runtime's internal API. Use this to check eval results, connection health, agent context, store data, and automation status. The endpoint is relative to the local server (e.g. "/api/evals/runs" or "/inspect/health"). Only GET requests are supported.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        endpoint: {type: 'string', description: 'API path (e.g. "/api/evals/runs", "/inspect/health", "/api/stores")'},
+      },
+      required: ['endpoint'],
+    },
+    async execute(params) {
+      const endpoint = String(params['endpoint'] ?? '');
+      const port = getPort();
+      if (!port) {
+        return {llmContent: 'Error: Server not ready', error: {message: 'Server not ready', type: 'EXECUTION_FAILED'}};
+      }
+      try {
+        const resp = await fetch(`http://127.0.0.1:${port}${endpoint}`);
+        const text = await resp.text();
+        try {
+          const json = JSON.parse(text);
+          return {llmContent: JSON.stringify(json, null, 2), returnDisplay: `GET ${endpoint} → ${resp.status}`};
+        } catch {
+          return {llmContent: text, returnDisplay: `GET ${endpoint} → ${resp.status}`};
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return {llmContent: `Error: ${msg}`, error: {message: msg, type: 'EXECUTION_FAILED'}};
+      }
+    },
+  });
+}

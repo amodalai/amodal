@@ -845,7 +845,7 @@ export class SessionManager {
    * content, then restores the original repo. This mirrors the old approach
    * of building an adminRepo overlay.
    */
-  async createAdminSession(): Promise<ManagedSession> {
+  async createAdminSession(getPort?: () => number | null): Promise<ManagedSession> {
     if (!this.repo) {
       throw new Error('Admin sessions require a repo');
     }
@@ -896,8 +896,14 @@ export class SessionManager {
       toolRegistry.registerTool(createWriteRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
       toolRegistry.registerTool(createDeleteRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
 
+      // Internal API tool — lets admin query eval results, health, context, etc.
+      if (getPort) {
+        const { createInternalApiTool } = await import('./admin-file-tools.js');
+        toolRegistry.registerTool(createInternalApiTool(getPort) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+      }
+
       await session.geminiClient.setTools();
-      process.stderr.write('[ADMIN] Registered file tools (read_repo_file, write_repo_file, delete_repo_file)\n');
+      process.stderr.write('[ADMIN] Registered admin tools (file tools + internal_api)\n');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[ADMIN] Failed to register file tools: ${msg}\n`);
