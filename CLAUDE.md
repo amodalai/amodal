@@ -3,8 +3,8 @@
 ## Working in this repo
 
 - Always work in a **git worktree** — never commit directly to main. Create with: `git worktree add ../amodal-<name> -b <branch-name>`
-- The main repo at `~/code/amodal` may have other agents working in it. Use worktrees to avoid conflicts.
-- Related repo: `~/code/packages` (marketplace packages, including `agent-admin`)
+- The main repo may have other agents working in it. Use worktrees to avoid conflicts.
+- Related repo: [amodalai/packages](https://github.com/amodalai/packages) (marketplace packages, including `agent-admin`)
 
 ## Building
 
@@ -27,10 +27,10 @@ See README "Developing from Source" section for linking the CLI to a local build
 
 ## Admin agent
 
-- Package source: `~/code/packages/agent-admin`
+- Package source: `agent-admin` directory in the [amodalai/packages](https://github.com/amodalai/packages) repo
 - Global cache: `~/.amodal/admin-agent/`
-- Local override: set `"adminAgent": "/path/to/agent-admin"` in your agent's `amodal.json`
-- After editing the package, sync to cache: `rm -rf ~/.amodal/admin-agent && cp -R ~/code/packages/agent-admin ~/.amodal/admin-agent`
+- Local override: set `"adminAgent": "/path/to/local/agent-admin"` in your agent's `amodal.json`
+- After editing the package locally, sync to cache: `rm -rf ~/.amodal/admin-agent && cp -R /path/to/agent-admin ~/.amodal/admin-agent`
 - Has `read_repo_file`, `write_repo_file`, `delete_repo_file` tools scoped to agent config directories
 
 ## Key architecture notes
