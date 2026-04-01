@@ -78,13 +78,20 @@ async function streamQuery(
       } else if (eventType === 'done' && event['usage']) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
         const u = event['usage'] as {input_tokens: number; output_tokens: number; cached_tokens?: number; cache_creation_tokens?: number};
+        // Accumulate tokens across multiple done events (multi-turn agent loops
+        // emit one done per turn in the refactored session runner)
         if (u.input_tokens > 0 || u.output_tokens > 0 || (u.cached_tokens ?? 0) > 0) {
-          usage = {
-            inputTokens: u.input_tokens,
-            outputTokens: u.output_tokens,
-            ...(u.cached_tokens ? {cacheReadInputTokens: u.cached_tokens} : {}),
-            ...(u.cache_creation_tokens ? {cacheCreationInputTokens: u.cache_creation_tokens} : {}),
-          };
+          if (!usage) {
+            usage = {inputTokens: 0, outputTokens: 0};
+          }
+          usage.inputTokens += u.input_tokens;
+          usage.outputTokens += u.output_tokens;
+          if (u.cached_tokens) {
+            usage.cacheReadInputTokens = (usage.cacheReadInputTokens ?? 0) + u.cached_tokens;
+          }
+          if (u.cache_creation_tokens) {
+            usage.cacheCreationInputTokens = (usage.cacheCreationInputTokens ?? 0) + u.cache_creation_tokens;
+          }
         }
       }
     } catch {
