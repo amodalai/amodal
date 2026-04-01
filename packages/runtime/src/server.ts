@@ -9,18 +9,17 @@ import type { Express } from 'express';
 import type http from 'node:http';
 import type { ConfigParameters } from '@amodalai/core';
 import { errorHandler } from './middleware/error-handler.js';
-import { createAuthMiddleware } from './middleware/auth.js';
 import { createHealthRouter } from './routes/health.js';
 import { createChatStreamRouter } from './routes/chat-stream.js';
 import { createWebhookRouter } from './routes/webhooks.js';
 import { createWidgetActionsRouter } from './routes/widget-actions.js';
 import { createAskUserResponseRouter } from './routes/ask-user-response.js';
-import { createSessionsRouter } from './routes/sessions.js';
 import { createAIStreamRouter } from './routes/ai-stream.js';
 import { SessionManager } from './session/session-manager.js';
 import { createAutomationRunner } from './cron/heartbeat-runner.js';
 import { AutomationScheduler } from './cron/heartbeat-scheduler.js';
-import { AuditClient } from './audit/audit-client.js';
+import type { StreamHooks } from './session/session-runner.js';
+import type { SessionStore } from './session/session-manager.js';
 import type { ServerConfig } from './types.js';
 
 export interface ServerInstance {
@@ -36,12 +35,22 @@ export interface CreateServerOptions {
   config: ServerConfig;
   /** Version string for /version endpoint */
   version?: string;
-  /** Platform API URL for API key validation (if set, enables auth middleware) */
+  /** Platform API URL (used by SessionManager for AgentSDK config loading) */
   platformApiUrl?: string;
-  /** JWKS URL for JWT verification (defaults to platformApiUrl/.well-known/jwks.json) */
-  jwksUrl?: string;
+  /** Middleware to mount before all routes (e.g., request enrichment) */
+  preMiddleware?: express.RequestHandler;
   /** Middleware to mount before the error handler (e.g., static file serving) */
   fallbackMiddleware?: express.RequestHandler;
+  /** Auth middleware for protected routes (injected by hosting layer) */
+  authMiddleware?: express.RequestHandler;
+  /** Additional routers to mount (e.g., session history proxy) */
+  additionalRouters?: express.Router[];
+  /** Lifecycle hooks for session streaming (audit, usage, persistence) */
+  streamHooks?: StreamHooks;
+  /** Pluggable session store for hydrating sessions (e.g., platform API, local DB) */
+  sessionStore?: SessionStore;
+  /** Shutdown callback for hosting layer cleanup (e.g., drain audit batches) */
+  onShutdown?: () => Promise<void>;
 }
 
 /**
@@ -57,15 +66,14 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     baseParams,
     ttlMs: config.sessionTtlMs,
     platformApiUrl: options.platformApiUrl,
+    sessionStore: options.sessionStore,
   });
 
-  // --- Audit client (batching HTTP poster to platform API) ---
-  const auditClient = options.platformApiUrl
-    ? new AuditClient({ platformApiUrl: options.platformApiUrl })
-    : undefined;
-
   // --- Automation runner ---
-  const runAutomation = createAutomationRunner({ sessionManager, auditClient });
+  const runAutomation = createAutomationRunner({
+    sessionManager,
+    streamHooks: options.streamHooks,
+  });
 
   // --- Automation scheduler (cron) ---
   const automationScheduler = new AutomationScheduler();
@@ -98,6 +106,11 @@ export function createServer(options: CreateServerOptions): ServerInstance {
 
   app.use(express.json());
 
+  // Pre-route middleware (e.g., request enrichment in hosted mode)
+  if (options.preMiddleware) {
+    app.use(options.preMiddleware);
+  }
+
   // Routes
   app.use(
     createHealthRouter({
@@ -107,24 +120,23 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     }),
   );
 
-  // Auth middleware for chat routes (if platform API URL is configured)
-  if (options.platformApiUrl) {
-    const authMiddleware = createAuthMiddleware({
-      platformApiUrl: options.platformApiUrl,
-      jwksUrl: options.jwksUrl,
-    });
-    app.use('/chat', authMiddleware);
-    app.use('/chat/stream', authMiddleware);
-    app.use('/sessions', authMiddleware);
+  // Auth middleware for protected routes (injected by hosting layer)
+  if (options.authMiddleware) {
+    app.use('/chat', options.authMiddleware);
+    app.use('/chat/stream', options.authMiddleware);
+    app.use('/sessions', options.authMiddleware);
   }
 
-  app.use(createChatStreamRouter({ sessionManager, auditClient, platformApiUrl: options.platformApiUrl }));
-  app.use(createAIStreamRouter({ sessionManager, auditClient, platformApiUrl: options.platformApiUrl }));
+  app.use(createChatStreamRouter({ sessionManager, streamHooks: options.streamHooks }));
+  app.use(createAIStreamRouter({ sessionManager, streamHooks: options.streamHooks }));
   app.use(createWidgetActionsRouter({ sessionManager }));
   app.use(createAskUserResponseRouter({ sessionManager }));
-  // Session history proxy routes (requires platform API URL)
-  if (options.platformApiUrl) {
-    app.use(createSessionsRouter({ platformApiUrl: options.platformApiUrl }));
+
+  // Additional routers (e.g., session history proxy from hosting layer)
+  if (options.additionalRouters) {
+    for (const router of options.additionalRouters) {
+      app.use(router);
+    }
   }
 
   app.use(
@@ -178,9 +190,9 @@ export function createServer(options: CreateServerOptions): ServerInstance {
         server = null;
       }
 
-      // Drain audit entries
-      if (auditClient) {
-        await auditClient.shutdown();
+      // Hosting layer cleanup (e.g., drain audit batches)
+      if (options.onShutdown) {
+        await options.onShutdown();
       }
 
       // Drain sessions

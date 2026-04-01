@@ -36,13 +36,20 @@ export class AgentSDK {
    * @param configOverrides Additional ConfigParameters fields for the underlying
    *   Config class (model, sessionId, cwd, etc.). Bundle-derived fields from
    *   the version config will override matching fields in configOverrides.
+   * @param platformClient Optional pre-built PlatformClient instance. If provided,
+   *   used instead of constructing one from sdkConfig.platform. Allows the hosting
+   *   layer to inject its own implementation.
    */
   constructor(
     sdkConfig: AgentSDKConfig,
     configOverrides: Record<string, unknown> = {},
+    platformClient?: PlatformClient,
   ) {
     this.sdkConfig = sdkConfig;
     this.configOverrides = configOverrides;
+    if (platformClient) {
+      this.platformClientInstance = platformClient;
+    }
   }
 
   /**
@@ -64,8 +71,10 @@ export class AgentSDK {
     let versionConfig: ReturnType<VersionManager['getVersionConfig']> = null;
 
     if (this.sdkConfig.platform) {
-      // Create PlatformClient for KB/org/secrets fetching
-      this.platformClientInstance = new PlatformClient(this.sdkConfig.platform);
+      // Use injected PlatformClient or create one from config
+      if (!this.platformClientInstance) {
+        this.platformClientInstance = new PlatformClient(this.sdkConfig.platform);
+      }
 
       // Only fetch bundle when a deployment is configured
       if (this.sdkConfig.platform.deployment) {

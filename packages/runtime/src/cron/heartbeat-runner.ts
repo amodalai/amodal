@@ -7,9 +7,8 @@
 import type { AutomationDefinition } from '@amodalai/core';
 import type { AutomationResult } from '../types.js';
 import type { SessionManager } from '../session/session-manager.js';
-import { runMessage, type StreamAuditContext } from '../session/session-runner.js';
+import { runMessage, type StreamHooks } from '../session/session-runner.js';
 import { routeOutput } from '../output/output-router.js';
-import type { AuditClient } from '../audit/audit-client.js';
 
 export type AutomationRunnerFn = (
   automation: AutomationDefinition,
@@ -18,11 +17,8 @@ export type AutomationRunnerFn = (
 
 export interface AutomationRunnerOptions {
   sessionManager: SessionManager;
-  auditClient?: AuditClient;
-  /** App ID for audit logging (e.g. from platform config) */
-  auditAppId?: string;
-  /** Auth token for audit logging */
-  auditToken?: string;
+  /** Lifecycle hooks for audit, usage reporting, and session persistence */
+  streamHooks?: StreamHooks;
 }
 
 /**
@@ -56,16 +52,6 @@ export function createAutomationRunner(
       };
     }
 
-    // Build audit context if audit client is available
-    let audit: StreamAuditContext | undefined;
-    if (options.auditClient && options.auditAppId && options.auditToken) {
-      audit = {
-        auditClient: options.auditClient,
-        appId: options.auditAppId,
-        token: options.auditToken,
-      };
-    }
-
     try {
       // Build prompt — optionally include payload data
       let prompt = automation.prompt;
@@ -84,7 +70,7 @@ export function createAutomationRunner(
       }
 
       try {
-        const result = await runMessage(session, prompt, controller.signal, audit);
+        const result = await runMessage(session, prompt, controller.signal, options.streamHooks);
 
         const automationResult: AutomationResult = {
           automation: automation.name,

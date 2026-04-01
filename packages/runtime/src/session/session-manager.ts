@@ -75,6 +75,25 @@ export interface ManagedSession {
   appId?: string;
 }
 
+/** Shape of a stored session record (from platform API or session store). */
+export interface StoredSessionRecord {
+  id: string;
+  app_id: string;
+  messages: SessionMessage[];
+  status: string;
+  model?: string;
+  provider?: string;
+}
+
+/**
+ * Pluggable session store for loading stored session history.
+ * Implementations are provided by the hosting layer.
+ */
+export interface SessionStore {
+  /** Fetch a stored session record by ID. Returns null if not found. */
+  getSession(appId: string, sessionId: string, token: string): Promise<StoredSessionRecord | null>;
+}
+
 export interface SessionManagerOptions {
   /** Base config parameters to clone for each session */
   baseParams: AmodalConfigParameters;
@@ -92,6 +111,8 @@ export interface SessionManagerOptions {
   shellExecutor?: CustomShellExecutor;
   /** Shared store backend (local dev) */
   storeBackend?: StoreBackend;
+  /** Pluggable session store for hydration (if not provided, falls back to platform API) */
+  sessionStore?: SessionStore;
 }
 
 /**
@@ -119,16 +140,6 @@ const ASK_USER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
  * Manages per-request sessions: creates Config + GeminiClient + Scheduler
  * instances, tracks them by ID, and cleans up expired sessions.
  */
-/** Shape returned by GET /api/applications/:appId/sessions/:sessionId */
-interface StoredSessionRecord {
-  id: string;
-  app_id: string;
-  messages: SessionMessage[];
-  status: string;
-  model?: string;
-  provider?: string;
-}
-
 export class SessionManager {
   private readonly sessions = new Map<string, ManagedSession>();
   private baseParams: AmodalConfigParameters;
@@ -138,6 +149,7 @@ export class SessionManager {
   private readonly toolExecutor?: CustomToolExecutor;
   private readonly shellExecutor?: CustomShellExecutor;
   private readonly sharedStoreBackend?: StoreBackend;
+  private readonly sessionStore?: SessionStore;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   /** Deduplicates concurrent hydration requests for the same conversation */
   private readonly pendingHydrations = new Map<string, Promise<ManagedSession | null>>();
@@ -153,6 +165,7 @@ export class SessionManager {
     this.toolExecutor = options.toolExecutor;
     this.shellExecutor = options.shellExecutor;
     this.sharedStoreBackend = options.storeBackend;
+    this.sessionStore = options.sessionStore;
 
     const cleanupIntervalMs =
       options.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS;
@@ -365,13 +378,6 @@ export class SessionManager {
     const connections = config.getConnections();
     const connKeys = Object.keys(connections).filter((k) => k !== '_secrets');
     process.stderr.write(`[SESSION] connections: ${connKeys.join(', ') || '(none)'}\n`);
-    if (sessionType === 'onboarding' && !connections['platform-api']) {
-      process.stderr.write(
-        `[SESSION] WARNING: onboarding session has no platform-api connection — ` +
-        `the request tool cannot create resources. Check that ADMIN_APP_ID is set ` +
-        `and the seed has run.\n`,
-      );
-    }
     // App secrets are available to tools via session-scoped getSessionEnv()
     // (through ToolContext). They are NOT injected into process.env to prevent
     // cross-app secret leakage in multi-session runtimes.
@@ -638,36 +644,51 @@ export class SessionManager {
     auth?: AuthContext,
     sessionType?: string,
   ): Promise<ManagedSession | null> {
-    // Fetch stored conversation from platform-api
-    const url = `${this.platformApiUrl}/api/applications/${auth!.applicationId}/sessions/${conversationId}`;
-    let record: StoredSessionRecord;
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10_000);
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${auth!.token}`,
-          Accept: 'application/json',
-        },
-      });
-      clearTimeout(timer);
+    // Fetch stored conversation via pluggable session store or platform API
+    let record: StoredSessionRecord | null = null;
 
-      if (!response.ok) {
+    if (this.sessionStore && auth?.applicationId && auth.token) {
+      try {
+        record = await this.sessionStore.getSession(auth.applicationId, conversationId, auth.token);
+      } catch (err: unknown) {
         process.stderr.write(
-          `[HYDRATE] Failed to fetch conversation ${conversationId}: HTTP ${response.status}\n`,
+          `[HYDRATE] Error fetching conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}\n`,
         );
         return null;
       }
+    } else if (this.platformApiUrl && auth?.applicationId && auth.token) {
+      // Fallback: direct platform API fetch (deprecated — use sessionStore instead)
+      const url = `${this.platformApiUrl}/api/applications/${auth.applicationId}/sessions/${conversationId}`;
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10_000);
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${auth.token}`,
+            Accept: 'application/json',
+          },
+        });
+        clearTimeout(timer);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- API response shape
-      record = (await response.json()) as StoredSessionRecord;
-    } catch (err: unknown) {
-      process.stderr.write(
-        `[HYDRATE] Error fetching conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}\n`,
-      );
-      return null;
+        if (!response.ok) {
+          process.stderr.write(
+            `[HYDRATE] Failed to fetch conversation ${conversationId}: HTTP ${response.status}\n`,
+          );
+          return null;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- API response shape
+        record = (await response.json()) as StoredSessionRecord;
+      } catch (err: unknown) {
+        process.stderr.write(
+          `[HYDRATE] Error fetching conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+        return null;
+      }
     }
+
+    if (!record) return null;
 
     // No messages → nothing to hydrate
     if (!record.messages || record.messages.length === 0) return null;

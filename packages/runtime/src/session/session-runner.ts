@@ -41,8 +41,6 @@ import {
   type SSEEvent,
   type SSESubagentEvent,
 } from '../types.js';
-import type { AuditClient } from '../audit/audit-client.js';
-
 const MAX_TURNS = 50;
 const MAX_RESULT_LENGTH = 2000;
 
@@ -122,101 +120,22 @@ function subagentMessageToSSE(
 }
 
 /**
- * Audit context for logging chat events to the platform API.
+ * Lifecycle hooks for session streaming events.
+ * Implementations are provided by the hosting layer (e.g., hosted-runtime).
  */
-export interface StreamAuditContext {
-  auditClient: AuditClient;
-  appId: string;
-  token: string;
-  orgId?: string;
-  actor?: string;
-  /** Platform API URL for session history persistence */
-  platformApiUrl?: string;
+export interface StreamHooks {
+  /** Log an audit event */
+  onAuditLog?: (entry: { event: string; resource_name: string; details?: Record<string, unknown> }) => void;
+  /** Report token usage after each turn (fire-and-forget) */
+  onUsageReport?: (usage: { model: string; taskAgentRuns: number; tokens: TokenCounts }) => void;
+  /** Persist session history after each turn (fire-and-forget) */
+  onSessionPersist?: (sessionId: string, messages: SessionMessage[], status: 'active' | 'completed' | 'error', meta?: { model?: string; provider?: string }) => void;
 }
-
 
 interface TokenCounts {
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
-}
-
-/**
- * Fire-and-forget POST to platform-api to report usage.
- * Never blocks the chat stream — errors are logged to stderr.
- */
-function reportUsage(
-  audit: StreamAuditContext,
-  model: string,
-  taskAgentRuns: number,
-  tokens: TokenCounts,
-): void {
-  if (!audit.platformApiUrl || !audit.orgId) return;
-
-  const url = `${audit.platformApiUrl}/api/orgs/${audit.orgId}/usage`;
-  const body = JSON.stringify({
-    model,
-    api_calls: 1,
-    chat_sessions: 1,
-    task_agent_runs: taskAgentRuns,
-    input_tokens: tokens.inputTokens,
-    output_tokens: tokens.outputTokens,
-    cached_tokens: tokens.cachedTokens,
-  });
-
-  fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(process.env['INTERNAL_API_KEY']
-        ? { 'X-Internal-Key': process.env['INTERNAL_API_KEY'] }
-        : {}),
-    },
-    body,
-  }).catch((err: unknown) => {
-    process.stderr.write(
-      `[USAGE] Failed to report usage for org ${audit.orgId}: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
-  });
-}
-
-/**
- * Fire-and-forget POST to platform-api to persist session history.
- * Never blocks the chat stream — errors are logged to stderr.
- */
-function saveSessionHistory(
-  audit: StreamAuditContext,
-  sessionId: string,
-  messages: SessionMessage[],
-  status: 'active' | 'completed' | 'error',
-  sessionMeta?: { model?: string; provider?: string },
-): void {
-  if (!audit.platformApiUrl || !audit.appId) return;
-
-  const url = `${audit.platformApiUrl}/api/applications/${audit.appId}/sessions`;
-  const body = JSON.stringify({
-    id: sessionId,
-    app_id: audit.appId,
-    actor: audit.actor,
-    messages,
-    status,
-    // Persist model/provider so hydrated sessions use the same model
-    ...(sessionMeta?.model ? { model: sessionMeta.model } : {}),
-    ...(sessionMeta?.provider ? { provider: sessionMeta.provider } : {}),
-  });
-
-  fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${audit.token}`,
-    },
-    body,
-  }).catch((err: unknown) => {
-    process.stderr.write(
-      `[SESSION-HISTORY] Failed to save session ${sessionId}: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
-  });
 }
 
 /**
@@ -227,7 +146,7 @@ export async function runMessage(
   session: ManagedSession,
   message: string,
   signal: AbortSignal,
-  audit?: StreamAuditContext,
+  hooks?: StreamHooks,
 ): Promise<ChatResponse> {
   const { geminiClient, scheduler, config } = session;
   const promptId = `msg-${Date.now()}`;
@@ -362,9 +281,9 @@ export async function runMessage(
     errorMessage = err instanceof Error ? err.message : String(err);
     throw err;
   } finally {
-    if (audit) {
+    if (hooks) {
       const model = geminiClient.getCurrentSequenceModel() ?? config.getModel();
-      logSessionCompleted(audit, session.id, message, responseText, turnCount, toolCalls, skillsActivated, status, errorMessage, sessionStartMs, model, tokens);
+      logSessionCompleted(hooks, session.id, message, responseText, turnCount, toolCalls, skillsActivated, status, errorMessage, sessionStartMs, model, tokens);
     }
   }
 }
@@ -376,7 +295,7 @@ export async function* streamMessage(
   session: ManagedSession,
   message: string,
   signal: AbortSignal,
-  audit?: StreamAuditContext,
+  hooks?: StreamHooks,
   sessionManager?: SessionManager,
 ): AsyncGenerator<SSEEvent> {
   const { geminiClient, scheduler, config } = session;
@@ -497,8 +416,8 @@ export async function* streamMessage(
           message: errMsg,
           timestamp: new Date().toISOString(),
         };
-        logSessionCompleted(audit, session.id, message, responseText, turnCount, auditToolCalls, skillsActivated, auditStatus, auditError, sessionStartMs, geminiClient.getCurrentSequenceModel() ?? config.getModel(), tokens);
-        accumulateAssistantAndSave(session, audit, responseText, auditToolCalls, skillsActivated, widgetEvents, contentBlockOrder, 'error');
+        logSessionCompleted(hooks, session.id, message, responseText, turnCount, auditToolCalls, skillsActivated, auditStatus, auditError, sessionStartMs, geminiClient.getCurrentSequenceModel() ?? config.getModel(), tokens);
+        accumulateAssistantAndSave(session, hooks, responseText, auditToolCalls, skillsActivated, widgetEvents, contentBlockOrder, 'error');
         yield {
           type: SSEEventType.Done,
           timestamp: new Date().toISOString(),
@@ -511,8 +430,8 @@ export async function* streamMessage(
         };
         return;
       } else if (event.type === GeminiEventType.AgentExecutionStopped) {
-        logSessionCompleted(audit, session.id, message, responseText, turnCount, auditToolCalls, skillsActivated, auditStatus, auditError, sessionStartMs, geminiClient.getCurrentSequenceModel() ?? config.getModel(), tokens);
-        accumulateAssistantAndSave(session, audit, responseText, auditToolCalls, skillsActivated, widgetEvents, contentBlockOrder, 'completed');
+        logSessionCompleted(hooks, session.id, message, responseText, turnCount, auditToolCalls, skillsActivated, auditStatus, auditError, sessionStartMs, geminiClient.getCurrentSequenceModel() ?? config.getModel(), tokens);
+        accumulateAssistantAndSave(session, hooks, responseText, auditToolCalls, skillsActivated, widgetEvents, contentBlockOrder, 'completed');
         yield {
           type: SSEEventType.Done,
           timestamp: new Date().toISOString(),
@@ -844,8 +763,8 @@ export async function* streamMessage(
           (tc) => tc.response.errorType === ToolErrorType.STOP_EXECUTION,
         );
         if (stopTool) {
-          logSessionCompleted(audit, session.id, message, responseText, turnCount, auditToolCalls, skillsActivated, auditStatus, auditError, sessionStartMs, geminiClient.getCurrentSequenceModel() ?? config.getModel(), tokens);
-          accumulateAssistantAndSave(session, audit, responseText, auditToolCalls, skillsActivated, widgetEvents, contentBlockOrder, 'completed');
+          logSessionCompleted(hooks, session.id, message, responseText, turnCount, auditToolCalls, skillsActivated, auditStatus, auditError, sessionStartMs, geminiClient.getCurrentSequenceModel() ?? config.getModel(), tokens);
+          accumulateAssistantAndSave(session, hooks, responseText, auditToolCalls, skillsActivated, widgetEvents, contentBlockOrder, 'completed');
           yield {
             type: SSEEventType.Done,
             timestamp: new Date().toISOString(),
@@ -866,8 +785,8 @@ export async function* streamMessage(
     }
   }
 
-  logSessionCompleted(audit, session.id, message, responseText, turnCount, auditToolCalls, skillsActivated, auditStatus, auditError, sessionStartMs, geminiClient.getCurrentSequenceModel() ?? config.getModel(), tokens);
-  accumulateAssistantAndSave(session, audit, responseText, auditToolCalls, skillsActivated, widgetEvents, contentBlockOrder, auditStatus === 'completed' ? 'completed' : 'error');
+  logSessionCompleted(hooks, session.id, message, responseText, turnCount, auditToolCalls, skillsActivated, auditStatus, auditError, sessionStartMs, geminiClient.getCurrentSequenceModel() ?? config.getModel(), tokens);
+  accumulateAssistantAndSave(session, hooks, responseText, auditToolCalls, skillsActivated, widgetEvents, contentBlockOrder, auditStatus === 'completed' ? 'completed' : 'error');
 
   yield {
     type: SSEEventType.Done,
@@ -886,7 +805,7 @@ export async function* streamMessage(
  */
 function accumulateAssistantAndSave(
   session: ManagedSession,
-  audit: StreamAuditContext | undefined,
+  hooks: StreamHooks | undefined,
   responseText: string,
   toolCalls: ToolCallSummary[],
   skillsActivated: string[],
@@ -918,16 +837,14 @@ function accumulateAssistantAndSave(
   };
   session.accumulatedMessages.push(assistantMsg);
 
-  if (audit) {
-    saveSessionHistory(audit, session.id, session.accumulatedMessages, status, {
-      model: session.model,
-      provider: session.provider,
-    });
-  }
+  hooks?.onSessionPersist?.(session.id, session.accumulatedMessages, status, {
+    model: session.model,
+    provider: session.provider,
+  });
 }
 
 function logSessionCompleted(
-  audit: StreamAuditContext | undefined,
+  hooks: StreamHooks | undefined,
   sessionId: string,
   message: string,
   response: string,
@@ -940,12 +857,11 @@ function logSessionCompleted(
   model?: string,
   tokens?: TokenCounts,
 ): void {
-  if (!audit) return;
+  if (!hooks) return;
+
   const details: Record<string, unknown> = {
     message,
     response,
-    app_id: audit.appId,
-    org_id: audit.orgId,
     turns,
     duration_ms: Date.now() - startMs,
     status,
@@ -955,13 +871,16 @@ function logSessionCompleted(
   if (error) {
     details['error'] = error;
   }
-  audit.auditClient.log(audit.appId, audit.token, {
+  hooks.onAuditLog?.({
     event: 'session_completed',
     resource_name: sessionId,
     details,
   });
 
-  // Report usage to platform API
   const taskAgentRuns = toolCalls.filter((tc) => tc.tool_name === 'dispatch').length;
-  reportUsage(audit, model ?? 'unknown', taskAgentRuns, tokens ?? { inputTokens: 0, outputTokens: 0, cachedTokens: 0 });
+  hooks.onUsageReport?.({
+    model: model ?? 'unknown',
+    taskAgentRuns,
+    tokens: tokens ?? { inputTokens: 0, outputTokens: 0, cachedTokens: 0 },
+  });
 }

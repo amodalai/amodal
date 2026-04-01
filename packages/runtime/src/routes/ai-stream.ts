@@ -22,8 +22,7 @@ import { z } from 'zod';
 import { validate } from '../middleware/request-validation.js';
 import { getAuthContext } from '../middleware/auth.js';
 import type { SessionManager } from '../session/session-manager.js';
-import { streamMessage, type StreamAuditContext } from '../session/session-runner.js';
-import type { AuditClient } from '../audit/audit-client.js';
+import { streamMessage, type StreamHooks } from '../session/session-runner.js';
 import { SSEEventType, type SSEEvent } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -354,8 +353,8 @@ export function extractUserMessage(messages: AIStreamRequest['messages']): strin
 
 export interface AIStreamRouterOptions {
   sessionManager: SessionManager;
-  auditClient?: AuditClient;
-  platformApiUrl?: string;
+  /** Lifecycle hooks for audit, usage reporting, and session persistence */
+  streamHooks?: StreamHooks;
 }
 
 export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
@@ -408,27 +407,11 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
         const controller = new AbortController();
         res.on('close', () => controller.abort());
 
-        // Build audit context
-        let audit: StreamAuditContext | undefined;
-        if (options.auditClient) {
-          const auth = getAuthContext(res);
-          if (auth?.token && auth.applicationId) {
-            audit = {
-              auditClient: options.auditClient,
-              appId: auth.applicationId,
-              token: auth.token,
-              orgId: auth.orgId,
-              actor: auth.actor,
-              platformApiUrl: options.platformApiUrl,
-            };
-          }
-        }
-
         const stream = streamMessage(
           session,
           message,
           controller.signal,
-          audit,
+          options.streamHooks,
           options.sessionManager,
         );
 

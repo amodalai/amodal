@@ -10,12 +10,12 @@ import { validate } from '../middleware/request-validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { getAuthContext } from '../middleware/auth.js';
 import type { SessionManager } from '../session/session-manager.js';
-import { runMessage, type StreamAuditContext } from '../session/session-runner.js';
-import type { AuditClient } from '../audit/audit-client.js';
+import { runMessage, type StreamHooks } from '../session/session-runner.js';
 
 export interface ChatRouterOptions {
   sessionManager: SessionManager;
-  auditClient?: AuditClient;
+  /** Lifecycle hooks for audit, usage reporting, and session persistence */
+  streamHooks?: StreamHooks;
 }
 
 export function createChatRouter(options: ChatRouterOptions): Router {
@@ -42,21 +42,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       // Abort on client disconnect
       res.on('close', () => controller.abort());
 
-      // Build audit context if audit client is available
-      let audit: StreamAuditContext | undefined;
-      if (options.auditClient) {
-        const auth = getAuthContext(res);
-        if (auth?.token && auth.applicationId) {
-          audit = {
-            auditClient: options.auditClient,
-            appId: auth.applicationId,
-            token: auth.token,
-            orgId: auth.orgId,
-          };
-        }
-      }
-
-      const result = await runMessage(session, message, controller.signal, audit);
+      const result = await runMessage(session, message, controller.signal, options.streamHooks);
       res.json(result);
     } catch (err) {
       next(err);
