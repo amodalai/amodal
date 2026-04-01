@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { CheckCircle2, XCircle, FlaskConical, Loader2, ChevronDown, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -100,10 +100,15 @@ function CollapsibleText({ text, lines = 2 }: { text: string; lines?: number }) 
 /*  EvalCard                                                            */
 /* ------------------------------------------------------------------ */
 
-function EvalCard({ suite }: { suite: EvalSuite }) {
-  const [expanded, setExpanded] = useState(false);
+function EvalCard({ suite, expanded: expandedProp, onToggle, runTrigger }: {
+  suite: EvalSuite;
+  expanded: boolean;
+  onToggle: () => void;
+  runTrigger: number;
+}) {
   const [isRunning, setIsRunning] = useState(false);
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
+  const lastRunTrigger = useRef(0);
 
   const handleRun = useCallback(async () => {
     setIsRunning(true);
@@ -161,6 +166,14 @@ function EvalCard({ suite }: { suite: EvalSuite }) {
     }
   }, [suite.name]);
 
+  // Run when parent triggers run-all
+  useEffect(() => {
+    if (runTrigger > 0 && runTrigger !== lastRunTrigger.current && !isRunning) {
+      lastRunTrigger.current = runTrigger;
+      void handleRun();
+    }
+  }, [runTrigger, isRunning, handleRun]);
+
   const isDone = cardResult?.phase === 'done';
   const borderColor = !cardResult ? 'border-gray-200 dark:border-zinc-800'
     : isDone && cardResult.passed ? 'border-emerald-500/40'
@@ -180,7 +193,7 @@ function EvalCard({ suite }: { suite: EvalSuite }) {
 
         {/* Title + description */}
         <button
-          onClick={() => setExpanded(!expanded)}
+          onClick={onToggle}
           className="flex-1 min-w-0 text-left"
         >
           <div className="text-sm font-medium text-gray-900 dark:text-zinc-200">{suite.title || suite.name}</div>
@@ -229,12 +242,12 @@ function EvalCard({ suite }: { suite: EvalSuite }) {
         )}
 
         <ChevronDown
-          onClick={() => setExpanded(!expanded)}
-          className={cn('h-4 w-4 text-gray-400 dark:text-zinc-500 transition-transform cursor-pointer shrink-0', expanded && 'rotate-180')}
+          onClick={onToggle}
+          className={cn('h-4 w-4 text-gray-400 dark:text-zinc-500 transition-transform cursor-pointer shrink-0', expandedProp && 'rotate-180')}
         />
       </div>
 
-      {expanded && (
+      {expandedProp && (
         <div className="border-t border-gray-100 dark:border-zinc-800/50 px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/30 space-y-3">
           {/* Query */}
           <div>
@@ -284,9 +297,9 @@ function EvalCard({ suite }: { suite: EvalSuite }) {
                     {cardResult.result.toolCalls.map((tc, ti) => (
                       <div key={ti} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono break-words">
                         <span className="text-indigo-500 font-semibold">{tc.name}</span>
-                        {cardResult.result!.toolResults?.[ti] && (
+                        {cardResult.result?.toolResults?.[ti] && (
                           <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px]">
-                            <CollapsibleText text={cardResult.result!.toolResults![ti]} />
+                            <CollapsibleText text={cardResult.result.toolResults[ti]} />
                           </div>
                         )}
                       </div>
@@ -344,7 +357,8 @@ function EvalCard({ suite }: { suite: EvalSuite }) {
 
 export function EvalSuitePage() {
   const [suites, setSuites] = useState<EvalSuite[]>([]);
-  const [isRunningAll, setIsRunningAll] = useState(false);
+  const [expandedSet, setExpandedSet] = useState<Set<string>>(new Set());
+  const [runTrigger, setRunTrigger] = useState(0);
 
   const loadSuites = useCallback(() => {
     fetch('/api/evals/suites')
@@ -360,6 +374,27 @@ export function EvalSuitePage() {
   useEffect(() => {
     loadSuites();
   }, [loadSuites]);
+
+  const toggleCard = useCallback((name: string) => {
+    setExpandedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const expandAll = useCallback(() => {
+    setExpandedSet(new Set(suites.map((s) => s.name)));
+  }, [suites]);
+
+  const collapseAll = useCallback(() => {
+    setExpandedSet(new Set());
+  }, []);
+
+  const runAll = useCallback(() => {
+    setRunTrigger((prev) => prev + 1);
+  }, []);
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
@@ -386,11 +421,33 @@ export function EvalSuitePage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {suites.map((suite) => (
-                <EvalCard key={suite.name} suite={suite} />
-              ))}
-            </div>
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                <button
+                  onClick={runAll}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 transition-colors flex items-center gap-2"
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  Run All
+                </button>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <button onClick={expandAll} className="text-indigo-400 hover:text-indigo-300 transition-colors">expand all</button>
+                  <span className="text-gray-300 dark:text-zinc-700">/</span>
+                  <button onClick={collapseAll} className="text-indigo-400 hover:text-indigo-300 transition-colors">collapse all</button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {suites.map((suite) => (
+                  <EvalCard
+                    key={suite.name}
+                    suite={suite}
+                    expanded={expandedSet.has(suite.name)}
+                    onToggle={() => toggleCard(suite.name)}
+                    runTrigger={runTrigger}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
