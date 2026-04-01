@@ -756,7 +756,7 @@ function SuitesTab({ suites }: { suites: EvalSuite[] }) {
 /*  Main Page                                                          */
 /* ------------------------------------------------------------------ */
 
-export function EvalsPage() {
+export function ModelArenaPage() {
   const [suites, setSuites] = useState<EvalSuite[]>([]);
 
   const loadSuites = useCallback(() => {
@@ -778,19 +778,13 @@ export function EvalsPage() {
     <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-1">
           <FlaskConical className="h-5 w-5 text-indigo-500" />
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Evals</h1>
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Model Arena</h1>
         </div>
-
-        {/* Single tab header */}
-        <div className="flex gap-1">
-          <button
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
-          >
-            Eval Suites
-          </button>
-        </div>
+        <p className="text-xs text-gray-400 dark:text-zinc-500 max-w-2xl mb-0">
+          Compare how different models perform on your eval suite. Select models, run them side by side, and compare quality, speed, and cost. Use this to find the best model for your use case or to validate a model swap before deploying.
+        </p>
       </div>
 
       {/* Content */}
