@@ -1,5 +1,27 @@
 # @amodalai/runtime
 
+## 0.1.16
+
+### Patch Changes
+
+- [#69](https://github.com/amodalai/amodal/pull/69) [`407b935`](https://github.com/amodalai/amodal/commit/407b93586178fa19d7c6162f03e259039df336c4) Thanks [@gte620v](https://github.com/gte620v)! - Add prompt caching, multi-model eval comparison, and new provider support
+  - Anthropic prompt caching: system prompt and tools sent with cache_control, 90% input cost savings on cache hits
+  - Cache-aware cost tracking throughout eval system with savings display
+  - Multi-model eval comparison: run evals against multiple models side-by-side with color-graded time/cost table
+  - Per-eval history with assertion breakdown, model info, and collapsible UI
+  - DeepSeek and Groq provider support via OpenAI-compatible endpoints
+  - Configurable eval timeout (20s–300s slider)
+  - Tool results now visible in eval output for judge verification
+  - Improved judge prompt for specific, evidence-based failure reasoning
+  - Auth/rate-limit errors surfaced with actionable UI messaging
+  - ConfigWatcher no longer triggers reload spam from eval result writes
+  - Session reuse during eval runs to minimize MCP reconnections
+
+- [#68](https://github.com/amodalai/amodal/pull/68) [`f99b2a1`](https://github.com/amodalai/amodal/commit/f99b2a1d836ee4f57a335182897af696bfce9502) Thanks [@whodatdev](https://github.com/whodatdev)! - Unify local and hosted server onto a single SessionManager, replacing AgentSessionManager + runAgentTurn with SessionManager + streamMessage. Adds minimal Config init for non-Google providers, CustomToolAdapter for repo tools, and configurable coreTools from repo config.
+
+- Updated dependencies [[`407b935`](https://github.com/amodalai/amodal/commit/407b93586178fa19d7c6162f03e259039df336c4), [`f99b2a1`](https://github.com/amodalai/amodal/commit/f99b2a1d836ee4f57a335182897af696bfce9502)]:
+  - @amodalai/core@0.1.16
+
 ## 0.1.15
 
 ### Patch Changes
