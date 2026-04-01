@@ -8,8 +8,8 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import type {SessionManager} from '../../session/session-manager.js';
 import type {EvalStore} from '../eval-store.js';
-import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost} from '@amodalai/core';
-import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo} from '@amodalai/core';
+import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost, createRuntimeProvider} from '@amodalai/core';
+import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo, ModelConfig} from '@amodalai/core';
 
 /**
  * Summarize a JSON tool result for the judge.
@@ -154,43 +154,39 @@ interface TrackedJudgeProvider extends JudgeProvider {
 }
 
 /**
- * Create a JudgeProvider that uses the local /chat endpoint and tracks token usage.
+ * Create a JudgeProvider that calls the LLM directly — no session, no tools,
+ * no system prompt overhead. Just a simple prompt→response for each assertion.
+ * This is ~10x cheaper than routing through /chat with the full agent context.
  */
-function createLocalJudgeProvider(baseUrl: string): TrackedJudgeProvider {
+function createDirectJudgeProvider(modelConfig: ModelConfig): TrackedJudgeProvider {
+  const provider = createRuntimeProvider(modelConfig);
   const tracked: TrackedJudgeProvider = {
     totalInputTokens: 0,
     totalOutputTokens: 0,
     judge: async (prompt: string) => {
-      const response = await fetch(`${baseUrl}/chat`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({message: prompt, app_id: 'eval-judge', session_id: `judge-${Date.now()}`}),
-      });
-      const text = await response.text();
-      let result = '';
-      for (const line of text.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE parsing
-          const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
-          if (event['type'] === 'text_delta') {
-            result += String(event['content'] ?? '');
-          } else if (event['type'] === 'done' && event['usage']) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-            const u = event['usage'] as {input_tokens: number; output_tokens: number};
-            tracked.totalInputTokens += u.input_tokens || 0;
-            tracked.totalOutputTokens += u.output_tokens || 0;
-          }
-        } catch {
-          // skip
+      try {
+        const response = await provider.chat({
+          model: modelConfig.model,
+          systemPrompt: 'You are an eval judge. Be concise.',
+          messages: [{role: 'user', content: prompt}],
+          tools: [],
+          maxTokens: 256,
+        });
+
+        const text = response.content
+          .filter((b): b is {type: 'text'; text: string} => b.type === 'text')
+          .map((b) => b.text)
+          .join('');
+
+        if (response.usage) {
+          tracked.totalInputTokens += response.usage.inputTokens + (response.usage.cacheReadInputTokens ?? 0) + (response.usage.cacheCreationInputTokens ?? 0);
+          tracked.totalOutputTokens += response.usage.outputTokens;
         }
+
+        return text;
+      } catch (err) {
+        return `Judge error: ${err instanceof Error ? err.message : String(err)}`;
       }
-      // Estimate if no usage reported
-      if (tracked.totalInputTokens === 0) {
-        tracked.totalInputTokens += Math.ceil(prompt.length / 4);
-        tracked.totalOutputTokens += Math.ceil(result.length / 4);
-      }
-      return result;
     },
   };
   return tracked;
@@ -291,9 +287,8 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     }
 
     const evalSessionId = `eval-${Date.now()}`;
-    const judgeSessionId = `judge-${Date.now()}`;
 
-    const judgeProvider = createLocalJudgeProvider(baseUrl);
+    const judgeProvider = createDirectJudgeProvider(originalModelConfig);
     const modelInfo = repo.config ? {
       provider: repo.config.models?.['main']?.provider ?? 'unknown',
       model: repo.config.models?.['main']?.model ?? 'unknown',
@@ -445,7 +440,6 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
     // Suppress unused variable warnings
     void evalSessionId;
-    void judgeSessionId;
 
     writeSSE(res, {type: 'run_complete', run});
     writeSSE(res, {type: 'done'});
