@@ -181,32 +181,33 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       res.status(404).json({error: 'Session not found'});
       return;
     }
-    // Convert LLMMessage[] to the format the UI expects
-    const isTextBlock = (b: unknown): b is {type: 'text'; text: string} =>
-      typeof b === 'object' && b !== null && 'type' in b && 'text' in b &&
-      (b as {type: unknown}).type === 'text' && typeof (b as {text: unknown}).text === 'string';
-    const isToolUseBlock = (b: unknown): b is {type: 'tool_use'; id: string; name: string; input: Record<string, unknown>} =>
-      typeof b === 'object' && b !== null && 'type' in b &&
-      (b as {type: unknown}).type === 'tool_use' && 'name' in b;
-
+    // Convert persisted messages to the format the UI expects.
+    // Supports both SessionMessage format ({type, text}) and legacy LLMMessage ({role, content}).
     const messages = persisted.conversationHistory.map((msg: unknown) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted LLMMessage
-      const m = msg as {role: string; content: unknown};
-      if (m.role === 'user') {
-        return {role: 'user', text: typeof m.content === 'string' ? m.content : ''};
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted message
+      const m = msg as Record<string, unknown>;
+
+      // SessionMessage format (new): {type: 'user'|'assistant_text'|'error', text, toolCalls?, ...}
+      if (m['type'] === 'user') {
+        return {role: 'user', text: String(m['text'] ?? '')};
       }
-      if (m.role === 'assistant') {
-        const blocks = Array.isArray(m.content) ? m.content : [];
+      if (m['type'] === 'assistant_text') {
+        return {role: 'assistant', text: String(m['text'] ?? ''), toolCalls: m['toolCalls']};
+      }
+
+      // Legacy LLMMessage format: {role: 'user'|'assistant', content: string|Block[]}
+      if (m['role'] === 'user') {
+        return {role: 'user', text: typeof m['content'] === 'string' ? m['content'] : ''};
+      }
+      if (m['role'] === 'assistant') {
+        const blocks = Array.isArray(m['content']) ? m['content'] : [];
+        const isTextBlock = (b: unknown): b is {text: string} =>
+          typeof b === 'object' && b !== null && 'type' in b && (b as Record<string, unknown>)['type'] === 'text' && 'text' in b;
         const text = blocks.filter(isTextBlock).map((b) => b.text).join('');
-        const toolCalls = blocks.filter(isToolUseBlock).map((b) => ({
-          toolId: b.id,
-          toolName: b.name,
-          parameters: b.input ?? {},
-          status: 'success' as const,
-        }));
-        return {role: 'assistant', text, toolCalls: toolCalls.length > 0 ? toolCalls : undefined};
+        return {role: 'assistant', text};
       }
-      return {role: m.role, text: ''};
+
+      return {role: String(m['role'] ?? m['type'] ?? 'unknown'), text: String(m['text'] ?? '')};
     });
     res.json({session_id: persisted.id, messages});
   });

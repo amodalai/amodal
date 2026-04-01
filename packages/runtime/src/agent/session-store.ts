@@ -102,11 +102,17 @@ export class SessionStore {
         if (data.title) {
           summary = data.title;
         } else {
-          const isUserMsg = (m: unknown): m is {role: 'user'; content: string} =>
-            typeof m === 'object' && m !== null && 'role' in m && 'content' in m &&
-            (m as Record<string, unknown>)['role'] === 'user' && typeof (m as Record<string, unknown>)['content'] === 'string';
+          // SessionMessage format: {type: 'user', text: string}
+          // Legacy LLMMessage format: {role: 'user', content: string}
+          const isUserMsg = (m: unknown): m is {text: string} | {content: string} =>
+            typeof m === 'object' && m !== null && (
+              (('type' in m && (m as Record<string, unknown>)['type'] === 'user' && 'text' in m && typeof (m as Record<string, unknown>)['text'] === 'string')) ||
+              (('role' in m && (m as Record<string, unknown>)['role'] === 'user' && 'content' in m && typeof (m as Record<string, unknown>)['content'] === 'string'))
+            );
           const firstUserMsg = data.conversationHistory.find(isUserMsg);
-          if (firstUserMsg) summary = firstUserMsg.content.slice(0, 80);
+          if (firstUserMsg) {
+            summary = ('text' in firstUserMsg ? firstUserMsg.text : (firstUserMsg as {content: string}).content).slice(0, 80);
+          }
         }
         sessions.push({
           id: data.id,
