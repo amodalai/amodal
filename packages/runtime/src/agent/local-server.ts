@@ -173,7 +173,9 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.get('/sessions', (req, res) => {
     const automationFilter = typeof req.query?.['automation'] === 'string' ? String(req.query['automation']) : undefined;
     const all = sessionStore.list();
-    const filtered = automationFilter ? all.filter((s) => s.automationName === automationFilter) : all;
+    // Filter out eval and admin sessions from chat history
+    const visible = all.filter((s) => s.appId !== 'eval-runner' && s.appId !== 'admin');
+    const filtered = automationFilter ? visible.filter((s) => s.automationName === automationFilter) : visible;
     res.json({sessions: filtered});
   });
 
