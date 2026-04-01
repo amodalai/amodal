@@ -554,13 +554,32 @@ export function EvalCard({
   const selectedCount = selectedModels.size;
   const colCount = Math.min(Math.max(models.length, 3), 5);
 
+  // Determine overall pass/fail from results (for suite mode styling)
+  const allPassed = results.length > 0 && results.every((r) => r.passed && !r.error);
+  const anyFailed = results.length > 0 && results.some((r) => !r.passed || r.error);
+  const hasSuiteResult = hideModelSelector && results.length > 0 && !isRunning;
+
+  const borderColor = hasSuiteResult
+    ? allPassed ? 'border-emerald-500/40' : 'border-red-500/40'
+    : 'border-gray-200 dark:border-zinc-800';
+
+  // Icon: spinner when running, green/red beaker in suite mode with results, default otherwise
+  let headerIcon = <FlaskConical className="h-4 w-4 text-indigo-500/60 shrink-0" />;
+  if (isRunning) {
+    headerIcon = <Loader2 className="h-4 w-4 animate-spin text-indigo-400 shrink-0" />;
+  } else if (hasSuiteResult && allPassed) {
+    headerIcon = <FlaskConical className="h-4 w-4 text-emerald-400 shrink-0" />;
+  } else if (hasSuiteResult && anyFailed) {
+    headerIcon = <FlaskConical className="h-4 w-4 text-red-400 shrink-0" />;
+  }
+
   return (
-    <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+    <div className={cn('border rounded-lg overflow-hidden transition-colors', borderColor)}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors"
       >
-        <FlaskConical className="h-4 w-4 text-indigo-500/60 shrink-0" />
+        {headerIcon}
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-gray-900 dark:text-zinc-200">{suite.title || suite.name}</div>
           {suite.description && (
