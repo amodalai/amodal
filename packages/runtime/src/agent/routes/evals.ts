@@ -70,7 +70,7 @@ async function streamQuery(
       } else if (eventType === 'tool_call_result') {
         // Capture result data so the judge knows tool calls returned real data
         const resultPreview = String(event['result'] ?? event['error'] ?? '');
-        toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${resultPreview.slice(0, 500)}`);
+        toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${resultPreview.slice(0, 4000)}`);
         writeSSE(evalRes, {type: 'agent_tool_result', evalName, toolName: event['tool_name'] ?? 'request', status: event['status'], durationMs: event['duration_ms']});
       } else if (eventType === 'error') {
         queryError = String(event['message'] ?? event['error'] ?? 'Unknown error');
