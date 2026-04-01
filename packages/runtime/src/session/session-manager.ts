@@ -177,9 +177,8 @@ export class SessionManager {
       approvalMode: ApprovalMode.YOLO,
       interactive: false,
       noBrowser: true,
-      // Disable all upstream Gemini CLI tools by default.
-      // Only Amodal platform tools (request, present, etc.) are registered.
-      coreTools: [],
+      // Build coreTools list based on repo config
+      coreTools: this.repo ? this.buildCoreToolsList(this.repo) : [],
       policyEngineConfig: {
         approvalMode: ApprovalMode.YOLO,
         defaultDecision: PolicyDecision.ALLOW,
@@ -193,6 +192,48 @@ export class SessionManager {
 
     if (role) {
       sessionParams.activeRole = role;
+    }
+
+    // Inject repo config into session params when in local mode
+    if (this.repo) {
+      const { buildConnectionsMap } = await import('@amodalai/core');
+      const connectionsMap = buildConnectionsMap(this.repo.connections);
+      sessionParams.connections = connectionsMap;
+      sessionParams.appDocuments = this.repo.knowledge.map((k) => ({
+        id: k.name,
+        scope_type: 'application' as const,
+        scope_id: 'local',
+        title: k.title ?? k.name,
+        category: 'system_docs' as const,
+        body: k.body,
+        tags: [],
+        status: 'active',
+        created_by: 'local',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+      sessionParams.bundleSkills = this.repo.skills.map((s) => ({
+        name: s.name,
+        description: s.description ?? '',
+        body: s.body,
+      }));
+      sessionParams.basePrompt = this.repo.config.basePrompt;
+      sessionParams.agentName = this.repo.config.name;
+      sessionParams.agentContext = this.repo.config.description;
+
+      // Model config from repo
+      const mainModel = this.repo.config.models?.main;
+      if (mainModel) {
+        sessionParams.modelConfig = {
+          provider: mainModel.provider ?? 'anthropic',
+          model: mainModel.model,
+        };
+      }
+
+      // Stores
+      if (this.repo.stores.length > 0) {
+        sessionParams.stores = this.repo.stores;
+      }
     }
 
     let config: AmodalConfig;
@@ -232,7 +273,88 @@ export class SessionManager {
       }
 
       config = new AmodalConfig(sessionParams);
-      await config.initialize();
+
+      // For non-platform sessions, skip the full upstream Config.initialize()
+      // which hangs trying to scan files, discover agents, and authenticate
+      // with Gemini. Instead, do a minimal init:
+      // 1. initializeAuth() — sets up MultiProviderContentGenerator for non-Google
+      // 2. registerTools() — registers amodal tools on the upstream registry
+      //
+      // We need to manually create the tool registry and message bus since
+      // the upstream Config only creates them in _initialize().
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      const upstreamRaw = config.getUpstreamConfig() as unknown as Record<string, unknown>;
+
+      // Initialize storage (required by many upstream components)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      const storage = (upstreamRaw['storage'] ?? upstreamRaw['_storage']) as { initialize?: () => Promise<void> } | undefined;
+      if (storage?.initialize) {
+        await storage.initialize();
+      }
+      // Create agent registry and tool registry if not already created
+      if (!upstreamRaw['toolRegistry'] && !upstreamRaw['_toolRegistry']) {
+        // Agent registry must exist before tool registry (createToolRegistry references it).
+        // Use a minimal stub — we register Amodal subagents separately.
+        if (!upstreamRaw['agentRegistry']) {
+          upstreamRaw['agentRegistry'] = {
+            getAllDefinitions: () => [],
+            agents: new Map(),
+            allDefinitions: new Map(),
+            initialize: async () => {},
+          };
+        }
+        // Prompt registry stub (referenced by some tools)
+        if (!upstreamRaw['promptRegistry']) {
+          upstreamRaw['promptRegistry'] = { getPrompts: () => [] };
+        }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+        const upstreamConfig = config.getUpstreamConfig() as unknown as { createToolRegistry: () => Promise<unknown> };
+        const registry = await upstreamConfig.createToolRegistry();
+        upstreamRaw['_toolRegistry'] = registry;
+      }
+
+      // Initialize auth (replaces content generator for non-Google providers)
+      await config.initializeAuth();
+
+      // Register amodal tools (request, present, knowledge, stores)
+      await config.registerTools();
+
+      // Register custom tools from repo tools/ directory
+      if (this.repo && this.repo.tools.length > 0) {
+        const { CustomToolAdapter } = await import('./custom-tool-adapter.js');
+        const { LocalToolExecutor } = await import('../agent/tool-executor-local.js');
+        const executor = this.toolExecutor ?? new LocalToolExecutor();
+        const registry = config.getUpstreamConfig().getToolRegistry();
+        // Session isn't created yet — we'll set it after session construction
+        // For now store the tools to register after session is built
+        for (const tool of this.repo.tools) {
+          if (tool.confirm === 'never') continue; // hidden from LLM
+          // Create a placeholder session for the adapter — will be updated below
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- partial session for tool context
+          const placeholder = { config, toolExecutor: executor } as unknown as ManagedSession;
+          const adapter = new CustomToolAdapter(tool, placeholder, executor);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- adapter matches upstream tool interface
+          registry.registerTool(adapter as never);
+        }
+        process.stderr.write(`[SESSION] Registered ${String(this.repo.tools.length)} custom tool(s)\n`);
+      }
+
+      // Set model on upstream config so GeminiClient.startChat() can resolve it
+      if (sessionParams.modelConfig?.model) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+        const upstreamForModel = config.getUpstreamConfig() as unknown as { model?: string; _model?: string };
+        if (!upstreamForModel.model && !upstreamForModel._model) {
+          upstreamForModel['model'] = sessionParams.modelConfig.model;
+          upstreamForModel['_model'] = sessionParams.modelConfig.model;
+        }
+      }
+
+      // Initialize the GeminiClient (creates the Chat instance)
+      // Must happen after tool registry and content generator are set up.
+      const gemClient = config.getGeminiClient();
+      if (!gemClient.isInitialized()) {
+        await gemClient.initialize();
+      }
     }
 
     // Inject app secrets as process env vars so shell_exec commands can
@@ -698,6 +820,26 @@ export class SessionManager {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[SESSION] MCP initialization failed: ${msg}\n`);
     }
+  }
+
+  /**
+   * Build the list of upstream core tools to enable based on repo config.
+   * Only tools relevant to the Amodal runtime are included.
+   */
+  private buildCoreToolsList(repo: AmodalRepo): string[] {
+    const tools: string[] = [
+      // Always available
+      'enter_plan_mode',
+      'exit_plan_mode',
+      'ask_user',
+    ];
+
+    // Shell execution (opt-in via config.sandbox.shellExec)
+    if (repo.config.sandbox?.shellExec) {
+      tools.push('shell');
+    }
+
+    return tools;
   }
 
   /**
