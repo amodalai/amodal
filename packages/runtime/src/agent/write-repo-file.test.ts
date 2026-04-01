@@ -5,7 +5,7 @@
  */
 
 import {describe, it, expect, beforeEach, afterEach} from 'vitest';
-import {mkdtemp, rm, readFile} from 'node:fs/promises';
+import {mkdtemp, rm, readFile, stat} from 'node:fs/promises';
 import path from 'node:path';
 import {tmpdir} from 'node:os';
 import type {AgentSession} from './agent-types.js';
@@ -14,6 +14,7 @@ import {
   validateRepoFilePath,
   executeWriteRepoFile,
   executeReadRepoFile,
+  executeDeleteRepoFile,
 } from './agent-runner.js';
 
 function makeAdminSession(repoOrigin: string): AgentSession {
@@ -274,5 +275,46 @@ describe('executeReadRepoFile', () => {
     const session = makeAdminSession(tmpDir);
     const result = await executeReadRepoFile(session, {path: 'package.json'});
     expect(result.error).toContain('not in an allowed directory');
+  });
+});
+
+describe('executeDeleteRepoFile', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(path.join(tmpdir(), 'amodal-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, {recursive: true, force: true});
+  });
+
+  it('deletes an existing file', async () => {
+    const session = makeAdminSession(tmpDir);
+    await executeWriteRepoFile(session, {
+      path: 'evals/old-test.md',
+      content: 'old eval',
+    });
+    const result = await executeDeleteRepoFile(session, {path: 'evals/old-test.md'});
+    expect(result.output).toContain('Deleted evals/old-test.md');
+    await expect(stat(path.join(tmpDir, 'evals/old-test.md'))).rejects.toThrow();
+  });
+
+  it('returns error for missing file', async () => {
+    const session = makeAdminSession(tmpDir);
+    const result = await executeDeleteRepoFile(session, {path: 'evals/nonexistent.md'});
+    expect(result.error).toContain('not found');
+  });
+
+  it('rejects deletes from disallowed paths', async () => {
+    const session = makeAdminSession(tmpDir);
+    const result = await executeDeleteRepoFile(session, {path: 'package.json'});
+    expect(result.error).toContain('not in an allowed directory');
+  });
+
+  it('rejects path traversal', async () => {
+    const session = makeAdminSession(tmpDir);
+    const result = await executeDeleteRepoFile(session, {path: '../../etc/passwd'});
+    expect(result.error).toContain('traversal');
   });
 });

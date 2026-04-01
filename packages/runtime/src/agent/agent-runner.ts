@@ -23,7 +23,7 @@ import type {
 } from '@amodalai/core';
 import type {LoadedTool, LoadedStore} from '@amodalai/core';
 import path from 'node:path';
-import {readFile, writeFile, mkdir} from 'node:fs/promises';
+import {readFile, writeFile, mkdir, unlink} from 'node:fs/promises';
 import {resolveKey} from '../stores/key-resolver.js';
 import type {AgentSession} from './agent-types.js';
 import type {SSEEvent, SSESubagentEvent} from '../types.js';
@@ -402,6 +402,18 @@ function buildTools(session: AgentSession): LLMToolDefinition[] {
         required: ['path', 'content'],
       },
     });
+
+    tools.push({
+      name: 'delete_repo_file',
+      description: 'Delete a file from the agent repo. Always confirm with the user before deleting. Path is relative to repo root. Same directory restrictions as write_repo_file.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {type: 'string', description: 'File path relative to repo root (e.g. "evals/old-test.md")'},
+        },
+        required: ['path'],
+      },
+    });
   }
 
   return tools;
@@ -440,6 +452,8 @@ async function executeTool(
       return {result: await executeReadRepoFile(session, args)};
     case 'write_repo_file':
       return {result: await executeWriteRepoFile(session, args)};
+    case 'delete_repo_file':
+      return {result: await executeDeleteRepoFile(session, args)};
     case 'query_store':
       return {result: await executeQueryStore(session, args)};
     default: {
@@ -1220,6 +1234,29 @@ export async function executeWriteRepoFile(
     await writeFile(validation.resolved, content, 'utf-8');
     return {output: `Wrote ${validation.relative} (${String(content.length)} bytes)`};
   } catch (err) {
+    return {error: err instanceof Error ? err.message : String(err)};
+  }
+}
+
+/** @internal Exported for testing */
+export async function executeDeleteRepoFile(
+  session: AgentSession,
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const rawPath = String(args['path'] ?? '');
+  const validation = validateRepoFilePath(session, rawPath);
+
+  if ('error' in validation) {
+    return {error: validation.error};
+  }
+
+  try {
+    await unlink(validation.resolved);
+    return {output: `Deleted ${validation.relative}`};
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'ENOENT') {
+      return {error: `File not found: ${validation.relative}`};
+    }
     return {error: err instanceof Error ? err.message : String(err)};
   }
 }
