@@ -11,72 +11,6 @@ import type {EvalStore} from '../eval-store.js';
 import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost, createRuntimeProvider} from '@amodalai/core';
 import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo, ModelConfig} from '@amodalai/core';
 
-/**
- * Summarize a JSON tool result for the judge.
- * Keeps structure intact but truncates long string values and summarizes arrays.
- * The judge needs to verify data accuracy, not read every byte.
- */
-function summarizeForJudge(raw: string, maxStringLen = 120, maxArrayItems = 5): string {
-  // Tool results often arrive as {"output": "HTTP 200\n[{...}]"} — unwrap the
-  // output field and summarize the inner content rather than truncating it as a string.
-  try {
-    const outer: unknown = JSON.parse(raw);
-    if (outer && typeof outer === 'object' && !Array.isArray(outer) && 'output' in outer) {
-       
-      const outputStr = String((outer as Record<string, unknown>)['output'] ?? '');
-      return summarizeToolOutput(outputStr, maxStringLen, maxArrayItems);
-    }
-    // Not an {output: ...} wrapper — summarize directly
-    return JSON.stringify(summarizeValue(outer, maxStringLen, maxArrayItems), null, 0);
-  } catch {
-    // Not JSON at all — return as-is
-    return raw;
-  }
-}
-
-function summarizeToolOutput(output: string, maxStr: number, maxArr: number): string {
-  // Strip HTTP status prefix
-  let body = output;
-  let prefix = '';
-  const httpMatch = /^(HTTP \d+\n)(.*)$/s.exec(output);
-  if (httpMatch) {
-    prefix = httpMatch[1];
-    body = httpMatch[2];
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(body);
-    return prefix + JSON.stringify(summarizeValue(parsed, maxStr, maxArr), null, 0);
-  } catch {
-    // Not JSON — return full output
-    return output;
-  }
-}
-
-function summarizeValue(val: unknown, maxStr: number, maxArr: number): unknown {
-  if (val === null || val === undefined) return val;
-  if (typeof val === 'string') {
-    return val.length > maxStr ? val.slice(0, maxStr) + '...' : val;
-  }
-  if (typeof val === 'number' || typeof val === 'boolean') return val;
-  if (Array.isArray(val)) {
-    const shown = val.slice(0, maxArr).map((v) => summarizeValue(v, maxStr, maxArr));
-    if (val.length > maxArr) {
-      return [...shown, `(+${val.length - maxArr} more items, ${val.length} total)`];
-    }
-    return shown;
-  }
-  if (typeof val === 'object') {
-    const result: Record<string, unknown> = {};
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- recursive JSON summarization
-    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-      result[k] = summarizeValue(v, maxStr, maxArr);
-    }
-    return result;
-  }
-  return val;
-}
-
 export interface EvalRouterOptions {
   sessionManager: SessionManager;
   evalStore: EvalStore;
@@ -135,8 +69,7 @@ async function streamQuery(
         writeSSE(evalRes, {type: 'agent_tool', evalName, toolName: event['tool_name'], parameters: params});
       } else if (eventType === 'tool_call_result') {
         const resultRaw = String(event['result'] ?? event['error'] ?? '');
-        process.stderr.write(`[TOOL RESULT] ${evalName} raw length=${resultRaw.length} first100=${resultRaw.slice(0, 100)}\n`);
-        toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${summarizeForJudge(resultRaw)}`);
+        toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${resultRaw}`);
         writeSSE(evalRes, {type: 'agent_tool_result', evalName, toolName: event['tool_name'] ?? 'request', status: event['status'], durationMs: event['duration_ms']});
       } else if (eventType === 'error') {
         queryError = String(event['message'] ?? event['error'] ?? 'Unknown error');

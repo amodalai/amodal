@@ -294,7 +294,7 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
 
   return (
     <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm table-fixed">
         <thead>
           <tr className="bg-gray-50 dark:bg-zinc-900/50 text-xs text-gray-500 dark:text-zinc-500">
             <th className="text-left px-4 py-2 font-medium">Model</th>
@@ -355,7 +355,7 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
                 </tr>
                 {isExpanded && (
                   <tr className="border-t border-gray-100 dark:border-zinc-800/50">
-                    <td colSpan={5} className="px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/20 space-y-3">
+                    <td colSpan={5} className="px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/20 space-y-3" style={{overflowWrap: 'anywhere', wordBreak: 'break-word'}}>
                       {r.error && (
                         <div className={cn('text-xs border rounded px-3 py-2 font-mono',
                           isAuthError ? 'text-amber-400 bg-amber-500/5 border-amber-500/20' :
