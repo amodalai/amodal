@@ -14,18 +14,47 @@ interface Message {
   content: string;
 }
 
+const STORAGE_KEY = 'amodal-admin-chat';
+
+function loadPersistedChat(): { sessionId: string | null; messages: Message[] } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { sessionId: null, messages: [] };
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return { sessionId: null, messages: [] };
+     
+    const data = parsed as { sessionId?: unknown; messages?: unknown };
+    return {
+      sessionId: typeof data.sessionId === 'string' ? data.sessionId : null,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- messages shape validated by caller context
+      messages: Array.isArray(data.messages) ? (data.messages as Message[]) : [],
+    };
+  } catch {
+    return { sessionId: null, messages: [] };
+  }
+}
+
+function persistChat(sessionId: string | null, messages: Message[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionId, messages }));
+  } catch { /* quota exceeded or private browsing */ }
+}
+
 export function AdminChatPanel({ compact }: { compact?: boolean }) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => loadPersistedChat().messages);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(() => loadPersistedChat().sessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
+
+  // Persist conversation to localStorage
+  useEffect(() => { persistChat(sessionId, messages); }, [sessionId, messages]);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
