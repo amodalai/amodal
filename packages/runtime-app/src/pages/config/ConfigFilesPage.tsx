@@ -112,17 +112,22 @@ export function ConfigFilesPage() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
-  // Fetch file tree
+  // Fetch file tree (and refresh every 5s to pick up changes from admin agent or hot reload)
   useEffect(() => {
-    fetch('/api/files')
-      .then((res) => res.json())
-      .then((data: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-        const body = data as { tree: FileTreeEntry[] };
-        setTree(body.tree);
-      })
-      .catch(() => {})
-      .finally(() => { setLoading(false); });
+    const fetchTree = () => {
+      fetch('/api/files')
+        .then((res) => res.json())
+        .then((data: unknown) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+          const body = data as { tree: FileTreeEntry[] };
+          setTree(body.tree);
+        })
+        .catch(() => {})
+        .finally(() => { setLoading(false); });
+    };
+    fetchTree();
+    const interval = setInterval(fetchTree, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Fetch file contents when a file is selected
