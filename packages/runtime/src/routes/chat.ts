@@ -9,13 +9,14 @@ import { ChatRequestSchema } from '../types.js';
 import { validate } from '../middleware/request-validation.js';
 import { AppError } from '../middleware/error-handler.js';
 import { getAuthContext } from '../middleware/auth.js';
+import type { AuthContext } from '../middleware/auth.js';
 import type { SessionManager } from '../session/session-manager.js';
 import { runMessage, type StreamHooks } from '../session/session-runner.js';
 
 export interface ChatRouterOptions {
   sessionManager: SessionManager;
-  /** Lifecycle hooks for audit, usage reporting, and session persistence */
-  streamHooks?: StreamHooks;
+  /** Factory that builds per-request stream hooks from the auth context */
+  createStreamHooks?: (auth?: AuthContext) => StreamHooks;
 }
 
 export function createChatRouter(options: ChatRouterOptions): Router {
@@ -42,7 +43,8 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       // Abort on client disconnect
       res.on('close', () => controller.abort());
 
-      const result = await runMessage(session, message, controller.signal, options.streamHooks);
+      const hooks = options.createStreamHooks?.(getAuthContext(res));
+      const result = await runMessage(session, message, controller.signal, hooks);
       res.json(result);
     } catch (err) {
       next(err);

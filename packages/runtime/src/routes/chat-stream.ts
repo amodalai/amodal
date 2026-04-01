@@ -8,13 +8,14 @@ import { Router } from 'express';
 import { ChatRequestSchema, SSEEventType } from '../types.js';
 import { validate } from '../middleware/request-validation.js';
 import { getAuthContext } from '../middleware/auth.js';
+import type { AuthContext } from '../middleware/auth.js';
 import type { SessionManager } from '../session/session-manager.js';
 import { streamMessage, type StreamHooks } from '../session/session-runner.js';
 
 export interface ChatStreamRouterOptions {
   sessionManager: SessionManager;
-  /** Lifecycle hooks for audit, usage reporting, and session persistence */
-  streamHooks?: StreamHooks;
+  /** Factory that builds per-request stream hooks from the auth context */
+  createStreamHooks?: (auth?: AuthContext) => StreamHooks;
 }
 
 export function createChatStreamRouter(
@@ -59,7 +60,10 @@ export function createChatStreamRouter(
         // Abort on client disconnect
         res.on('close', () => controller.abort());
 
-        const stream = streamMessage(session, message, controller.signal, options.streamHooks, options.sessionManager);
+        // Build per-request hooks with auth context
+        const hooks = options.createStreamHooks?.(getAuthContext(res));
+
+        const stream = streamMessage(session, message, controller.signal, hooks, options.sessionManager);
 
         for await (const event of stream) {
           if (controller.signal.aborted) break;

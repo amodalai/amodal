@@ -21,6 +21,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../middleware/request-validation.js';
 import { getAuthContext } from '../middleware/auth.js';
+import type { AuthContext } from '../middleware/auth.js';
 import type { SessionManager } from '../session/session-manager.js';
 import { streamMessage, type StreamHooks } from '../session/session-runner.js';
 import { SSEEventType, type SSEEvent } from '../types.js';
@@ -353,8 +354,8 @@ export function extractUserMessage(messages: AIStreamRequest['messages']): strin
 
 export interface AIStreamRouterOptions {
   sessionManager: SessionManager;
-  /** Lifecycle hooks for audit, usage reporting, and session persistence */
-  streamHooks?: StreamHooks;
+  /** Factory that builds per-request stream hooks from the auth context */
+  createStreamHooks?: (auth?: AuthContext) => StreamHooks;
 }
 
 export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
@@ -407,11 +408,14 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
         const controller = new AbortController();
         res.on('close', () => controller.abort());
 
+        // Build per-request hooks with auth context
+        const hooks = options.createStreamHooks?.(getAuthContext(res));
+
         const stream = streamMessage(
           session,
           message,
           controller.signal,
-          options.streamHooks,
+          hooks,
           options.sessionManager,
         );
 

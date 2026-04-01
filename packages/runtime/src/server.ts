@@ -19,6 +19,7 @@ import { SessionManager } from './session/session-manager.js';
 import { createAutomationRunner } from './cron/heartbeat-runner.js';
 import { AutomationScheduler } from './cron/heartbeat-scheduler.js';
 import type { StreamHooks } from './session/session-runner.js';
+import type { AuthContext } from './middleware/auth.js';
 import type { SessionStore } from './session/session-manager.js';
 import type { ServerConfig } from './types.js';
 
@@ -45,8 +46,8 @@ export interface CreateServerOptions {
   authMiddleware?: express.RequestHandler;
   /** Additional routers to mount (e.g., session history proxy) */
   additionalRouters?: express.Router[];
-  /** Lifecycle hooks for session streaming (audit, usage, persistence) */
-  streamHooks?: StreamHooks;
+  /** Factory that builds per-request stream hooks from the auth context */
+  createStreamHooks?: (auth?: AuthContext) => StreamHooks;
   /** Pluggable session store for hydrating sessions (e.g., platform API, local DB) */
   sessionStore?: SessionStore;
   /** Shutdown callback for hosting layer cleanup (e.g., drain audit batches) */
@@ -72,7 +73,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
   // --- Automation runner ---
   const runAutomation = createAutomationRunner({
     sessionManager,
-    streamHooks: options.streamHooks,
+    streamHooks: options.createStreamHooks?.(),
   });
 
   // --- Automation scheduler (cron) ---
@@ -127,8 +128,8 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     app.use('/sessions', options.authMiddleware);
   }
 
-  app.use(createChatStreamRouter({ sessionManager, streamHooks: options.streamHooks }));
-  app.use(createAIStreamRouter({ sessionManager, streamHooks: options.streamHooks }));
+  app.use(createChatStreamRouter({ sessionManager, createStreamHooks: options.createStreamHooks }));
+  app.use(createAIStreamRouter({ sessionManager, createStreamHooks: options.createStreamHooks }));
   app.use(createWidgetActionsRouter({ sessionManager }));
   app.use(createAskUserResponseRouter({ sessionManager }));
 
