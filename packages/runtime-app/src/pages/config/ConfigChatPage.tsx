@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Send, Loader2, Bot, AlertCircle } from 'lucide-react';
+import { Send, Square, Loader2, Bot, AlertCircle } from 'lucide-react';
 import Markdown from 'react-markdown';
 
 interface Message {
@@ -48,6 +48,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
   const [sessionId, setSessionId] = useState<string | null>(() => loadPersistedChat().sessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -71,6 +72,9 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
     // Add empty assistant message that we'll stream into
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     const resp = await fetch('/config/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,6 +83,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
         app_id: 'admin',
         ...(sessionId ? { session_id: sessionId } : {}),
       }),
+      signal: controller.signal,
     });
 
     if (!resp.ok || !resp.body) {
@@ -129,13 +134,25 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
         }
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      if (err instanceof Error && err.name === 'AbortError') {
+        // User stopped — not an error
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+      }
     } finally {
+      abortRef.current = null;
       setIsStreaming(false);
       inputRef.current?.focus();
     }
   }, [input, isStreaming, sessionId]);
+
+  const handleStop = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+  }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -196,13 +213,23 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
             className={`flex-1 resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/[0.04] ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm'} text-gray-900 dark:text-white/90 placeholder-gray-400 dark:placeholder-white/25 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-500/50 transition-colors`}
             disabled={isStreaming}
           />
-          <button
-            type="submit"
-            disabled={!input.trim() || isStreaming}
-            className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-indigo-600 text-white disabled:opacity-30 hover:bg-indigo-500 transition-colors shrink-0`}
-          >
-            {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={handleStop}
+              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-red-600 text-white hover:bg-red-500 transition-colors shrink-0`}
+            >
+              <Square className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!input.trim()}
+              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-indigo-600 text-white disabled:opacity-30 hover:bg-indigo-500 transition-colors shrink-0`}
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          )}
         </form>
       </div>
     </div>
