@@ -28,6 +28,7 @@ const ALLOWED_REPO_DIRS = [
   'evals/',
   'agents/',
   'tools/',
+  'amodal_packages/',  // installed packages (read-only)
 ];
 
 const BLOCKED_FILENAMES = [
@@ -38,11 +39,19 @@ const BLOCKED_FILENAMES = [
   'tsconfig.json',
 ];
 
+const READ_ONLY_DIRS = [
+  'amodal_packages/',
+];
+
 /** @internal Exported for testing */
 export function isAllowedRepoPath(relPath: string): boolean {
   const basename = path.basename(relPath);
   if (BLOCKED_FILENAMES.includes(basename)) return false;
   return ALLOWED_REPO_DIRS.some((dir) => relPath.startsWith(dir));
+}
+
+function isReadOnlyPath(relPath: string): boolean {
+  return READ_ONLY_DIRS.some((dir) => relPath.startsWith(dir));
 }
 
 function validatePath(
@@ -173,6 +182,9 @@ export function createWriteRepoFileTool(repoRoot: string) {
       if ('error' in validation) {
         return {llmContent: `Error: ${validation.error}`, error: {message: validation.error, type: 'VALIDATION_ERROR'}};
       }
+      if (isReadOnlyPath(validation.relative)) {
+        return {llmContent: `Error: ${validation.relative} is read-only (installed package)`, error: {message: 'Cannot write to installed packages', type: 'VALIDATION_ERROR'}};
+      }
       if (!content) {
         return {llmContent: 'Error: Content must not be empty', error: {message: 'Content must not be empty', type: 'VALIDATION_ERROR'}};
       }
@@ -204,6 +216,9 @@ export function createDeleteRepoFileTool(repoRoot: string) {
       const validation = validatePath(repoRoot, rawPath);
       if ('error' in validation) {
         return {llmContent: `Error: ${validation.error}`, error: {message: validation.error, type: 'VALIDATION_ERROR'}};
+      }
+      if (isReadOnlyPath(validation.relative)) {
+        return {llmContent: `Error: ${validation.relative} is read-only (installed package)`, error: {message: 'Cannot delete installed packages', type: 'VALIDATION_ERROR'}};
       }
       try {
         await unlink(validation.resolved);

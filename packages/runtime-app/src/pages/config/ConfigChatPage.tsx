@@ -58,12 +58,8 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
-  const handleSubmit = useCallback(async (e: FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
+  const sendText = useCallback(async (text: string) => {
     if (!text || isStreaming) return;
-
-    setInput('');
     setError(null);
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setIsStreaming(true);
@@ -135,7 +131,25 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
       setIsStreaming(false);
       inputRef.current?.focus();
     }
-  }, [input, isStreaming, sessionId]);
+  }, [isStreaming, sessionId]);
+
+  const handleSubmit = useCallback((e: FormEvent) => {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    void sendText(text);
+  }, [input, sendText]);
+
+  // Listen for programmatic messages (e.g. from Feedback page synthesis)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const msg = (e as unknown as {detail?: string}).detail; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- CustomEvent detail
+      if (msg) void sendText(msg);
+    };
+    window.addEventListener('admin-chat-send', handler);
+    return () => window.removeEventListener('admin-chat-send', handler);
+  }, [sendText]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

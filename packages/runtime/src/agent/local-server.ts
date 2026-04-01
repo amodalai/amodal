@@ -17,6 +17,8 @@ import {createChatRouter} from './routes/chat.js';
 import {createAdminChatRouter} from './routes/admin-chat.js';
 import {createTaskRouter} from './routes/task.js';
 import {createInspectRouter} from './routes/inspect.js';
+import {createFeedbackRouter} from './routes/feedback.js';
+import {FeedbackStore} from './feedback-store.js';
 import {createAutomationRouter} from './routes/automations.js';
 import {createWebhookRouter} from './routes/webhooks.js';
 import {createStoresRouter} from './routes/stores.js';
@@ -254,6 +256,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Evals
   const evalStore = new EvalStore(config.repoPath);
   app.use(createEvalRouter({sessionManager, evalStore, repoPath: config.repoPath, getPort: () => config.port}));
+
+  // Feedback
+  const feedbackStore = new FeedbackStore(config.repoPath);
+  app.use(createFeedbackRouter({feedbackStore}));
 
   // Routes
   app.use(createChatRouter({
