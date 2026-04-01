@@ -156,6 +156,8 @@ export class SessionManager {
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   /** Deduplicates concurrent hydration requests for the same conversation */
   private readonly pendingHydrations = new Map<string, Promise<ManagedSession | null>>();
+  /** Shared MCP manager for all sessions (lazy-initialized, reused) */
+  private sharedMcpManager?: McpManager;
   /** Persistent MCP manager for inspect operations (lazy-initialized) */
   private inspectMcp?: McpManager;
   private inspectMcpInitialized = false;
@@ -614,13 +616,15 @@ export class SessionManager {
       appId: auth?.applicationId,
     };
 
-    // Initialize MCP servers if repo has MCP connections
-    if (this.repo) {
-      await this.initMcp(session, this.repo);
+    // Share MCP connection across sessions — connect once, reuse for all
+    if (this.repo && !this.sharedMcpManager) {
+      await this.initSharedMcp(this.repo);
+    }
+    if (this.sharedMcpManager) {
+      session.mcpManager = this.sharedMcpManager;
 
       // Register MCP tools on the upstream tool registry so the Gemini client can see them
-      if (session.mcpManager) {
-        try {
+      try {
           const upstream = config.getUpstreamConfig();
           const toolRegistry = upstream.getToolRegistry();
           const mcpTools = session.mcpManager.getDiscoveredTools();
@@ -678,7 +682,6 @@ export class SessionManager {
           const msg = err instanceof Error ? err.message : String(err);
           process.stderr.write(`[MCP] Failed to register MCP tools: ${msg}\n`);
         }
-      }
     }
 
     this.sessions.set(sessionId, session);
@@ -836,29 +839,76 @@ export class SessionManager {
 
   /**
    * Create an admin session for the config chat.
-   * Uses admin agent skills/knowledge but the current repo's connections.
+   * Uses admin agent skills/knowledge but the current repo's connections/stores.
+   *
+   * Temporarily swaps repo fields so create() builds the prompt with admin
+   * content, then restores the original repo. This mirrors the old approach
+   * of building an adminRepo overlay.
    */
-  async createAdminSession(): Promise<ManagedSession> {
+  async createAdminSession(getPort?: () => number | null): Promise<ManagedSession> {
     if (!this.repo) {
       throw new Error('Admin sessions require a repo');
     }
+    if (this.repo.source !== 'local') {
+      throw new Error('Admin sessions are only available for local repos');
+    }
+
     const agentDir = await ensureAdminAgent(this.repo.origin);
     const adminContent = await loadAdminAgent(agentDir);
 
-    // Create a session with admin context
-    // The admin session uses the same create() flow but with overridden prompts
-    const session = await this.create('admin');
+    // Save original repo fields
+    const origSkills = this.repo.skills;
+    const origKnowledge = this.repo.knowledge;
+    const origAgents = this.repo.agents;
+    const origAutomations = this.repo.automations;
 
-    // Override system prompt with admin agent prompt
-    if (adminContent.agentPrompt) {
-      try {
-        session.geminiClient.getChat().setSystemInstruction(adminContent.agentPrompt);
-      } catch {
-        // Non-fatal
-      }
+    // Swap in admin content so create() builds the prompt correctly
+    this.repo.skills = adminContent.skills;
+    this.repo.knowledge = adminContent.knowledge;
+    this.repo.agents = {
+      main: adminContent.agentPrompt ?? undefined,
+      simple: undefined,
+      subagents: [],
+    };
+    this.repo.automations = [];
+
+    let session: ManagedSession;
+    try {
+      session = await this.create('admin');
+    } finally {
+      // Restore original repo fields
+      this.repo.skills = origSkills;
+      this.repo.knowledge = origKnowledge;
+      this.repo.agents = origAgents;
+      this.repo.automations = origAutomations;
     }
 
     session.appId = 'admin';
+
+    // Register admin file tools (read/write/delete repo files)
+    try {
+      const { createReadRepoFileTool, createWriteRepoFileTool, createDeleteRepoFileTool } = await import('./admin-file-tools.js');
+      const repoRoot = this.repo.origin;
+      const upstream = session.config.getUpstreamConfig();
+      const toolRegistry = upstream.getToolRegistry();
+
+      toolRegistry.registerTool(createReadRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+      toolRegistry.registerTool(createWriteRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+      toolRegistry.registerTool(createDeleteRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+
+      // Internal API tool — lets admin query eval results, health, context, etc.
+      if (getPort) {
+        const { createInternalApiTool } = await import('./admin-file-tools.js');
+        toolRegistry.registerTool(createInternalApiTool(getPort) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+      }
+
+      await session.geminiClient.setTools();
+      process.stderr.write('[ADMIN] Registered admin tools (file tools + internal_api)\n');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[ADMIN] Failed to register file tools: ${msg}\n`);
+    }
+
     return session;
   }
 
@@ -892,7 +942,11 @@ export class SessionManager {
   /**
    * Initialize MCP servers for a session from repo connections.
    */
-  private async initMcp(session: ManagedSession, repo: AmodalRepo): Promise<void> {
+  /**
+   * Initialize the shared MCP manager (once, reused across sessions).
+   * Avoids reconnecting MCP servers for every eval/judge/admin session.
+   */
+  private async initSharedMcp(repo: AmodalRepo): Promise<void> {
     const mcpServers = this.buildMcpConfigs(repo);
     if (Object.keys(mcpServers).length === 0) return;
 
@@ -900,7 +954,7 @@ export class SessionManager {
     try {
       await manager.startServers(mcpServers);
       if (manager.connectedCount > 0) {
-        session.mcpManager = manager;
+        this.sharedMcpManager = manager;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

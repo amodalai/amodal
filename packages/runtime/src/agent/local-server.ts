@@ -280,7 +280,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     },
   }));
   app.use(createTaskRouter({sessionManager}));
-  app.use(createAdminChatRouter({sessionManager}));
+  app.use(createAdminChatRouter({sessionManager, getPort: () => config.port}));
   app.use(createInspectRouter({sessionManager, repoPath: config.repoPath}));
   app.use(createAutomationRouter({runner}));
   app.use(createWebhookRouter({runner, webhookSecret: config.webhookSecret}));
