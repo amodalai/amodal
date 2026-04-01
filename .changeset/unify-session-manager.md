@@ -1,5 +1,5 @@
 ---
-"@amodalai/runtime": minor
+"@amodalai/runtime": patch
 "@amodalai/core": patch
 ---
 
