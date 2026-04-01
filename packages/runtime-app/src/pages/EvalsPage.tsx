@@ -266,6 +266,37 @@ async function runSingleModelEval(
 /*  CompareTable                                                        */
 /* ------------------------------------------------------------------ */
 
+function CollapsibleText({ text, lines = 2 }: { text: string; lines?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const lineCount = text.split('\n').length;
+  const needsCollapse = text.length > 200 || lineCount > lines;
+
+  if (!needsCollapse) {
+    return <div className="whitespace-pre-wrap break-words" style={{overflowWrap: 'anywhere'}}>{text}</div>;
+  }
+
+  return (
+    <div>
+      <div
+        className={cn('whitespace-pre-wrap break-words', !expanded && 'line-clamp-2')}
+        style={{overflowWrap: 'anywhere'}}
+      >
+        {text}
+      </div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1 mt-1 text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
+      >
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          className={cn('transition-transform', expanded && 'rotate-90')}>
+          <polyline points="9 6 15 12 9 18" />
+        </svg>
+        {expanded ? 'collapse' : `show all (${text.length > 1000 ? Math.round(text.length / 1000) + 'K chars' : text.length + ' chars'})`}
+      </button>
+    </div>
+  );
+}
+
 function ElapsedTimer({ startTime }: { startTime: number }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -381,7 +412,9 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
                               <div key={ti} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono break-words">
                                 <span className="text-indigo-500 font-semibold">{tc.name}</span>
                                 {r.toolResults[ti] && (
-                                  <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px] whitespace-pre-wrap break-words">{r.toolResults[ti]}</div>
+                                  <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px]">
+                                    <CollapsibleText text={r.toolResults[ti]} />
+                                  </div>
                                 )}
                               </div>
                             ))}
