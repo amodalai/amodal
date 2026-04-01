@@ -75,17 +75,17 @@ async function streamQuery(
       } else if (eventType === 'error') {
         queryError = String(event['message'] ?? event['error'] ?? 'Unknown error');
         writeSSE(evalRes, {type: 'agent_error', evalName, error: queryError});
-      } else if (eventType === 'done' && event['usage']) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        const u = event['usage'] as {input_tokens: number; output_tokens: number; cached_tokens?: number; cache_creation_tokens?: number};
+      } else if (eventType === 'done') {
+         
+        const u = (event['usage'] ?? {}) as {input_tokens?: number; output_tokens?: number; cached_tokens?: number; cache_creation_tokens?: number};
         // Accumulate tokens across multiple done events (multi-turn agent loops
-        // emit one done per turn in the refactored session runner)
-        if (u.input_tokens > 0 || u.output_tokens > 0 || (u.cached_tokens ?? 0) > 0) {
+        // may emit one done per turn in the session runner)
+        if ((u.input_tokens ?? 0) > 0 || (u.output_tokens ?? 0) > 0 || (u.cached_tokens ?? 0) > 0) {
           if (!usage) {
             usage = {inputTokens: 0, outputTokens: 0};
           }
-          usage.inputTokens += u.input_tokens;
-          usage.outputTokens += u.output_tokens;
+          usage.inputTokens += u.input_tokens ?? 0;
+          usage.outputTokens += u.output_tokens ?? 0;
           if (u.cached_tokens) {
             usage.cacheReadInputTokens = (usage.cacheReadInputTokens ?? 0) + u.cached_tokens;
           }
