@@ -37,7 +37,26 @@ function summarizeForJudge(raw: string, maxStringLen = 120, maxArrayItems = 5): 
 function summarizeValue(val: unknown, maxStr: number, maxArr: number): unknown {
   if (val === null || val === undefined) return val;
   if (typeof val === 'string') {
-    return val.length > maxStr ? val.slice(0, maxStr) + '...' : val;
+    // Check if the string contains JSON — if so, parse and summarize recursively
+    // This handles the common pattern {"output": "HTTP 200\n[{...}]"}
+    if (val.length > maxStr) {
+      // Strip HTTP prefix if present
+      let inner = val;
+      let httpPrefix = '';
+      const httpMatch = /^(HTTP \d+\n)(.*)$/s.exec(val);
+      if (httpMatch) {
+        httpPrefix = httpMatch[1];
+        inner = httpMatch[2];
+      }
+      try {
+        const parsed: unknown = JSON.parse(inner);
+        return httpPrefix + JSON.stringify(summarizeValue(parsed, maxStr, maxArr), null, 0);
+      } catch {
+        // Not JSON — truncate as string
+        return val.slice(0, maxStr) + '...';
+      }
+    }
+    return val;
   }
   if (typeof val === 'number' || typeof val === 'boolean') return val;
   if (Array.isArray(val)) {
@@ -115,9 +134,8 @@ async function streamQuery(
         toolCalls.push({name: String(event['tool_name'] ?? ''), parameters: params});
         writeSSE(evalRes, {type: 'agent_tool', evalName, toolName: event['tool_name'], parameters: params});
       } else if (eventType === 'tool_call_result') {
-        // Summarize tool results for the judge — keeps JSON structure but truncates
-        // long string values and caps arrays. Same summary shown in the UI.
         const resultRaw = String(event['result'] ?? event['error'] ?? '');
+        process.stderr.write(`[TOOL RESULT] ${evalName} raw length=${resultRaw.length} first100=${resultRaw.slice(0, 100)}\n`);
         toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${summarizeForJudge(resultRaw)}`);
         writeSSE(evalRes, {type: 'agent_tool_result', evalName, toolName: event['tool_name'] ?? 'request', status: event['status'], durationMs: event['duration_ms']});
       } else if (eventType === 'error') {

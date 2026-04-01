@@ -461,6 +461,11 @@ export class SessionManager {
         title: k.title,
       })),
     });
+    process.stderr.write(`[PROMPT DEBUG] systemPrompt length=${systemPrompt.length} chars\n`);
+    process.stderr.write(`[PROMPT DEBUG] first 500 chars: ${systemPrompt.slice(0, 500)}\n`);
+    process.stderr.write(`[PROMPT DEBUG] skills in prompt: ${(systemPrompt.match(/### /g) || []).length} sections\n`);
+    process.stderr.write(`[PROMPT DEBUG] has 'devto': ${systemPrompt.includes('devto')}\n`);
+    process.stderr.write(`[PROMPT DEBUG] has 'GET /articles': ${systemPrompt.includes('GET /articles')}\n`);
     try {
       geminiClient.getChat().setSystemInstruction(systemPrompt);
     } catch {
