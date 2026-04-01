@@ -76,22 +76,28 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
       });
 
       // Build the system prompt so the UI can display it
-      const { buildDefaultPrompt } = await import('@amodalai/core');
-      const systemPrompt = repo.config?.basePrompt ?? buildDefaultPrompt({
-        name: repo.config?.name ?? 'Agent',
-        description: repo.config?.description,
-        agentContext: repo.config?.userContext ?? repo.config?.description,
-        agentOverride: repo.agents?.main,
-        connections: repo.connections ? Array.from(repo.connections.values()).map((conn: {name: string; surface: Array<{included: boolean; method: string; path: string; description: string}>; entities?: string; rules?: string}) => ({
-          name: conn.name,
-          endpoints: (conn.surface ?? []).filter((ep) => ep.included).map((ep) => ({method: ep.method, path: ep.path, description: ep.description})),
-          entities: conn.entities,
-          rules: conn.rules,
-        })) : undefined,
-        skills: repo.skills?.map((s: {name: string; description?: string; trigger?: string; body: string}) => ({name: s.name, description: s.description ?? '', trigger: s.trigger, body: s.body})),
-        knowledge: repo.knowledge?.map((k: {name: string; title?: string; body: string}) => ({name: k.name, title: k.title, body: k.body})),
-      });
-      const estimatedTokens = Math.ceil(systemPrompt.length / 4);
+      let systemPrompt = '';
+      let estimatedTokens = 0;
+      try {
+        const { buildDefaultPrompt } = await import('@amodalai/core');
+        systemPrompt = repo.config?.basePrompt ?? buildDefaultPrompt({
+          name: repo.config?.name ?? 'Agent',
+          description: repo.config?.description,
+          agentContext: String((repo.config as Record<string, unknown> | undefined)?.['userContext'] ?? repo.config?.description ?? ''),  
+          agentOverride: repo.agents?.main,
+          connections: repo.connections?.size ? Array.from(repo.connections.values()).map((conn: {name: string; surface?: Array<{included: boolean; method: string; path: string; description: string}>; entities?: string; rules?: string}) => ({
+            name: conn.name,
+            endpoints: (conn.surface ?? []).filter((ep) => ep.included).map((ep) => ({method: ep.method, path: ep.path, description: ep.description})),
+            entities: conn.entities,
+            rules: conn.rules,
+          })) : undefined,
+          skills: repo.skills?.map((s: {name: string; description?: string; trigger?: string; body?: string}) => ({name: s.name, description: s.description ?? '', trigger: s.trigger, body: s.body ?? ''})),
+          knowledge: repo.knowledge?.map((k: {name: string; title?: string; body?: string}) => ({name: k.name, title: k.title, body: k.body ?? ''})),
+        });
+        estimatedTokens = Math.ceil(systemPrompt.length / 4);
+      } catch {
+        // Prompt generation failed — non-fatal, return empty
+      }
 
       res.json({
         repo_path: options.repoPath,
