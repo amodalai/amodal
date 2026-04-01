@@ -9,7 +9,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Define mock functions at module scope — persists across clearAllMocks
 const mockInitialize = vi.fn().mockResolvedValue(undefined);
 const mockShutdownAudit = vi.fn().mockResolvedValue(undefined);
-const mockGetGeminiClient = vi.fn().mockReturnValue({});
+const mockGetGeminiClient = vi.fn().mockReturnValue({
+  isInitialized: vi.fn().mockReturnValue(true),
+  initialize: vi.fn().mockResolvedValue(undefined),
+  getChat: vi.fn().mockReturnValue({
+    setSystemInstruction: vi.fn(),
+    getHistory: vi.fn().mockReturnValue([]),
+  }),
+  setHistory: vi.fn(),
+  setTools: vi.fn().mockResolvedValue(undefined),
+  getCurrentSequenceModel: vi.fn().mockReturnValue(undefined),
+});
 const mockGetMessageBus = vi.fn().mockReturnValue({
   on: vi.fn(),
   removeListener: vi.fn(),
@@ -18,7 +28,17 @@ const mockGetMessageBus = vi.fn().mockReturnValue({
 // Use a function constructor so each `new Config()` returns a fresh mock object
 // with the same module-scope mock functions.
 const mockGetConnections = vi.fn().mockReturnValue({});
-const mockGetUpstreamConfig = vi.fn().mockReturnValue({});
+const mockToolRegistry = {
+  registerTool: vi.fn(),
+  unregisterTool: vi.fn(),
+  getFunctionDeclarations: vi.fn().mockReturnValue([]),
+};
+const mockGetUpstreamConfig = vi.fn().mockReturnValue({
+  createToolRegistry: vi.fn().mockResolvedValue(mockToolRegistry),
+  getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
+  getAgentRegistry: vi.fn().mockReturnValue({ getAllDefinitions: () => [] }),
+  registerSubAgentTools: vi.fn(),
+});
 const MockConfig = vi.fn(function (this: Record<string, unknown>) {
   this['initialize'] = mockInitialize;
   this['shutdownAudit'] = mockShutdownAudit;
@@ -37,6 +57,10 @@ const MockConfig = vi.fn(function (this: Record<string, unknown>) {
   this['getStores'] = vi.fn().mockReturnValue([]);
   this['getStoreBackend'] = vi.fn().mockReturnValue(undefined);
   this['setStoreBackend'] = vi.fn();
+  this['registerTools'] = vi.fn().mockResolvedValue(undefined);
+  this['getBundleSubagents'] = vi.fn().mockReturnValue([]);
+  this['getDisabledSubagents'] = vi.fn().mockReturnValue([]);
+  this['getAppId'] = vi.fn().mockReturnValue('test-app');
 });
 
 // AgentSDK mock
@@ -57,6 +81,20 @@ vi.mock('@amodalai/core', () => ({
   ApprovalMode: { YOLO: 'yolo' },
   PolicyDecision: { ALLOW: 'allow', ASK_USER: 'ask_user', DENY: 'deny' },
   buildDefaultPrompt: vi.fn().mockReturnValue('Default system prompt'),
+  PlanModeManager: vi.fn(function (this: Record<string, unknown>) {
+    this['isActive'] = vi.fn().mockReturnValue(false);
+    this['enter'] = vi.fn();
+    this['exit'] = vi.fn();
+  }),
+  McpManager: vi.fn(function (this: Record<string, unknown>) {
+    this['startServers'] = vi.fn().mockResolvedValue(undefined);
+    this['shutdown'] = vi.fn().mockResolvedValue(undefined);
+    this['connectedCount'] = 0;
+    this['getServerInfo'] = vi.fn().mockReturnValue([]);
+    this['getDiscoveredTools'] = vi.fn().mockReturnValue([]);
+  }),
+  ensureAdminAgent: vi.fn().mockResolvedValue('/tmp/admin-agent'),
+  loadAdminAgent: vi.fn().mockResolvedValue({ skills: [], knowledge: [], agentPrompt: 'admin prompt' }),
 }));
 
 const { SessionManager } = await import('./session-manager.js');
@@ -85,6 +123,10 @@ describe('SessionManager', () => {
       getStores: vi.fn().mockReturnValue([]),
       getStoreBackend: vi.fn().mockReturnValue(undefined),
       setStoreBackend: vi.fn(),
+      registerTools: vi.fn().mockResolvedValue(undefined),
+      getBundleSubagents: vi.fn().mockReturnValue([]),
+      getDisabledSubagents: vi.fn().mockReturnValue([]),
+      getAppId: vi.fn().mockReturnValue('test-app'),
     };
   }
 
@@ -93,12 +135,25 @@ describe('SessionManager', () => {
     // Re-attach default implementations after clearAllMocks
     mockInitialize.mockResolvedValue(undefined);
     mockShutdownAudit.mockResolvedValue(undefined);
-    mockGetGeminiClient.mockReturnValue({});
+    mockGetGeminiClient.mockReturnValue({
+      isInitialized: vi.fn().mockReturnValue(true),
+      initialize: vi.fn().mockResolvedValue(undefined),
+      getChat: vi.fn().mockReturnValue({ setSystemInstruction: vi.fn(), getHistory: vi.fn().mockReturnValue([]) }),
+      setHistory: vi.fn(),
+      setTools: vi.fn().mockResolvedValue(undefined),
+      getCurrentSequenceModel: vi.fn().mockReturnValue(undefined),
+    });
     mockGetMessageBus.mockReturnValue({
       on: vi.fn(),
       removeListener: vi.fn(),
     });
     mockGetConnections.mockReturnValue({});
+    mockGetUpstreamConfig.mockReturnValue({
+      createToolRegistry: vi.fn().mockResolvedValue(mockToolRegistry),
+      getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
+      getAgentRegistry: vi.fn().mockReturnValue({ getAllDefinitions: () => [] }),
+      registerSubAgentTools: vi.fn(),
+    });
     mockSdkInitialize.mockResolvedValue(undefined);
     mockSdkGetConfig.mockReturnValue(makeMockConfig());
 
@@ -152,9 +207,11 @@ describe('SessionManager', () => {
       expect(configCall['activeRole']).toBe('analyst');
     });
 
-    it('initializes the Config', async () => {
-      await manager.create();
-      expect(mockInitialize).toHaveBeenCalledOnce();
+    it('initializes the Config (non-platform uses minimal init)', async () => {
+      const session = await manager.create();
+      // Non-platform sessions skip config.initialize() and use minimal init
+      // (initializeAuth + registerTools) to avoid upstream Gemini CLI hangs
+      expect(session.config).toBeDefined();
     });
 
     it('creates multiple sessions with different IDs', async () => {

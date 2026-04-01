@@ -38,7 +38,13 @@ function makeSessionManager(): SessionManager {
     cleanup: vi.fn(),
     updateRepo: vi.fn(),
     shutdown: vi.fn(),
-    getRepo: vi.fn(() => ({connections: new Map(), skills: [], automations: [], knowledge: []})),
+    getRepo: vi.fn(() => ({
+      connections: new Map([['crm', {name: 'crm', spec: {baseUrl: 'https://api.example.com', testPath: undefined}, surface: [], entities: null, rules: null, location: 'connections/crm'}]]),
+      config: {name: 'test-agent', models: {main: {model: 'test-model', provider: 'test'}}},
+      skills: [{name: 'triage'}, {name: 'investigate'}],
+      automations: [{name: 'daily-scan'}],
+      knowledge: [{name: 'api-docs'}],
+    })),
     getInspectMcpManager: vi.fn(async () => undefined),
   } as unknown as SessionManager;
 }
@@ -56,35 +62,21 @@ describe('repo-inspect route', () => {
     sessionManager = makeSessionManager();
   });
 
-  it('should return compiled context info', async () => {
+  it('should return repo context info', async () => {
     const app = createTestApp(sessionManager);
     const res = await request(app).get('/inspect/context');
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('repo_path', '/test/repo');
-    expect(res.body['token_usage']).toEqual({
-      total: 100000,
-      used: 500,
-      remaining: 99500,
-      sectionBreakdown: {core: 200, skills: 300},
-    });
-    expect(res.body['sections']).toHaveLength(2);
+    expect(res.body).toHaveProperty('name', 'test-agent');
     expect(res.body['connections']).toEqual([expect.objectContaining({name: 'crm'})]);
     expect(res.body['skills']).toEqual(['triage', 'investigate']);
     expect(res.body['automations']).toEqual(['daily-scan']);
     expect(res.body['knowledge']).toEqual(['api-docs']);
   });
 
-  it('should destroy temporary session after inspect', async () => {
-    const app = createTestApp(sessionManager);
-    await request(app).get('/inspect/context');
-
-    expect(sessionManager.destroy).toHaveBeenCalledWith('inspect-session');
-  });
-
-  it('should handle session creation errors', async () => {
-     
-    (sessionManager.create as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Config invalid'));
+  it('should handle missing repo', async () => {
+    (sessionManager.getRepo as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
 
     const app = createTestApp(sessionManager);
     const res = await request(app).get('/inspect/context');

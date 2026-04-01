@@ -15,8 +15,8 @@ const {mockRunAgentTurn, mockDeliverResult} = vi.hoisted(() => ({
   mockDeliverResult: vi.fn(),
 }));
 
-vi.mock('../agent-runner.js', () => ({
-  runAgentTurn: mockRunAgentTurn,
+vi.mock('../../session/session-runner.js', () => ({
+  streamMessage: mockRunAgentTurn,
 }));
 
 vi.mock('./delivery.js', () => ({
