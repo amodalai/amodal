@@ -36,17 +36,17 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-2.5-pro': {inputPerMToken: 1_250_000, outputPerMToken: 10_000_000},
   'gemini-2.5-flash': {inputPerMToken: 150_000, outputPerMToken: 600_000},
   'gemini-2.0-flash': {inputPerMToken: 100_000, outputPerMToken: 400_000},
-  // DeepSeek
-  'deepseek-chat': {inputPerMToken: 270_000, outputPerMToken: 1_100_000},
-  'deepseek-reasoner': {inputPerMToken: 550_000, outputPerMToken: 2_190_000},
-  // Groq (hosted models)
+  // DeepSeek — both models share identical pricing
+  'deepseek-chat': {inputPerMToken: 280_000, outputPerMToken: 420_000},
+  'deepseek-reasoner': {inputPerMToken: 280_000, outputPerMToken: 420_000},
+  // Groq (hosted models) — prices from groq.com/pricing
   'llama-3.3-70b-versatile': {inputPerMToken: 590_000, outputPerMToken: 790_000},
   'llama-3.1-8b-instant': {inputPerMToken: 50_000, outputPerMToken: 80_000},
   'mixtral-8x7b-32768': {inputPerMToken: 240_000, outputPerMToken: 240_000},
   'meta-llama/llama-4-scout-17b-16e-instruct': {inputPerMToken: 110_000, outputPerMToken: 340_000},
-  'qwen/qwen3-32b': {inputPerMToken: 290_000, outputPerMToken: 390_000},
-  'moonshotai/kimi-k2-instruct': {inputPerMToken: 290_000, outputPerMToken: 390_000},
-  'openai/gpt-oss-120b': {inputPerMToken: 590_000, outputPerMToken: 790_000},
+  'qwen/qwen3-32b': {inputPerMToken: 290_000, outputPerMToken: 590_000},
+  'moonshotai/kimi-k2-instruct': {inputPerMToken: 1_000_000, outputPerMToken: 3_000_000},
+  'openai/gpt-oss-120b': {inputPerMToken: 150_000, outputPerMToken: 600_000},
 };
 
 // Default pricing for unknown models (conservative estimate)
