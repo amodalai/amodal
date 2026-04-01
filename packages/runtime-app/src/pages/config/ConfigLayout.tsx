@@ -175,27 +175,29 @@ export function ConfigLayout() {
                 <Server className="h-4 w-4 shrink-0" />
                 System
               </ConfigNavItem>
+
+              <div className="mt-3 mb-1 px-3 pt-3 border-t border-gray-200 dark:border-white/[0.06]">
+                <span className="text-[10px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">Tools</span>
+              </div>
+
+              <button
+                onClick={() => setChatOpen((v) => !v)}
+                className={cn(
+                  'flex items-center gap-2.5 w-full px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
+                  chatOpen
+                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium'
+                    : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
+                )}
+              >
+                <MessageSquare className="h-4 w-4 shrink-0" />
+                Admin Agent
+                {chatOpen
+                  ? <PanelRightClose className="h-3.5 w-3.5 ml-auto" />
+                  : <PanelRightOpen className="h-3.5 w-3.5 ml-auto" />
+                }
+              </button>
             </div>
           </nav>
-
-          <div className="border-t border-gray-200 dark:border-white/[0.06] px-2 py-2">
-            <button
-              onClick={() => setChatOpen((v) => !v)}
-              className={cn(
-                'flex items-center gap-2.5 w-full px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
-                chatOpen
-                  ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium'
-                  : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
-              )}
-            >
-              <MessageSquare className="h-4 w-4 shrink-0" />
-              Admin Agent
-              {chatOpen
-                ? <PanelRightClose className="h-3.5 w-3.5 ml-auto" />
-                : <PanelRightOpen className="h-3.5 w-3.5 ml-auto" />
-              }
-            </button>
-          </div>
         </aside>
 
         <main className={cn('overflow-auto bg-white dark:bg-[#0a0a0f] scrollbar-thin', chatOpen ? 'w-[60%]' : 'flex-1')}>

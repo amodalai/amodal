@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronRight, File, FolderOpen, Folder, Save, Package, Loader2 } from 'lucide-react';
+import { ChevronRight, File, FolderOpen, Folder, Save, Package, Loader2, RefreshCw } from 'lucide-react';
 import { CodeEditor } from '@/components/CodeEditor';
 import { cn } from '@/lib/utils';
 
@@ -155,6 +155,22 @@ export function ConfigFilesPage() {
       });
   }, []);
 
+  // Reload the currently selected file from disk
+  const reloadFile = useCallback(() => {
+    if (!selectedPath) return;
+    fetch(`/api/files/${selectedPath}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load');
+        return res.json();
+      })
+      .then((data: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+        setFileData(data as FileData);
+        setEditedContent(null);
+      })
+      .catch(() => {});
+  }, [selectedPath]);
+
   // Save file
   const saveFile = useCallback(async () => {
     if (!selectedPath || editedContent === null) return;
@@ -239,6 +255,13 @@ export function ConfigFilesPage() {
                 {saveStatus === 'error' && (
                   <span className="text-[11px] text-red-500">Save failed</span>
                 )}
+                <button
+                  onClick={reloadFile}
+                  className="h-7 w-7 rounded flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+                  title="Reload file from disk"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
                 <button
                   onClick={() => { void saveFile(); }}
                   disabled={!hasChanges || saving}
