@@ -265,7 +265,7 @@ async function runSingleModelEval(
 function CompareTable({ results, runningModel }: { results: CompareResult[]; runningModel?: AvailableModel | null }) {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-  if (results.length === 0) return null;
+  if (results.length === 0 && !runningModel) return null;
 
   const times = results.map((r) => r.durationMs).filter((t) => t > 0);
   const costs = results.map((r) => r.queryCostMicros).filter((c) => c > 0);
