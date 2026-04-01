@@ -81,15 +81,14 @@ describe('createRuntimeProvider', () => {
     expect(() => createRuntimeProvider({provider: 'unknown', model: 'test'})).toThrow(ProviderError);
   });
 
-  it('should throw ProviderError with provider name in message', () => {
-    try {
-      createRuntimeProvider({provider: 'deepseek', model: 'test'});
-      expect.fail('Should have thrown');
-    } catch (err) {
-      expect(err).toBeInstanceOf(ProviderError);
+  it('should create OpenAIRuntimeProvider for deepseek', () => {
+    const provider = createRuntimeProvider({provider: 'deepseek', model: 'deepseek-chat'});
+    expect(provider).toBeInstanceOf(OpenAIRuntimeProvider);
+  });
 
-      expect((err as ProviderError).message).toContain('deepseek');
-    }
+  it('should create OpenAIRuntimeProvider for groq', () => {
+    const provider = createRuntimeProvider({provider: 'groq', model: 'llama-3.3-70b-versatile'});
+    expect(provider).toBeInstanceOf(OpenAIRuntimeProvider);
   });
 
   it('should create OpenAIRuntimeProvider for ollama with baseUrl', () => {

@@ -28,8 +28,8 @@ describe('getModelPricing', () => {
 
   it('returns pricing for known Google model', () => {
     const pricing = getModelPricing('gemini-2.5-flash');
-    expect(pricing.inputPerMToken).toBe(150_000);
-    expect(pricing.outputPerMToken).toBe(600_000);
+    expect(pricing.inputPerMToken).toBe(300_000);
+    expect(pricing.outputPerMToken).toBe(2_500_000);
   });
 
   it('returns default pricing for unknown model', () => {

@@ -12,6 +12,7 @@ import type {
   LLMMessage,
   LLMResponseBlock,
   LLMToolDefinition,
+  LLMUsage,
 } from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
@@ -44,17 +45,20 @@ export class AnthropicRuntimeProvider implements RuntimeProvider {
 
     const messages = convertMessages(request.messages);
     const tools = convertTools(request.tools);
+    const system = buildCachedSystem(request.systemPrompt);
+    const cachedTools = applyCacheControlToTools(tools);
 
     try {
       const response = await client.messages.create({
         model: request.model,
         max_tokens: request.maxTokens ?? 4096,
-        system: request.systemPrompt,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SDK boundary: system content block array
+        system: system as unknown as Parameters<typeof client.messages.create>[0]['system'],
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SDK boundary: our AnthropicMessage[] maps to MessageParam[]
         messages: messages as unknown as Parameters<typeof client.messages.create>[0]['messages'],
-        ...(tools.length > 0
+        ...(cachedTools.length > 0
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SDK boundary: our AnthropicTool[] maps to ToolUnion[]
-          ? {tools: tools as unknown as Parameters<typeof client.messages.create>[0]['tools']}
+          ? {tools: cachedTools as unknown as Parameters<typeof client.messages.create>[0]['tools']}
           : {}),
       });
 
@@ -62,17 +66,14 @@ export class AnthropicRuntimeProvider implements RuntimeProvider {
       const msg = response as unknown as {
         content: AnthropicContentBlock[];
         stop_reason: string | null;
-        usage: {input_tokens: number; output_tokens: number};
+        usage: AnthropicUsage;
       };
       /* eslint-enable @typescript-eslint/no-unsafe-type-assertion */
 
       return {
         content: convertResponseBlocks(msg.content),
         stopReason: mapStopReason(msg.stop_reason),
-        usage: {
-          inputTokens: msg.usage.input_tokens,
-          outputTokens: msg.usage.output_tokens,
-        },
+        usage: extractUsage(msg.usage),
       };
     } catch (err) {
       throw classifyError(err);
@@ -89,23 +90,38 @@ export class AnthropicRuntimeProvider implements RuntimeProvider {
 
     const messages = convertMessages(request.messages);
     const tools = convertTools(request.tools);
+    const system = buildCachedSystem(request.systemPrompt);
+    const cachedTools = applyCacheControlToTools(tools);
 
     try {
       /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- SDK boundary: stream events */
       const stream = client.messages.stream({
         model: request.model,
         max_tokens: request.maxTokens ?? 4096,
-        system: request.systemPrompt,
+        system: system as unknown as Parameters<typeof client.messages.create>[0]['system'],
         messages: messages as unknown as Parameters<typeof client.messages.create>[0]['messages'],
-        ...(tools.length > 0
-          ? {tools: tools as unknown as Parameters<typeof client.messages.create>[0]['tools']}
+        ...(cachedTools.length > 0
+          ? {tools: cachedTools as unknown as Parameters<typeof client.messages.create>[0]['tools']}
           : {}),
       });
 
       const toolInputBuffers = new Map<string, string>();
+      // Anthropic sends input token counts (including cache fields) in
+      // message_start, and output token counts in message_delta. We
+      // accumulate both and emit a single message_end with the full picture.
+      let streamUsage: LLMUsage = {inputTokens: 0, outputTokens: 0};
 
       for await (const event of stream as unknown as AsyncIterable<AnthropicStreamEvent>) {
         switch (event.type) {
+          case 'message_start': {
+            // Capture input tokens + cache fields from message_start
+            const u = event.message?.usage;
+            if (u) {
+              streamUsage = extractUsage(u);
+            }
+            break;
+          }
+
           case 'content_block_start':
             if (event.content_block?.type === 'tool_use') {
               const id = event.content_block.id ?? '';
@@ -145,12 +161,14 @@ export class AnthropicRuntimeProvider implements RuntimeProvider {
           }
 
           case 'message_delta':
+            // message_delta carries output_tokens; merge with input counts from message_start
+            if (event.usage) {
+              streamUsage.outputTokens = event.usage.output_tokens ?? 0;
+            }
             yield {
               type: 'message_end',
               stopReason: mapStopReason(event.delta?.stop_reason ?? null),
-              usage: event.usage
-                ? {inputTokens: event.usage.input_tokens ?? 0, outputTokens: event.usage.output_tokens ?? 0}
-                : undefined,
+              usage: streamUsage,
             };
             break;
 
@@ -176,9 +194,60 @@ function findCurrentToolId(buffers: Map<string, string>): string | undefined {
 
 interface AnthropicStreamEvent {
   type: string;
+  message?: {usage?: AnthropicUsage};
   content_block?: {type?: string; id?: string; name?: string};
   delta?: {type?: string; text?: string; partial_json?: string; stop_reason?: string | null};
   usage?: {input_tokens?: number; output_tokens?: number};
+}
+
+interface AnthropicUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Prompt caching helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a system prompt string into a content-block array with
+ * `cache_control` on the last block. This tells Anthropic to cache
+ * the system prompt prefix, giving 90% input cost savings on cache hits.
+ */
+function buildCachedSystem(systemPrompt: string): Array<{type: 'text'; text: string; cache_control: {type: 'ephemeral'}}> {
+  return [{type: 'text', text: systemPrompt, cache_control: {type: 'ephemeral'}}];
+}
+
+/**
+ * Add `cache_control` to the last tool definition so the full tool list
+ * is included in the cached prefix.
+ */
+function applyCacheControlToTools(tools: AnthropicTool[]): Array<AnthropicTool & {cache_control?: {type: 'ephemeral'}}> {
+  if (tools.length === 0) return tools;
+  return tools.map((t, i) =>
+    i === tools.length - 1
+      ? {...t, cache_control: {type: 'ephemeral'}}
+      : t,
+  );
+}
+
+/**
+ * Extract our LLMUsage from the Anthropic usage object, mapping cache fields.
+ */
+function extractUsage(u: AnthropicUsage): LLMUsage {
+  const usage: LLMUsage = {
+    inputTokens: u.input_tokens,
+    outputTokens: u.output_tokens,
+  };
+  if (u.cache_read_input_tokens) {
+    usage.cacheReadInputTokens = u.cache_read_input_tokens;
+  }
+  if (u.cache_creation_input_tokens) {
+    usage.cacheCreationInputTokens = u.cache_creation_input_tokens;
+  }
+  return usage;
 }
 
 // ---------------------------------------------------------------------------

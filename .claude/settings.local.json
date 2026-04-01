@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching\")",
+      "WebSearch"
+    ]
+  }
+}

@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, FlaskConical, Loader2, Play, Trophy } from 'lucide-react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
+import { CheckCircle2, XCircle, FlaskConical, Loader2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabId = 'suites' | 'arena';
+/* ------------------------------------------------------------------ */
+/*  Types                                                               */
+/* ------------------------------------------------------------------ */
 
 interface EvalSuite {
   name: string;
@@ -19,28 +21,82 @@ interface EvalSuite {
   assertions: Array<{ text: string; negated: boolean }>;
 }
 
-interface EvalRunSummary {
-  id: string;
-  model: { provider: string; model: string };
-  passRate: number;
-  totalPassed: number;
-  totalFailed: number;
-  totalDurationMs: number;
-  totalCostMicros: number;
-  label?: string;
-  triggeredBy: string;
-  createdAt: string;
-}
-
-interface ArenaModel {
+interface AvailableModel {
   provider: string;
   model: string;
   label?: string;
 }
 
+interface AssertionResult {
+  text: string;
+  negated: boolean;
+  passed: boolean;
+  reason: string;
+}
+
+interface CostInfo {
+  estimatedCostMicros: number;
+  estimatedCostNoCacheMicros?: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+}
+
+interface EvalResultDetail {
+  response: string;
+  toolCalls: Array<{ name: string; parameters: Record<string, unknown> }>;
+  toolResults?: string[];
+  assertions: AssertionResult[];
+  durationMs: number;
+  error?: string;
+  queryCost?: CostInfo;
+  judgeCost?: CostInfo;
+}
+
+interface EvalHistoryEntry {
+  runId: string;
+  passed: boolean;
+  durationMs: number;
+  queryCostMicros: number;
+  judgeCostMicros: number;
+  timestamp: string;
+  model: string;
+  assertions: Array<{ passed: boolean }>;
+}
+
+interface CompareResult {
+  model: AvailableModel;
+  passed: boolean;
+  assertions: AssertionResult[];
+  durationMs: number;
+  queryCostMicros: number;
+  judgeCostMicros: number;
+  response: string;
+  toolCalls: Array<{ name: string; parameters: Record<string, unknown> }>;
+  toolResults: string[];
+  error?: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface RunResult {
+  evalName: string;
+  passed: boolean;
+  result?: EvalResultDetail;
+  liveText?: string;
+  liveTools?: Array<{ name: string; status?: string }>;
+  phase?: 'querying' | 'judging' | 'done';
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                             */
+/* ------------------------------------------------------------------ */
+
 function formatCost(micros: number): string {
   if (micros === 0) return '$0.00';
-  return `$${(micros / 1_000_000).toFixed(2)}`;
+  const dollars = micros / 1_000_000;
+  if (dollars < 0.01) return `$${dollars.toFixed(4)}`;
+  return `$${dollars.toFixed(2)}`;
 }
 
 function formatDuration(ms: number): string {
@@ -59,188 +115,506 @@ function formatRelativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-function PassRateBadge({ rate }: { rate: number }) {
-  const pct = Math.round(rate * 100);
-  const color = pct === 100 ? 'text-emerald-400' : pct >= 90 ? 'text-blue-400' : pct >= 80 ? 'text-amber-400' : 'text-red-400';
-  return <span className={cn('font-semibold', color)}>{pct}%</span>;
+function gradientColor(value: number, min: number, max: number): string {
+  if (min === max) return 'text-emerald-400';
+  const ratio = (value - min) / (max - min);
+  if (ratio <= 0.33) return 'text-emerald-400';
+  if (ratio <= 0.66) return 'text-amber-400';
+  return 'text-red-400';
 }
 
 /* ------------------------------------------------------------------ */
-/*  Tab: Eval Suites                                                   */
+/*  SSE helper                                                          */
 /* ------------------------------------------------------------------ */
 
-interface AssertionResult {
-  text: string;
-  negated: boolean;
-  passed: boolean;
-  reason: string;
+function streamEvalRun(
+  evalNames: string[],
+  onEvent: (event: Record<string, unknown>) => void,
+  model?: { provider: string; model: string },
+  timeoutMs?: number,
+): { promise: Promise<void>; abort: () => void } {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  if (timeoutMs) {
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
+  const promise = (async () => {
+    try {
+      const resp = await fetch('/api/evals/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ evalNames, ...(model ? { model } : {}) }),
+        signal: controller.signal,
+      });
+      if (!resp.ok || !resp.body) return;
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const parsed: unknown = JSON.parse(line.slice(6));
+            if (parsed && typeof parsed === 'object') {
+              onEvent(parsed as Record<string, unknown>); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- SSE parsing
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') { // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- error classification
+        onEvent({ type: 'error', message: (err as Error).message ?? 'Stream error' }); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- error classification
+      }
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  })();
+
+  return { promise, abort: () => controller.abort() };
 }
 
-interface CostInfo {
-  estimatedCostMicros: number;
-  inputTokens: number;
-  outputTokens: number;
+async function runSingleModelEval(
+  evalName: string,
+  model: AvailableModel,
+  timeoutMs?: number,
+): Promise<CompareResult> {
+  return new Promise<CompareResult>((resolve) => {
+    let resolved = false;
+    const result: CompareResult = {
+      model,
+      passed: false,
+      assertions: [],
+      durationMs: 0,
+      queryCostMicros: 0,
+      judgeCostMicros: 0,
+      response: '',
+      toolCalls: [],
+      toolResults: [],
+    };
+
+    const { promise, abort } = streamEvalRun(
+      [evalName],
+      (event) => {
+        const type = String(event['type'] ?? '');
+        if (type === 'eval_complete' && !resolved) {
+          resolved = true;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE result
+          const r = event['result'] as EvalResultDetail | undefined;
+          if (r) {
+            result.passed = Boolean(event['passed']);
+            result.assertions = r.assertions ?? [];
+            result.durationMs = r.durationMs ?? 0;
+            result.queryCostMicros = r.queryCost?.estimatedCostMicros ?? 0;
+            result.judgeCostMicros = r.judgeCost?.estimatedCostMicros ?? 0;
+            result.response = r.response ?? '';
+            result.toolCalls = r.toolCalls ?? [];
+            result.toolResults = r.toolResults ?? [];
+            result.error = r.error;
+          }
+        } else if (type === 'agent_error' && !resolved) {
+          result.error = String(event['error'] ?? 'Unknown error');
+        }
+      },
+      { provider: model.provider, model: model.model },
+      timeoutMs,
+    );
+
+    const timeoutRace = timeoutMs
+      ? new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeoutMs + 1000))
+      : null;
+
+    const race = timeoutRace
+      ? Promise.race([promise, timeoutRace])
+      : promise;
+
+    race
+      .then(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(result);
+        } else {
+          resolve(result);
+        }
+      })
+      .catch((err) => {
+        if (!resolved) {
+          resolved = true;
+          result.error = (err as Error).message ?? 'Timeout'; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- error message
+          abort();
+          resolve(result);
+        } else {
+          resolve(result);
+        }
+      });
+  });
 }
 
-interface EvalResultDetail {
-  response: string;
-  toolCalls: Array<{ name: string; parameters: Record<string, unknown> }>;
-  assertions: AssertionResult[];
-  durationMs: number;
-  error?: string;
-  queryCost?: CostInfo;
-  judgeCost?: CostInfo;
-}
+/* ------------------------------------------------------------------ */
+/*  CompareTable                                                        */
+/* ------------------------------------------------------------------ */
 
-interface RunResult {
-  evalName: string;
-  passed: boolean;
-  result?: EvalResultDetail;
-  liveText?: string;
-  liveTools?: Array<{ name: string; status?: string }>;
-  phase?: 'querying' | 'judging' | 'done';
-}
+function CompareTable({ results }: { results: CompareResult[] }) {
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-function EvalResultCard({ result: r }: { result: RunResult }) {
-  const isLive = r.phase === 'querying' || r.phase === 'judging';
-  const [expanded, setExpanded] = useState(true);
+  if (results.length === 0) return null;
+
+  const times = results.map((r) => r.durationMs).filter((t) => t > 0);
+  const costs = results.map((r) => r.queryCostMicros).filter((c) => c > 0);
+  const minTime = Math.min(...times, Infinity);
+  const maxTime = Math.max(...times, 0);
+  const minCost = Math.min(...costs, Infinity);
+  const maxCost = Math.max(...costs, 0);
+
+  // Best value: cheapest passing model
+  const passingCosts = results.filter((r) => r.passed).map((r) => r.queryCostMicros);
+  const bestCost = passingCosts.length > 0 ? Math.min(...passingCosts) : -1;
 
   return (
-    <div className={cn('border rounded-lg overflow-hidden',
-      isLive ? 'border-indigo-500/30' : r.passed ? 'border-emerald-500/20' : 'border-red-500/30',
-    )}>
+    <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-gray-50 dark:bg-zinc-900/50 text-xs text-gray-500 dark:text-zinc-500">
+            <th className="text-left px-4 py-2 font-medium">Model</th>
+            <th className="text-center px-4 py-2 font-medium">Result</th>
+            <th className="text-center px-4 py-2 font-medium">Assertions</th>
+            <th className="text-right px-4 py-2 font-medium">Time</th>
+            <th className="text-right px-4 py-2 font-medium">Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.map((r, i) => {
+            const isExpanded = expandedRow === i;
+            const isAuthError = r.error && /auth|unauthorized|401/i.test(r.error);
+            const isRateLimit = r.error && /rate.?limit|429|too many/i.test(r.error);
+            const errorColor = isAuthError ? 'text-amber-400' : isRateLimit ? 'text-orange-400' : 'text-red-400';
+            const passedCount = r.assertions.filter((a) => a.passed).length;
+            const isBest = r.passed && r.queryCostMicros === bestCost && bestCost >= 0;
+
+            return (
+              <Fragment key={i}>
+                <tr
+                  onClick={() => setExpandedRow(isExpanded ? null : i)}
+                  className="border-t border-gray-100 dark:border-zinc-800/50 hover:bg-gray-50/50 dark:hover:bg-zinc-800/20 cursor-pointer"
+                >
+                  <td className="px-4 py-2.5 text-gray-800 dark:text-zinc-300 font-medium">
+                    {r.model.label || r.model.model.replace(/-\d{8}$/, '')}
+                    {isBest && (
+                      <span className="ml-2 px-1.5 py-0.5 text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 rounded">best value</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    {r.error ? (
+                      <span className={cn('font-semibold text-xs', errorColor)}>ERR</span>
+                    ) : r.passed ? (
+                      <span className="font-semibold text-xs text-emerald-400">PASS</span>
+                    ) : (
+                      <span className="font-semibold text-xs text-red-400">FAIL</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className="inline-flex items-center gap-0.5">
+                      {r.assertions.map((a, ai) => (
+                        <span key={ai} className={cn('inline-block w-1.5 h-1.5 rounded-full', a.passed ? 'bg-emerald-400' : 'bg-red-400')} />
+                      ))}
+                      {r.assertions.length > 0 && (
+                        <span className="text-[10px] text-gray-400 dark:text-zinc-600 ml-1">
+                          {passedCount}/{r.assertions.length}
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td className={cn('px-4 py-2.5 text-right font-mono text-xs', r.durationMs > 0 ? gradientColor(r.durationMs, minTime, maxTime) : 'text-gray-400 dark:text-zinc-600')}>
+                    {r.durationMs > 0 ? formatDuration(r.durationMs) : '-'}
+                  </td>
+                  <td className={cn('px-4 py-2.5 text-right font-mono text-xs', r.queryCostMicros > 0 ? gradientColor(r.queryCostMicros, minCost, maxCost) : 'text-gray-400 dark:text-zinc-600')}>
+                    {r.queryCostMicros > 0 ? formatCost(r.queryCostMicros) : '-'}
+                  </td>
+                </tr>
+                {isExpanded && (
+                  <tr className="border-t border-gray-100 dark:border-zinc-800/50">
+                    <td colSpan={5} className="px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/20 space-y-3">
+                      {r.error && (
+                        <div className={cn('text-xs border rounded px-3 py-2 font-mono',
+                          isAuthError ? 'text-amber-400 bg-amber-500/5 border-amber-500/20' :
+                          isRateLimit ? 'text-orange-400 bg-orange-500/5 border-orange-500/20' :
+                          'text-red-400 bg-red-500/5 border-red-500/20',
+                        )}>
+                          {r.error}
+                        </div>
+                      )}
+                      {r.response && (
+                        <div>
+                          <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Response</div>
+                          <div className="text-xs text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap">
+                            {r.response}
+                          </div>
+                        </div>
+                      )}
+                      {r.toolCalls.length > 0 && (
+                        <div>
+                          <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Tool Calls</div>
+                          <div className="space-y-1">
+                            {r.toolCalls.map((tc, ti) => (
+                              <div key={ti} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono">
+                                <span className="text-indigo-500 font-semibold">{tc.name}</span>
+                                {r.toolResults[ti] && (
+                                  <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px] truncate">{r.toolResults[ti]}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {r.assertions.length > 0 && (
+                        <div>
+                          <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Assertions</div>
+                          <div className="space-y-1.5">
+                            {r.assertions.map((a, ai) => (
+                              <div key={ai} className={cn('text-xs rounded px-3 py-2 border', a.passed ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-red-500/20 bg-red-500/5')}>
+                                <div className="flex items-center gap-2">
+                                  {a.passed ? (
+                                    <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                                  ) : (
+                                    <XCircle className="h-3 w-3 text-red-400 shrink-0" />
+                                  )}
+                                  <span className={a.passed ? 'text-emerald-300' : 'text-red-300'}>{a.negated ? 'NOT ' : ''}{a.text}</span>
+                                </div>
+                                {a.reason && (
+                                  <div className="mt-1 ml-5 text-gray-500 dark:text-zinc-500 italic">{a.reason}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  EvalCard                                                            */
+/* ------------------------------------------------------------------ */
+
+function EvalCard({
+  suite,
+  models,
+  history,
+}: {
+  suite: EvalSuite;
+  models: AvailableModel[];
+  history: EvalHistoryEntry[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const [timeout, setTimeoutVal] = useState(60);
+  const [isRunning, setIsRunning] = useState(false);
+  const [results, setResults] = useState<CompareResult[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Pre-select first model on initial open
+  useEffect(() => {
+    if (expanded && selectedModels.size === 0 && models.length > 0) {
+      setSelectedModels(new Set([`${models[0].provider}/${models[0].model}`]));
+    }
+  }, [expanded, models, selectedModels.size]);
+
+  const toggleModel = (key: string) => {
+    setSelectedModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedModels(new Set(models.map((m) => `${m.provider}/${m.model}`)));
+  };
+
+  const selectNone = () => {
+    setSelectedModels(new Set());
+  };
+
+  const handleRun = async () => {
+    setIsRunning(true);
+    setResults([]);
+
+    const selected = models.filter((m) => selectedModels.has(`${m.provider}/${m.model}`));
+
+    // Run sequentially, each model result appears in table as it completes
+    for (const model of selected) {
+      const r = await runSingleModelEval(suite.name, model, timeout * 1000);
+      setResults((prev) => [...prev, r]);
+    }
+
+    setIsRunning(false);
+  };
+
+  const selectedCount = selectedModels.size;
+  const colCount = Math.min(Math.max(models.length, 3), 5);
+
+  return (
+    <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 text-xs px-3 py-2 hover:bg-gray-50 dark:hover:bg-zinc-800/20 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors"
       >
-        {isLive ? (
-          <Loader2 className="h-3.5 w-3.5 text-indigo-400 animate-spin shrink-0" />
-        ) : r.passed ? (
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-        ) : (
-          <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-        )}
-        <span className="text-gray-700 dark:text-zinc-300 font-medium">{r.evalName}</span>
-        {r.result && (
-          <>
-            <span className="text-gray-400 dark:text-zinc-600 ml-1">{formatDuration(r.result.durationMs)}</span>
-            {r.result.queryCost && (
-              <span className="text-gray-400 dark:text-zinc-600 font-mono text-[10px]" title="Query cost">
-                Q:{formatCost(r.result.queryCost.estimatedCostMicros)}
-              </span>
-            )}
-            {r.result.judgeCost && (
-              <span className="text-gray-400 dark:text-zinc-600 font-mono text-[10px]" title="Judge cost">
-                J:{formatCost(r.result.judgeCost.estimatedCostMicros)}
-              </span>
-            )}
-          </>
-        )}
-        <span className={cn('ml-auto font-semibold',
-          isLive ? 'text-indigo-400' : r.passed ? 'text-emerald-400' : 'text-red-400',
-        )}>
-          {isLive ? 'Running...' : r.passed ? 'PASS' : 'FAIL'}
+        <FlaskConical className="h-4 w-4 text-indigo-500/60 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-900 dark:text-zinc-200">{suite.title || suite.name}</div>
+          {suite.description && (
+            <div className="text-xs text-gray-400 dark:text-zinc-500 truncate">{suite.description}</div>
+          )}
+        </div>
+        <span className="text-[11px] text-gray-400 dark:text-zinc-500 tabular-nums">
+          {suite.assertionCount} assertion{suite.assertionCount !== 1 ? 's' : ''}
         </span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          className={cn('text-gray-400 transition-transform', expanded && 'rotate-180')}>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <ChevronDown className={cn('h-4 w-4 text-gray-400 dark:text-zinc-500 transition-transform', expanded && 'rotate-180')} />
       </button>
 
       {expanded && (
-        <div className="border-t border-gray-100 dark:border-zinc-800/50 px-3 py-3 space-y-3 bg-gray-50/50 dark:bg-zinc-900/20">
-          {/* Live streaming text */}
-          {isLive && (
-            <>
-              {(r.liveTools ?? []).length > 0 && (
-                <div className="space-y-1">
-                  {(r.liveTools ?? []).map((t, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono">
-                      {t.status ? (
-                        <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
-                      ) : (
-                        <Loader2 className="h-3 w-3 text-indigo-400 animate-spin shrink-0" />
-                      )}
-                      <span className="text-indigo-500 font-semibold">{t.name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {r.liveText && (
-                <div className="text-xs text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap">
-                  {r.liveText}
-                  <span className="inline-block w-1.5 h-3.5 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom" />
-                </div>
-              )}
-              {!r.liveText && (r.liveTools ?? []).length === 0 && (
-                <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-zinc-500">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Querying agent...
-                </div>
-              )}
-            </>
-          )}
+        <div className="border-t border-gray-100 dark:border-zinc-800/50 px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/30 space-y-4">
+          {/* Query */}
+          <div>
+            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Query</div>
+            <div className="text-sm text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 font-mono">
+              {suite.query}
+            </div>
+          </div>
 
-          {/* Completed result */}
-          {r.result && (
-            <>
-              {r.result.error && (
-                <div className="text-xs text-red-400 bg-red-500/5 border border-red-500/20 rounded px-3 py-2 font-mono">
-                  {r.result.error}
+          {/* Assertions */}
+          <div>
+            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Assertions</div>
+            <div className="space-y-1">
+              {suite.assertions.map((a, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-gray-600 dark:text-zinc-400">
+                  <span className={a.negated ? 'text-red-400' : 'text-emerald-400'}>{a.negated ? 'NOT' : 'SHOULD'}</span>
+                  <span>{a.text}</span>
                 </div>
-              )}
+              ))}
+            </div>
+          </div>
 
-              {r.result.response && (
-                <div>
-                  <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Response</div>
-                  <div className="text-xs text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap">
-                    {r.result.response}
-                  </div>
-                </div>
-              )}
+          {/* Model selector grid */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Models</div>
+              <button onClick={selectAll} className="text-[10px] text-indigo-400 hover:text-indigo-300">all</button>
+              <button onClick={selectNone} className="text-[10px] text-indigo-400 hover:text-indigo-300">none</button>
+            </div>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+              {models.map((m) => {
+                const key = `${m.provider}/${m.model}`;
+                const selected = selectedModels.has(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleModel(key)}
+                    className={cn(
+                      'px-2 py-1.5 rounded text-xs font-medium border transition-colors text-center truncate',
+                      selected
+                        ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-400'
+                        : 'border-gray-200 dark:border-zinc-700/50 text-gray-400 dark:text-zinc-500 hover:border-gray-300 dark:hover:border-zinc-600',
+                    )}
+                  >
+                    {m.label || m.model.replace(/-\d{8}$/, '')}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-              {r.result.toolCalls.length > 0 && (
-                <div>
-                  <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Tool Calls</div>
-                  <div className="space-y-1">
-                    {r.result.toolCalls.map((tc, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono">
-                        <span className="text-indigo-500 font-semibold">{tc.name}</span>
-                        {tc.parameters['connection'] && (
-                          <span className="text-gray-500 dark:text-zinc-500">{String(tc.parameters['connection'])}</span>
-                        )}
-                        {tc.parameters['path'] && (
-                          <span className="text-gray-400 dark:text-zinc-600">{String(tc.parameters['path'])}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+          {/* Timeout slider */}
+          <div className="flex items-center gap-3">
+            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Timeout</div>
+            <input
+              type="range"
+              min={20}
+              max={300}
+              value={timeout}
+              onChange={(e) => setTimeoutVal(Number(e.target.value))}
+              className="flex-1 h-1 accent-indigo-500"
+            />
+            <span className="text-xs text-gray-400 dark:text-zinc-500 tabular-nums w-10 text-right">{timeout}s</span>
+          </div>
 
-              {r.result.assertions.length > 0 && (
-                <div>
-                  <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Assertions</div>
-                  <div className="space-y-1.5">
-                    {r.result.assertions.map((a, i) => (
-                      <div key={i} className={cn('text-xs rounded px-3 py-2 border', a.passed ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-red-500/20 bg-red-500/5')}>
-                        <div className="flex items-center gap-2">
-                          {a.passed ? (
-                            <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
-                          ) : (
-                            <XCircle className="h-3 w-3 text-red-400 shrink-0" />
-                          )}
-                          <span className={a.passed ? 'text-emerald-300' : 'text-red-300'}>{a.negated ? 'NOT ' : ''}{a.text}</span>
-                        </div>
-                        {a.reason && (
-                          <div className="mt-1 ml-5 text-gray-500 dark:text-zinc-500 italic">{a.reason}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+          {/* Run button */}
+          <button
+            onClick={() => { void handleRun(); }}
+            disabled={isRunning || selectedCount === 0}
+            className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 disabled:opacity-30 transition-colors flex items-center gap-2"
+          >
+            {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Run {selectedCount} model{selectedCount !== 1 ? 's' : ''}
+          </button>
+
+          {/* Results table */}
+          <CompareTable results={results} />
+
+          {/* History */}
+          {history.length > 0 && (
+            <div>
+              <button
+                onClick={() => setHistoryOpen(!historyOpen)}
+                className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest hover:text-gray-600 dark:hover:text-zinc-400"
+              >
+                <ChevronDown className={cn('h-3 w-3 transition-transform', historyOpen && 'rotate-180')} />
+                History ({history.length})
+              </button>
+              {historyOpen && (
+                <div className="mt-2 border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-zinc-900/50 text-gray-500 dark:text-zinc-500">
+                        <th className="text-left px-3 py-1.5 font-medium">Model</th>
+                        <th className="text-center px-3 py-1.5 font-medium">Result</th>
+                        <th className="text-center px-3 py-1.5 font-medium">Assertions</th>
+                        <th className="text-right px-3 py-1.5 font-medium">Time</th>
+                        <th className="text-right px-3 py-1.5 font-medium">Cost</th>
+                        <th className="text-right px-3 py-1.5 font-medium">When</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.map((h, i) => (
+                        <tr key={i} className="border-t border-gray-100 dark:border-zinc-800/50">
+                          <td className="px-3 py-1.5 text-gray-700 dark:text-zinc-300">{h.model.replace(/-\d{8}$/, '')}</td>
+                          <td className="px-3 py-1.5 text-center">
+                            <span className={h.passed ? 'text-emerald-400' : 'text-red-400'}>{h.passed ? 'PASS' : 'FAIL'}</span>
+                          </td>
+                          <td className="px-3 py-1.5 text-center">
+                            <span className="inline-flex items-center gap-0.5">
+                              {h.assertions.map((a, ai) => (
+                                <span key={ai} className={cn('inline-block w-1.5 h-1.5 rounded-full', a.passed ? 'bg-emerald-400' : 'bg-red-400')} />
+                              ))}
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-gray-400 dark:text-zinc-500">{formatDuration(h.durationMs)}</td>
+                          <td className="px-3 py-1.5 text-right text-gray-400 dark:text-zinc-500 font-mono">{formatCost(h.queryCostMicros)}</td>
+                          <td className="px-3 py-1.5 text-right text-gray-400 dark:text-zinc-500">{formatRelativeTime(h.timestamp)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       )}
@@ -248,87 +622,38 @@ function EvalResultCard({ result: r }: { result: RunResult }) {
   );
 }
 
-function SuitesTab({ suites, runs, onRunComplete }: { suites: EvalSuite[]; runs: EvalRunSummary[]; onRunComplete: () => void }) {
-  const [expandedSuite, setExpandedSuite] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [progress, setProgress] = useState<{ current: number; total: number; evalName: string } | null>(null);
-  const [runResults, setRunResults] = useState<RunResult[]>([]);
+/* ------------------------------------------------------------------ */
+/*  SuitesTab                                                           */
+/* ------------------------------------------------------------------ */
 
-  const handleRunSuite = async () => {
-    setIsRunning(true);
-    setProgress(null);
-    setRunResults([]);
+function SuitesTab({ suites }: { suites: EvalSuite[] }) {
+  const [models, setModels] = useState<AvailableModel[]>([]);
+  const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
 
-    const resp = await fetch('/api/evals/run', { method: 'POST' });
-    if (!resp.ok || !resp.body) {
-      setIsRunning(false);
-      return;
+  useEffect(() => {
+    fetch('/api/evals/arena/models')
+      .then((res) => res.json())
+      .then((data: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
+        const d = data as { models: AvailableModel[] };
+        setModels(d.models);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fetch per-eval history
+  useEffect(() => {
+    for (const suite of suites) {
+      fetch(`/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`)
+        .then((res) => res.json())
+        .then((data: unknown) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
+          const d = data as { entries: EvalHistoryEntry[] };
+          setHistoryMap((prev) => ({ ...prev, [suite.name]: d.entries }));
+        })
+        .catch(() => {});
     }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          const event: unknown = JSON.parse(line.slice(6));
-          if (!event || typeof event !== 'object') continue;
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE event
-          const e = event as Record<string, unknown>;
-          const type = String(e['type'] ?? '');
-
-          const evalName = String(e['evalName'] ?? '');
-
-          if (type === 'eval_start' && evalName) {
-            setProgress({ current: Number(e['current'] ?? 0), total: Number(e['total'] ?? 0), evalName });
-            // Add a live entry
-            setRunResults((prev) => [...prev, { evalName, passed: false, phase: 'querying', liveText: '', liveTools: [] }]);
-          } else if (type === 'agent_text' && evalName) {
-            // Stream text into the live entry
-            setRunResults((prev) => prev.map((r) =>
-              r.evalName === evalName ? { ...r, liveText: (r.liveText ?? '') + String(e['content'] ?? '') } : r,
-            ));
-          } else if (type === 'agent_tool' && evalName) {
-            setRunResults((prev) => prev.map((r) =>
-              r.evalName === evalName ? { ...r, liveTools: [...(r.liveTools ?? []), { name: String(e['toolName'] ?? 'request') }] } : r,
-            ));
-          } else if (type === 'agent_tool_result' && evalName) {
-            setRunResults((prev) => prev.map((r) =>
-              r.evalName === evalName ? {
-                ...r,
-                liveTools: (r.liveTools ?? []).map((t, i) => i === (r.liveTools ?? []).length - 1 ? { ...t, status: String(e['status'] ?? 'success') } : t),
-              } : r,
-            ));
-          } else if (type === 'eval_complete' && evalName) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE result
-            const result = e['result'] as EvalResultDetail | undefined;
-            setRunResults((prev) => prev.map((r) =>
-              r.evalName === evalName ? { evalName, passed: Boolean(e['passed']), result, phase: 'done' } : r,
-            ));
-            setProgress({ current: Number(e['current'] ?? 0), total: Number(e['total'] ?? 0), evalName });
-          } else if (type === 'run_complete' || type === 'done') {
-            setIsRunning(false);
-            setProgress(null);
-            onRunComplete();
-          }
-        } catch {
-          // skip
-        }
-      }
-    }
-
-    setIsRunning(false);
-    setProgress(null);
-  };
+  }, [suites]);
 
   if (suites.length === 0) {
     return (
@@ -344,279 +669,26 @@ function SuitesTab({ suites, runs, onRunComplete }: { suites: EvalSuite[]; runs:
 
   return (
     <div className="space-y-3">
-      {suites.map((suite) => {
-        const isExpanded = expandedSuite === suite.name;
-        return (
-          <div key={suite.name} className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setExpandedSuite(isExpanded ? null : suite.name)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors"
-            >
-              <FlaskConical className="h-4 w-4 text-indigo-500/60 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-900 dark:text-zinc-200">{suite.title || suite.name}</div>
-                {suite.description && (
-                  <div className="text-xs text-gray-400 dark:text-zinc-500 truncate">{suite.description}</div>
-                )}
-              </div>
-              <span className="text-[11px] text-gray-400 dark:text-zinc-500 tabular-nums">
-                {suite.assertionCount} assertion{suite.assertionCount !== 1 ? 's' : ''}
-              </span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                className={cn('text-gray-400 dark:text-zinc-500 transition-transform', isExpanded && 'rotate-180')}>
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-
-            {isExpanded && (
-              <div className="border-t border-gray-100 dark:border-zinc-800/50 px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/30">
-                <div className="mb-3">
-                  <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Query</div>
-                  <div className="text-sm text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 font-mono">
-                    {suite.query}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Assertions</div>
-                  <div className="space-y-1">
-                    {suite.assertions.map((a, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs text-gray-600 dark:text-zinc-400">
-                        <span className={a.negated ? 'text-red-400' : 'text-emerald-400'}>{a.negated ? 'NOT' : 'SHOULD'}</span>
-                        <span>{a.text}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {/* Run Controls */}
-      <div className="flex items-center gap-3 mt-2">
-        <button
-          onClick={() => { void handleRunSuite(); }}
-          disabled={isRunning}
-          className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 disabled:opacity-30 transition-colors flex items-center gap-2"
-        >
-          {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-          Run Suite
-        </button>
-        {progress && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
-            <div className="w-32 h-1.5 bg-gray-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${(progress.current / progress.total) * 100}%` }} />
-            </div>
-            <span>{progress.current}/{progress.total}</span>
-            <span className="text-gray-400 dark:text-zinc-600">{progress.evalName}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Live Results */}
-      {runResults.length > 0 && (
-        <div className="mt-3 space-y-2">
-          {runResults.map((r) => (
-            <EvalResultCard key={r.evalName} result={r} />
-          ))}
-        </div>
-      )}
-
-      {/* Recent Runs */}
-      {runs.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-3">Recent Runs</h3>
-          <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-zinc-900/50 text-xs text-gray-500 dark:text-zinc-500">
-                  <th className="text-left px-4 py-2 font-medium">Model</th>
-                  <th className="text-right px-4 py-2 font-medium">Pass Rate</th>
-                  <th className="text-right px-4 py-2 font-medium">Duration</th>
-                  <th className="text-right px-4 py-2 font-medium">Cost</th>
-                  <th className="text-right px-4 py-2 font-medium">When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((run) => (
-                  <tr key={run.id} className="border-t border-gray-100 dark:border-zinc-800/50 hover:bg-gray-50/50 dark:hover:bg-zinc-800/20">
-                    <td className="px-4 py-2.5 text-gray-800 dark:text-zinc-300 font-medium">
-                      {run.model.model.replace(/-\d{8}$/, '')}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <PassRateBadge rate={run.passRate} />
-                      <span className="text-gray-400 dark:text-zinc-600 ml-1 text-xs">({run.totalPassed}/{run.totalPassed + run.totalFailed})</span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-gray-400 dark:text-zinc-500">{formatDuration(run.totalDurationMs)}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-400 dark:text-zinc-500 font-mono text-xs">{formatCost(run.totalCostMicros)}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-400 dark:text-zinc-500 text-xs">{formatRelativeTime(run.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {suites.map((suite) => (
+        <EvalCard
+          key={suite.name}
+          suite={suite}
+          models={models}
+          history={historyMap[suite.name] ?? []}
+        />
+      ))}
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  Tab: Model Arena                                                    */
-/* ------------------------------------------------------------------ */
-
-interface ArenaResult {
-  model: ArenaModel;
-  passRate: number;
-  totalPassed: number;
-  totalFailed: number;
-  avgDurationMs: number;
-  costMicros: number;
-}
-
-function ArenaTab({ suites }: { suites: EvalSuite[] }) {
-  const [models, setModels] = useState<ArenaModel[]>([]);
-  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
-  const [results, _setResults] = useState<ArenaResult[]>([]);
-  const [_isRunning, _setIsRunning] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/evals/arena/models')
-      .then((res) => res.json())
-      .then((data: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
-        const d = data as { models: ArenaModel[] };
-        setModels(d.models);
-        setSelectedModels(new Set(d.models.map((m) => `${m.provider}/${m.model}`)));
-      })
-      .catch(() => {});
-  }, []);
-
-  const toggleModel = (key: string) => {
-    setSelectedModels((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Model Selection */}
-      <div className="flex flex-wrap gap-2">
-        {models.map((m) => {
-          const key = `${m.provider}/${m.model}`;
-          const selected = selectedModels.has(key);
-          return (
-            <button
-              key={key}
-              onClick={() => toggleModel(key)}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
-                selected
-                  ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-400'
-                  : 'border-gray-200 dark:border-zinc-700/50 text-gray-400 dark:text-zinc-500 hover:border-gray-300 dark:hover:border-zinc-600',
-              )}
-            >
-              {m.label || m.model.replace(/-\d{8}$/, '')}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Run Button */}
-      <div className="flex items-center gap-3">
-        {suites.length > 0 && (
-          <span className="text-xs text-gray-400 dark:text-zinc-500">
-            {suites.length} eval{suites.length !== 1 ? 's' : ''} in suite
-          </span>
-        )}
-        <button
-          disabled
-          className="ml-auto px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-30 transition-colors flex items-center gap-2"
-          title="Coming soon — requires API keys for each model"
-        >
-          <Play className="h-4 w-4" />
-          Run Arena
-        </button>
-      </div>
-      <div className="text-xs text-gray-400 dark:text-zinc-500 bg-indigo-500/5 border border-indigo-500/20 rounded-lg px-3 py-2">
-        Arena runs require API keys for each selected model. Configure models in <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-zinc-800">amodal.json</code> under <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-zinc-800">arena.models</code>.
-      </div>
-
-      {/* Results Table */}
-      {results.length > 0 && (
-        <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-zinc-900/50 text-xs text-gray-500 dark:text-zinc-500">
-                <th className="text-left px-4 py-3 font-medium">Model</th>
-                <th className="text-right px-4 py-3 font-medium">Pass Rate</th>
-                <th className="text-right px-4 py-3 font-medium">Avg Latency</th>
-                <th className="text-right px-4 py-3 font-medium">Cost / Run</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.sort((a, b) => b.passRate - a.passRate).map((r, i) => (
-                <tr key={`${r.model.provider}-${r.model.model}`} className="border-t border-gray-100 dark:border-zinc-800/50">
-                  <td className="px-4 py-3 text-gray-800 dark:text-zinc-300 font-medium flex items-center gap-2">
-                    {i === 0 && <Trophy className="h-3.5 w-3.5 text-amber-400" />}
-                    {r.model.label || r.model.model.replace(/-\d{8}$/, '')}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <PassRateBadge rate={r.passRate} />
-                    <span className="text-gray-400 dark:text-zinc-600 ml-1 text-xs">({r.totalPassed}/{r.totalPassed + r.totalFailed})</span>
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-400 dark:text-zinc-500">{formatDuration(r.avgDurationMs)}</td>
-                  <td className="px-4 py-3 text-right text-gray-400 dark:text-zinc-500 font-mono text-xs">{formatCost(r.costMicros)}</td>
-                  <td className="px-4 py-3 text-right">
-                    {i === 0 ? (
-                      <span className="px-2 py-1 text-[10px] font-medium bg-emerald-500/10 text-emerald-400 rounded">Best</span>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {results.length === 0 && !isRunning && (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Trophy className="h-10 w-10 text-amber-500/20 mb-3" />
-          <h3 className="text-sm font-semibold text-gray-400 dark:text-zinc-400 mb-1">No arena results yet</h3>
-          <p className="text-xs text-gray-400 dark:text-zinc-500 max-w-sm">
-            Select models and run the arena to compare their performance on your eval suite.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Tab: Health                                                        */
-/* ------------------------------------------------------------------ */
-
 
 /* ------------------------------------------------------------------ */
 /*  Main Page                                                          */
 /* ------------------------------------------------------------------ */
 
-const tabs: Array<{ id: TabId; label: string }> = [
-  { id: 'suites', label: 'Eval Suites' },
-  { id: 'arena', label: 'Model Arena' },
-];
-
 export function EvalsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>('suites');
   const [suites, setSuites] = useState<EvalSuite[]>([]);
-  const [runs, setRuns] = useState<EvalRunSummary[]>([]);
 
-  useEffect(() => {
+  const loadSuites = useCallback(() => {
     fetch('/api/evals/suites')
       .then((res) => res.json())
       .then((data: unknown) => {
@@ -625,16 +697,11 @@ export function EvalsPage() {
         setSuites(d.suites);
       })
       .catch(() => {});
-
-    fetch('/api/evals/runs')
-      .then((res) => res.json())
-      .then((data: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
-        const d = data as { runs: EvalRunSummary[] };
-        setRuns(d.runs);
-      })
-      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    loadSuites();
+  }, [loadSuites]);
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
@@ -645,35 +712,20 @@ export function EvalsPage() {
           <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Evals</h1>
         </div>
 
-        {/* Tabs */}
+        {/* Single tab header */}
         <div className="flex gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeTab === tab.id
-                  ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                  : 'text-gray-500 dark:text-zinc-500 hover:text-gray-800 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800/30',
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+          <button
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+          >
+            Eval Suites
+          </button>
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="max-w-4xl mx-auto px-6 py-6">
-          {activeTab === 'suites' && <SuitesTab suites={suites} runs={runs} onRunComplete={() => {
-            fetch('/api/evals/runs').then((r) => r.json()).then((d: unknown) => {
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
-              setRuns((d as { runs: EvalRunSummary[] }).runs);
-            }).catch(() => {});
-          }} />}
-          {activeTab === 'arena' && <ArenaTab suites={suites} />}
+          <SuitesTab suites={suites} />
         </div>
       </div>
     </div>

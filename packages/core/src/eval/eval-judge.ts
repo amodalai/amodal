@@ -33,10 +33,11 @@ export async function judgeAssertion(
     '',
     '## Instructions',
     'Reply with exactly one line in the format:',
-    'PASS: <brief reason>',
+    'PASS: <reason with specific evidence from the response>',
     'or',
-    'FAIL: <brief reason>',
+    'FAIL: <reason citing what was wrong, missing, or incorrect — quote specific text or data from the response and tool results that demonstrates the failure>',
     '',
+    'Be concrete. Reference actual content from the response. Do not give generic reasons like "the response does not satisfy the assertion".',
     'Nothing else.',
   ].join('\n');
 

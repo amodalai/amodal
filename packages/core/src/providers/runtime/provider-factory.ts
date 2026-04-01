@@ -36,6 +36,18 @@ export function createRuntimeProvider(modelConfig: ModelConfig): RuntimeProvider
       return new BedrockRuntimeProvider(modelConfig);
     case 'azure':
       return new AzureOpenAIRuntimeProvider(modelConfig);
+    case 'deepseek':
+      return new OpenAIRuntimeProvider({
+        ...modelConfig,
+        baseUrl: modelConfig.baseUrl ?? 'https://api.deepseek.com/v1',
+        credentials: modelConfig.credentials ?? {OPENAI_API_KEY: process.env['DEEPSEEK_API_KEY'] ?? ''},
+      });
+    case 'groq':
+      return new OpenAIRuntimeProvider({
+        ...modelConfig,
+        baseUrl: modelConfig.baseUrl ?? 'https://api.groq.com/openai/v1',
+        credentials: modelConfig.credentials ?? {OPENAI_API_KEY: process.env['GROQ_API_KEY'] ?? ''},
+      });
     default:
       if (modelConfig.baseUrl) {
         // OpenAI-compatible endpoint
