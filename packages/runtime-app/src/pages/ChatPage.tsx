@@ -24,11 +24,9 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
   const [rating, setRating] = useState<'up' | 'down' | null>(null);
   const [showComment, setShowComment] = useState(false);
   const [comment, setComment] = useState('');
-  const [submitted, setSubmitted] = useState(false);
 
   const submit = (r: 'up' | 'down', c?: string) => {
     setRating(r);
-    setSubmitted(true);
     setShowComment(false);
     fetch('/api/feedback', {
       method: 'POST',
@@ -37,39 +35,34 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
     }).catch(() => {});
   };
 
-  if (submitted) {
-    return (
-      <div className="flex items-center gap-1 mt-1.5">
-        {rating === 'up' ? (
-          <ThumbsUp className="h-3.5 w-3.5 text-emerald-400" />
-        ) : (
-          <ThumbsDown className="h-3.5 w-3.5 text-red-400" />
-        )}
-        <span className="text-[10px] text-gray-400 dark:text-zinc-600">Thanks for the feedback</span>
-      </div>
-    );
-  }
+  const clear = () => {
+    setRating(null);
+    setShowComment(false);
+    setComment('');
+  };
 
   return (
     <div className="mt-1.5">
       <div className="flex items-center gap-1">
         <button
-          onClick={() => submit('up')}
-          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-800/50 text-gray-300 dark:text-zinc-600 hover:text-emerald-400 transition-colors"
-          title="Good response"
+          onClick={() => rating === 'up' ? clear() : submit('up')}
+          className={`p-1 rounded transition-colors ${rating === 'up' ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-emerald-400 hover:bg-gray-100 dark:hover:bg-zinc-800/50'}`}
+          title={rating === 'up' ? 'Undo' : 'Good response'}
         >
           <ThumbsUp className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={() => {
-            if (showComment) {
+            if (rating === 'down') {
+              clear();
+            } else if (showComment) {
               submit('down', comment || undefined);
             } else {
               setShowComment(true);
             }
           }}
-          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-800/50 text-gray-300 dark:text-zinc-600 hover:text-red-400 transition-colors"
-          title="Bad response"
+          className={`p-1 rounded transition-colors ${rating === 'down' ? 'text-red-400 bg-red-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-red-400 hover:bg-gray-100 dark:hover:bg-zinc-800/50'}`}
+          title={rating === 'down' ? 'Undo' : 'Bad response'}
         >
           <ThumbsDown className="h-3.5 w-3.5" />
         </button>

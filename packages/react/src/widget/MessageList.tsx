@@ -36,23 +36,27 @@ function FeedbackButtons({ messageId, sessionId, query, response }: {
     }).catch(() => {});
   }, [sessionId, messageId, query, response]);
 
-  if (rating) {
-    return (
-      <div className="pcw-feedback pcw-feedback--submitted">
-        <span className={`pcw-feedback__icon pcw-feedback__icon--${rating}`}>
-          {rating === 'up' ? '👍' : '👎'}
-        </span>
-      </div>
-    );
-  }
+  const clear = useCallback(() => {
+    setRating(null);
+    setShowComment(false);
+    setComment('');
+  }, []);
 
   return (
     <div className="pcw-feedback">
-      <button className="pcw-feedback__btn" onClick={() => submit('up')} title="Good response">👍</button>
       <button
-        className="pcw-feedback__btn"
-        onClick={() => showComment ? submit('down', comment || undefined) : setShowComment(true)}
-        title="Bad response"
+        className={`pcw-feedback__btn ${rating === 'up' ? 'pcw-feedback__btn--active' : ''}`}
+        onClick={() => rating === 'up' ? clear() : submit('up')}
+        title={rating === 'up' ? 'Undo' : 'Good response'}
+      >👍</button>
+      <button
+        className={`pcw-feedback__btn ${rating === 'down' ? 'pcw-feedback__btn--active' : ''}`}
+        onClick={() => {
+          if (rating === 'down') clear();
+          else if (showComment) submit('down', comment || undefined);
+          else setShowComment(true);
+        }}
+        title={rating === 'down' ? 'Undo' : 'Bad response'}
       >👎</button>
       {showComment && (
         <div className="pcw-feedback__comment">
