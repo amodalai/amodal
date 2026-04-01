@@ -94,6 +94,9 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
         <ChevronRight className={cn('h-3 w-3 shrink-0 transition-transform', open && 'rotate-90')} />
         <FolderIcon className={cn('h-3.5 w-3.5 shrink-0', dirColor)} />
         <span className="truncate font-medium">{entry.name}</span>
+        {entry.source === 'package' && (
+          <Package className="h-3 w-3 shrink-0 text-violet-400/50" title={entry.packageName ?? 'installed package'} />
+        )}
         {entry.children && (
           <span className="text-[10px] text-gray-400 dark:text-white/20 ml-auto">{String(entry.children.length)}</span>
         )}
