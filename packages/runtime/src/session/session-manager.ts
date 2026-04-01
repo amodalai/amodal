@@ -15,7 +15,12 @@ import {
   PolicyDecision,
   AgentSDK,
   buildDefaultPrompt,
+  PlanModeManager,
+  McpManager,
+  ensureAdminAgent,
+  loadAdminAgent,
 } from '@amodalai/core';
+import type { AmodalRepo, CustomToolExecutor, CustomShellExecutor, StoreBackend } from '@amodalai/core';
 import type { AuthContext } from '../middleware/auth.js';
 import { convertSessionMessagesToHistory } from './history-converter.js';
 
@@ -55,7 +60,19 @@ export interface ManagedSession {
   /** Provider used for this session (pinned at creation, survives hydration) */
   provider?: string;
   /** Store backend for cleanup on session destroy */
-  storeBackend?: import('@amodalai/core').StoreBackend;
+  storeBackend?: StoreBackend;
+  /** Plan mode manager (local dev) */
+  planModeManager?: PlanModeManager;
+  /** MCP server manager (local dev) */
+  mcpManager?: McpManager;
+  /** Session title */
+  title?: string;
+  /** Custom tool executor (local dev) */
+  toolExecutor?: CustomToolExecutor;
+  /** Custom shell executor (local dev) */
+  shellExecutor?: CustomShellExecutor;
+  /** App ID for this session */
+  appId?: string;
 }
 
 export interface SessionManagerOptions {
@@ -67,6 +84,31 @@ export interface SessionManagerOptions {
   cleanupIntervalMs?: number;
   /** Platform API URL (for loading org-specific config per session) */
   platformApiUrl?: string;
+  /** Repo for local dev mode — sessions initialized from repo config instead of platform API */
+  repo?: AmodalRepo;
+  /** Custom tool executor (local dev) */
+  toolExecutor?: CustomToolExecutor;
+  /** Custom shell executor (local dev) */
+  shellExecutor?: CustomShellExecutor;
+  /** Shared store backend (local dev) */
+  storeBackend?: StoreBackend;
+}
+
+/**
+ * Resolve env: references in a string record.
+ * "env:VAR_NAME" → process.env.VAR_NAME value
+ */
+function resolveEnvRefs(record: Record<string, string>): Record<string, string> {
+  const resolved: Record<string, string> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (value.startsWith('env:')) {
+      const envVar = value.slice(4);
+      resolved[key] = process.env[envVar] ?? '';
+    } else {
+      resolved[key] = value;
+    }
+  }
+  return resolved;
 }
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -89,17 +131,28 @@ interface StoredSessionRecord {
 
 export class SessionManager {
   private readonly sessions = new Map<string, ManagedSession>();
-  private readonly baseParams: AmodalConfigParameters;
+  private baseParams: AmodalConfigParameters;
   private readonly ttlMs: number;
   private readonly platformApiUrl?: string;
+  private repo?: AmodalRepo;
+  private readonly toolExecutor?: CustomToolExecutor;
+  private readonly shellExecutor?: CustomShellExecutor;
+  private readonly sharedStoreBackend?: StoreBackend;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   /** Deduplicates concurrent hydration requests for the same conversation */
   private readonly pendingHydrations = new Map<string, Promise<ManagedSession | null>>();
+  /** Persistent MCP manager for inspect operations (lazy-initialized) */
+  private inspectMcp?: McpManager;
+  private inspectMcpInitialized = false;
 
   constructor(options: SessionManagerOptions) {
     this.baseParams = options.baseParams;
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     this.platformApiUrl = options.platformApiUrl;
+    this.repo = options.repo;
+    this.toolExecutor = options.toolExecutor;
+    this.shellExecutor = options.shellExecutor;
+    this.sharedStoreBackend = options.storeBackend;
 
     const cleanupIntervalMs =
       options.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS;
@@ -237,9 +290,10 @@ export class SessionManager {
     // Initialize store backend if stores are configured.
     // Must happen before initializeAuth/tool registration so store tools
     // are available when registerAmodalTools runs.
+    // In local dev mode, use the shared store backend from options.
     const stores = config.getStores();
-    let storeBackend: import('@amodalai/core').StoreBackend | undefined;
-    if (stores.length > 0) {
+    let storeBackend: StoreBackend | undefined = this.sharedStoreBackend;
+    if (stores.length > 0 && !storeBackend) {
       try {
         const { PGLiteStoreBackend } = await import('../stores/pglite-store-backend.js');
         const backend = new PGLiteStoreBackend();
@@ -394,7 +448,16 @@ export class SessionManager {
       model: mc?.model ?? config.getModel(),
       provider: mc?.provider,
       storeBackend,
+      planModeManager: new PlanModeManager(),
+      toolExecutor: this.toolExecutor,
+      shellExecutor: this.shellExecutor,
+      appId: auth?.applicationId,
     };
+
+    // Initialize MCP servers if repo has MCP connections
+    if (this.repo) {
+      await this.initMcp(session, this.repo);
+    }
 
     this.sessions.set(sessionId, session);
     return session;
@@ -532,6 +595,144 @@ export class SessionManager {
     await session.config.shutdownAudit();
   }
 
+  // ---------------------------------------------------------------------------
+  // Local dev features
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get the repo (local dev mode).
+   */
+  getRepo(): AmodalRepo | undefined {
+    return this.repo;
+  }
+
+  /**
+   * Update the repo for new sessions (hot reload).
+   * Existing sessions keep their old config.
+   */
+  updateRepo(repo: AmodalRepo): void {
+    this.repo = repo;
+    // Reset inspect MCP manager so it picks up new connections
+    this.inspectMcpInitialized = false;
+    this.inspectMcp = undefined;
+  }
+
+  /**
+   * Re-register a session under a different ID (e.g., restoring original ID on session restore).
+   */
+  reregister(session: ManagedSession, newId: string): void {
+    this.sessions.delete(session.id);
+    session.id = newId;
+    this.sessions.set(newId, session);
+  }
+
+  /**
+   * Create an admin session for the config chat.
+   * Uses admin agent skills/knowledge but the current repo's connections.
+   */
+  async createAdminSession(): Promise<ManagedSession> {
+    if (!this.repo) {
+      throw new Error('Admin sessions require a repo');
+    }
+    const agentDir = await ensureAdminAgent(this.repo.origin);
+    const adminContent = await loadAdminAgent(agentDir);
+
+    // Create a session with admin context
+    // The admin session uses the same create() flow but with overridden prompts
+    const session = await this.create('admin');
+
+    // Override system prompt with admin agent prompt
+    if (adminContent.agentPrompt) {
+      try {
+        session.geminiClient.getChat().setSystemInstruction(adminContent.agentPrompt);
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    session.appId = 'admin';
+    return session;
+  }
+
+  /**
+   * Get a persistent MCP manager for inspect/health operations.
+   * Lazy-initialized on first call, reused across requests.
+   */
+  async getInspectMcpManager(): Promise<McpManager | undefined> {
+    if (this.inspectMcpInitialized) return this.inspectMcp;
+    this.inspectMcpInitialized = true;
+
+    if (!this.repo) return undefined;
+
+    // Build MCP server configs from repo connections
+    const mcpServers = this.buildMcpConfigs(this.repo);
+    if (Object.keys(mcpServers).length === 0) return undefined;
+
+    const manager = new McpManager();
+    try {
+      await manager.startServers(mcpServers);
+      this.inspectMcp = manager;
+      return manager;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[INSPECT] MCP initialization failed: ${msg}\n`);
+      this.inspectMcp = manager;
+      return manager;
+    }
+  }
+
+  /**
+   * Initialize MCP servers for a session from repo connections.
+   */
+  private async initMcp(session: ManagedSession, repo: AmodalRepo): Promise<void> {
+    const mcpServers = this.buildMcpConfigs(repo);
+    if (Object.keys(mcpServers).length === 0) return;
+
+    const manager = new McpManager();
+    try {
+      await manager.startServers(mcpServers);
+      if (manager.connectedCount > 0) {
+        session.mcpManager = manager;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[SESSION] MCP initialization failed: ${msg}\n`);
+    }
+  }
+
+  /**
+   * Build MCP server configs from repo connections.
+   */
+  private buildMcpConfigs(repo: AmodalRepo): Record<string, { transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean }> {
+    const mcpServers: Record<string, { transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean }> = {};
+
+    for (const [name, conn] of repo.connections) {
+      if (conn.spec.protocol === 'mcp') {
+        const resolvedHeaders = conn.spec.headers ? resolveEnvRefs(conn.spec.headers) : undefined;
+        const resolvedEnv = conn.spec.env ? resolveEnvRefs(conn.spec.env) : undefined;
+        mcpServers[name] = {
+          transport: conn.spec.transport ?? 'stdio',
+          command: conn.spec.command,
+          args: conn.spec.args,
+          env: resolvedEnv,
+          url: conn.spec.url,
+          headers: resolvedHeaders,
+          trust: conn.spec.trust,
+        };
+      }
+    }
+
+    if (repo.mcpServers) {
+      for (const [name, config] of Object.entries(repo.mcpServers)) {
+        if (!mcpServers[name]) {
+          mcpServers[name] = config;
+        }
+      }
+    }
+
+    return mcpServers;
+  }
+
   /**
    * Remove sessions that have been idle longer than the TTL.
    */
@@ -559,6 +760,20 @@ export class SessionManager {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
+    }
+
+    // Shutdown MCP managers for all sessions
+    for (const session of this.sessions.values()) {
+      if (session.mcpManager) {
+        await session.mcpManager.shutdown().catch(() => {});
+      }
+    }
+
+    // Shutdown persistent inspect MCP manager
+    if (this.inspectMcp) {
+      await this.inspectMcp.shutdown().catch(() => {});
+      this.inspectMcp = undefined;
+      this.inspectMcpInitialized = false;
     }
 
     const ids = [...this.sessions.keys()];

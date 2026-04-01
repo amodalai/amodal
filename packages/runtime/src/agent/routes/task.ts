@@ -8,13 +8,13 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
-import type {AgentSessionManager} from '../session-manager.js';
-import {runAgentTurn} from '../agent-runner.js';
+import type {SessionManager} from '../../session/session-manager.js';
+import {streamMessage} from '../../session/session-runner.js';
 import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 
 export interface TaskRouterOptions {
-  sessionManager: AgentSessionManager;
+  sessionManager: SessionManager;
 }
 
 const TaskRequestSchema = z.object({
@@ -43,7 +43,7 @@ export function createTaskRouter(options: TaskRouterOptions): Router {
       return;
     }
 
-    const {prompt, app_id, app_token} = parsed.data;
+    const {prompt, app_id} = parsed.data;
     const taskId = randomUUID();
 
     const record: TaskRecord = {
@@ -60,10 +60,10 @@ export function createTaskRouter(options: TaskRouterOptions): Router {
     // Run in background
     void (async () => {
       try {
-        const session = await options.sessionManager.create(app_id, app_token);
+        const session = await options.sessionManager.create(app_id);
         const controller = new AbortController();
 
-        for await (const event of runAgentTurn(session, prompt, controller.signal)) {
+        for await (const event of streamMessage(session, prompt, controller.signal)) {
           record.events.push(event);
         }
 

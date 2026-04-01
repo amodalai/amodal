@@ -6,13 +6,13 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
-import type {AgentSessionManager} from '../session-manager.js';
+import type {SessionManager} from '../../session/session-manager.js';
 import type {EvalStore} from '../eval-store.js';
 import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost} from '@amodalai/core';
 import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo} from '@amodalai/core';
 
 export interface EvalRouterOptions {
-  sessionManager: AgentSessionManager;
+  sessionManager: SessionManager;
   evalStore: EvalStore;
   repoPath: string;
   /** Port the server is listening on — used by eval query provider to call /chat */
@@ -141,7 +141,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
   /** List eval definitions from the repo */
   router.get('/api/evals/suites', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo();
+    const repo = options.sessionManager.getRepo()!;
     const suites = repo.evals.map((e) => ({
       name: e.name,
       title: e.title,
@@ -189,7 +189,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     }
 
     const baseUrl = `http://127.0.0.1:${port}`;
-    const repo = options.sessionManager.getRepo();
+    const repo = options.sessionManager.getRepo()!;
     const evals = repo.evals;
 
     if (evals.length === 0) {
@@ -317,7 +317,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
   /** Get arena model config */
   router.get('/api/evals/arena/models', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo();
+    const repo = options.sessionManager.getRepo()!;
     const config = repo.config;
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- config shape

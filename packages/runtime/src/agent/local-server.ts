@@ -9,7 +9,7 @@ import type http from 'node:http';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
 import {loadRepo} from '@amodalai/core';
-import {AgentSessionManager} from './session-manager.js';
+import {SessionManager} from '../session/session-manager.js';
 import {LocalShellExecutor} from './shell-executor-local.js';
 import {ConfigWatcher} from './config-watcher.js';
 import {ProactiveRunner} from './proactive/proactive-runner.js';
@@ -26,7 +26,7 @@ import {errorHandler} from '../middleware/error-handler.js';
 import type {LocalServerConfig} from './agent-types.js';
 import type {ServerInstance} from '../server.js';
 import {createPGLiteStoreBackend} from '../stores/pglite-store-backend.js';
-import type {StoreBackend, LLMMessage} from '@amodalai/core';
+import type {StoreBackend} from '@amodalai/core';
 import {SessionStore} from './session-store.js';
 import {EvalStore} from './eval-store.js';
 import {buildPages} from './page-builder.js';
@@ -35,7 +35,7 @@ import {buildPages} from './page-builder.js';
  * Creates an Express server for repo-based agent mode.
  *
  * Loads the `.amodal/` config from `config.repoPath`, creates a
- * `AgentSessionManager`, mounts chat/task/inspect/automation/webhook routes,
+ * `SessionManager`, mounts chat/task/inspect/automation/webhook routes,
  * and optionally watches for config changes (hot reload).
  */
 export async function createLocalServer(config: LocalServerConfig): Promise<ServerInstance> {
@@ -54,8 +54,17 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
   }
 
-  const sessionManager = new AgentSessionManager(repo, {
+  const sessionManager = new SessionManager({
+    baseParams: {
+      sessionId: 'local-init',
+      interactive: false,
+      noBrowser: true,
+      debugMode: process.env['DEBUG'] === 'true',
+      cwd: config.repoPath,
+      targetDir: config.repoPath,
+    },
     ttlMs: config.sessionTtlMs,
+    repo,
     shellExecutor,
     storeBackend,
   });
@@ -117,7 +126,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Full agent config for the config page
   app.get('/api/config', (_req, res) => {
-    const repoData = sessionManager.getRepo();
+    const repoData = sessionManager.getRepo()!;
     const cfg = repoData.config;
 
     // Collect all env:* references from connection specs
@@ -227,7 +236,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.delete('/session/:id', (req, res) => {
     const sessionId = req.params['id'] ?? '';
     // Destroy in-memory session if active
-    sessionManager.destroy(sessionId);
+    void sessionManager.destroy(sessionId);
     const deleted = sessionStore.delete(sessionId);
     if (!deleted) {
       res.status(404).json({error: 'Session not found'});
@@ -250,12 +259,18 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       const persisted = sessionStore.load(sessionId);
       if (!persisted) return null;
 
-      // Create a fresh session and replay the conversation history
+      // Create a fresh session and seed LLM history from stored conversation
       const session = await sessionManager.create(tenantId);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted data matches LLMMessage shape
-      session.conversationHistory = persisted.conversationHistory as LLMMessage[];
-      // Re-register under the original ID so the client can keep using it
       sessionManager.reregister(session, sessionId);
+
+      // Convert stored messages to history format and seed the LLM
+      const { convertSessionMessagesToHistory } = await import('../session/history-converter.js');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted data
+      const history = convertSessionMessagesToHistory(persisted.conversationHistory as Array<import('../session/session-manager.js').SessionMessage>);
+      if (history.length > 0) {
+        session.geminiClient.setHistory(history);
+      }
+
       process.stderr.write(`[SESSION] Restored session ${sessionId} (${persisted.conversationHistory.length} messages)\n`);
       return session;
     },

@@ -8,9 +8,9 @@ import {describe, it, expect, vi, beforeEach} from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import {createInspectRouter} from './inspect.js';
-import type {AgentSessionManager} from '../session-manager.js';
+import type {SessionManager} from '../../session/session-manager.js';
 
-function makeSessionManager(): AgentSessionManager {
+function makeSessionManager(): SessionManager {
   return {
     size: 0,
     create: vi.fn(async () => ({
@@ -40,17 +40,17 @@ function makeSessionManager(): AgentSessionManager {
     shutdown: vi.fn(),
     getRepo: vi.fn(() => ({connections: new Map(), skills: [], automations: [], knowledge: []})),
     getInspectMcpManager: vi.fn(async () => undefined),
-  } as unknown as AgentSessionManager;
+  } as unknown as SessionManager;
 }
 
-function createTestApp(sessionManager: AgentSessionManager): express.Express {
+function createTestApp(sessionManager: SessionManager): express.Express {
   const app = express();
   app.use(createInspectRouter({sessionManager, repoPath: '/test/repo'}));
   return app;
 }
 
 describe('repo-inspect route', () => {
-  let sessionManager: AgentSessionManager;
+  let sessionManager: SessionManager;
 
   beforeEach(() => {
     sessionManager = makeSessionManager();

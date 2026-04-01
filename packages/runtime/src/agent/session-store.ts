@@ -6,7 +6,7 @@
 
 import {existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync} from 'node:fs';
 import {join, resolve} from 'node:path';
-import type {AgentSession} from './agent-types.js';
+import type {ManagedSession} from '../session/session-manager.js';
 
 interface PersistedSession {
   id: string;
@@ -52,15 +52,15 @@ export class SessionStore {
   /**
    * Save a session's conversation history to disk.
    */
-  save(session: AgentSession, automationName?: string): void {
+  save(session: ManagedSession, automationName?: string): void {
     const file = this.resolvePath(session.id);
     if (!file) return;
     this.ensureDir();
     const data: PersistedSession = {
       id: session.id,
-      appId: session.appId,
+      appId: session.appId ?? 'local',
       title: session.title,
-      conversationHistory: session.conversationHistory,
+      conversationHistory: session.accumulatedMessages,
       createdAt: session.createdAt,
       lastAccessedAt: session.lastAccessedAt,
       automationName,
