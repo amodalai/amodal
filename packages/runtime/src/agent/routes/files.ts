@@ -237,7 +237,9 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
             for (const pkgDirName of pkgDirs) {
               const npmName = `@amodalai/${pkgDirName}`;
               if (!lockFile.packages[npmName]) continue;
-              const pkgFilePath = path.join(scopeDir, pkgDirName, filePath);
+              const pkgRoot = path.join(scopeDir, pkgDirName);
+              const pkgFilePath = validateFilePath(pkgRoot, filePath);
+              if (!pkgFilePath) continue;
               try {
                 content = await readFile(pkgFilePath, 'utf-8');
                 source = 'package';
