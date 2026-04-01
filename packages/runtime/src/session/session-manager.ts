@@ -618,33 +618,50 @@ export class SessionManager {
           const upstream = config.getUpstreamConfig();
           const toolRegistry = upstream.getToolRegistry();
           const mcpTools = session.mcpManager.getDiscoveredTools();
-          for (const tool of mcpTools) {
-            // Create a minimal tool adapter matching the upstream ToolDefinition interface
+          for (const mcpTool of mcpTools) {
+            // Adapter matching upstream DeclarativeTool interface (build/silentBuild/schema/getSchema)
+            const mcpSession = session;
             const adapter = {
-              name: tool.name,
-              displayName: tool.name,
-              description: tool.description,
+              name: mcpTool.name,
+              displayName: mcpTool.name,
+              description: mcpTool.description,
               kind: 'declarative' as const,
-              parameterSchema: tool.parameters,
+              parameterSchema: mcpTool.parameters,
               get isReadOnly() { return true; },
               get toolAnnotations() { return undefined; },
+              get schema() { return this.getSchema(); },
               getSchema() {
                 return {
-                  name: tool.name,
-                  description: tool.description,
-                  parametersJsonSchema: tool.parameters,
+                  name: mcpTool.name,
+                  description: mcpTool.description,
+                  parametersJsonSchema: mcpTool.parameters,
                 };
               },
-              async processInvocation(args: Record<string, unknown>) {
-                const result = await session.mcpManager!.callTool(tool.name, args);
-                const output = result.content
-                  .map((c: {type: string; text?: string}) => c.type === 'text' && c.text ? c.text : `[${c.type}]`)
-                  .join('\n');
+              build(params: Record<string, unknown>) {
                 return {
-                  llmContent: result.isError ? `Error: ${output}` : output,
-                  returnDisplay: output.slice(0, 200),
-                  ...(result.isError ? {error: {message: output, type: 'EXECUTION_FAILED'}} : {}),
+                  name: mcpTool.name,
+                  params,
+                  execute: async () => adapter.validateBuildAndExecute(params),
                 };
+              },
+              silentBuild(params: Record<string, unknown>) {
+                return this.build(params);
+              },
+              async validateBuildAndExecute(params: Record<string, unknown>) {
+                try {
+                  const result = await mcpSession.mcpManager!.callTool(mcpTool.name, params);
+                  const output = result.content
+                    .map((c: {type: string; text?: string}) => c.type === 'text' && c.text ? c.text : `[${c.type}]`)
+                    .join('\n');
+                  return {
+                    llmContent: result.isError ? `Error: ${output}` : output,
+                    returnDisplay: output.slice(0, 200),
+                    ...(result.isError ? {error: {message: output, type: 'EXECUTION_FAILED'}} : {}),
+                  };
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  return {llmContent: `Error: ${msg}`, returnDisplay: msg, error: {message: msg, type: 'EXECUTION_FAILED'}};
+                }
               },
             };
             toolRegistry.registerTool(adapter as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
