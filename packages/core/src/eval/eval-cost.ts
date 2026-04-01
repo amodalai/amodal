@@ -43,6 +43,10 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'llama-3.3-70b-versatile': {inputPerMToken: 590_000, outputPerMToken: 790_000},
   'llama-3.1-8b-instant': {inputPerMToken: 50_000, outputPerMToken: 80_000},
   'mixtral-8x7b-32768': {inputPerMToken: 240_000, outputPerMToken: 240_000},
+  'meta-llama/llama-4-scout-17b-16e-instruct': {inputPerMToken: 110_000, outputPerMToken: 340_000},
+  'qwen/qwen3-32b': {inputPerMToken: 290_000, outputPerMToken: 390_000},
+  'moonshotai/kimi-k2-instruct': {inputPerMToken: 290_000, outputPerMToken: 390_000},
+  'openai/gpt-oss-120b': {inputPerMToken: 590_000, outputPerMToken: 790_000},
 };
 
 // Default pricing for unknown models (conservative estimate)

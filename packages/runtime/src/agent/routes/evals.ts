@@ -438,6 +438,10 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
       {provider: 'deepseek', model: 'deepseek-reasoner', label: 'DeepSeek Reasoner'},
       {provider: 'groq', model: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq)'},
       {provider: 'groq', model: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (Groq)'},
+      {provider: 'groq', model: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout (Groq)'},
+      {provider: 'groq', model: 'qwen/qwen3-32b', label: 'Qwen 3 32B (Groq)'},
+      {provider: 'groq', model: 'moonshotai/kimi-k2-instruct', label: 'Kimi K2 (Groq)'},
+      {provider: 'groq', model: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (Groq)'},
     ];
 
     res.json({models});
