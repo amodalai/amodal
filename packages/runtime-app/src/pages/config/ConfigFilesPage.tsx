@@ -299,6 +299,7 @@ export function ConfigFilesPage() {
                 value={fileData.content}
                 language={fileData.language}
                 onChange={isPackageFile ? undefined : setEditedContent}
+                readOnly={isPackageFile}
               />
             </div>
           </>
