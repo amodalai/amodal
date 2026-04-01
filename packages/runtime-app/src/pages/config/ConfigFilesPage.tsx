@@ -114,13 +114,18 @@ export function ConfigFilesPage() {
 
   // Fetch file tree (and refresh every 5s to pick up changes from admin agent or hot reload)
   useEffect(() => {
+    let lastJson = '';
     const fetchTree = () => {
       fetch('/api/files')
         .then((res) => res.json())
         .then((data: unknown) => {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const body = data as { tree: FileTreeEntry[] };
-          setTree(body.tree);
+          const json = JSON.stringify(data);
+          if (json !== lastJson) {
+            lastJson = json;
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+            const body = data as { tree: FileTreeEntry[] };
+            setTree(body.tree);
+          }
         })
         .catch(() => {})
         .finally(() => { setLoading(false); });
