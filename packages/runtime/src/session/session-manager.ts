@@ -644,48 +644,19 @@ export class SessionManager {
     auth?: AuthContext,
     sessionType?: string,
   ): Promise<ManagedSession | null> {
-    // Fetch stored conversation via pluggable session store or platform API
-    let record: StoredSessionRecord | null = null;
+    // Fetch stored conversation via pluggable session store
+    if (!this.sessionStore || !auth?.applicationId || !auth.token) {
+      return null;
+    }
 
-    if (this.sessionStore && auth?.applicationId && auth.token) {
-      try {
-        record = await this.sessionStore.getSession(auth.applicationId, conversationId, auth.token);
-      } catch (err: unknown) {
-        process.stderr.write(
-          `[HYDRATE] Error fetching conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}\n`,
-        );
-        return null;
-      }
-    } else if (this.platformApiUrl && auth?.applicationId && auth.token) {
-      // Fallback: direct platform API fetch (deprecated — use sessionStore instead)
-      const url = `${this.platformApiUrl}/api/applications/${auth.applicationId}/sessions/${conversationId}`;
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 10_000);
-        const response = await fetch(url, {
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${auth.token}`,
-            Accept: 'application/json',
-          },
-        });
-        clearTimeout(timer);
-
-        if (!response.ok) {
-          process.stderr.write(
-            `[HYDRATE] Failed to fetch conversation ${conversationId}: HTTP ${response.status}\n`,
-          );
-          return null;
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- API response shape
-        record = (await response.json()) as StoredSessionRecord;
-      } catch (err: unknown) {
-        process.stderr.write(
-          `[HYDRATE] Error fetching conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}\n`,
-        );
-        return null;
-      }
+    let record: StoredSessionRecord | null;
+    try {
+      record = await this.sessionStore.getSession(auth.applicationId, conversationId, auth.token);
+    } catch (err: unknown) {
+      process.stderr.write(
+        `[HYDRATE] Error fetching conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      return null;
     }
 
     if (!record) return null;
