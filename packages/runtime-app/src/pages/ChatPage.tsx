@@ -6,12 +6,96 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import type { FormEvent } from 'react';
-import { Send, Loader2, CheckCircle2, XCircle, Wrench, Pencil, Check } from 'lucide-react';
+import { Send, Loader2, CheckCircle2, XCircle, Wrench, Pencil, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { useAmodalChat } from '@amodalai/react';
 import type { ToolCallInfo, ContentBlock, ConfirmationInfo } from '@amodalai/react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
+
+function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, model }: {
+  messageId: string;
+  sessionId?: string;
+  query: string;
+  response: string;
+  toolCalls?: string[];
+  model?: string;
+}) {
+  const [rating, setRating] = useState<'up' | 'down' | null>(null);
+  const [showComment, setShowComment] = useState(false);
+  const [comment, setComment] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  const submit = (r: 'up' | 'down', c?: string) => {
+    setRating(r);
+    setSubmitted(true);
+    setShowComment(false);
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sessionId: sessionId ?? '', messageId, rating: r, comment: c, query, response, toolCalls, model}),
+    }).catch(() => {});
+  };
+
+  if (submitted) {
+    return (
+      <div className="flex items-center gap-1 mt-1.5">
+        {rating === 'up' ? (
+          <ThumbsUp className="h-3.5 w-3.5 text-emerald-400" />
+        ) : (
+          <ThumbsDown className="h-3.5 w-3.5 text-red-400" />
+        )}
+        <span className="text-[10px] text-gray-400 dark:text-zinc-600">Thanks for the feedback</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1.5">
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => submit('up')}
+          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-800/50 text-gray-300 dark:text-zinc-600 hover:text-emerald-400 transition-colors"
+          title="Good response"
+        >
+          <ThumbsUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => {
+            if (showComment) {
+              submit('down', comment || undefined);
+            } else {
+              setShowComment(true);
+            }
+          }}
+          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-800/50 text-gray-300 dark:text-zinc-600 hover:text-red-400 transition-colors"
+          title="Bad response"
+        >
+          <ThumbsDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {showComment && (
+        <div className="mt-1.5 flex gap-2 items-start">
+          <input
+            type="text"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit('down', comment || undefined); }}
+            placeholder="What went wrong? (optional)"
+            className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-800/50 text-gray-700 dark:text-zinc-300 placeholder:text-gray-400 dark:placeholder:text-zinc-600"
+            autoFocus
+          />
+          <button
+            onClick={() => submit('down', comment || undefined)}
+            className="text-xs px-2 py-1.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            Submit
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const METHOD_COLORS: Record<string, string> = {
   GET: 'text-blue-500',
@@ -381,14 +465,35 @@ export function ChatPage() {
                       </div>
                     </div>
                   );
-                case 'assistant_text':
+                case 'assistant_text': {
+                  // Find the preceding user message for feedback context
+                  const msgIndex = messages.indexOf(msg);
+                  const prevUser = messages.slice(0, msgIndex).reverse().find((m) => m.type === 'user');
+                  const queryText = prevUser && 'text' in prevUser ? String(prevUser.text) : '';
+                  const responseText = msg.contentBlocks
+                    .filter((b): b is {type: 'text'; text: string} => b.type === 'text')
+                    .map((b) => b.text)
+                    .join('');
+                  const toolNames = msg.contentBlocks
+                    .filter((b): b is {type: 'tool_calls'; calls: ToolCallInfo[]} => b.type === 'tool_calls')
+                    .flatMap((b) => b.calls.map((c) => c.toolName));
                   return (
                     <div key={msg.id} className="mb-6">
                       <div className="text-[14px] text-gray-900 dark:text-zinc-200">
                         <MessageContent blocks={msg.contentBlocks} respondToConfirmation={respondToConfirmation} />
                       </div>
+                      {!isStreaming && (
+                        <FeedbackButtons
+                          messageId={msg.id}
+                          sessionId={sessionId}
+                          query={queryText}
+                          response={responseText}
+                          toolCalls={toolNames.length > 0 ? toolNames : undefined}
+                        />
+                      )}
                     </div>
                   );
+                }
                 case 'error':
                   return (
                     <div key={msg.id} className="mb-6 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">

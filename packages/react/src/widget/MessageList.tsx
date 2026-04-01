@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { ChatMessage, AssistantTextMessage } from '../types';
 import type { InteractionEvent } from '../events/types';
 import { ToolCallCard } from './ToolCallCard';
@@ -16,6 +16,62 @@ import { AskUserCard } from './AskUserCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 
+function FeedbackButtons({ messageId, sessionId, query, response }: {
+  messageId: string;
+  sessionId?: string;
+  query: string;
+  response: string;
+}) {
+  const [rating, setRating] = useState<'up' | 'down' | null>(null);
+  const [showComment, setShowComment] = useState(false);
+  const [comment, setComment] = useState('');
+
+  const submit = useCallback((r: 'up' | 'down', c?: string) => {
+    setRating(r);
+    setShowComment(false);
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sessionId: sessionId ?? '', messageId, rating: r, comment: c, query, response}),
+    }).catch(() => {});
+  }, [sessionId, messageId, query, response]);
+
+  if (rating) {
+    return (
+      <div className="pcw-feedback pcw-feedback--submitted">
+        <span className={`pcw-feedback__icon pcw-feedback__icon--${rating}`}>
+          {rating === 'up' ? '👍' : '👎'}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pcw-feedback">
+      <button className="pcw-feedback__btn" onClick={() => submit('up')} title="Good response">👍</button>
+      <button
+        className="pcw-feedback__btn"
+        onClick={() => showComment ? submit('down', comment || undefined) : setShowComment(true)}
+        title="Bad response"
+      >👎</button>
+      {showComment && (
+        <div className="pcw-feedback__comment">
+          <input
+            type="text"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit('down', comment || undefined); }}
+            placeholder="What went wrong? (optional)"
+            className="pcw-feedback__input"
+            autoFocus
+          />
+          <button className="pcw-feedback__submit" onClick={() => submit('down', comment || undefined)}>Submit</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface MessageListProps {
   messages: ChatMessage[];
   isStreaming: boolean;
@@ -24,6 +80,7 @@ interface MessageListProps {
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
   emptyStateText?: string;
+  sessionId?: string;
 }
 
 function AssistantBubble({
@@ -123,7 +180,7 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, sendMessage, customWidgets, onInteraction, onAskUserSubmit, emptyStateText }: MessageListProps) {
+export function MessageList({ messages, isStreaming, sendMessage, customWidgets, onInteraction, onAskUserSubmit, emptyStateText, sessionId }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -165,17 +222,29 @@ export function MessageList({ messages, isStreaming, sendMessage, customWidgets,
                 <p className="pcw-bubble__text">{msg.text}</p>
               </div>
             );
-          case 'assistant_text':
+          case 'assistant_text': {
+            const idx = messages.indexOf(msg);
+            const prevUser = messages.slice(0, idx).reverse().find((m) => m.type === 'user');
+            const qText = prevUser && 'text' in prevUser ? String(prevUser.text) : '';
+            const rText = msg.contentBlocks
+              ?.filter((b): b is {type: 'text'; text: string} => b.type === 'text')
+              .map((b) => b.text)
+              .join('') ?? msg.text;
             return (
-              <AssistantBubble
-                key={msg.id}
-                message={msg}
-                sendMessage={sendMessage}
-                customWidgets={customWidgets}
-                onInteraction={onInteraction}
-                onAskUserSubmit={onAskUserSubmit}
-              />
+              <div key={msg.id}>
+                <AssistantBubble
+                  message={msg}
+                  sendMessage={sendMessage}
+                  customWidgets={customWidgets}
+                  onInteraction={onInteraction}
+                  onAskUserSubmit={onAskUserSubmit}
+                />
+                {!isStreaming && (
+                  <FeedbackButtons messageId={msg.id} sessionId={sessionId} query={qText} response={rText} />
+                )}
+              </div>
             );
+          }
           case 'error':
             return (
               <div key={msg.id} className="pcw-error">
