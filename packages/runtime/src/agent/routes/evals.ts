@@ -17,46 +17,46 @@ import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo, ModelConf
  * The judge needs to verify data accuracy, not read every byte.
  */
 function summarizeForJudge(raw: string, maxStringLen = 120, maxArrayItems = 5): string {
-  // Strip HTTP status prefix (e.g. "HTTP 200\n") to get to the JSON
-  let jsonStr = raw;
-  const httpMatch = /^HTTP \d+\n(.*)$/s.exec(raw);
-  const prefix = httpMatch ? raw.slice(0, raw.length - httpMatch[1].length) : '';
+  // Tool results often arrive as {"output": "HTTP 200\n[{...}]"} — unwrap the
+  // output field and summarize the inner content rather than truncating it as a string.
+  try {
+    const outer: unknown = JSON.parse(raw);
+    if (outer && typeof outer === 'object' && !Array.isArray(outer) && 'output' in outer) {
+       
+      const outputStr = String((outer as Record<string, unknown>)['output'] ?? '');
+      return summarizeToolOutput(outputStr, maxStringLen, maxArrayItems);
+    }
+    // Not an {output: ...} wrapper — summarize directly
+    return JSON.stringify(summarizeValue(outer, maxStringLen, maxArrayItems), null, 0);
+  } catch {
+    // Not JSON at all — return as-is
+    return raw;
+  }
+}
+
+function summarizeToolOutput(output: string, maxStr: number, maxArr: number): string {
+  // Strip HTTP status prefix
+  let body = output;
+  let prefix = '';
+  const httpMatch = /^(HTTP \d+\n)(.*)$/s.exec(output);
   if (httpMatch) {
-    jsonStr = httpMatch[1];
+    prefix = httpMatch[1];
+    body = httpMatch[2];
   }
 
   try {
-    const parsed: unknown = JSON.parse(jsonStr);
-    return prefix + JSON.stringify(summarizeValue(parsed, maxStringLen, maxArrayItems), null, 0);
+    const parsed: unknown = JSON.parse(body);
+    return prefix + JSON.stringify(summarizeValue(parsed, maxStr, maxArr), null, 0);
   } catch {
-    // Not JSON — return full string (no truncation)
-    return raw;
+    // Not JSON — return full output
+    return output;
   }
 }
 
 function summarizeValue(val: unknown, maxStr: number, maxArr: number): unknown {
   if (val === null || val === undefined) return val;
   if (typeof val === 'string') {
-    // Check if the string contains JSON — if so, parse and summarize recursively
-    // This handles the common pattern {"output": "HTTP 200\n[{...}]"}
-    if (val.length > maxStr) {
-      // Strip HTTP prefix if present
-      let inner = val;
-      let httpPrefix = '';
-      const httpMatch = /^(HTTP \d+\n)(.*)$/s.exec(val);
-      if (httpMatch) {
-        httpPrefix = httpMatch[1];
-        inner = httpMatch[2];
-      }
-      try {
-        const parsed: unknown = JSON.parse(inner);
-        return httpPrefix + JSON.stringify(summarizeValue(parsed, maxStr, maxArr), null, 0);
-      } catch {
-        // Not JSON — truncate as string
-        return val.slice(0, maxStr) + '...';
-      }
-    }
-    return val;
+    return val.length > maxStr ? val.slice(0, maxStr) + '...' : val;
   }
   if (typeof val === 'number' || typeof val === 'boolean') return val;
   if (Array.isArray(val)) {
