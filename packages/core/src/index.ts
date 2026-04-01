@@ -114,3 +114,4 @@ export { AgentSDK } from './sdk.js';
 
 // Admin agent
 export * from './admin/index.js';
+export * from './runtime/user-context.js';

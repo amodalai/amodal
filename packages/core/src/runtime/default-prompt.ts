@@ -28,6 +28,9 @@ export function buildDefaultPrompt(opts: {
   knowledge?: Array<{name: string; title?: string; body?: string}>;
   fieldGuidance?: string;
   scopeLabels?: Record<string, string>;
+  alternativeLookupGuidance?: string;
+  planMode?: boolean;
+  approvedPlan?: string;
 }): string {
   const parts: string[] = [];
 
@@ -149,6 +152,26 @@ export function buildDefaultPrompt(opts: {
     parts.push('## Data Scope');
     for (const [entity, label] of Object.entries(opts.scopeLabels)) {
       parts.push(`- ${entity}: ${label}`);
+    }
+    parts.push('');
+  }
+
+  // Alternative lookup guidance
+  if (opts.alternativeLookupGuidance) {
+    parts.push(opts.alternativeLookupGuidance);
+    parts.push('');
+  }
+
+  // Plan mode
+  if (opts.planMode) {
+    parts.push('## Planning Mode Active');
+    parts.push('You are currently in planning mode. Present your plan to the user before executing write operations.');
+    parts.push('Read operations and explore are allowed freely.');
+    if (opts.approvedPlan) {
+      parts.push('');
+      parts.push('## Approved Plan');
+      parts.push('Execute the following approved plan:');
+      parts.push(opts.approvedPlan);
     }
     parts.push('');
   }

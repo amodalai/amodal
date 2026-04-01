@@ -15,6 +15,9 @@ import {
   PolicyDecision,
   AgentSDK,
   buildDefaultPrompt,
+  resolveScopeLabels,
+  generateFieldGuidance,
+  generateAlternativeLookupGuidance,
   PlanModeManager,
   McpManager,
   ensureAdminAgent,
@@ -462,6 +465,16 @@ export class SessionManager {
         title: k.title,
         body: k.body,
       })),
+      ...(this.repo?.connections ? (() => {
+        const {scopeLabels} = resolveScopeLabels(this.repo.connections, []);
+        const fieldGuidance = generateFieldGuidance(this.repo.connections, []);
+        const altLookup = generateAlternativeLookupGuidance(this.repo.connections);
+        return {
+          fieldGuidance: fieldGuidance || undefined,
+          scopeLabels: Object.keys(scopeLabels).length > 0 ? scopeLabels : undefined,
+          alternativeLookupGuidance: altLookup || undefined,
+        };
+      })() : {}),
     });
     try {
       geminiClient.getChat().setSystemInstruction(systemPrompt);
@@ -598,6 +611,51 @@ export class SessionManager {
     // Initialize MCP servers if repo has MCP connections
     if (this.repo) {
       await this.initMcp(session, this.repo);
+
+      // Register MCP tools on the upstream tool registry so the Gemini client can see them
+      if (session.mcpManager) {
+        try {
+          const upstream = config.getUpstreamConfig();
+          const toolRegistry = upstream.getToolRegistry();
+          const mcpTools = session.mcpManager.getDiscoveredTools();
+          for (const tool of mcpTools) {
+            // Create a minimal tool adapter matching the upstream ToolDefinition interface
+            const adapter = {
+              name: tool.name,
+              displayName: tool.name,
+              description: tool.description,
+              kind: 'declarative' as const,
+              parameterSchema: tool.parameters,
+              get isReadOnly() { return true; },
+              get toolAnnotations() { return undefined; },
+              getSchema() {
+                return {
+                  name: tool.name,
+                  description: tool.description,
+                  parametersJsonSchema: tool.parameters,
+                };
+              },
+              async processInvocation(args: Record<string, unknown>) {
+                const result = await session.mcpManager!.callTool(tool.name, args);
+                const output = result.content
+                  .map((c: {type: string; text?: string}) => c.type === 'text' && c.text ? c.text : `[${c.type}]`)
+                  .join('\n');
+                return {
+                  llmContent: result.isError ? `Error: ${output}` : output,
+                  returnDisplay: output.slice(0, 200),
+                  ...(result.isError ? {error: {message: output, type: 'EXECUTION_FAILED'}} : {}),
+                };
+              },
+            };
+            toolRegistry.registerTool(adapter as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+          }
+          await geminiClient.setTools();
+          process.stderr.write(`[MCP] Registered ${String(mcpTools.length)} MCP tools on tool registry\n`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`[MCP] Failed to register MCP tools: ${msg}\n`);
+        }
+      }
     }
 
     this.sessions.set(sessionId, session);
