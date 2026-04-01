@@ -11,6 +11,45 @@ import type {EvalStore} from '../eval-store.js';
 import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost} from '@amodalai/core';
 import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo} from '@amodalai/core';
 
+/**
+ * Summarize a JSON tool result for the judge.
+ * Keeps structure intact but truncates long string values and summarizes arrays.
+ * The judge needs to verify data accuracy, not read every byte.
+ */
+function summarizeForJudge(raw: string, maxStringLen = 120, maxArrayItems = 5): string {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return JSON.stringify(summarizeValue(parsed, maxStringLen, maxArrayItems), null, 0);
+  } catch {
+    // Not JSON — truncate as string
+    return raw.length > 2000 ? raw.slice(0, 2000) + '...' : raw;
+  }
+}
+
+function summarizeValue(val: unknown, maxStr: number, maxArr: number): unknown {
+  if (val === null || val === undefined) return val;
+  if (typeof val === 'string') {
+    return val.length > maxStr ? val.slice(0, maxStr) + '...' : val;
+  }
+  if (typeof val === 'number' || typeof val === 'boolean') return val;
+  if (Array.isArray(val)) {
+    const shown = val.slice(0, maxArr).map((v) => summarizeValue(v, maxStr, maxArr));
+    if (val.length > maxArr) {
+      return [...shown, `(+${val.length - maxArr} more items, ${val.length} total)`];
+    }
+    return shown;
+  }
+  if (typeof val === 'object') {
+    const result: Record<string, unknown> = {};
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- recursive JSON summarization
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      result[k] = summarizeValue(v, maxStr, maxArr);
+    }
+    return result;
+  }
+  return val;
+}
+
 export interface EvalRouterOptions {
   sessionManager: SessionManager;
   evalStore: EvalStore;
@@ -68,9 +107,10 @@ async function streamQuery(
         toolCalls.push({name: String(event['tool_name'] ?? ''), parameters: params});
         writeSSE(evalRes, {type: 'agent_tool', evalName, toolName: event['tool_name'], parameters: params});
       } else if (eventType === 'tool_call_result') {
-        // Capture result data so the judge knows tool calls returned real data
-        const resultPreview = String(event['result'] ?? event['error'] ?? '');
-        toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${resultPreview.slice(0, 16000)}`);
+        // Summarize tool results for the judge — keeps JSON structure but truncates
+        // long string values and caps arrays. Same summary shown in the UI.
+        const resultRaw = String(event['result'] ?? event['error'] ?? '');
+        toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${summarizeForJudge(resultRaw)}`);
         writeSSE(evalRes, {type: 'agent_tool_result', evalName, toolName: event['tool_name'] ?? 'request', status: event['status'], durationMs: event['duration_ms']});
       } else if (eventType === 'error') {
         queryError = String(event['message'] ?? event['error'] ?? 'Unknown error');
