@@ -21,25 +21,30 @@ export interface ModelPricing {
 
 export const MODEL_PRICING: Record<string, ModelPricing> = {
   // Anthropic — cache read = 10% of input, cache write = 125% of input
+  // Source: platform.claude.com/docs/en/about-claude/models
+  'claude-opus-4-6': {inputPerMToken: 5_000_000, outputPerMToken: 25_000_000, cacheReadPerMToken: 500_000, cacheWritePerMToken: 6_250_000},
+  'claude-sonnet-4-6': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000, cacheReadPerMToken: 300_000, cacheWritePerMToken: 3_750_000},
+  'claude-opus-4-5-20251101': {inputPerMToken: 5_000_000, outputPerMToken: 25_000_000, cacheReadPerMToken: 500_000, cacheWritePerMToken: 6_250_000},
+  'claude-sonnet-4-5-20250929': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000, cacheReadPerMToken: 300_000, cacheWritePerMToken: 3_750_000},
   'claude-opus-4-20250514': {inputPerMToken: 15_000_000, outputPerMToken: 75_000_000, cacheReadPerMToken: 1_500_000, cacheWritePerMToken: 18_750_000},
   'claude-sonnet-4-20250514': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000, cacheReadPerMToken: 300_000, cacheWritePerMToken: 3_750_000},
   'claude-sonnet-4-6-20250626': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000, cacheReadPerMToken: 300_000, cacheWritePerMToken: 3_750_000},
+  'claude-haiku-4-5-20251001': {inputPerMToken: 1_000_000, outputPerMToken: 5_000_000, cacheReadPerMToken: 100_000, cacheWritePerMToken: 1_250_000},
   'claude-haiku-3-5-20241022': {inputPerMToken: 800_000, outputPerMToken: 4_000_000, cacheReadPerMToken: 80_000, cacheWritePerMToken: 1_000_000},
-  'claude-haiku-4-5-20251001': {inputPerMToken: 800_000, outputPerMToken: 4_000_000, cacheReadPerMToken: 80_000, cacheWritePerMToken: 1_000_000},
   // OpenAI
   'gpt-4o': {inputPerMToken: 2_500_000, outputPerMToken: 10_000_000},
   'gpt-4o-mini': {inputPerMToken: 150_000, outputPerMToken: 600_000},
   'gpt-4.1': {inputPerMToken: 2_000_000, outputPerMToken: 8_000_000},
   'gpt-4.1-mini': {inputPerMToken: 400_000, outputPerMToken: 1_600_000},
   'gpt-4.1-nano': {inputPerMToken: 100_000, outputPerMToken: 400_000},
-  // Google
+  // Google — source: ai.google.dev/pricing
   'gemini-2.5-pro': {inputPerMToken: 1_250_000, outputPerMToken: 10_000_000},
-  'gemini-2.5-flash': {inputPerMToken: 150_000, outputPerMToken: 600_000},
+  'gemini-2.5-flash': {inputPerMToken: 300_000, outputPerMToken: 2_500_000},
   'gemini-2.0-flash': {inputPerMToken: 100_000, outputPerMToken: 400_000},
-  // DeepSeek — both models share identical pricing
+  // DeepSeek — source: api-docs.deepseek.com (both models same price)
   'deepseek-chat': {inputPerMToken: 280_000, outputPerMToken: 420_000},
   'deepseek-reasoner': {inputPerMToken: 280_000, outputPerMToken: 420_000},
-  // Groq (hosted models) — prices from groq.com/pricing
+  // Groq — source: groq.com/pricing
   'llama-3.3-70b-versatile': {inputPerMToken: 590_000, outputPerMToken: 790_000},
   'llama-3.1-8b-instant': {inputPerMToken: 50_000, outputPerMToken: 80_000},
   'mixtral-8x7b-32768': {inputPerMToken: 240_000, outputPerMToken: 240_000},

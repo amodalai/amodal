@@ -425,8 +425,8 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     const configModels = arena?.['models'] as Array<{provider: string; model: string; label?: string}> | undefined;
 
     const models = configModels ?? [
-      {provider: 'anthropic', model: 'claude-opus-4-20250514', label: 'Claude Opus 4'},
-      {provider: 'anthropic', model: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4'},
+      {provider: 'anthropic', model: 'claude-opus-4-6', label: 'Claude Opus 4.6'},
+      {provider: 'anthropic', model: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6'},
       {provider: 'anthropic', model: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5'},
       {provider: 'openai', model: 'gpt-4o', label: 'GPT-4o'},
       {provider: 'openai', model: 'gpt-4o-mini', label: 'GPT-4o Mini'},
