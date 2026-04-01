@@ -32,10 +32,8 @@ describe('getModelPricing', () => {
     expect(pricing.outputPerMToken).toBe(2_500_000);
   });
 
-  it('returns default pricing for unknown model', () => {
-    const pricing = getModelPricing('unknown-model-xyz');
-    expect(pricing.inputPerMToken).toBe(3_000_000);
-    expect(pricing.outputPerMToken).toBe(15_000_000);
+  it('throws for unknown model', () => {
+    expect(() => getModelPricing('unknown-model-xyz')).toThrow('No pricing data for model');
   });
 });
 
@@ -55,11 +53,8 @@ describe('computeEvalCost', () => {
     expect(cost.estimatedCostMicros).toBe(0);
   });
 
-  it('uses default pricing for unknown model', () => {
-    const cost = computeEvalCost(1000, 1000, 'mystery-model');
-    expect(cost.estimatedCostMicros).toBe(
-      Math.round((1000 * 3_000_000 + 1000 * 15_000_000) / 1_000_000),
-    );
+  it('throws for unknown model', () => {
+    expect(() => computeEvalCost(1000, 1000, 'mystery-model')).toThrow('No pricing data for model');
   });
 
   it('rounds cost to nearest integer', () => {

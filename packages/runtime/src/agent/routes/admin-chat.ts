@@ -7,13 +7,13 @@
 import {Router} from 'express';
 import type {Request, Response} from 'express';
 import {AgentChatRequestSchema} from '../agent-types.js';
-import type {AgentSessionManager} from '../session-manager.js';
-import {runAgentTurn} from '../agent-runner.js';
+import type {SessionManager} from '../../session/session-manager.js';
+import {streamMessage} from '../../session/session-runner.js';
 import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 
 export interface AdminChatRouterOptions {
-  sessionManager: AgentSessionManager;
+  sessionManager: SessionManager;
 }
 
 function writeSSE(res: Response, event: SSEEvent): void {
@@ -66,7 +66,7 @@ export function createAdminChatRouter(options: AdminChatRouterOptions): Router {
       const controller = new AbortController();
       res.on('close', () => controller.abort());
 
-      for await (const event of runAgentTurn(session, message, controller.signal)) {
+      for await (const event of streamMessage(session, message, controller.signal)) {
         if (controller.signal.aborted) break;
         writeSSE(res, event);
       }

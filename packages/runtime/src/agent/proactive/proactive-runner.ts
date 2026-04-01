@@ -7,17 +7,17 @@
 import type {AmodalRepo} from '@amodalai/core';
 import {bridgeAutomations, type RunnableAutomation} from '../automation-bridge.js';
 import {deliverResult} from './delivery.js';
-import {runAgentTurn} from '../agent-runner.js';
-import type {AgentSession} from '../agent-types.js';
+import {streamMessage} from '../../session/session-runner.js';
+import type {ManagedSession} from '../../session/session-manager.js';
 
 export interface ProactiveRunnerConfig {
   webhookSecret?: string;
   /** Factory for creating ephemeral sessions */
-  createSession: () => Promise<AgentSession>;
+  createSession: () => Promise<ManagedSession>;
   /** Cleanup after ephemeral session */
   destroySession: (sessionId: string) => Promise<void>;
   /** Called before session is destroyed — use to persist session history */
-  onSessionComplete?: (session: AgentSession, automationName: string) => void;
+  onSessionComplete?: (session: ManagedSession, automationName: string) => void;
 }
 
 interface CronJob {
@@ -209,14 +209,14 @@ export class ProactiveRunner {
     if (!automation) return;
 
     process.stderr.write(`[proactive] Streaming "${name}"...\n`);
-    let session: AgentSession | undefined;
+    let session: ManagedSession | undefined;
     try {
       session = await this.config.createSession();
       const signal = new AbortController().signal;
 
       yield {type: 'init', session_id: session.id, automation: name, timestamp: new Date().toISOString()};
 
-      for await (const event of runAgentTurn(session, automation.prompt, signal)) {
+      for await (const event of streamMessage(session, automation.prompt, signal)) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE event from agent runner
         yield event as unknown as Record<string, unknown>;
       }
@@ -250,7 +250,7 @@ export class ProactiveRunner {
   ): Promise<void> {
     process.stderr.write(`[proactive] Running "${automation.name}"...\n`);
 
-    let session: AgentSession | undefined;
+    let session: ManagedSession | undefined;
     try {
       session = await this.config.createSession();
 
@@ -262,7 +262,7 @@ export class ProactiveRunner {
       // Collect full response from agent
       const signal = new AbortController().signal;
       let responseText = '';
-      for await (const event of runAgentTurn(session, prompt, signal)) {
+      for await (const event of streamMessage(session, prompt, signal)) {
         if ('type' in event && event['type'] === 'error' && 'message' in event) {
           throw new Error(String(event['message']));
         }

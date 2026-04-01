@@ -23,8 +23,9 @@ export function createChatStreamRouter(
 ): Router {
   const router = Router();
 
+  // Mount on both /chat and /chat/stream so the SPA always gets SSE
   router.post(
-    '/chat/stream',
+    ['/chat', '/chat/stream'],
     validate(ChatRequestSchema),
     async (req, res, next) => {
       try {

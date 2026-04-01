@@ -395,18 +395,9 @@ export class AmodalConfig implements ToolContext {
       // Create our multi-provider content generator
       const generator = new MultiProviderContentGenerator(modelConfig);
 
-      // Try to initialize upstream state (model router, etc.) via refreshAuth.
-      // This may fail without valid Gemini credentials — that's OK since
-      // we're replacing the content generator anyway.
-      const authType = getAuthTypeFromEnv();
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        await this.config.refreshAuth(authType ?? ('gemini-api-key' as AuthType));
-      } catch {
-        // Expected when no Gemini credentials are available
-      }
-
       // Replace the content generator on the upstream Config (private field).
+      // Skip refreshAuth entirely — it hangs without Gemini credentials and
+      // is unnecessary since we're replacing the content generator.
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       const raw = this.config as unknown as Record<string, unknown>;
       raw['contentGenerator'] = generator;

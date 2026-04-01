@@ -6,10 +6,10 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
-import type {AgentSessionManager} from '../session-manager.js';
+import type {SessionManager} from '../../session/session-manager.js';
 
 export interface InspectRouterOptions {
-  sessionManager: AgentSessionManager;
+  sessionManager: SessionManager;
   repoPath: string;
 }
 
@@ -38,17 +38,16 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   router.get('/inspect/context', async (_req: Request, res: Response) => {
     try {
-      // Create a temporary session to inspect the compiled context
-      const session = await options.sessionManager.create('__inspect__');
-
-      const runtime = session.runtime;
-      const compiled = runtime.compiledContext;
-      const repo = runtime.repo;
+      const repo = options.sessionManager.getRepo()!;
+      if (!repo) {
+        res.status(500).json({error: {code: 'INSPECT_FAILED', message: 'No repo available'}});
+        return;
+      }
 
       // Get MCP server info from persistent inspect manager
       const mcpManager = await options.sessionManager.getInspectMcpManager();
       const mcpServers = mcpManager
-        ? mcpManager.getServerInfo().map((s) => ({
+        ? mcpManager.getServerInfo().map((s: { name: string; status: string; tools: unknown[]; error?: string }) => ({
             name: s.name,
             status: s.status,
             toolCount: s.tools.length,
@@ -59,7 +58,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
       // Check connection health in parallel (REST only — MCP health checked via McpManager)
       const connectionEntries = Array.from(repo.connections.entries());
       const healthChecks = await Promise.allSettled(
-        connectionEntries.map(async ([name, conn]) => {
+        connectionEntries.map(async ([name, conn]: [string, { spec: { protocol?: string; baseUrl?: string; testPath?: string } }]) => {
           if (conn.spec.protocol === 'mcp' || !conn.spec.baseUrl) {
             return {name, status: 'connected' as const, error: undefined};
           }
@@ -68,7 +67,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
         }),
       );
 
-      const connections = connectionEntries.map(([name], i) => {
+      const connections = connectionEntries.map(([name]: [string, unknown], i: number) => {
         const result = healthChecks[i];
         if (result && result.status === 'fulfilled') {
           return result.value;
@@ -78,27 +77,15 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
       res.json({
         repo_path: options.repoPath,
-        name: runtime.repo.config?.name ?? '',
-        model: runtime.repo.config?.models?.['main']?.model ?? '',
-        provider: runtime.repo.config?.models?.['main']?.provider ?? '',
-        system_prompt: compiled.systemPrompt,
-        system_prompt_length: compiled.systemPrompt.length,
-        token_usage: compiled.tokenUsage,
-        sections: compiled.sections.map((s) => ({
-          name: s.name,
-          tokens: s.tokens,
-          priority: s.priority,
-          trimmed: s.trimmed,
-        })),
+        name: repo.config?.name ?? '',
+        model: repo.config?.models?.['main']?.model ?? '',
+        provider: repo.config?.models?.['main']?.provider ?? '',
         connections,
         mcpServers,
-        skills: runtime.repo.skills.map((s) => s.name),
-        automations: runtime.repo.automations.map((a) => a.name),
-        knowledge: runtime.repo.knowledge.map((k) => k.name),
+        skills: repo.skills.map((s: { name: string }) => s.name),
+        automations: repo.automations.map((a: { name: string }) => a.name),
+        knowledge: repo.knowledge.map((k: { name: string }) => k.name),
       });
-
-      // Clean up the temporary session
-      options.sessionManager.destroy(session.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: {code: 'INSPECT_FAILED', message: msg}});
@@ -112,7 +99,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   /** Connection detail by name — reads repo directly, no session needed. */
   router.get('/inspect/connections/:name', async (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo();
+    const repo = options.sessionManager.getRepo()!;
     const connName = _req.params['name'] ?? '';
     const conn = repo.connections.get(connName);
 
@@ -197,7 +184,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
         }));
 
       // Get transport info from repo config
-      const repo = options.sessionManager.getRepo();
+      const repo = options.sessionManager.getRepo()!;
       const mcpConfig = repo.mcpServers?.[serverName];
 
       res.json({
@@ -218,7 +205,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   /** Skill detail by name — reads repo directly, no session needed. */
   router.get('/inspect/skills/:name', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo();
+    const repo = options.sessionManager.getRepo()!;
     const skill = repo.skills.find((s) => s.name === _req.params['name']);
 
     if (!skill) {
@@ -237,7 +224,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   /** Knowledge document detail by name — reads repo directly, no session needed. */
   router.get('/inspect/knowledge/:name', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo();
+    const repo = options.sessionManager.getRepo()!;
     const doc = repo.knowledge.find((k) => k.name === _req.params['name']);
 
     if (!doc) {

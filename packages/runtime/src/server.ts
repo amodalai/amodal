@@ -11,7 +11,6 @@ import type { ConfigParameters } from '@amodalai/core';
 import { errorHandler } from './middleware/error-handler.js';
 import { createAuthMiddleware } from './middleware/auth.js';
 import { createHealthRouter } from './routes/health.js';
-import { createChatRouter } from './routes/chat.js';
 import { createChatStreamRouter } from './routes/chat-stream.js';
 import { createWebhookRouter } from './routes/webhooks.js';
 import { createWidgetActionsRouter } from './routes/widget-actions.js';
@@ -119,7 +118,6 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     app.use('/sessions', authMiddleware);
   }
 
-  app.use(createChatRouter({ sessionManager, auditClient }));
   app.use(createChatStreamRouter({ sessionManager, auditClient, platformApiUrl: options.platformApiUrl }));
   app.use(createAIStreamRouter({ sessionManager, auditClient, platformApiUrl: options.platformApiUrl }));
   app.use(createWidgetActionsRouter({ sessionManager }));

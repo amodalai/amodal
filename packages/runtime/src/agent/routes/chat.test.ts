@@ -8,17 +8,17 @@ import {describe, it, expect, vi, beforeEach} from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import {createChatRouter} from './chat.js';
-import type {AgentSessionManager} from '../session-manager.js';
+import type {SessionManager} from '../../session/session-manager.js';
 
-// Mock agent-runner
-vi.mock('../agent-runner.js', () => ({
-  runAgentTurn: vi.fn(async function* () {
+// Mock session-runner
+vi.mock('../../session/session-runner.js', () => ({
+  streamMessage: vi.fn(async function* () {
     yield {type: 'text_delta', content: 'Hello!', timestamp: new Date().toISOString()};
     yield {type: 'done', timestamp: new Date().toISOString()};
   }),
 }));
 
-function makeSessionManager(): AgentSessionManager {
+function makeSessionManager(): SessionManager {
   const sessions = new Map();
 
   return {
@@ -43,10 +43,10 @@ function makeSessionManager(): AgentSessionManager {
     updateRepo: vi.fn(),
     shutdown: vi.fn(),
    
-  } as unknown as AgentSessionManager;
+  } as unknown as SessionManager;
 }
 
-function createTestApp(sessionManager: AgentSessionManager): express.Express {
+function createTestApp(sessionManager: SessionManager): express.Express {
   const app = express();
   app.use(express.json());
   app.use(createChatRouter({sessionManager}));
@@ -54,7 +54,7 @@ function createTestApp(sessionManager: AgentSessionManager): express.Express {
 }
 
 describe('repo-chat route', () => {
-  let sessionManager: AgentSessionManager;
+  let sessionManager: SessionManager;
 
   beforeEach(() => {
     sessionManager = makeSessionManager();
@@ -90,7 +90,7 @@ describe('repo-chat route', () => {
       .post('/chat')
       .send({message: 'hello', app_id: 'tenant-1'});
 
-    expect(sessionManager.create).toHaveBeenCalledWith('tenant-1', undefined);
+    expect(sessionManager.create).toHaveBeenCalledWith('tenant-1');
   });
 
   it('should reuse existing session if session_id provided', async () => {
@@ -130,12 +130,13 @@ describe('repo-chat route', () => {
     expect(res.text).toContain('"type":"error"');
   });
 
-  it('should pass app_token when provided', async () => {
+  it('should create session with app_id as role', async () => {
     const app = createTestApp(sessionManager);
     await request(app)
       .post('/chat')
       .send({message: 'hello', app_id: 'tenant-1', app_token: 'tok-123'});
 
-    expect(sessionManager.create).toHaveBeenCalledWith('tenant-1', 'tok-123');
+    // app_id is passed as role to SessionManager.create()
+    expect(sessionManager.create).toHaveBeenCalledWith('tenant-1');
   });
 });

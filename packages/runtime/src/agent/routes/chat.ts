@@ -7,9 +7,9 @@
 import {Router} from 'express';
 import type {Request, Response} from 'express';
 import {AgentChatRequestSchema} from '../agent-types.js';
-import type {AgentSession} from '../agent-types.js';
-import type {AgentSessionManager} from '../session-manager.js';
-import {runAgentTurn} from '../agent-runner.js';
+import type {ManagedSession} from '../../session/session-manager.js';
+import type {SessionManager} from '../../session/session-manager.js';
+import {streamMessage} from '../../session/session-runner.js';
 import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 
@@ -18,22 +18,22 @@ import type {SSEEvent} from '../../types.js';
  * When provided, called instead of sessionManager.create().
  * Receives the Express request and response (for auth context access).
  */
-export type SessionCreator = (req: Request, res: Response, appId: string, appToken?: string) => Promise<AgentSession>;
+export type SessionCreator = (req: Request, res: Response, appId: string, appToken?: string) => Promise<ManagedSession>;
 
 /**
  * Optional hook for hydrating a session from external storage.
  * Called when session_id is provided but not found in memory.
  */
-export type SessionHydrator = (req: Request, res: Response, sessionId: string, appId: string) => Promise<AgentSession | null>;
+export type SessionHydrator = (req: Request, res: Response, sessionId: string, appId: string) => Promise<ManagedSession | null>;
 
 /**
  * Optional hook called after each agent turn completes.
  * Used by hosted runtime to persist conversation history.
  */
-export type TurnCompleteHandler = (session: AgentSession, req: Request, res: Response) => void;
+export type TurnCompleteHandler = (session: ManagedSession, req: Request, res: Response) => void;
 
 export interface ChatRouterOptions {
-  sessionManager: AgentSessionManager;
+  sessionManager: SessionManager;
   /** Optional session creator hook — used by hosted runtime to inject app config from platform API */
   sessionCreator?: SessionCreator;
   /** Optional session hydrator — called when session_id not found in memory (e.g., load from platform API) */
@@ -82,7 +82,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       try {
         session = options.sessionCreator
           ? await options.sessionCreator(req, res, app_id, app_token)
-          : await options.sessionManager.create(app_id, app_token);
+          : await options.sessionManager.create(app_id);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         writeSSE(res, {type: SSEEventType.Error, message: errMsg, timestamp: ts()});
@@ -100,7 +100,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     res.on('close', () => controller.abort());
 
     try {
-      for await (const event of runAgentTurn(session, message, controller.signal)) {
+      for await (const event of streamMessage(session, message, controller.signal, undefined, options.sessionManager)) {
         if (controller.signal.aborted) break;
         writeSSE(res, event);
       }

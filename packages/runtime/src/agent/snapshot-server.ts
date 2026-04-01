@@ -8,7 +8,7 @@ import express from 'express';
 import type http from 'node:http';
 import {loadSnapshotFromFile, snapshotToRepo} from '@amodalai/core';
 import type {AmodalRepo, DeploySnapshot, CustomToolExecutor, CustomShellExecutor} from '@amodalai/core';
-import {AgentSessionManager} from './session-manager.js';
+import {SessionManager} from '../session/session-manager.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
 import {createChatRouter} from './routes/chat.js';
 import {createTaskRouter} from './routes/task.js';
@@ -70,8 +70,16 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
     toolExecutor = new LocalToolExecutor();
   }
 
-  const sessionManager = new AgentSessionManager(repo, {
+  const sessionManager = new SessionManager({
+    baseParams: {
+      sessionId: 'snapshot-init',
+      interactive: false,
+      noBrowser: true,
+      cwd: process.cwd(),
+      targetDir: process.cwd(),
+    },
     ttlMs: config.sessionTtlMs,
+    repo,
     toolExecutor,
     shellExecutor: config.shellExecutor,
   });

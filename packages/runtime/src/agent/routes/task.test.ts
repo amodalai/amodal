@@ -8,7 +8,7 @@ import {describe, it, expect, vi, beforeEach} from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import {createTaskRouter} from './task.js';
-import type {AgentSessionManager} from '../session-manager.js';
+import type {SessionManager} from '../../session/session-manager.js';
 
 // Mock agent-runner
 vi.mock('../agent-runner.js', () => ({
@@ -18,7 +18,7 @@ vi.mock('../agent-runner.js', () => ({
   }),
 }));
 
-function makeSessionManager(): AgentSessionManager {
+function makeSessionManager(): SessionManager {
   return {
     size: 0,
     create: vi.fn(async () => ({
@@ -37,10 +37,10 @@ function makeSessionManager(): AgentSessionManager {
     updateRepo: vi.fn(),
     shutdown: vi.fn(),
    
-  } as unknown as AgentSessionManager;
+  } as unknown as SessionManager;
 }
 
-function createTestApp(sessionManager: AgentSessionManager): express.Express {
+function createTestApp(sessionManager: SessionManager): express.Express {
   const app = express();
   app.use(express.json());
   app.use(createTaskRouter({sessionManager}));
@@ -48,7 +48,7 @@ function createTestApp(sessionManager: AgentSessionManager): express.Express {
 }
 
 describe('repo-task route', () => {
-  let sessionManager: AgentSessionManager;
+  let sessionManager: SessionManager;
 
   beforeEach(() => {
     sessionManager = makeSessionManager();

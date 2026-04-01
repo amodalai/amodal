@@ -136,7 +136,8 @@ describe('createLocalServer', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('repo_path', '/test');
-    expect(res.body).toHaveProperty('sections');
     expect(res.body).toHaveProperty('connections');
+    expect(res.body).toHaveProperty('skills');
+    expect(res.body).toHaveProperty('knowledge');
   });
 });

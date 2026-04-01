@@ -6,13 +6,13 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
-import type {AgentSessionManager} from '../session-manager.js';
+import type {SessionManager} from '../../session/session-manager.js';
 import type {EvalStore} from '../eval-store.js';
 import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost} from '@amodalai/core';
 import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo} from '@amodalai/core';
 
 export interface EvalRouterOptions {
-  sessionManager: AgentSessionManager;
+  sessionManager: SessionManager;
   evalStore: EvalStore;
   repoPath: string;
   /** Port the server is listening on — used by eval query provider to call /chat */
@@ -78,13 +78,20 @@ async function streamQuery(
       } else if (eventType === 'done' && event['usage']) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
         const u = event['usage'] as {input_tokens: number; output_tokens: number; cached_tokens?: number; cache_creation_tokens?: number};
+        // Accumulate tokens across multiple done events (multi-turn agent loops
+        // emit one done per turn in the refactored session runner)
         if (u.input_tokens > 0 || u.output_tokens > 0 || (u.cached_tokens ?? 0) > 0) {
-          usage = {
-            inputTokens: u.input_tokens,
-            outputTokens: u.output_tokens,
-            ...(u.cached_tokens ? {cacheReadInputTokens: u.cached_tokens} : {}),
-            ...(u.cache_creation_tokens ? {cacheCreationInputTokens: u.cache_creation_tokens} : {}),
-          };
+          if (!usage) {
+            usage = {inputTokens: 0, outputTokens: 0};
+          }
+          usage.inputTokens += u.input_tokens;
+          usage.outputTokens += u.output_tokens;
+          if (u.cached_tokens) {
+            usage.cacheReadInputTokens = (usage.cacheReadInputTokens ?? 0) + u.cached_tokens;
+          }
+          if (u.cache_creation_tokens) {
+            usage.cacheCreationInputTokens = (usage.cacheCreationInputTokens ?? 0) + u.cache_creation_tokens;
+          }
         }
       }
     } catch {
@@ -158,7 +165,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
   /** List eval definitions from the repo */
   router.get('/api/evals/suites', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo();
+    const repo = options.sessionManager.getRepo()!;
     const suites = repo.evals.map((e) => ({
       name: e.name,
       title: e.title,
@@ -206,7 +213,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     }
 
     const baseUrl = `http://127.0.0.1:${port}`;
-    const repo = options.sessionManager.getRepo();
+    const repo = options.sessionManager.getRepo()!;
 
     // Read optional eval names and model override from POST body
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
@@ -414,7 +421,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
   /** Get arena model config */
   router.get('/api/evals/arena/models', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo();
+    const repo = options.sessionManager.getRepo()!;
     const config = repo.config;
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- config shape

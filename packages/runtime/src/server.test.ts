@@ -26,7 +26,24 @@ vi.mock('@amodalai/core', () => ({
     this['getMessageBus'] = mockGetMessageBus;
     this['getModel'] = mockGetModel;
     this['getConnections'] = vi.fn().mockReturnValue({});
-    this['getUpstreamConfig'] = vi.fn().mockReturnValue({});
+    this['getUpstreamConfig'] = vi.fn().mockReturnValue({
+      createToolRegistry: vi.fn().mockResolvedValue({
+        registerTool: vi.fn(),
+        unregisterTool: vi.fn(),
+        getFunctionDeclarations: vi.fn().mockReturnValue([]),
+      }),
+      getToolRegistry: vi.fn().mockReturnValue({
+        registerTool: vi.fn(),
+        unregisterTool: vi.fn(),
+        getFunctionDeclarations: vi.fn().mockReturnValue([]),
+      }),
+      getAgentRegistry: vi.fn().mockReturnValue({ getAllDefinitions: () => [] }),
+      registerSubAgentTools: vi.fn(),
+    });
+    this['registerTools'] = vi.fn().mockResolvedValue(undefined);
+    this['getBundleSubagents'] = vi.fn().mockReturnValue([]);
+    this['getDisabledSubagents'] = vi.fn().mockReturnValue([]);
+    this['getAppId'] = vi.fn().mockReturnValue('test-app');
     this['initializeAuth'] = vi.fn().mockResolvedValue(undefined);
     this['getModelConfig'] = vi.fn().mockReturnValue(undefined);
     this['setModelConfig'] = vi.fn();
@@ -56,6 +73,12 @@ vi.mock('@amodalai/core', () => ({
   PRESENT_TOOL_NAME: 'present',
   ACTIVATE_SKILL_TOOL_NAME: 'activate_skill',
   buildDefaultPrompt: vi.fn().mockReturnValue('Default system prompt'),
+  PlanModeManager: vi.fn(function (this: Record<string, unknown>) {
+    this['isActive'] = vi.fn().mockReturnValue(false);
+  }),
+  McpManager: vi.fn(),
+  ensureAdminAgent: vi.fn(),
+  loadAdminAgent: vi.fn(),
 }));
 
 const { createServer } = await import('./server.js');
@@ -86,11 +109,15 @@ describe('createServer', () => {
     };
 
     mockGetGeminiClient.mockReturnValue({
+      isInitialized: vi.fn().mockReturnValue(true),
+      initialize: vi.fn().mockResolvedValue(undefined),
       sendMessageStream: vi.fn().mockReturnValue(
         makeStream([{ type: 'content', value: 'Hello from server!' }]),
       ),
       getCurrentSequenceModel: vi.fn().mockReturnValue('test-model'),
-      getChat: vi.fn().mockReturnValue(mockChat),
+      getChat: vi.fn().mockReturnValue({ ...mockChat, setSystemInstruction: vi.fn() }),
+      setHistory: vi.fn(),
+      setTools: vi.fn().mockResolvedValue(undefined),
     });
 
     vi.spyOn(process.stderr, 'write').mockReturnValue(true);
@@ -129,14 +156,21 @@ describe('createServer', () => {
     expect(res.body.version).toBe('1.0.0-test');
   });
 
-  it('responds to POST /chat with valid message', async () => {
+  it('responds to POST /chat with SSE (unified with /chat/stream)', async () => {
     const res = await request(serverInstance.app)
       .post('/chat')
       .send({ message: 'hello' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.session_id).toBeDefined();
-    expect(res.body.response).toBe('Hello from server!');
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    expect(res.text).toContain('data: ');
+
+    const lines = res.text.split('\n\n').filter(Boolean);
+    const events = lines.map((line) =>
+      JSON.parse(line.replace('data: ', '')),
+    );
+    const types = events.map((e: Record<string, unknown>) => e['type']);
+    expect(types).toContain(SSEEventType.Init);
+    expect(types).toContain(SSEEventType.Done);
   });
 
   it('responds to POST /chat/stream with SSE', async () => {
