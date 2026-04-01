@@ -1,5 +1,16 @@
 # @amodalai/runtime-app
 
+## 0.1.17
+
+### Patch Changes
+
+- [#77](https://github.com/amodalai/amodal/pull/77) [`86084ff`](https://github.com/amodalai/amodal/commit/86084ff0435e58bcb0f738ae88ef6179a3278f9d) Thanks [@gte620v](https://github.com/gte620v)! - Split Evals page into Eval Suite (pass/fail cards, no model picker) and Model Arena (multi-model comparison). Add Run All button and expand/collapse all controls to Eval Suite.
+
+- [#78](https://github.com/amodalai/amodal/pull/78) [`14ef749`](https://github.com/amodalai/amodal/commit/14ef749ba9ccf3b74dbf86e3959c609682eda198) Thanks [@gte620v](https://github.com/gte620v)! - Show installed package files in the config Files view alongside local repo files. Package files display a purple package icon and "package" badge in the editor.
+
+- Updated dependencies [[`fb49f28`](https://github.com/amodalai/amodal/commit/fb49f284bc427e7dc13a0c43653a55a28b23afb3)]:
+  - @amodalai/react@0.1.17
+
 ## 0.1.16
 
 ### Patch Changes

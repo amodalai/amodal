@@ -1,5 +1,44 @@
 # @amodalai/runtime
 
+## 0.1.17
+
+### Patch Changes
+
+- [#73](https://github.com/amodalai/amodal/pull/73) [`83f08b4`](https://github.com/amodalai/amodal/commit/83f08b48270e24801923c911eb745cdcecf13fa9) Thanks [@whodatdev](https://github.com/whodatdev)! - Extract platform-specific code from OSS runtime into injectable hooks.
+
+  **Breaking:** `createAuthMiddleware` and `AuditClient` are no longer exported from `@amodalai/runtime`. Auth middleware, audit logging, usage reporting, and session history persistence are now provided by the hosting layer via `CreateServerOptions.authMiddleware`, `streamHooks`, `additionalRouters`, and `onShutdown`.
+
+  **New exports:** `StreamHooks`, `SessionStore`, `StoredSessionRecord` interfaces for hosting layer integration.
+
+  **`@amodalai/core`:** `AgentSDK` constructor now accepts an optional third `platformClient` parameter for dependency injection.
+
+- [#78](https://github.com/amodalai/amodal/pull/78) [`14ef749`](https://github.com/amodalai/amodal/commit/14ef749ba9ccf3b74dbf86e3959c609682eda198) Thanks [@gte620v](https://github.com/gte620v)! - Show installed package files in the config Files view alongside local repo files. Package files display a purple package icon and "package" badge in the editor.
+
+- [#76](https://github.com/amodalai/amodal/pull/76) [`b6aa9f3`](https://github.com/amodalai/amodal/commit/b6aa9f390863ad71545867be40e24587e85eb646) Thanks [@gte620v](https://github.com/gte620v)! - Fix admin agent session: restore skills, knowledge, file tools, and path validation
+
+  The session manager refactor ([#68](https://github.com/amodalai/amodal/issues/68)) broke the admin agent by dropping admin skills/knowledge from the prompt, removing file tools (read/write/delete_repo_file), and losing path validation. Admin sessions now temporarily swap repo fields to inject admin content, register file tools with full security checks, and verify local-only access.
+
+- [#75](https://github.com/amodalai/amodal/pull/75) [`0c3c202`](https://github.com/amodalai/amodal/commit/0c3c20207bb92ed1321373e474be83d315c1a1b2) Thanks [@gte620v](https://github.com/gte620v)! - Fix eval token counting, prompt context, judge accuracy, and tool result handling
+  - Fix prompt regression: include skills, knowledge, and connection API docs in system prompt (were silently dropped by session manager refactor)
+  - Fix token counting: accumulate usage across multiple done events, route Google through MPCG adapter for consistent counts, emit usage on all Done event paths
+  - Fix judge: direct LLM calls instead of full agent session (90% cheaper), grade text response quality not tool results, require specific evidence
+  - Fix tool results: remove all truncation (session runner 2K, SSE 500, eval route 4K), pass full output to judge
+  - Fix request tool: coerce params to strings (prevents "must be string" schema errors), relax additionalProperties constraint
+  - Add collapsible tool results in UI (2-line preview, click to expand)
+  - Add elapsed timer with running/judging phase indicator
+  - Add DeepSeek/Groq providers and model pricing
+  - Prompt improvements: answer directly before analyzing, retry with different params on empty results
+
+- [#79](https://github.com/amodalai/amodal/pull/79) [`fb49f28`](https://github.com/amodalai/amodal/commit/fb49f284bc427e7dc13a0c43653a55a28b23afb3) Thanks [@gte620v](https://github.com/gte620v)! - Add user feedback system: thumbs up/down on responses with admin synthesis
+  - Thumbs up/down on assistant messages in dev UI chat and embedded React widget
+  - Optional text comment on thumbs down
+  - Feedback persisted to .amodal/feedback/ as JSON files
+  - Admin dashboard page with stats, feedback list, and LLM synthesis button
+  - Admin agent can query feedback via internal_api tool
+
+- Updated dependencies [[`83f08b4`](https://github.com/amodalai/amodal/commit/83f08b48270e24801923c911eb745cdcecf13fa9), [`0c3c202`](https://github.com/amodalai/amodal/commit/0c3c20207bb92ed1321373e474be83d315c1a1b2), [`fb49f28`](https://github.com/amodalai/amodal/commit/fb49f284bc427e7dc13a0c43653a55a28b23afb3)]:
+  - @amodalai/core@0.1.17
+
 ## 0.1.16
 
 ### Patch Changes
