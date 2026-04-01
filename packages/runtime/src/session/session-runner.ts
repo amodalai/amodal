@@ -44,7 +44,6 @@ import {
 import type { AuditClient } from '../audit/audit-client.js';
 
 const MAX_TURNS = 50;
-const MAX_RESULT_LENGTH = 2000;
 
 /**
  * Extract text from tool response parts, truncated for audit logging.
@@ -66,9 +65,7 @@ function extractResultText(parts: Part[] | undefined): string | undefined {
   }
   const text = segments.join('');
   if (!text) return undefined;
-  return text.length > MAX_RESULT_LENGTH
-    ? text.slice(0, MAX_RESULT_LENGTH) + '...[truncated]'
-    : text;
+  return text;
 }
 
 const MAX_SUBAGENT_RESULT_LENGTH = 300;

@@ -378,7 +378,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
           current: i + 1,
           total: evals.length,
           result: {
-            response: response.length > 4000 ? response.slice(0, 4000) + '...' : response,
+            response,
             toolCalls,
             toolResults,
             assertions,
