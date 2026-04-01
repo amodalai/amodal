@@ -156,6 +156,8 @@ export class SessionManager {
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   /** Deduplicates concurrent hydration requests for the same conversation */
   private readonly pendingHydrations = new Map<string, Promise<ManagedSession | null>>();
+  /** Shared MCP manager for all sessions (lazy-initialized, reused) */
+  private sharedMcpManager?: McpManager;
   /** Persistent MCP manager for inspect operations (lazy-initialized) */
   private inspectMcp?: McpManager;
   private inspectMcpInitialized = false;
@@ -614,13 +616,15 @@ export class SessionManager {
       appId: auth?.applicationId,
     };
 
-    // Initialize MCP servers if repo has MCP connections
-    if (this.repo) {
-      await this.initMcp(session, this.repo);
+    // Share MCP connection across sessions — connect once, reuse for all
+    if (this.repo && !this.sharedMcpManager) {
+      await this.initSharedMcp(this.repo);
+    }
+    if (this.sharedMcpManager) {
+      session.mcpManager = this.sharedMcpManager;
 
       // Register MCP tools on the upstream tool registry so the Gemini client can see them
-      if (session.mcpManager) {
-        try {
+      try {
           const upstream = config.getUpstreamConfig();
           const toolRegistry = upstream.getToolRegistry();
           const mcpTools = session.mcpManager.getDiscoveredTools();
@@ -678,7 +682,6 @@ export class SessionManager {
           const msg = err instanceof Error ? err.message : String(err);
           process.stderr.write(`[MCP] Failed to register MCP tools: ${msg}\n`);
         }
-      }
     }
 
     this.sessions.set(sessionId, session);
@@ -933,7 +936,11 @@ export class SessionManager {
   /**
    * Initialize MCP servers for a session from repo connections.
    */
-  private async initMcp(session: ManagedSession, repo: AmodalRepo): Promise<void> {
+  /**
+   * Initialize the shared MCP manager (once, reused across sessions).
+   * Avoids reconnecting MCP servers for every eval/judge/admin session.
+   */
+  private async initSharedMcp(repo: AmodalRepo): Promise<void> {
     const mcpServers = this.buildMcpConfigs(repo);
     if (Object.keys(mcpServers).length === 0) return;
 
@@ -941,7 +948,7 @@ export class SessionManager {
     try {
       await manager.startServers(mcpServers);
       if (manager.connectedCount > 0) {
-        session.mcpManager = manager;
+        this.sharedMcpManager = manager;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
