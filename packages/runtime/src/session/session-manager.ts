@@ -219,7 +219,7 @@ export class SessionManager {
       }));
       sessionParams.basePrompt = this.repo.config.basePrompt;
       sessionParams.agentName = this.repo.config.name;
-      sessionParams.agentContext = this.repo.config.description;
+      sessionParams.agentContext = this.repo.config.userContext ?? this.repo.config.description;
 
       // Model config from repo
       const mainModel = this.repo.config.models?.main;
