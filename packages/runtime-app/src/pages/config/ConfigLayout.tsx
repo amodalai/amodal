@@ -171,7 +171,7 @@ export function ConfigLayout() {
                 <FlaskConical className="h-4 w-4 shrink-0" />
                 Evals
               </ConfigNavItem>
-              <ConfigNavItem to="/feedback">
+              <ConfigNavItem to="/config/feedback">
                 <MessageSquare className="h-4 w-4 shrink-0" />
                 Feedback
               </ConfigNavItem>
