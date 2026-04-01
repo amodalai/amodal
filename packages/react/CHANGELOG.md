@@ -1,5 +1,16 @@
 # @amodalai/react
 
+## 0.1.17
+
+### Patch Changes
+
+- [#79](https://github.com/amodalai/amodal/pull/79) [`fb49f28`](https://github.com/amodalai/amodal/commit/fb49f284bc427e7dc13a0c43653a55a28b23afb3) Thanks [@gte620v](https://github.com/gte620v)! - Add user feedback system: thumbs up/down on responses with admin synthesis
+  - Thumbs up/down on assistant messages in dev UI chat and embedded React widget
+  - Optional text comment on thumbs down
+  - Feedback persisted to .amodal/feedback/ as JSON files
+  - Admin dashboard page with stats, feedback list, and LLM synthesis button
+  - Admin agent can query feedback via internal_api tool
+
 ## 0.1.16
 
 ## 0.1.15
