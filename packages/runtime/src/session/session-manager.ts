@@ -442,6 +442,7 @@ export class SessionManager {
       name: config.getAgentName() ?? 'Amodal Agent',
       description: config.getAgentDescription(),
       agentContext: config.getAgentContext(),
+      agentOverride: this.repo?.agents?.main,
       connections: this.repo?.connections ? Array.from(this.repo.connections.values()).map((conn) => ({
         name: conn.name,
         endpoints: (conn.surface ?? [])
@@ -459,6 +460,7 @@ export class SessionManager {
       knowledge: this.repo?.knowledge?.map((k) => ({
         name: k.name,
         title: k.title,
+        body: k.body,
       })),
     });
     try {

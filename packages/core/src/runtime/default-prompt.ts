@@ -15,6 +15,7 @@ export function buildDefaultPrompt(opts: {
   name: string;
   description?: string;
   agentContext?: string;
+  agentOverride?: string;
   connectionNames?: string[];
   connections?: Array<{
     name: string;
@@ -24,7 +25,9 @@ export function buildDefaultPrompt(opts: {
     rules?: string;
   }>;
   skills?: Array<{name: string; description: string; trigger?: string; body?: string}>;
-  knowledge?: Array<{name: string; title?: string}>;
+  knowledge?: Array<{name: string; title?: string; body?: string}>;
+  fieldGuidance?: string;
+  scopeLabels?: Record<string, string>;
 }): string {
   const parts: string[] = [];
 
@@ -35,6 +38,12 @@ export function buildDefaultPrompt(opts: {
   // Agent context (if set by the deployment)
   if (opts.agentContext) {
     parts.push(opts.agentContext);
+    parts.push('');
+  }
+
+  // Agent override (custom agent prompt if configured)
+  if (opts.agentOverride) {
+    parts.push(opts.agentOverride);
     parts.push('');
   }
 
@@ -117,10 +126,29 @@ export function buildDefaultPrompt(opts: {
 
   // Knowledge
   if (opts.knowledge && opts.knowledge.length > 0) {
-    parts.push('## Available knowledge');
+    parts.push('## Knowledge Base');
     parts.push('');
     for (const doc of opts.knowledge) {
-      parts.push(`- ${doc.title ?? doc.name}`);
+      parts.push(`### ${doc.title ?? doc.name}`);
+      if (doc.body) {
+        parts.push(doc.body);
+      }
+      parts.push('');
+    }
+  }
+
+  // Field access restrictions
+  if (opts.fieldGuidance) {
+    parts.push(`## Field Access Restrictions`);
+    parts.push(opts.fieldGuidance);
+    parts.push('');
+  }
+
+  // Data scope
+  if (opts.scopeLabels && Object.keys(opts.scopeLabels).length > 0) {
+    parts.push('## Data Scope');
+    for (const [entity, label] of Object.entries(opts.scopeLabels)) {
+      parts.push(`- ${entity}: ${label}`);
     }
     parts.push('');
   }
