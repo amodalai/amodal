@@ -262,7 +262,7 @@ async function runSingleModelEval(
 /*  CompareTable                                                        */
 /* ------------------------------------------------------------------ */
 
-function CompareTable({ results }: { results: CompareResult[] }) {
+function CompareTable({ results, runningModel }: { results: CompareResult[]; runningModel?: AvailableModel | null }) {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   if (results.length === 0) return null;
@@ -354,7 +354,7 @@ function CompareTable({ results }: { results: CompareResult[] }) {
                       {r.response && (
                         <div>
                           <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Response</div>
-                          <div className="text-xs text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap">
+                          <div className="text-xs text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
                             {r.response}
                           </div>
                         </div>
@@ -364,10 +364,10 @@ function CompareTable({ results }: { results: CompareResult[] }) {
                           <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Tool Calls</div>
                           <div className="space-y-1">
                             {r.toolCalls.map((tc, ti) => (
-                              <div key={ti} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono">
+                              <div key={ti} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono break-words">
                                 <span className="text-indigo-500 font-semibold">{tc.name}</span>
                                 {r.toolResults[ti] && (
-                                  <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px] truncate">{r.toolResults[ti]}</div>
+                                  <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px] whitespace-pre-wrap break-words">{r.toolResults[ti]}</div>
                                 )}
                               </div>
                             ))}
@@ -402,6 +402,17 @@ function CompareTable({ results }: { results: CompareResult[] }) {
               </Fragment>
             );
           })}
+          {runningModel && (
+            <tr>
+              <td colSpan={6} className="px-3 py-2.5 border-t border-gray-100 dark:border-zinc-800/50">
+                <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-zinc-500">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+                  <span>{runningModel.label || runningModel.model.replace(/-\d{8}$/, '')}</span>
+                  <span className="text-gray-300 dark:text-zinc-600">running...</span>
+                </div>
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -425,6 +436,7 @@ function EvalCard({
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [timeout, setTimeoutVal] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
+  const [currentRunningModel, setCurrentRunningModel] = useState<AvailableModel | null>(null);
   const [results, setResults] = useState<CompareResult[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -460,10 +472,12 @@ function EvalCard({
 
     // Run sequentially, each model result appears in table as it completes
     for (const model of selected) {
+      setCurrentRunningModel(model);
       const r = await runSingleModelEval(suite.name, model, timeout * 1000);
       setResults((prev) => [...prev, r]);
     }
 
+    setCurrentRunningModel(null);
     setIsRunning(false);
   };
 
@@ -494,7 +508,7 @@ function EvalCard({
           {/* Query */}
           <div>
             <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Query</div>
-            <div className="text-sm text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 font-mono">
+            <div className="text-sm text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 font-mono break-words">
               {suite.query}
             </div>
           </div>
@@ -566,7 +580,7 @@ function EvalCard({
           </button>
 
           {/* Results table */}
-          <CompareTable results={results} />
+          <CompareTable results={results} runningModel={currentRunningModel} />
 
           {/* History */}
           {history.length > 0 && (
