@@ -70,5 +70,18 @@ export function createFeedbackRouter(options: FeedbackRouterOptions): Router {
     res.json(summary);
   });
 
+  /** Mark feedback entries as reviewed */
+  router.post('/api/feedback/mark-reviewed', (req: Request, res: Response) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const ids = Array.isArray(body['ids']) ? (body['ids'] as unknown[]).map(String) : [];
+    if (ids.length === 0) {
+      res.status(400).json({error: 'ids array is required'});
+      return;
+    }
+    options.feedbackStore.markReviewed(ids);
+    res.json({ok: true, reviewed: ids.length});
+  });
+
   return router;
 }

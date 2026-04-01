@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { ThumbsUp, ThumbsDown, MessageSquare, Loader2, Sparkles } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, MessageSquare, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FeedbackEntry {
@@ -19,6 +19,7 @@ interface FeedbackEntry {
   toolCalls?: string[];
   model?: string;
   timestamp: string;
+  reviewedAt?: string;
 }
 
 interface FeedbackSummary {
@@ -39,14 +40,68 @@ function formatRelativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
+function FeedbackEntryCard({ entry, expandedEntry, setExpandedEntry }: {
+  entry: FeedbackEntry;
+  expandedEntry: string | null;
+  setExpandedEntry: (id: string | null) => void;
+}) {
+  const isExpanded = expandedEntry === entry.id;
+  return (
+    <button
+      key={entry.id}
+      onClick={() => setExpandedEntry(isExpanded ? null : entry.id)}
+      className="w-full text-left border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden"
+    >
+      <div className={cn('flex items-center gap-3 px-4 py-2.5 text-xs',
+        entry.rating === 'down' ? 'bg-red-500/5' : 'bg-emerald-500/5',
+      )}>
+        {entry.rating === 'up' ? (
+          <ThumbsUp className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+        ) : (
+          <ThumbsDown className="h-3.5 w-3.5 text-red-400 shrink-0" />
+        )}
+        <span className="text-gray-700 dark:text-zinc-300 truncate flex-1">&ldquo;{entry.query}&rdquo;</span>
+        {entry.comment && (
+          <span className="text-red-400/70 truncate max-w-[200px]">{entry.comment}</span>
+        )}
+        {entry.model && (
+          <span className="text-gray-400 dark:text-zinc-600 shrink-0">{entry.model.replace(/-\d{8}$/, '')}</span>
+        )}
+        <span className="text-gray-400 dark:text-zinc-600 shrink-0">{formatRelativeTime(entry.timestamp)}</span>
+      </div>
+      {isExpanded && (
+        <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800/50 space-y-2" onClick={(e) => e.stopPropagation()}>
+          <div>
+            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-0.5">Query</div>
+            <div className="text-xs text-gray-600 dark:text-zinc-400">{entry.query}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-0.5">Response</div>
+            <div className="text-xs text-gray-600 dark:text-zinc-400 whitespace-pre-wrap" style={{overflowWrap: 'anywhere'}}>{entry.response}</div>
+          </div>
+          {entry.comment && (
+            <div>
+              <div className="text-[10px] font-semibold text-red-400 uppercase tracking-widest mb-0.5">User Comment</div>
+              <div className="text-xs text-red-300">{entry.comment}</div>
+            </div>
+          )}
+          {entry.toolCalls && entry.toolCalls.length > 0 && (
+            <div className="text-xs text-gray-400 dark:text-zinc-600">
+              Tools: {entry.toolCalls.join(', ')}
+            </div>
+          )}
+        </div>
+      )}
+    </button>
+  );
+}
+
 export function FeedbackPage() {
   const [summary, setSummary] = useState<FeedbackSummary | null>(null);
   const [allEntries, setAllEntries] = useState<FeedbackEntry[]>([]);
-  const [synthesizing, setSynthesizing] = useState(false);
-  const [synthesis, setSynthesis] = useState<string | null>(null);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = () => {
     fetch('/api/feedback/summary')
       .then((res) => res.json())
       .then((data: unknown) => {
@@ -63,20 +118,23 @@ export function FeedbackPage() {
         setAllEntries(d.entries);
       })
       .catch(() => {});
-  }, []);
+  };
 
-  const handleSynthesize = async () => {
-    setSynthesizing(true);
-    setSynthesis(null);
+  useEffect(() => { loadData(); }, []);
 
-    // Send negative feedback to admin agent for analysis
-    const negFeedback = allEntries.filter((e) => e.rating === 'down').slice(0, 20);
+  const newEntries = allEntries.filter((e) => !e.reviewedAt);
+  const reviewedEntries = allEntries.filter((e) => e.reviewedAt);
+  const unreviewedDown = newEntries.filter((e) => e.rating === 'down');
+
+  const handleSynthesize = () => {
+    if (unreviewedDown.length === 0) return;
+
     const prompt = `Analyze this user feedback about the agent and recommend specific changes to improve it.
 
-Here are ${String(negFeedback.length)} negative feedback entries:
+Here are ${String(unreviewedDown.length)} negative feedback entries that haven't been reviewed yet:
 
-${negFeedback.map((e, i) => `${String(i + 1)}. Query: "${e.query}"
-   Response preview: "${e.response.slice(0, 200)}..."
+${unreviewedDown.map((e, i) => `${String(i + 1)}. Query: "${e.query}"
+   Response preview: "${e.response.slice(0, 300)}..."
    ${e.comment ? `User comment: "${e.comment}"` : '(no comment)'}
    ${e.toolCalls?.length ? `Tools used: ${e.toolCalls.join(', ')}` : ''}
    ${e.model ? `Model: ${e.model}` : ''}
@@ -90,29 +148,20 @@ Based on these patterns, recommend specific changes:
 
 Be specific — reference actual feedback entries and propose concrete file changes.`;
 
-    try {
-      const resp = await fetch('/config/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({message: prompt, app_id: 'feedback-synthesis'}),
-      });
-      const text = await resp.text();
-      let result = '';
-      for (const line of text.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE parsing
-          const event = JSON.parse(line.slice(6)) as Record<string, unknown>;
-          if (event['type'] === 'text_delta') {
-            result += String(event['content'] ?? '');
-          }
-        } catch { /* skip */ }
-      }
-      setSynthesis(result || 'No recommendations generated.');
-    } catch {
-      setSynthesis('Failed to get recommendations. Is the admin agent available?');
-    }
-    setSynthesizing(false);
+    // Mark these as reviewed
+    const ids = unreviewedDown.map((e) => e.id);
+    fetch('/api/feedback/mark-reviewed', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ids}),
+    }).then(() => loadData()).catch(() => {});
+
+    // Open admin chat panel and send the prompt
+    window.dispatchEvent(new CustomEvent('admin-chat-open'));
+    // Small delay to let panel open
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('admin-chat-send', {detail: prompt}));
+    }, 200);
   };
 
   const positiveRate = summary && summary.total > 0 ? Math.round((summary.thumbsUp / summary.total) * 100) : 0;
@@ -154,86 +203,47 @@ Be specific — reference actual feedback entries and propose concrete file chan
             </div>
           )}
 
-          {/* Synthesize button */}
-          <button
-            onClick={() => { void handleSynthesize(); }}
-            disabled={synthesizing || allEntries.filter((e) => e.rating === 'down').length === 0}
-            className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 disabled:opacity-30 transition-colors flex items-center gap-2"
-          >
-            {synthesizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Synthesize Recommendations
-          </button>
-
-          {/* Synthesis results */}
-          {synthesis && (
-            <div className="border border-indigo-500/20 bg-indigo-500/5 rounded-lg px-4 py-3">
-              <div className="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest mb-2">Admin Agent Recommendations</div>
-              <div className="text-sm text-gray-700 dark:text-zinc-300 whitespace-pre-wrap">{synthesis}</div>
-            </div>
-          )}
-
-          {/* All feedback entries */}
+          {/* New Feedback */}
           <div>
-            <h2 className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-3">All Feedback</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">
+                New Feedback {newEntries.length > 0 && <span className="text-indigo-400 ml-1">({newEntries.length})</span>}
+              </h2>
+              {unreviewedDown.length > 0 && (
+                <button
+                  onClick={handleSynthesize}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-500 transition-colors flex items-center gap-1.5"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Synthesize ({unreviewedDown.length} negative)
+                </button>
+              )}
+            </div>
             <div className="space-y-2">
-              {allEntries.length === 0 && (
-                <div className="text-sm text-gray-400 dark:text-zinc-500 text-center py-8">
-                  No feedback yet. Rate responses in the chat to see data here.
+              {newEntries.length === 0 && (
+                <div className="text-sm text-gray-400 dark:text-zinc-500 text-center py-6">
+                  No new feedback. Rate responses in the chat to see data here.
                 </div>
               )}
-              {allEntries.map((entry) => {
-                const isExpanded = expandedEntry === entry.id;
-                return (
-                  <button
-                    key={entry.id}
-                    onClick={() => setExpandedEntry(isExpanded ? null : entry.id)}
-                    className="w-full text-left border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden"
-                  >
-                    <div className={cn('flex items-center gap-3 px-4 py-2.5 text-xs',
-                      entry.rating === 'down' ? 'bg-red-500/5' : 'bg-emerald-500/5',
-                    )}>
-                      {entry.rating === 'up' ? (
-                        <ThumbsUp className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                      ) : (
-                        <ThumbsDown className="h-3.5 w-3.5 text-red-400 shrink-0" />
-                      )}
-                      <span className="text-gray-700 dark:text-zinc-300 truncate flex-1">&ldquo;{entry.query}&rdquo;</span>
-                      {entry.comment && (
-                        <span className="text-red-400/70 truncate max-w-[200px]">{entry.comment}</span>
-                      )}
-                      {entry.model && (
-                        <span className="text-gray-400 dark:text-zinc-600 shrink-0">{entry.model.replace(/-\d{8}$/, '')}</span>
-                      )}
-                      <span className="text-gray-400 dark:text-zinc-600 shrink-0">{formatRelativeTime(entry.timestamp)}</span>
-                    </div>
-                    {isExpanded && (
-                      <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800/50 space-y-2" onClick={(e) => e.stopPropagation()}>
-                        <div>
-                          <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-0.5">Query</div>
-                          <div className="text-xs text-gray-600 dark:text-zinc-400">{entry.query}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-0.5">Response</div>
-                          <div className="text-xs text-gray-600 dark:text-zinc-400 whitespace-pre-wrap">{entry.response}</div>
-                        </div>
-                        {entry.comment && (
-                          <div>
-                            <div className="text-[10px] font-semibold text-red-400 uppercase tracking-widest mb-0.5">User Comment</div>
-                            <div className="text-xs text-red-300">{entry.comment}</div>
-                          </div>
-                        )}
-                        {entry.toolCalls && entry.toolCalls.length > 0 && (
-                          <div className="text-xs text-gray-400 dark:text-zinc-600">
-                            Tools: {entry.toolCalls.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+              {newEntries.map((entry) => (
+                <FeedbackEntryCard key={entry.id} entry={entry} expandedEntry={expandedEntry} setExpandedEntry={setExpandedEntry} />
+              ))}
             </div>
           </div>
+
+          {/* Reviewed Feedback */}
+          {reviewedEntries.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-3">
+                Reviewed ({reviewedEntries.length})
+              </h2>
+              <div className="space-y-2 opacity-60">
+                {reviewedEntries.map((entry) => (
+                  <FeedbackEntryCard key={entry.id} entry={entry} expandedEntry={expandedEntry} setExpandedEntry={setExpandedEntry} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

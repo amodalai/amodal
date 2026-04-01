@@ -78,6 +78,13 @@ export function ConfigLayout() {
   const connectionStatus = useConnectionStatus();
   const [chatOpen, setChatOpen] = useState(false);
 
+  // Listen for requests to open the admin chat panel (e.g. from Feedback synthesis)
+  useEffect(() => {
+    const handler = () => setChatOpen(true);
+    window.addEventListener('admin-chat-open', handler);
+    return () => window.removeEventListener('admin-chat-open', handler);
+  }, []);
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-white dark:bg-[#0a0a0f]">
       <header className="h-14 bg-gray-50 dark:bg-[#0f0f17] border-b border-gray-200 dark:border-white/[0.06] text-gray-900 dark:text-white flex items-center justify-between px-5 shrink-0 z-20">

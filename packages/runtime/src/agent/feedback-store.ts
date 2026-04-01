@@ -19,6 +19,7 @@ export interface FeedbackEntry {
   toolCalls?: string[];
   model?: string;
   timestamp: string;
+  reviewedAt?: string;
 }
 
 export interface FeedbackSummary {
@@ -90,7 +91,8 @@ export class FeedbackStore {
     const all = this.list(1000);
     const thumbsUp = all.filter((e) => e.rating === 'up').length;
     const thumbsDown = all.filter((e) => e.rating === 'down').length;
-    const recentDown = all.filter((e) => e.rating === 'down').slice(0, 20);
+    const unreviewedDown = all.filter((e) => e.rating === 'down' && !e.reviewedAt);
+    const recentDown = unreviewedDown.slice(0, 20);
 
     return {
       total: all.length,
@@ -98,5 +100,23 @@ export class FeedbackStore {
       thumbsDown,
       recentDown,
     };
+  }
+
+  /** Mark feedback entries as reviewed so they're excluded from the next synthesis. */
+  markReviewed(ids: string[]): void {
+    const now = new Date().toISOString();
+    for (const id of ids) {
+      const file = this.resolvePath(id);
+      if (!file || !existsSync(file)) continue;
+      try {
+        const raw: unknown = JSON.parse(readFileSync(file, 'utf-8'));
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- trusted local file
+        const entry = raw as FeedbackEntry;
+        entry.reviewedAt = now;
+        writeFileSync(file, JSON.stringify(entry, null, 2));
+      } catch {
+        // Skip
+      }
+    }
   }
 }
