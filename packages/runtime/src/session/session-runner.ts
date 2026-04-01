@@ -590,7 +590,7 @@ export async function* streamMessage(
               type: SSEEventType.ToolCallResult,
               tool_id: askId,
               status: 'success',
-              result: resultOutput.slice(0, 500),
+              result: resultOutput,
               duration_ms: askDuration,
               timestamp: new Date().toISOString(),
             };
@@ -801,7 +801,7 @@ export async function* streamMessage(
               type: SSEEventType.ToolCallResult,
               tool_id: completed.request.callId,
               status: completed.response.error ? 'error' : 'success',
-              result: extractResultText(completed.response.responseParts)?.slice(0, 500),
+              result: extractResultText(completed.response.responseParts),
               duration_ms: duration,
               error: completed.response.error?.message,
               timestamp: new Date().toISOString(),
