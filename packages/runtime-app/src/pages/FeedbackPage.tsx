@@ -94,7 +94,7 @@ Be specific — reference actual feedback entries and propose concrete file chan
       const resp = await fetch('/config/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({message: prompt}),
+        body: JSON.stringify({message: prompt, app_id: 'feedback-synthesis'}),
       });
       const text = await resp.text();
       let result = '';
