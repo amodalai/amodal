@@ -336,17 +336,30 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
 
 export function ChatPage() {
   const { resumeSessionId: serverResumeId } = useRuntimeManifest();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const urlResumeId = searchParams.get('resume');
+  const initialPrompt = searchParams.get('prompt');
   const activeResumeId = useMemo(() => urlResumeId ?? serverResumeId, [urlResumeId, serverResumeId]);
 
   const { messages, send, stop, isStreaming, activeToolCalls, respondToConfirmation, usage, sessionId } = useAmodalChat({
     initialSessionId: activeResumeId,
   });
   const [input, setInput] = useState('');
+  const promptSent = useRef(false);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-send initial prompt from query param (e.g., from "Make Content" button)
+  useEffect(() => {
+    if (initialPrompt && !promptSent.current && !isStreaming) {
+      promptSent.current = true;
+      // Clear the prompt from URL to avoid re-sending on refresh
+      searchParams.delete('prompt');
+      setSearchParams(searchParams, { replace: true });
+      send(initialPrompt);
+    }
+  }, [initialPrompt, isStreaming, send, searchParams, setSearchParams]);
 
   // Load conversation history for resumed sessions
   useEffect(() => {
