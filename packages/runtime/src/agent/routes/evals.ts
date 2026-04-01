@@ -84,11 +84,18 @@ async function streamQuery(
   return {response: fullResponse, toolCalls, toolResults, usage};
 }
 
+interface TrackedJudgeProvider extends JudgeProvider {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+}
+
 /**
- * Create a JudgeProvider that uses the local /chat endpoint.
+ * Create a JudgeProvider that uses the local /chat endpoint and tracks token usage.
  */
-function createLocalJudgeProvider(baseUrl: string): JudgeProvider {
-  return {
+function createLocalJudgeProvider(baseUrl: string): TrackedJudgeProvider {
+  const tracked: TrackedJudgeProvider = {
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
     judge: async (prompt: string) => {
       const response = await fetch(`${baseUrl}/chat`, {
         method: 'POST',
@@ -104,14 +111,25 @@ function createLocalJudgeProvider(baseUrl: string): JudgeProvider {
           const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
           if (event['type'] === 'text_delta') {
             result += String(event['content'] ?? '');
+          } else if (event['type'] === 'done' && event['usage']) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+            const u = event['usage'] as {input_tokens: number; output_tokens: number};
+            tracked.totalInputTokens += u.input_tokens || 0;
+            tracked.totalOutputTokens += u.output_tokens || 0;
           }
         } catch {
           // skip
         }
       }
+      // Estimate if no usage reported
+      if (tracked.totalInputTokens === 0) {
+        tracked.totalInputTokens += Math.ceil(prompt.length / 4);
+        tracked.totalOutputTokens += Math.ceil(result.length / 4);
+      }
       return result;
     },
   };
+  return tracked;
 }
 
 function writeSSE(res: Response, data: unknown): void {
@@ -213,11 +231,18 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
           enriched += '\n\n[Tool results received:\n' + toolResults.join('\n') + ']';
         }
 
-        // Judge assertions
+        // Judge assertions — track judge tokens separately
+        const judgeInputBefore = judgeProvider.totalInputTokens;
+        const judgeOutputBefore = judgeProvider.totalOutputTokens;
         const assertions = await judgeAllAssertions(enriched, ev.assertions, judgeProvider);
         const passed = assertions.every((a) => a.passed);
-        const cost = usage ? computeEvalCost(usage.inputTokens, usage.outputTokens, modelInfo.model) : undefined;
-        if (cost) perCaseCosts.push(cost);
+
+        const queryCost = usage ? computeEvalCost(usage.inputTokens, usage.outputTokens, modelInfo.model) : undefined;
+        const judgeInputUsed = judgeProvider.totalInputTokens - judgeInputBefore;
+        const judgeOutputUsed = judgeProvider.totalOutputTokens - judgeOutputBefore;
+        const judgeCost = judgeInputUsed > 0 ? computeEvalCost(judgeInputUsed, judgeOutputUsed, modelInfo.model) : undefined;
+
+        if (queryCost) perCaseCosts.push(queryCost);
 
         const result: EvalResult = {
           eval: ev,
@@ -226,11 +251,11 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
           assertions,
           passed,
           durationMs: Date.now() - evalStart,
-          cost,
+          cost: queryCost,
         };
         results.push(result);
 
-        // Send full result with eval_complete
+        // Send full result with eval_complete — separate query and judge costs
         writeSSE(res, {
           type: 'eval_complete',
           evalName: ev.name,
@@ -242,7 +267,8 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
             toolCalls,
             assertions,
             durationMs: result.durationMs,
-            cost,
+            queryCost,
+            judgeCost,
           },
         });
       } catch (err) {

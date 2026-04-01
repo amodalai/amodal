@@ -76,13 +76,21 @@ interface AssertionResult {
   reason: string;
 }
 
+interface CostInfo {
+  estimatedCostMicros: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 interface EvalResultDetail {
   response: string;
   toolCalls: Array<{ name: string; parameters: Record<string, unknown> }>;
   assertions: AssertionResult[];
   durationMs: number;
   error?: string;
-  cost?: { estimatedCostMicros: number };
+  queryCost?: CostInfo;
+  judgeCost?: CostInfo;
+  cost?: CostInfo; // legacy
 }
 
 interface RunResult {
@@ -117,8 +125,15 @@ function EvalResultCard({ result: r }: { result: RunResult }) {
         {r.result && (
           <>
             <span className="text-gray-400 dark:text-zinc-600 ml-1">{formatDuration(r.result.durationMs)}</span>
-            {r.result.cost && (
-              <span className="text-gray-400 dark:text-zinc-600 font-mono text-[10px]">{formatCost(r.result.cost.estimatedCostMicros)}</span>
+            {(r.result.queryCost || r.result.cost) && (
+              <span className="text-gray-400 dark:text-zinc-600 font-mono text-[10px]" title="Query cost">
+                Q:{formatCost((r.result.queryCost ?? r.result.cost)!.estimatedCostMicros)}{ }
+              </span>
+            )}
+            {r.result.judgeCost && (
+              <span className="text-gray-400 dark:text-zinc-600 font-mono text-[10px]" title="Judge cost">
+                J:{formatCost(r.result.judgeCost.estimatedCostMicros)}
+              </span>
             )}
           </>
         )}
