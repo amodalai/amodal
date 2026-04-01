@@ -20,8 +20,6 @@ export { createLocalServer } from './agent/local-server.js';
 export type { LocalServerConfig, AgentChatRequest, AgentSession } from './agent/agent-types.js';
 export { SessionManager } from './session/session-manager.js';
 export type { ManagedSession, SessionManagerOptions, SessionStore, StoredSessionRecord } from './session/session-manager.js';
-/** @deprecated Use SessionManager instead */
-export { SessionManager as AgentSessionManager } from './session/session-manager.js';
 export { ProactiveRunner } from './agent/proactive/proactive-runner.js';
 export type { AutomationInfo, ProactiveRunnerConfig } from './agent/proactive/proactive-runner.js';
 
