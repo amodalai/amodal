@@ -15,6 +15,7 @@ interface EvalRunSummary {
   totalFailed: number;
   totalDurationMs: number;
   totalCostMicros: number;
+  totalCostNoCacheMicros?: number;
   label?: string;
   gitSha?: string;
   triggeredBy: string;
@@ -88,6 +89,7 @@ export class EvalStore {
           totalFailed: Number(suite['totalFailed'] ?? 0),
           totalDurationMs: Number(suite['totalDurationMs'] ?? 0),
           totalCostMicros: Number(totalCost['estimatedCostMicros'] ?? 0),
+          ...(totalCost['estimatedCostNoCacheMicros'] ? {totalCostNoCacheMicros: Number(totalCost['estimatedCostNoCacheMicros'])} : {}),
           label: typeof data['label'] === 'string' ? data['label'] : undefined,
           gitSha: typeof data['gitSha'] === 'string' ? data['gitSha'] : undefined,
           triggeredBy: String(data['triggeredBy'] ?? 'manual'),

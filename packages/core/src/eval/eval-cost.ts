@@ -10,13 +10,22 @@ import type {EvalCostInfo} from './eval-types.js';
  * Pricing per million tokens (in microdollars) for known models.
  * Prices are approximate and should be updated as providers change pricing.
  */
-export const MODEL_PRICING: Record<string, {inputPerMToken: number; outputPerMToken: number}> = {
-  // Anthropic
-  'claude-opus-4-20250514': {inputPerMToken: 15_000_000, outputPerMToken: 75_000_000},
-  'claude-sonnet-4-20250514': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000},
-  'claude-sonnet-4-6-20250626': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000},
-  'claude-haiku-3-5-20241022': {inputPerMToken: 800_000, outputPerMToken: 4_000_000},
-  'claude-haiku-4-5-20251001': {inputPerMToken: 800_000, outputPerMToken: 4_000_000},
+export interface ModelPricing {
+  inputPerMToken: number;
+  outputPerMToken: number;
+  /** Price per million tokens for cache reads. Defaults to 10% of inputPerMToken. */
+  cacheReadPerMToken?: number;
+  /** Price per million tokens for cache writes. Defaults to 125% of inputPerMToken. */
+  cacheWritePerMToken?: number;
+}
+
+export const MODEL_PRICING: Record<string, ModelPricing> = {
+  // Anthropic — cache read = 10% of input, cache write = 125% of input
+  'claude-opus-4-20250514': {inputPerMToken: 15_000_000, outputPerMToken: 75_000_000, cacheReadPerMToken: 1_500_000, cacheWritePerMToken: 18_750_000},
+  'claude-sonnet-4-20250514': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000, cacheReadPerMToken: 300_000, cacheWritePerMToken: 3_750_000},
+  'claude-sonnet-4-6-20250626': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000, cacheReadPerMToken: 300_000, cacheWritePerMToken: 3_750_000},
+  'claude-haiku-3-5-20241022': {inputPerMToken: 800_000, outputPerMToken: 4_000_000, cacheReadPerMToken: 80_000, cacheWritePerMToken: 1_000_000},
+  'claude-haiku-4-5-20251001': {inputPerMToken: 800_000, outputPerMToken: 4_000_000, cacheReadPerMToken: 80_000, cacheWritePerMToken: 1_000_000},
   // OpenAI
   'gpt-4o': {inputPerMToken: 2_500_000, outputPerMToken: 10_000_000},
   'gpt-4o-mini': {inputPerMToken: 150_000, outputPerMToken: 600_000},
@@ -30,30 +39,60 @@ export const MODEL_PRICING: Record<string, {inputPerMToken: number; outputPerMTo
 };
 
 // Default pricing for unknown models (conservative estimate)
-const DEFAULT_PRICING = {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000};
+const DEFAULT_PRICING: ModelPricing = {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000};
 
 /**
  * Look up pricing for a model, falling back to default for unknown models.
  */
-export function getModelPricing(model: string): {inputPerMToken: number; outputPerMToken: number} {
+export function getModelPricing(model: string): ModelPricing {
   return MODEL_PRICING[model] ?? DEFAULT_PRICING;
 }
 
 /**
  * Compute cost info from token counts and model identity.
+ *
+ * When `cacheReadInputTokens` or `cacheCreationInputTokens` are provided the
+ * cost is computed using the cache-specific pricing and the hypothetical
+ * no-cache cost is included for comparison.
  */
 export function computeEvalCost(
   inputTokens: number,
   outputTokens: number,
   model: string,
+  cacheReadInputTokens?: number,
+  cacheCreationInputTokens?: number,
 ): EvalCostInfo {
   const pricing = getModelPricing(model);
-  const totalTokens = inputTokens + outputTokens;
+  const cacheRead = cacheReadInputTokens ?? 0;
+  const cacheWrite = cacheCreationInputTokens ?? 0;
+  const totalTokens = inputTokens + outputTokens + cacheRead + cacheWrite;
+
+  const cacheReadPrice = pricing.cacheReadPerMToken ?? Math.round(pricing.inputPerMToken * 0.1);
+  const cacheWritePrice = pricing.cacheWritePerMToken ?? Math.round(pricing.inputPerMToken * 1.25);
+
   const estimatedCostMicros = Math.round(
-    (inputTokens * pricing.inputPerMToken + outputTokens * pricing.outputPerMToken) / 1_000_000,
+    (inputTokens * pricing.inputPerMToken
+      + cacheRead * cacheReadPrice
+      + cacheWrite * cacheWritePrice
+      + outputTokens * pricing.outputPerMToken) / 1_000_000,
   );
 
-  return {inputTokens, outputTokens, totalTokens, estimatedCostMicros};
+  // Hypothetical cost: treat all cached tokens as regular input
+  const allInputTokens = inputTokens + cacheRead + cacheWrite;
+  const estimatedCostNoCacheMicros = Math.round(
+    (allInputTokens * pricing.inputPerMToken + outputTokens * pricing.outputPerMToken) / 1_000_000,
+  );
+
+  const hasCacheData = cacheRead > 0 || cacheWrite > 0;
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    ...(hasCacheData ? {cacheReadInputTokens: cacheRead, cacheCreationInputTokens: cacheWrite} : {}),
+    estimatedCostMicros,
+    ...(hasCacheData ? {estimatedCostNoCacheMicros} : {}),
+  };
 }
 
 /**
@@ -67,11 +106,28 @@ export function aggregateRunCost(perCaseCosts: EvalCostInfo[]): EvalCostInfo {
     estimatedCostMicros: 0,
   };
 
+  let totalCacheRead = 0;
+  let totalCacheWrite = 0;
+  let totalNoCacheMicros = 0;
+  let hasCacheData = false;
+
   for (const cost of perCaseCosts) {
     result.inputTokens += cost.inputTokens;
     result.outputTokens += cost.outputTokens;
     result.totalTokens += cost.totalTokens;
     result.estimatedCostMicros += cost.estimatedCostMicros;
+    if (cost.cacheReadInputTokens || cost.cacheCreationInputTokens) {
+      hasCacheData = true;
+      totalCacheRead += cost.cacheReadInputTokens ?? 0;
+      totalCacheWrite += cost.cacheCreationInputTokens ?? 0;
+    }
+    totalNoCacheMicros += cost.estimatedCostNoCacheMicros ?? cost.estimatedCostMicros;
+  }
+
+  if (hasCacheData) {
+    result.cacheReadInputTokens = totalCacheRead;
+    result.cacheCreationInputTokens = totalCacheWrite;
+    result.estimatedCostNoCacheMicros = totalNoCacheMicros;
   }
 
   return result;

@@ -18,7 +18,7 @@ export interface EvalQueryProvider {
   query(message: string, appId?: string): Promise<{
     response: string;
     toolCalls: Array<{name: string; parameters: Record<string, unknown>}>;
-    usage?: {inputTokens: number; outputTokens: number};
+    usage?: {inputTokens: number; outputTokens: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number};
   }>;
 }
 
@@ -114,7 +114,10 @@ async function runSingleEval(
     const passed = assertions.every((a) => a.passed);
 
     const cost = usage && options.model
-      ? computeEvalCost(usage.inputTokens, usage.outputTokens, options.model.model)
+      ? computeEvalCost(
+          usage.inputTokens, usage.outputTokens, options.model.model,
+          usage.cacheReadInputTokens, usage.cacheCreationInputTokens,
+        )
       : undefined;
 
     return {

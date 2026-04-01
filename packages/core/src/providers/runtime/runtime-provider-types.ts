@@ -53,7 +53,23 @@ export interface LLMToolResultMessage {
 export interface LLMChatResponse {
   content: LLMResponseBlock[];
   stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'error';
-  usage?: {inputTokens: number; outputTokens: number};
+  usage?: LLMUsage;
+}
+
+/**
+ * Token usage returned by an LLM call.
+ *
+ * The `cacheReadInputTokens` and `cacheCreationInputTokens` fields are
+ * populated when the provider supports prompt caching (e.g. Anthropic).
+ * `inputTokens` always reflects tokens that were *not* served from cache.
+ */
+export interface LLMUsage {
+  inputTokens: number;
+  outputTokens: number;
+  /** Tokens served from a previously cached prefix (much cheaper). */
+  cacheReadInputTokens?: number;
+  /** Tokens written to the cache for future requests (slightly more expensive). */
+  cacheCreationInputTokens?: number;
 }
 
 export type LLMResponseBlock = LLMTextBlock | LLMToolUseBlock;
