@@ -836,29 +836,70 @@ export class SessionManager {
 
   /**
    * Create an admin session for the config chat.
-   * Uses admin agent skills/knowledge but the current repo's connections.
+   * Uses admin agent skills/knowledge but the current repo's connections/stores.
+   *
+   * Temporarily swaps repo fields so create() builds the prompt with admin
+   * content, then restores the original repo. This mirrors the old approach
+   * of building an adminRepo overlay.
    */
   async createAdminSession(): Promise<ManagedSession> {
     if (!this.repo) {
       throw new Error('Admin sessions require a repo');
     }
+    if (this.repo.source !== 'local') {
+      throw new Error('Admin sessions are only available for local repos');
+    }
+
     const agentDir = await ensureAdminAgent(this.repo.origin);
     const adminContent = await loadAdminAgent(agentDir);
 
-    // Create a session with admin context
-    // The admin session uses the same create() flow but with overridden prompts
-    const session = await this.create('admin');
+    // Save original repo fields
+    const origSkills = this.repo.skills;
+    const origKnowledge = this.repo.knowledge;
+    const origAgents = this.repo.agents;
+    const origAutomations = this.repo.automations;
 
-    // Override system prompt with admin agent prompt
-    if (adminContent.agentPrompt) {
-      try {
-        session.geminiClient.getChat().setSystemInstruction(adminContent.agentPrompt);
-      } catch {
-        // Non-fatal
-      }
+    // Swap in admin content so create() builds the prompt correctly
+    this.repo.skills = adminContent.skills;
+    this.repo.knowledge = adminContent.knowledge;
+    this.repo.agents = {
+      main: adminContent.agentPrompt ?? undefined,
+      simple: undefined,
+      subagents: [],
+    };
+    this.repo.automations = [];
+
+    let session: ManagedSession;
+    try {
+      session = await this.create('admin');
+    } finally {
+      // Restore original repo fields
+      this.repo.skills = origSkills;
+      this.repo.knowledge = origKnowledge;
+      this.repo.agents = origAgents;
+      this.repo.automations = origAutomations;
     }
 
     session.appId = 'admin';
+
+    // Register admin file tools (read/write/delete repo files)
+    try {
+      const { createReadRepoFileTool, createWriteRepoFileTool, createDeleteRepoFileTool } = await import('./admin-file-tools.js');
+      const repoRoot = this.repo.origin;
+      const upstream = session.config.getUpstreamConfig();
+      const toolRegistry = upstream.getToolRegistry();
+
+      toolRegistry.registerTool(createReadRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+      toolRegistry.registerTool(createWriteRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+      toolRegistry.registerTool(createDeleteRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+
+      await session.geminiClient.setTools();
+      process.stderr.write('[ADMIN] Registered file tools (read_repo_file, write_repo_file, delete_repo_file)\n');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[ADMIN] Failed to register file tools: ${msg}\n`);
+    }
+
     return session;
   }
 
