@@ -19,9 +19,7 @@ export { createAIStreamRouter, type AIStreamRouterOptions } from './routes/ai-st
 export { createLocalServer } from './agent/local-server.js';
 export type { LocalServerConfig, AgentChatRequest, AgentSession } from './agent/agent-types.js';
 export { SessionManager } from './session/session-manager.js';
-export type { ManagedSession, SessionManagerOptions } from './session/session-manager.js';
-/** @deprecated Use SessionManager instead */
-export { SessionManager as AgentSessionManager } from './session/session-manager.js';
+export type { ManagedSession, SessionManagerOptions, SessionStore, StoredSessionRecord } from './session/session-manager.js';
 export { ProactiveRunner } from './agent/proactive/proactive-runner.js';
 export type { AutomationInfo, ProactiveRunnerConfig } from './agent/proactive/proactive-runner.js';
 
@@ -35,9 +33,12 @@ export type { ChatRouterOptions, SessionCreator, SessionHydrator, TurnCompleteHa
 export { createTaskRouter } from './agent/routes/task.js';
 export type { TaskRouterOptions } from './agent/routes/task.js';
 
-// Auth
-export { getAuthContext, createAuthMiddleware } from './middleware/auth.js';
-export type { AuthContext, AuthMiddlewareOptions } from './middleware/auth.js';
+// Auth types (middleware implementation provided by hosting layer)
+export { getAuthContext } from './middleware/auth.js';
+export type { AuthContext } from './middleware/auth.js';
+
+// Stream hooks
+export type { StreamHooks } from './session/session-runner.js';
 
 // Error handler
 export { errorHandler } from './middleware/error-handler.js';
@@ -67,13 +68,8 @@ async function main(): Promise<void> {
   const host = getEnvOrDefault('HOST', '0.0.0.0');
   const sessionTtlMs = getEnvInt('SESSION_TTL_MS', 30 * 60 * 1000);
 
-  // Platform API URL — used for auth (validating ak_ keys from requests)
-  // and for loading org-specific config per session.
-  // No API key needed at startup — keys come from request headers.
+  // Platform API URL — used by SessionManager for AgentSDK config loading.
   const platformApiUrl = process.env['PLATFORM_API_URL'];
-
-  // JWKS URL for JWT verification (defaults to platformApiUrl/.well-known/jwks.json)
-  const jwksUrl = process.env['JWT_JWKS_URL'] || undefined;
 
   // LLM config comes from env. Default matches the platform API default.
   const model = getEnvOrDefault('MODEL', 'claude-sonnet-4-20250514');
@@ -112,7 +108,6 @@ async function main(): Promise<void> {
       },
       version: SERVER_VERSION,
       platformApiUrl,
-      jwksUrl,
     });
 
     await serverInstance.start();

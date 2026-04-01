@@ -16,10 +16,10 @@ vi.mock('../session/session-runner.js', () => ({
   runMessage: (...args: unknown[]) => mockRunMessage(...args),
 }));
 
-function createApp(sessionManager: Record<string, unknown>, auditClient?: Record<string, unknown>) {
+function createApp(sessionManager: Record<string, unknown>) {
   const app = express();
   app.use(express.json());
-  app.use(createChatRouter({ sessionManager: sessionManager as never, auditClient: auditClient as never }));
+  app.use(createChatRouter({ sessionManager: sessionManager as never }));
   app.use(errorHandler);
   return app;
 }

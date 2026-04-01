@@ -500,9 +500,12 @@ describe('SessionManager', () => {
       { type: 'assistant_text', id: 'msg-2', text: 'Hi there!', timestamp: '2024-01-01T00:00:01Z' },
     ];
 
+    const mockGetSession = vi.fn();
+
     function makeHydrateManager() {
       const mockSetHistory = vi.fn();
       mockGetGeminiClient.mockReturnValue({ setHistory: mockSetHistory });
+      mockGetSession.mockReset();
 
       const mgr = new SessionManager({
         baseParams: {
@@ -514,6 +517,7 @@ describe('SessionManager', () => {
         },
         cleanupIntervalMs: 60_000,
         platformApiUrl: 'http://localhost:4000',
+        sessionStore: { getSession: mockGetSession },
       });
 
       return { mgr, mockSetHistory };
@@ -555,53 +559,41 @@ describe('SessionManager', () => {
       await mgr.shutdown();
     });
 
-    it('returns null on fetch failure', async () => {
+    it('returns null on session store error', async () => {
       const { mgr } = makeHydrateManager();
-      const fetchSpy = vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('Network error'));
+      mockGetSession.mockRejectedValueOnce(new Error('Network error'));
 
       const result = await mgr.hydrate('conv-1', undefined, platformAuth);
       expect(result).toBeNull();
-      fetchSpy.mockRestore();
       await mgr.shutdown();
     });
 
-    it('returns null on non-OK HTTP response', async () => {
+    it('returns null when session store returns null', async () => {
       const { mgr } = makeHydrateManager();
-      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      } as Response);
+      mockGetSession.mockResolvedValueOnce(null);
 
       const result = await mgr.hydrate('conv-1', undefined, platformAuth);
       expect(result).toBeNull();
-      fetchSpy.mockRestore();
       await mgr.shutdown();
     });
 
     it('returns null when stored conversation has no messages', async () => {
       const { mgr } = makeHydrateManager();
-      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'conv-1', app_id: 'app-1', messages: [], status: 'active' }),
-      } as Response);
+      mockGetSession.mockResolvedValueOnce({ id: 'conv-1', app_id: 'app-1', messages: [], status: 'active' });
 
       const result = await mgr.hydrate('conv-1', undefined, platformAuth);
       expect(result).toBeNull();
-      fetchSpy.mockRestore();
       await mgr.shutdown();
     });
 
     it('creates session under original conversation ID', async () => {
       const { mgr, mockSetHistory } = makeHydrateManager();
-      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'conv-original',
-          app_id: 'app-1',
-          messages: storedMessages,
-          status: 'active',
-        }),
-      } as Response);
+      mockGetSession.mockResolvedValueOnce({
+        id: 'conv-original',
+        app_id: 'app-1',
+        messages: storedMessages,
+        status: 'active',
+      });
 
       const session = await mgr.hydrate('conv-original', undefined, platformAuth);
       expect(session).not.toBeNull();
@@ -609,21 +601,17 @@ describe('SessionManager', () => {
       expect(mgr.get('conv-original')).toBeDefined();
       expect(mockSetHistory).toHaveBeenCalledOnce();
 
-      fetchSpy.mockRestore();
       await mgr.shutdown();
     });
 
     it('seeds LLM history via setHistory', async () => {
       const { mgr, mockSetHistory } = makeHydrateManager();
-      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'conv-history',
-          app_id: 'app-1',
-          messages: storedMessages,
-          status: 'active',
-        }),
-      } as Response);
+      mockGetSession.mockResolvedValueOnce({
+        id: 'conv-history',
+        app_id: 'app-1',
+        messages: storedMessages,
+        status: 'active',
+      });
 
       await mgr.hydrate('conv-history', undefined, platformAuth);
 
@@ -633,47 +621,39 @@ describe('SessionManager', () => {
       expect(historyArg[0]?.['role']).toBe('user');
       expect(historyArg[1]?.['role']).toBe('model');
 
-      fetchSpy.mockRestore();
       await mgr.shutdown();
     });
 
     it('pre-populates accumulatedMessages', async () => {
       const { mgr } = makeHydrateManager();
-      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'conv-acc',
-          app_id: 'app-1',
-          messages: storedMessages,
-          status: 'active',
-        }),
-      } as Response);
+      mockGetSession.mockResolvedValueOnce({
+        id: 'conv-acc',
+        app_id: 'app-1',
+        messages: storedMessages,
+        status: 'active',
+      });
 
       const session = await mgr.hydrate('conv-acc', undefined, platformAuth);
       expect(session!.accumulatedMessages).toHaveLength(2);
       expect(session!.accumulatedMessages[0]?.text).toBe('Hello');
       expect(session!.accumulatedMessages[1]?.text).toBe('Hi there!');
 
-      fetchSpy.mockRestore();
       await mgr.shutdown();
     });
 
     it('deduplicates concurrent hydration requests', async () => {
       const { mgr } = makeHydrateManager();
 
-      let resolveJson!: (v: unknown) => void;
-      const jsonPromise = new Promise((r) => { resolveJson = r; });
-      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
-        ok: true,
-        json: () => jsonPromise,
-      } as unknown as Response);
+      let resolveSession!: (v: unknown) => void;
+      const sessionPromise = new Promise((r) => { resolveSession = r; });
+      mockGetSession.mockReturnValue(sessionPromise);
 
       // Start two concurrent hydrations for the same conversation
       const p1 = mgr.hydrate('conv-dedup', undefined, platformAuth);
       const p2 = mgr.hydrate('conv-dedup', undefined, platformAuth);
 
-      // Resolve the fetch
-      resolveJson({
+      // Resolve the session store
+      resolveSession({
         id: 'conv-dedup',
         app_id: 'app-1',
         messages: storedMessages,
@@ -684,10 +664,9 @@ describe('SessionManager', () => {
 
       // Both should return the same session
       expect(s1).toBe(s2);
-      // Only one fetch was made
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      // Only one store call was made
+      expect(mockGetSession).toHaveBeenCalledTimes(1);
 
-      fetchSpy.mockRestore();
       await mgr.shutdown();
     });
   });

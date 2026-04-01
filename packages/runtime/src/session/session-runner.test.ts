@@ -306,35 +306,28 @@ describe('runMessage', () => {
       },
     ]);
 
-    const mockLog = vi.fn();
-    const audit = {
-      auditClient: { log: mockLog },
-      appId: 'app-1',
-      token: 'tok-1',
-
-
-      orgId: 'org-1',
+    const mockAuditLog = vi.fn();
+    const mockUsageReport = vi.fn();
+    const hooks = {
+      onAuditLog: mockAuditLog,
+      onUsageReport: mockUsageReport,
     };
 
     await runMessage(
       session as never,
       'do something',
       controller.signal,
-      audit as never,
+      hooks as never,
     );
 
-    expect(mockLog).toHaveBeenCalledOnce();
-    const [appId, token, entry] = mockLog.mock.calls[0] as [string, string, Record<string, unknown>];
-    expect(appId).toBe('app-1');
-    expect(token).toBe('tok-1');
+    expect(mockAuditLog).toHaveBeenCalledOnce();
+    const entry = mockAuditLog.mock.calls[0][0] as Record<string, unknown>;
     expect(entry['event']).toBe('session_completed');
     expect(entry['resource_name']).toBe('sess-123');
     const details = entry['details'] as Record<string, unknown>;
     expect(details['status']).toBe('completed');
     expect(details['message']).toBe('do something');
     expect(details['response']).toBe('Done');
-    expect(details['app_id']).toBe('app-1');
-    expect(details['org_id']).toBe('org-1');
     expect(details['turns']).toBe(2);
     const toolCalls = details['tool_calls'] as Array<Record<string, unknown>>;
     expect(toolCalls).toHaveLength(1);
@@ -379,21 +372,21 @@ describe('runMessage', () => {
       },
     ]);
 
-    const mockLog = vi.fn();
-    const audit = {
-      auditClient: { log: mockLog },
-      appId: 'app-1',
-      token: 'tok-1',
+    const mockAuditLog = vi.fn();
+    const mockUsageReport = vi.fn();
+    const hooks = {
+      onAuditLog: mockAuditLog,
+      onUsageReport: mockUsageReport,
     };
 
     await runMessage(
       session as never,
       'list devices',
       controller.signal,
-      audit as never,
+      hooks as never,
     );
 
-    const [, , entry] = mockLog.mock.calls[0] as [string, string, Record<string, unknown>];
+    const entry = mockAuditLog.mock.calls[0][0] as Record<string, unknown>;
     const details = entry['details'] as Record<string, unknown>;
     const toolCalls = details['tool_calls'] as Array<Record<string, unknown>>;
     expect(toolCalls[0]?.['result']).toBe('{"devices": [{"id": "d1", "name": "sensor-001"}]}');
@@ -442,21 +435,21 @@ describe('runMessage', () => {
       },
     ]);
 
-    const mockLog = vi.fn();
-    const audit = {
-      auditClient: { log: mockLog },
-      appId: 'app-1',
-      token: 'tok-1',
+    const mockAuditLog = vi.fn();
+    const mockUsageReport = vi.fn();
+    const hooks = {
+      onAuditLog: mockAuditLog,
+      onUsageReport: mockUsageReport,
     };
 
     await runMessage(
       session as never,
       'scan environment',
       controller.signal,
-      audit as never,
+      hooks as never,
     );
 
-    const [, , entry] = mockLog.mock.calls[0] as [string, string, Record<string, unknown>];
+    const entry = mockAuditLog.mock.calls[0][0] as Record<string, unknown>;
     const details = entry['details'] as Record<string, unknown>;
     const toolCalls = details['tool_calls'] as Array<Record<string, unknown>>;
     expect(toolCalls[0]?.['result']).toBe('{"summary":"No anomalies detected","devices_scanned":42}');
@@ -498,21 +491,21 @@ describe('runMessage', () => {
       },
     ]);
 
-    const mockLog = vi.fn();
-    const audit = {
-      auditClient: { log: mockLog },
-      appId: 'app-1',
-      token: 'tok-1',
+    const mockAuditLog = vi.fn();
+    const mockUsageReport = vi.fn();
+    const hooks = {
+      onAuditLog: mockAuditLog,
+      onUsageReport: mockUsageReport,
     };
 
     await runMessage(
       session as never,
       'big query',
       controller.signal,
-      audit as never,
+      hooks as never,
     );
 
-    const [, , entry] = mockLog.mock.calls[0] as [string, string, Record<string, unknown>];
+    const entry = mockAuditLog.mock.calls[0][0] as Record<string, unknown>;
     const details = entry['details'] as Record<string, unknown>;
     const toolCalls = details['tool_calls'] as Array<Record<string, unknown>>;
     const result = toolCalls[0]?.['result'] as string;
@@ -528,19 +521,19 @@ describe('runMessage', () => {
       },
     ]);
 
-    const mockLog = vi.fn();
-    const audit = {
-      auditClient: { log: mockLog },
-      appId: 'app-1',
-      token: 'tok-1',
+    const mockAuditLog = vi.fn();
+    const mockUsageReport = vi.fn();
+    const hooks = {
+      onAuditLog: mockAuditLog,
+      onUsageReport: mockUsageReport,
     };
 
     await expect(
-      runMessage(session as never, 'fail', controller.signal, audit as never),
+      runMessage(session as never, 'fail', controller.signal, hooks as never),
     ).rejects.toThrow('LLM error');
 
-    expect(mockLog).toHaveBeenCalledOnce();
-    const [, , entry] = mockLog.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(mockAuditLog).toHaveBeenCalledOnce();
+    const entry = mockAuditLog.mock.calls[0][0] as Record<string, unknown>;
     expect(entry['event']).toBe('session_completed');
     const details = entry['details'] as Record<string, unknown>;
     expect(details['status']).toBe('error');
@@ -764,32 +757,25 @@ describe('streamMessage', () => {
       },
     ]);
 
-    const mockLog = vi.fn();
-    const audit = {
-      auditClient: { log: mockLog },
-      appId: 'app-1',
-      token: 'tok-1',
-
-
-      orgId: 'org-1',
+    const mockAuditLog = vi.fn();
+    const mockUsageReport = vi.fn();
+    const hooks = {
+      onAuditLog: mockAuditLog,
+      onUsageReport: mockUsageReport,
     };
 
     await collectEvents(
-      streamMessage(session as never, 'triage please', controller.signal, audit as never),
+      streamMessage(session as never, 'triage please', controller.signal, hooks as never),
     );
 
-    expect(mockLog).toHaveBeenCalledOnce();
-    const [appId, token, entry] = mockLog.mock.calls[0] as [string, string, Record<string, unknown>];
-    expect(appId).toBe('app-1');
-    expect(token).toBe('tok-1');
+    expect(mockAuditLog).toHaveBeenCalledOnce();
+    const entry = mockAuditLog.mock.calls[0][0] as Record<string, unknown>;
     expect(entry['event']).toBe('session_completed');
     expect(entry['resource_name']).toBe('sess-123');
     const details = entry['details'] as Record<string, unknown>;
     expect(details['status']).toBe('completed');
     expect(details['message']).toBe('triage please');
     expect(details['response']).toBe('skill loaded');
-    expect(details['app_id']).toBe('app-1');
-    expect(details['org_id']).toBe('org-1');
     expect(details['skills_activated']).toEqual(['triage']);
     const toolCalls = details['tool_calls'] as Array<Record<string, unknown>>;
     expect(toolCalls).toHaveLength(1);
@@ -833,18 +819,18 @@ describe('streamMessage', () => {
       },
     ]);
 
-    const mockLog = vi.fn();
-    const audit = {
-      auditClient: { log: mockLog },
-      appId: 'app-1',
-      token: 'tok-1',
+    const mockAuditLog = vi.fn();
+    const mockUsageReport = vi.fn();
+    const hooks = {
+      onAuditLog: mockAuditLog,
+      onUsageReport: mockUsageReport,
     };
 
     await collectEvents(
-      streamMessage(session as never, 'check alerts', controller.signal, audit as never),
+      streamMessage(session as never, 'check alerts', controller.signal, hooks as never),
     );
 
-    const [, , entry] = mockLog.mock.calls[0] as [string, string, Record<string, unknown>];
+    const entry = mockAuditLog.mock.calls[0][0] as Record<string, unknown>;
     const details = entry['details'] as Record<string, unknown>;
     const toolCalls = details['tool_calls'] as Array<Record<string, unknown>>;
     expect(toolCalls[0]?.['result']).toBe('{"alerts": [{"severity": "high", "message": "anomaly detected"}]}');
@@ -858,19 +844,19 @@ describe('streamMessage', () => {
       },
     ]);
 
-    const mockLog = vi.fn();
-    const audit = {
-      auditClient: { log: mockLog },
-      appId: 'app-1',
-      token: 'tok-1',
+    const mockAuditLog = vi.fn();
+    const mockUsageReport = vi.fn();
+    const hooks = {
+      onAuditLog: mockAuditLog,
+      onUsageReport: mockUsageReport,
     };
 
     await collectEvents(
-      streamMessage(session as never, 'fail', controller.signal, audit as never),
+      streamMessage(session as never, 'fail', controller.signal, hooks as never),
     );
 
-    expect(mockLog).toHaveBeenCalledOnce();
-    const [, , entry] = mockLog.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(mockAuditLog).toHaveBeenCalledOnce();
+    const entry = mockAuditLog.mock.calls[0][0] as Record<string, unknown>;
     expect(entry['event']).toBe('session_completed');
     const details = entry['details'] as Record<string, unknown>;
     expect(details['status']).toBe('error');
@@ -906,19 +892,19 @@ describe('streamMessage', () => {
       },
     ]);
 
-    const mockLog = vi.fn();
-    const audit = {
-      auditClient: { log: mockLog },
-      appId: 'app-1',
-      token: 'tok-1',
+    const mockAuditLog = vi.fn();
+    const mockUsageReport = vi.fn();
+    const hooks = {
+      onAuditLog: mockAuditLog,
+      onUsageReport: mockUsageReport,
     };
 
     await collectEvents(
-      streamMessage(session as never, 'loop forever', controller.signal, audit as never),
+      streamMessage(session as never, 'loop forever', controller.signal, hooks as never),
     );
 
-    expect(mockLog).toHaveBeenCalledOnce();
-    const [, , entry] = mockLog.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(mockAuditLog).toHaveBeenCalledOnce();
+    const entry = mockAuditLog.mock.calls[0][0] as Record<string, unknown>;
     expect(entry['event']).toBe('session_completed');
     const details = entry['details'] as Record<string, unknown>;
     expect(details['status']).toBe('max_turns');
