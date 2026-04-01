@@ -849,6 +849,12 @@ export async function* streamMessage(
           yield {
             type: SSEEventType.Done,
             timestamp: new Date().toISOString(),
+            usage: {
+              input_tokens: tokens.inputTokens,
+              output_tokens: tokens.outputTokens,
+              cached_tokens: tokens.cachedTokens,
+              total_tokens: tokens.inputTokens + tokens.outputTokens,
+            },
           };
           return;
         }
@@ -866,6 +872,12 @@ export async function* streamMessage(
   yield {
     type: SSEEventType.Done,
     timestamp: new Date().toISOString(),
+    usage: {
+      input_tokens: tokens.inputTokens,
+      output_tokens: tokens.outputTokens,
+      cached_tokens: tokens.cachedTokens,
+      total_tokens: tokens.inputTokens + tokens.outputTokens,
+    },
   };
 }
 
