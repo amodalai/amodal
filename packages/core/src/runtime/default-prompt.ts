@@ -16,6 +16,13 @@ export function buildDefaultPrompt(opts: {
   description?: string;
   agentContext?: string;
   connectionNames?: string[];
+  connections?: Array<{
+    name: string;
+    description?: string;
+    endpoints?: Array<{method: string; path: string; description: string}>;
+    entities?: string;
+    rules?: string;
+  }>;
   skills?: Array<{name: string; description: string; trigger?: string; body?: string}>;
   knowledge?: Array<{name: string; title?: string}>;
 }): string {
@@ -51,15 +58,41 @@ export function buildDefaultPrompt(opts: {
 - If a skill or tool is not found, report the error and list what is available.`);
   parts.push('');
 
-  // Connections
-  if (opts.connectionNames && opts.connectionNames.length > 0) {
+  // Connections — include API surface so the model knows available endpoints
+  if (opts.connections && opts.connections.length > 0) {
+    parts.push('## Connected systems');
+    parts.push('');
+    for (const conn of opts.connections) {
+      parts.push(`### Connection: ${conn.name}`);
+      if (conn.description) {
+        parts.push(conn.description);
+      }
+      if (conn.endpoints && conn.endpoints.length > 0) {
+        parts.push('');
+        parts.push('**Available Endpoints:**');
+        for (const ep of conn.endpoints) {
+          parts.push(`- ${ep.method} ${ep.path} — ${ep.description}`);
+        }
+      }
+      if (conn.entities) {
+        parts.push('');
+        parts.push(conn.entities);
+      }
+      if (conn.rules) {
+        parts.push('');
+        parts.push(conn.rules);
+      }
+      parts.push('');
+    }
+    parts.push('Use `request` with the connection name, method, endpoint, and intent to interact with these systems.');
+    parts.push('');
+  } else if (opts.connectionNames && opts.connectionNames.length > 0) {
+    // Fallback: just names
     parts.push('## Connected systems');
     parts.push('');
     for (const name of opts.connectionNames) {
       parts.push(`- **${name}**`);
     }
-    parts.push('');
-    parts.push('Use `request` with the connection name to interact with these systems. Check the connection documentation for available endpoints.');
     parts.push('');
   }
 

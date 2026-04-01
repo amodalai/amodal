@@ -442,7 +442,24 @@ export class SessionManager {
       name: config.getAgentName() ?? 'Amodal Agent',
       description: config.getAgentDescription(),
       agentContext: config.getAgentContext(),
-      connectionNames: Object.keys(config.getConnections()).filter((k) => k !== '_secrets'),
+      connections: this.repo?.connections ? Array.from(this.repo.connections.values()).map((conn) => ({
+        name: conn.name,
+        endpoints: (conn.surface ?? [])
+          .filter((ep) => ep.included)
+          .map((ep) => ({method: ep.method, path: ep.path, description: ep.description})),
+        entities: conn.entities,
+        rules: conn.rules,
+      })) : undefined,
+      skills: this.repo?.skills?.map((s) => ({
+        name: s.name,
+        description: s.description ?? '',
+        trigger: s.trigger,
+        body: s.body,
+      })),
+      knowledge: this.repo?.knowledge?.map((k) => ({
+        name: k.name,
+        title: k.title,
+      })),
     });
     try {
       geminiClient.getChat().setSystemInstruction(systemPrompt);
