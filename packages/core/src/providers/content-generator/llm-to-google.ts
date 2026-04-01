@@ -41,6 +41,7 @@ interface GUsageMetadata {
   promptTokenCount?: number;
   candidatesTokenCount?: number;
   totalTokenCount?: number;
+  cachedContentTokenCount?: number;
 }
 
 /**
@@ -74,10 +75,14 @@ export function convertLLMResponse(response: LLMChatResponse): GGenerateContentR
   };
 
   if (response.usage) {
+    const allInput = response.usage.inputTokens
+      + (response.usage.cacheReadInputTokens ?? 0)
+      + (response.usage.cacheCreationInputTokens ?? 0);
     result.usageMetadata = {
-      promptTokenCount: response.usage.inputTokens,
+      promptTokenCount: allInput,
       candidatesTokenCount: response.usage.outputTokens,
-      totalTokenCount: response.usage.inputTokens + response.usage.outputTokens,
+      totalTokenCount: allInput + response.usage.outputTokens,
+      cachedContentTokenCount: response.usage.cacheReadInputTokens,
     };
   }
 
@@ -157,10 +162,14 @@ export function convertStreamEvent(event: LLMStreamEvent): GGenerateContentRespo
         ],
       };
       if (event.usage) {
+        const allInput = event.usage.inputTokens
+          + (event.usage.cacheReadInputTokens ?? 0)
+          + (event.usage.cacheCreationInputTokens ?? 0);
         chunk.usageMetadata = {
-          promptTokenCount: event.usage.inputTokens,
+          promptTokenCount: allInput,
           candidatesTokenCount: event.usage.outputTokens,
-          totalTokenCount: event.usage.inputTokens + event.usage.outputTokens,
+          totalTokenCount: allInput + event.usage.outputTokens,
+          cachedContentTokenCount: event.usage.cacheReadInputTokens,
         };
       }
       break;

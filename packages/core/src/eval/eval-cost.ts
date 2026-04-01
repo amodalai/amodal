@@ -54,14 +54,16 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'openai/gpt-oss-120b': {inputPerMToken: 150_000, outputPerMToken: 600_000},
 };
 
-// Default pricing for unknown models (conservative estimate)
-const DEFAULT_PRICING: ModelPricing = {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000};
-
 /**
- * Look up pricing for a model, falling back to default for unknown models.
+ * Look up pricing for a model. Throws if the model has no known pricing —
+ * this ensures we never silently compute wrong costs.
  */
 export function getModelPricing(model: string): ModelPricing {
-  return MODEL_PRICING[model] ?? DEFAULT_PRICING;
+  const pricing = MODEL_PRICING[model];
+  if (!pricing) {
+    throw new Error(`No pricing data for model "${model}". Add it to MODEL_PRICING in eval-cost.ts.`);
+  }
+  return pricing;
 }
 
 /**

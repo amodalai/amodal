@@ -389,7 +389,7 @@ function CompareTable({ results }: { results: CompareResult[] }) {
                                   <span className={a.passed ? 'text-emerald-300' : 'text-red-300'}>{a.negated ? 'NOT ' : ''}{a.text}</span>
                                 </div>
                                 {a.reason && (
-                                  <div className="mt-1 ml-5 text-gray-500 dark:text-zinc-500 italic">{a.reason}</div>
+                                  <div className="mt-1 ml-5 text-gray-500 dark:text-zinc-500 italic break-words whitespace-normal">{a.reason}</div>
                                 )}
                               </div>
                             ))}
