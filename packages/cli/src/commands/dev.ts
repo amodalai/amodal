@@ -5,7 +5,7 @@
  */
 
 import type {CommandModule} from 'yargs';
-import {existsSync} from 'node:fs';
+import {existsSync, readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -33,6 +33,23 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(`[dev] ${msg}\n`);
     process.exit(1);
+  }
+
+  // Load .env file from the repo root (if present)
+  const envPath = path.join(repoPath, '.env');
+  if (existsSync(envPath)) {
+    const envContent = readFileSync(envPath, 'utf-8');
+    for (const line of envContent.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const value = trimmed.slice(eqIdx + 1).trim();
+      if (key && !(key in process.env)) {
+        process.env[key] = value;
+      }
+    }
   }
 
   const port = options.port ?? DEFAULT_PORT;
