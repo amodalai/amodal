@@ -1,7 +1,7 @@
 ---
 "@amodalai/core": patch
 "@amodalai/runtime": patch
-"@amodalai/cli": patch
+"@amodalai/amodal": patch
 ---
 
 Add prompt caching, multi-model eval comparison, and new provider support
