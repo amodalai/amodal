@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Fragment, useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
 import { CheckCircle2, XCircle, FlaskConical, Loader2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -473,16 +473,21 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
 /*  EvalCard                                                            */
 /* ------------------------------------------------------------------ */
 
-function EvalCard({
+export function EvalCard({
   suite,
   models,
   history,
+  hideModelSelector,
+  autoRunTrigger,
 }: {
   suite: EvalSuite;
   models: AvailableModel[];
   history: EvalHistoryEntry[];
+  hideModelSelector?: boolean;
+  autoRunTrigger?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const lastAutoRun = useRef(0);
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [timeout, setTimeoutVal] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
@@ -516,7 +521,7 @@ function EvalCard({
     setSelectedModels(new Set());
   };
 
-  const handleRun = async () => {
+  const handleRun = useCallback(async () => {
     setIsRunning(true);
     setResults([]);
 
@@ -536,7 +541,16 @@ function EvalCard({
 
     setCurrentRunningModel(null);
     setIsRunning(false);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- models and selectedModels are stable refs
+  }, [suite.name, timeout]);
+
+  // Auto-run when triggered by parent (e.g., Run All)
+  useEffect(() => {
+    if (autoRunTrigger && autoRunTrigger > 0 && autoRunTrigger !== lastAutoRun.current && !isRunning && selectedModels.size > 0) {
+      lastAutoRun.current = autoRunTrigger;
+      void handleRun();
+    }
+  }, [autoRunTrigger, isRunning, selectedModels.size, handleRun]);
 
   const selectedCount = selectedModels.size;
   const colCount = Math.min(Math.max(models.length, 3), 5);
@@ -584,47 +598,51 @@ function EvalCard({
           </div>
 
           {/* Model selector grid */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Models</div>
-              <button onClick={selectAll} className="text-[10px] text-indigo-400 hover:text-indigo-300">all</button>
-              <button onClick={selectNone} className="text-[10px] text-indigo-400 hover:text-indigo-300">none</button>
+          {!hideModelSelector && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Models</div>
+                <button onClick={selectAll} className="text-[10px] text-indigo-400 hover:text-indigo-300">all</button>
+                <button onClick={selectNone} className="text-[10px] text-indigo-400 hover:text-indigo-300">none</button>
+              </div>
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+                {models.map((m) => {
+                  const key = `${m.provider}/${m.model}`;
+                  const selected = selectedModels.has(key);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => toggleModel(key)}
+                      className={cn(
+                        'px-2 py-1.5 rounded text-xs font-medium border transition-colors text-center truncate',
+                        selected
+                          ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-400'
+                          : 'border-gray-200 dark:border-zinc-700/50 text-gray-400 dark:text-zinc-500 hover:border-gray-300 dark:hover:border-zinc-600',
+                      )}
+                    >
+                      {m.label || m.model.replace(/-\d{8}$/, '')}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
-              {models.map((m) => {
-                const key = `${m.provider}/${m.model}`;
-                const selected = selectedModels.has(key);
-                return (
-                  <button
-                    key={key}
-                    onClick={() => toggleModel(key)}
-                    className={cn(
-                      'px-2 py-1.5 rounded text-xs font-medium border transition-colors text-center truncate',
-                      selected
-                        ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-400'
-                        : 'border-gray-200 dark:border-zinc-700/50 text-gray-400 dark:text-zinc-500 hover:border-gray-300 dark:hover:border-zinc-600',
-                    )}
-                  >
-                    {m.label || m.model.replace(/-\d{8}$/, '')}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          )}
 
           {/* Timeout slider */}
-          <div className="flex items-center gap-3">
-            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Timeout</div>
-            <input
-              type="range"
-              min={20}
-              max={300}
-              value={timeout}
-              onChange={(e) => setTimeoutVal(Number(e.target.value))}
-              className="flex-1 h-1 accent-indigo-500"
-            />
-            <span className="text-xs text-gray-400 dark:text-zinc-500 tabular-nums w-10 text-right">{timeout}s</span>
-          </div>
+          {!hideModelSelector && (
+            <div className="flex items-center gap-3">
+              <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Timeout</div>
+              <input
+                type="range"
+                min={20}
+                max={300}
+                value={timeout}
+                onChange={(e) => setTimeoutVal(Number(e.target.value))}
+                className="flex-1 h-1 accent-indigo-500"
+              />
+              <span className="text-xs text-gray-400 dark:text-zinc-500 tabular-nums w-10 text-right">{timeout}s</span>
+            </div>
+          )}
 
           {/* Run button */}
           <button
@@ -697,7 +715,7 @@ function EvalCard({
 /*  SuitesTab                                                           */
 /* ------------------------------------------------------------------ */
 
-function SuitesTab({ suites }: { suites: EvalSuite[] }) {
+export function SuitesTab({ suites, hideModelSelector, runAllTrigger }: { suites: EvalSuite[]; hideModelSelector?: boolean; runAllTrigger?: number }) {
   const [models, setModels] = useState<AvailableModel[]>([]);
   const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
 
@@ -746,6 +764,8 @@ function SuitesTab({ suites }: { suites: EvalSuite[] }) {
           suite={suite}
           models={models}
           history={historyMap[suite.name] ?? []}
+          hideModelSelector={hideModelSelector}
+          autoRunTrigger={runAllTrigger}
         />
       ))}
     </div>
