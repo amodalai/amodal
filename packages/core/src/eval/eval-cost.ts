@@ -21,6 +21,7 @@ export interface ModelPricing {
 
 export const MODEL_PRICING: Record<string, ModelPricing> = {
   // Anthropic — cache read = 10% of input, cache write = 125% of input
+  'claude-opus-4-5-20250514': {inputPerMToken: 5_000_000, outputPerMToken: 25_000_000, cacheReadPerMToken: 500_000, cacheWritePerMToken: 6_250_000},
   'claude-opus-4-20250514': {inputPerMToken: 15_000_000, outputPerMToken: 75_000_000, cacheReadPerMToken: 1_500_000, cacheWritePerMToken: 18_750_000},
   'claude-sonnet-4-20250514': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000, cacheReadPerMToken: 300_000, cacheWritePerMToken: 3_750_000},
   'claude-sonnet-4-6-20250626': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000, cacheReadPerMToken: 300_000, cacheWritePerMToken: 3_750_000},
