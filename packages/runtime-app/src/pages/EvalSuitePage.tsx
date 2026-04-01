@@ -53,6 +53,17 @@ interface CardResult {
   phase?: 'querying' | 'judging' | 'done';
 }
 
+interface EvalHistoryEntry {
+  runId: string;
+  passed: boolean;
+  durationMs: number;
+  queryCostMicros: number;
+  judgeCostMicros: number;
+  timestamp: string;
+  model: string;
+  assertions: Array<{ passed: boolean }>;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
@@ -67,6 +78,17 @@ function formatCost(micros: number): string {
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 function CollapsibleText({ text, lines = 2 }: { text: string; lines?: number }) {
@@ -100,14 +122,16 @@ function CollapsibleText({ text, lines = 2 }: { text: string; lines?: number }) 
 /*  EvalCard                                                            */
 /* ------------------------------------------------------------------ */
 
-function EvalCard({ suite, expanded: expandedProp, onToggle, runTrigger }: {
+function EvalCard({ suite, expanded: expandedProp, onToggle, runTrigger, history }: {
   suite: EvalSuite;
   expanded: boolean;
   onToggle: () => void;
   runTrigger: number;
+  history: EvalHistoryEntry[];
 }) {
   const [isRunning, setIsRunning] = useState(false);
   const [cardResult, setCardResult] = useState<CardResult | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const lastRunTrigger = useRef(0);
 
   const handleRun = useCallback(async () => {
@@ -345,6 +369,53 @@ function EvalCard({ suite, expanded: expandedProp, onToggle, runTrigger }: {
               )}
             </>
           )}
+
+          {/* History */}
+          {history.length > 0 && (
+            <div>
+              <button
+                onClick={() => setHistoryOpen(!historyOpen)}
+                className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest hover:text-gray-600 dark:hover:text-zinc-400"
+              >
+                <ChevronDown className={cn('h-3 w-3 transition-transform', historyOpen && 'rotate-180')} />
+                History ({history.length})
+              </button>
+              {historyOpen && (
+                <div className="mt-2 border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-zinc-900/50 text-gray-500 dark:text-zinc-500">
+                        <th className="text-center px-3 py-1.5 font-medium">Result</th>
+                        <th className="text-center px-3 py-1.5 font-medium">Assertions</th>
+                        <th className="text-right px-3 py-1.5 font-medium">Time</th>
+                        <th className="text-right px-3 py-1.5 font-medium">Cost</th>
+                        <th className="text-right px-3 py-1.5 font-medium">When</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.map((h, i) => (
+                        <tr key={i} className="border-t border-gray-100 dark:border-zinc-800/50">
+                          <td className="px-3 py-1.5 text-center">
+                            <span className={h.passed ? 'text-emerald-400' : 'text-red-400'}>{h.passed ? 'PASS' : 'FAIL'}</span>
+                          </td>
+                          <td className="px-3 py-1.5 text-center">
+                            <span className="inline-flex items-center gap-0.5">
+                              {h.assertions.map((a, ai) => (
+                                <span key={ai} className={cn('inline-block w-1.5 h-1.5 rounded-full', a.passed ? 'bg-emerald-400' : 'bg-red-400')} />
+                              ))}
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-gray-400 dark:text-zinc-500">{formatDuration(h.durationMs)}</td>
+                          <td className="px-3 py-1.5 text-right text-gray-400 dark:text-zinc-500 font-mono">{formatCost(h.queryCostMicros)}</td>
+                          <td className="px-3 py-1.5 text-right text-gray-400 dark:text-zinc-500">{formatRelativeTime(h.timestamp)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -359,6 +430,7 @@ export function EvalSuitePage() {
   const [suites, setSuites] = useState<EvalSuite[]>([]);
   const [expandedSet, setExpandedSet] = useState<Set<string>>(new Set());
   const [runTrigger, setRunTrigger] = useState(0);
+  const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
 
   const loadSuites = useCallback(() => {
     fetch('/api/evals/suites')
@@ -374,6 +446,20 @@ export function EvalSuitePage() {
   useEffect(() => {
     loadSuites();
   }, [loadSuites]);
+
+  // Fetch per-eval history
+  useEffect(() => {
+    for (const suite of suites) {
+      fetch(`/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`)
+        .then((res) => res.json())
+        .then((data: unknown) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
+          const d = data as { entries: EvalHistoryEntry[] };
+          setHistoryMap((prev) => ({ ...prev, [suite.name]: d.entries }));
+        })
+        .catch(() => {});
+    }
+  }, [suites]);
 
   const toggleCard = useCallback((name: string) => {
     setExpandedSet((prev) => {
@@ -444,6 +530,7 @@ export function EvalSuitePage() {
                     expanded={expandedSet.has(suite.name)}
                     onToggle={() => toggleCard(suite.name)}
                     runTrigger={runTrigger}
+                    history={historyMap[suite.name] ?? []}
                   />
                 ))}
               </div>
