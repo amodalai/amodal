@@ -13,3 +13,4 @@ bundle/
 junit.xml
 coverage/
 .typecheck/
+.claude/settings.local.json
