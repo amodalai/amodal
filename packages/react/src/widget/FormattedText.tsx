@@ -76,7 +76,7 @@ function markdownToHtml(markdown: string): string {
     }
 
     // Headers
-    const headerMatch = /^(#{1,4})\s+(.+)$/.exec(line);
+    const headerMatch = /^(#{1,4}) (\S.*)$/.exec(line);
     if (headerMatch) {
       if (inList) { output.push('</ul>'); inList = false; }
       const level = headerMatch[1].length;
@@ -85,7 +85,7 @@ function markdownToHtml(markdown: string): string {
     }
 
     // Bullet list item: - text or * text or number. text
-    const listMatch = /^(\s*)[-*]\s+(.+)$/.exec(line) ?? /^(\s*)\d+\.\s+(.+)$/.exec(line);
+    const listMatch = /^(\s*)[-*] (\S.*)$/.exec(line) ?? /^(\s*)\d+\. (\S.*)$/.exec(line);
     if (listMatch) {
       if (!inList) { output.push('<ul class="pcw-md-list">'); inList = true; }
       output.push(`<li>${inlineMarkdown(listMatch[2])}</li>`);
