@@ -24,6 +24,7 @@ import { ConfigSystemPage } from '@/pages/config/ConfigSystemPage';
 import { ConfigFilesPage } from '@/pages/config/ConfigFilesPage';
 import { EvalSuitePage } from '@/pages/EvalSuitePage';
 import { ModelArenaPage } from '@/pages/ModelArenaPage';
+import { FeedbackPage } from '@/pages/FeedbackPage';
 
 export const router = createBrowserRouter([
   {
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
       { path: 'files', element: <ConfigFilesPage /> },
       { path: 'evals', element: <EvalSuitePage /> },
       { path: 'arena', element: <ModelArenaPage /> },
+      { path: 'feedback', element: <FeedbackPage /> },
     ],
   },
 ]);

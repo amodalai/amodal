@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Send, Square, Loader2, Bot, AlertCircle } from 'lucide-react';
+import { Send, Square, Bot, AlertCircle } from 'lucide-react';
 import Markdown from 'react-markdown';
 
 interface Message {
@@ -59,12 +59,8 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
-  const handleSubmit = useCallback(async (e: FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
+  const sendText = useCallback(async (text: string) => {
     if (!text || isStreaming) return;
-
-    setInput('');
     setError(null);
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setIsStreaming(true);
@@ -145,7 +141,25 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
       setIsStreaming(false);
       inputRef.current?.focus();
     }
-  }, [input, isStreaming, sessionId]);
+  }, [isStreaming, sessionId]);
+
+  const handleSubmit = useCallback((e: FormEvent) => {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    void sendText(text);
+  }, [input, sendText]);
+
+  // Listen for programmatic messages (e.g. from Feedback page synthesis)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const msg = (e as unknown as {detail?: string}).detail; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- CustomEvent detail
+      if (msg) void sendText(msg);
+    };
+    window.addEventListener('admin-chat-send', handler);
+    return () => window.removeEventListener('admin-chat-send', handler);
+  }, [sendText]);
 
   const handleStop = useCallback(() => {
     if (abortRef.current) {
@@ -217,7 +231,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
             <button
               type="button"
               onClick={handleStop}
-              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-red-600 text-white hover:bg-red-500 transition-colors shrink-0`}
+              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-gray-500 dark:bg-zinc-600 text-white hover:bg-gray-400 dark:hover:bg-zinc-500 transition-colors shrink-0`}
             >
               <Square className="h-3.5 w-3.5" />
             </button>
