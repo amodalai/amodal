@@ -13,6 +13,7 @@ import type { PageConfig } from 'virtual:amodal-manifest';
 
 interface SessionSummary {
   id: string;
+  appId: string;
   title?: string;
   summary: string;
   lastAccessedAt: number;
@@ -255,7 +256,8 @@ export function Sidebar() {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
           const all = (data as Record<string, unknown>)['sessions'] as Array<SessionSummary & {automationName?: string}>;
           // Filter out automation sessions — those show in the automation detail page
-          setSessions(all.filter((s) => !s.automationName).slice(0, 10));
+          const EVAL_APP_IDS = new Set(['eval-runner', 'eval-judge', 'admin']);
+          setSessions(all.filter((s) => !s.automationName && !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
         }
       })
       .catch(() => {});

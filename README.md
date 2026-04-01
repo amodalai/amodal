@@ -176,6 +176,46 @@ Amodal supports multiple LLM providers. Configure in `amodal.json`:
 
 Supported: **Anthropic** (default), **OpenAI**, **Google Gemini**, **AWS Bedrock**, **Azure OpenAI**, and any **OpenAI-compatible** endpoint.
 
+## Developing from Source
+
+```bash
+# Clone and build
+git clone git@github.com:amodalai/amodal.git
+cd amodal
+pnpm install
+pnpm run build
+
+# Link the CLI so `amodal` runs from source
+pnpm link --global
+```
+
+Now `amodal` on your PATH runs your local build. Verify with:
+
+```bash
+amodal --version   # should show X.Y.Z-dev
+```
+
+If you previously installed via `npm install -g @amodalai/amodal`, remove it so there's no ambiguity:
+
+```bash
+npm uninstall -g @amodalai/amodal
+```
+
+Use it from any agent repo:
+
+```bash
+cd /path/to/my-agent
+amodal dev
+```
+
+When you change code, rebuild and restart:
+
+```bash
+pnpm dev:build    # rebuilds CLI + runtime + runtime-app
+```
+
+All workspace dependencies resolve through pnpm, so you always run your local source.
+
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, project structure, and how to submit changes.

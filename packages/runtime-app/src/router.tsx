@@ -23,6 +23,8 @@ import { ConfigSecretsPage } from '@/pages/config/ConfigSecretsPage';
 import { ConfigSystemPage } from '@/pages/config/ConfigSystemPage';
 import { ConfigFilesPage } from '@/pages/config/ConfigFilesPage';
 import { ConfigChatPage } from '@/pages/config/ConfigChatPage';
+import { EvalsPage } from '@/pages/EvalsPage';
+
 
 export const router = createBrowserRouter([
   {
@@ -51,6 +53,7 @@ export const router = createBrowserRouter([
       { path: 'secrets', element: <ConfigSecretsPage /> },
       { path: 'system', element: <ConfigSystemPage /> },
       { path: 'files', element: <ConfigFilesPage /> },
+      { path: 'evals', element: <EvalsPage /> },
     ],
   },
 ]);
