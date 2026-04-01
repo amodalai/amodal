@@ -55,7 +55,7 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
   selectedPath: string | null;
   onSelect: (path: string) => void;
 }) {
-  const [open, setOpen] = useState(depth < 2);
+  const [open, setOpen] = useState(depth < 1);
 
   if (entry.type === 'file') {
     const { icon: FileIcon, color } = getFileIcon(entry.name, entry.path);
@@ -220,6 +220,7 @@ export function ConfigFilesPage() {
   }, [saveFile]);
 
   const hasChanges = editedContent !== null && fileData !== null && editedContent !== fileData.content;
+  const isPackageFile = fileData?.source === 'package';
 
   if (loading) {
     return <div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading...</div>;
@@ -271,19 +272,24 @@ export function ConfigFilesPage() {
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                 </button>
-                <button
-                  onClick={() => { void saveFile(); }}
-                  disabled={!hasChanges || saving}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-medium transition-colors',
-                    hasChanges
-                      ? 'bg-indigo-600 text-white hover:bg-indigo-500'
-                      : 'bg-gray-200 dark:bg-white/[0.06] text-gray-400 dark:text-white/20 cursor-not-allowed',
-                  )}
-                >
-                  {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                  Save
-                </button>
+                {!isPackageFile && (
+                  <button
+                    onClick={() => { void saveFile(); }}
+                    disabled={!hasChanges || saving}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-medium transition-colors',
+                      hasChanges
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+                        : 'bg-gray-200 dark:bg-white/[0.06] text-gray-400 dark:text-white/20 cursor-not-allowed',
+                    )}
+                  >
+                    {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                    Save
+                  </button>
+                )}
+                {isPackageFile && (
+                  <span className="text-[11px] text-gray-400 dark:text-zinc-500">read-only</span>
+                )}
               </div>
             </div>
 
@@ -292,7 +298,7 @@ export function ConfigFilesPage() {
               <CodeEditor
                 value={fileData.content}
                 language={fileData.language}
-                onChange={setEditedContent}
+                onChange={isPackageFile ? undefined : setEditedContent}
               />
             </div>
           </>
