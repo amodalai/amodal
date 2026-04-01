@@ -9,6 +9,7 @@ import type {Request, Response} from 'express';
 import rateLimit from 'express-rate-limit';
 import {readdir, readFile, writeFile, stat, mkdir} from 'node:fs/promises';
 import path from 'node:path';
+import {readLockFile, getNpmContextPaths} from '@amodalai/core';
 
 export interface FilesRouterOptions {
   repoPath: string;
@@ -19,6 +20,10 @@ interface FileTreeEntry {
   path: string;
   type: 'file' | 'directory';
   children?: FileTreeEntry[];
+  /** 'local' (default) or 'package' for installed package files. */
+  source?: 'local' | 'package';
+  /** npm package name if source is 'package'. */
+  packageName?: string;
 }
 
 /** Convention directories to show in the file tree. */
@@ -28,7 +33,12 @@ const CONVENTION_DIRS = ['connections', 'skills', 'knowledge', 'automations', 'a
  * Recursively build a file tree for a directory.
  * Only goes 3 levels deep to avoid runaway traversal.
  */
-async function buildTree(dirPath: string, relativeTo: string, depth = 0): Promise<FileTreeEntry[]> {
+async function buildTree(
+  dirPath: string,
+  relativeTo: string,
+  depth = 0,
+  meta?: {source: 'package'; packageName: string},
+): Promise<FileTreeEntry[]> {
   if (depth > 3) return [];
 
   let entries;
@@ -54,14 +64,44 @@ async function buildTree(dirPath: string, relativeTo: string, depth = 0): Promis
     const relPath = path.relative(relativeTo, fullPath);
 
     if (entry.isDirectory()) {
-      const children = await buildTree(fullPath, relativeTo, depth + 1);
-      result.push({name: entry.name, path: relPath, type: 'directory', children});
+      const children = await buildTree(fullPath, relativeTo, depth + 1, meta);
+      result.push({name: entry.name, path: relPath, type: 'directory', children, ...meta && {source: meta.source, packageName: meta.packageName}});
     } else {
-      result.push({name: entry.name, path: relPath, type: 'file'});
+      result.push({name: entry.name, path: relPath, type: 'file', ...meta && {source: meta.source, packageName: meta.packageName}});
     }
   }
 
   return result;
+}
+
+/**
+ * Merge package file tree entries into the local tree.
+ * Package entries appear inside the same convention directories as local files.
+ * Local entries with the same path take precedence (aren't duplicated).
+ */
+function mergePackageTree(localTree: FileTreeEntry[], packageEntries: FileTreeEntry[]): void {
+  for (const pkgEntry of packageEntries) {
+    // Find matching top-level directory in local tree
+    const existing = localTree.find((e) => e.name === pkgEntry.name && e.type === 'directory');
+    if (existing && existing.children && pkgEntry.children) {
+      // Merge children: add package children that don't already exist locally
+      const localPaths = new Set(existing.children.map((c) => c.path));
+      for (const child of pkgEntry.children) {
+        if (!localPaths.has(child.path)) {
+          existing.children.push(child);
+        }
+      }
+      // Re-sort: directories first, then alphabetical
+      existing.children.sort((a, b) => {
+        if (a.type === 'directory' && b.type !== 'directory') return -1;
+        if (a.type !== 'directory' && b.type === 'directory') return 1;
+        return a.name.localeCompare(b.name);
+      });
+    } else if (!existing) {
+      // Convention directory only exists in packages, add it
+      localTree.push(pkgEntry);
+    }
+  }
 }
 
 /**
@@ -103,7 +143,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
         });
       } catch { /* no config */ }
 
-      // Add convention directories
+      // Add convention directories (local files)
       for (const dir of CONVENTION_DIRS) {
         const dirPath = path.join(repoPath, dir);
         try {
@@ -115,6 +155,42 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
         } catch { /* dir doesn't exist */ }
       }
 
+      // Add installed package files (merged into convention directories)
+      try {
+        const lockFile = await readLockFile(repoPath);
+        if (lockFile && Object.keys(lockFile.packages).length > 0) {
+          const paths = getNpmContextPaths(repoPath);
+          const scopeDir = path.join(paths.nodeModules, '@amodalai');
+          let pkgDirs: string[] = [];
+          try {
+            const entries = await readdir(scopeDir, {withFileTypes: true});
+            pkgDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+          } catch { /* no packages dir */ }
+
+          for (const pkgDirName of pkgDirs) {
+            const npmName = `@amodalai/${pkgDirName}`;
+            if (!lockFile.packages[npmName]) continue;
+
+            const pkgDir = path.join(scopeDir, pkgDirName);
+            const meta = {source: 'package' as const, packageName: npmName};
+            const pkgTree: FileTreeEntry[] = [];
+
+            for (const dir of CONVENTION_DIRS) {
+              const pkgConvDir = path.join(pkgDir, dir);
+              try {
+                const s = await stat(pkgConvDir);
+                if (s.isDirectory()) {
+                  const children = await buildTree(pkgConvDir, pkgDir, 0, meta);
+                  pkgTree.push({name: dir, path: dir, type: 'directory', children, ...meta});
+                }
+              } catch { /* dir doesn't exist in package */ }
+            }
+
+            mergePackageTree(tree, pkgTree);
+          }
+        }
+      } catch { /* lock file read failed, skip packages */ }
+
       res.json({tree, repoPath});
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -122,7 +198,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
     }
   });
 
-  /** Read a file's contents. */
+  /** Read a file's contents. Checks local repo first, then installed packages. */
   router.get('/api/files/*', filesLimiter, async (req: Request, res: Response) => {
     try {
       const filePath = req.params[0] ?? '';
@@ -137,15 +213,49 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
         return;
       }
 
-      const content = await readFile(resolved, 'utf-8');
-      const ext = path.extname(filePath).slice(1);
+      let content: string | null = null;
+      let source: 'local' | 'package' = 'local';
 
-      res.json({path: filePath, content, language: extToLanguage(ext)});
-    } catch (err) {
-      if (err instanceof Error && 'code' in err && (err as unknown as {code: string}).code === 'ENOENT') { // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- Node errno check
+      // Try local repo first
+      try {
+        content = await readFile(resolved, 'utf-8');
+      } catch { /* not found locally */ }
+
+      // Fall back to installed packages
+      if (content === null) {
+        try {
+          const lockFile = await readLockFile(repoPath);
+          if (lockFile) {
+            const paths = getNpmContextPaths(repoPath);
+            const scopeDir = path.join(paths.nodeModules, '@amodalai');
+            let pkgDirs: string[] = [];
+            try {
+              const entries = await readdir(scopeDir, {withFileTypes: true});
+              pkgDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+            } catch { /* */ }
+
+            for (const pkgDirName of pkgDirs) {
+              const npmName = `@amodalai/${pkgDirName}`;
+              if (!lockFile.packages[npmName]) continue;
+              const pkgFilePath = path.join(scopeDir, pkgDirName, filePath);
+              try {
+                content = await readFile(pkgFilePath, 'utf-8');
+                source = 'package';
+                break;
+              } catch { /* not in this package */ }
+            }
+          }
+        } catch { /* lock file read failed */ }
+      }
+
+      if (content === null) {
         res.status(404).json({error: {code: 'NOT_FOUND', message: 'File not found'}});
         return;
       }
+
+      const ext = path.extname(filePath).slice(1);
+      res.json({path: filePath, content, language: extToLanguage(ext), source});
+    } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: {code: 'READ_FAILED', message: msg}});
     }

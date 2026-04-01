@@ -14,12 +14,15 @@ interface FileTreeEntry {
   path: string;
   type: 'file' | 'directory';
   children?: FileTreeEntry[];
+  source?: 'local' | 'package';
+  packageName?: string;
 }
 
 interface FileData {
   path: string;
   content: string;
   language: string;
+  source?: 'local' | 'package';
 }
 
 // Icons by convention directory
@@ -71,6 +74,9 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
       >
         <FileIcon className={cn('h-3.5 w-3.5 shrink-0', isSelected ? 'text-indigo-400' : color)} />
         <span className="truncate font-mono">{entry.name}</span>
+        {entry.source === 'package' && (
+          <Package className="h-3 w-3 shrink-0 text-violet-400/50" title={entry.packageName ?? 'installed package'} />
+        )}
       </button>
     );
   }
@@ -244,6 +250,9 @@ export function ConfigFilesPage() {
             <div className="h-10 border-b border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17] flex items-center justify-between px-4 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-[12px] text-gray-500 dark:text-white/40 font-mono">{selectedPath}</span>
+                {fileData?.source === 'package' && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-medium">package</span>
+                )}
                 {hasChanges && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-medium">modified</span>
                 )}
