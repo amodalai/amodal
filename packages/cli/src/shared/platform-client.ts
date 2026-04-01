@@ -237,8 +237,11 @@ export class PlatformClient {
   }
 
   /**
-   * Trigger a remote build via the platform API.
-   * Uploads the tarball, platform creates a Fly Machine to build everything.
+   * Trigger a remote build:
+   * 1. Get a presigned R2 upload URL from the platform API
+   * 2. Upload the tarball directly to R2
+   * 3. Tell the platform API to trigger a Fly Machine build
+   *
    * Returns a buildId for polling.
    */
   async triggerRemoteBuild(
@@ -247,40 +250,37 @@ export class PlatformClient {
     tarballPath: string,
     message?: string,
   ): Promise<{ buildId: string }> {
-    const {createReadStream: fsCreateReadStream} = await import('node:fs');
-    const stream = fsCreateReadStream(tarballPath);
+    // Step 1: Get presigned upload URL
+     
+    const uploadInfo = await this.request<{buildId: string; tarballKey: string; uploadUrl: string}>(
+      'POST',
+      '/api/deploys/build?action=upload-url',
+      {appId},
+    );
 
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of stream) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      chunks.push(chunk as Uint8Array);
-    }
-    const blob = new Blob(chunks, {type: 'application/gzip'});
+    // Step 2: Upload tarball directly to R2
+    const {readFileSync} = await import('node:fs');
+    const tarball = readFileSync(tarballPath);
 
-    const formData = new FormData();
-    formData.append('appId', appId);
-    formData.append('environment', environment);
-    if (message) formData.append('message', message);
-    formData.append('repo', blob, 'repo.tar.gz');
-
-    const resp = await fetch(`${this.baseUrl}/api/deploys/build`, {
-      method: 'POST',
-      headers: {Authorization: `Bearer ${this.apiKey}`},
-      body: formData,
+    const uploadResp = await fetch(uploadInfo.uploadUrl, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/gzip'},
+      body: tarball,
     });
 
-    if (!resp.ok) {
-      let detail = '';
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        const errBody = await resp.json() as {error?: string; message?: string};
-        detail = errBody.message ?? errBody.error ?? '';
-      } catch { /* ignore */ }
-      throw new Error(`Deploy failed (${resp.status}): ${detail}`);
+    if (!uploadResp.ok) {
+      throw new Error(`Tarball upload failed: ${uploadResp.status}`);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    return await resp.json() as { buildId: string };
+    // Step 3: Trigger the build
+     
+    const result = await this.request<{buildId: string}>(
+      'POST',
+      '/api/deploys/build?action=trigger',
+      {appId, tarballKey: uploadInfo.tarballKey, environment, message},
+    );
+
+    return result;
   }
 
   /**
