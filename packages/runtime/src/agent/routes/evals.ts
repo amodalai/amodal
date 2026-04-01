@@ -36,11 +36,12 @@ async function streamQuery(
   evalRes: Response,
   evalName: string,
   appId?: string,
-): Promise<{response: string; toolCalls: Array<{name: string; parameters: Record<string, unknown>}>; toolResults: string[]; usage?: QueryUsage}> {
+  sessionId?: string,
+): Promise<{response: string; toolCalls: Array<{name: string; parameters: Record<string, unknown>}>; toolResults: string[]; usage?: QueryUsage; error?: string}> {
   const chatRes = await fetch(`${baseUrl}/chat`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({message, app_id: appId ?? 'eval-runner'}),
+    body: JSON.stringify({message, app_id: appId ?? 'eval-runner', ...(sessionId ? {session_id: sessionId} : {})}),
   });
 
   const text = await chatRes.text();
@@ -49,6 +50,7 @@ async function streamQuery(
   const toolCalls: Array<{name: string; parameters: Record<string, unknown>}> = [];
   const toolResults: string[] = [];
   let usage: QueryUsage | undefined;
+  let queryError: string | undefined;
 
   for (const line of lines) {
     if (!line.startsWith('data: ')) continue;
@@ -70,6 +72,9 @@ async function streamQuery(
         const resultPreview = String(event['result'] ?? event['error'] ?? '');
         toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${resultPreview.slice(0, 500)}`);
         writeSSE(evalRes, {type: 'agent_tool_result', evalName, toolName: event['tool_name'] ?? 'request', status: event['status'], durationMs: event['duration_ms']});
+      } else if (eventType === 'error') {
+        queryError = String(event['message'] ?? event['error'] ?? 'Unknown error');
+        writeSSE(evalRes, {type: 'agent_error', evalName, error: queryError});
       } else if (eventType === 'done' && event['usage']) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
         const u = event['usage'] as {input_tokens: number; output_tokens: number; cached_tokens?: number; cache_creation_tokens?: number};
@@ -93,7 +98,7 @@ async function streamQuery(
     usage = {inputTokens: estimatedOutput * 3, outputTokens: estimatedOutput};
   }
 
-  return {response: fullResponse, toolCalls, toolResults, usage};
+  return {response: fullResponse, toolCalls, toolResults, usage, ...(queryError ? {error: queryError} : {})};
 }
 
 interface TrackedJudgeProvider extends JudgeProvider {
@@ -202,7 +207,19 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
     const baseUrl = `http://127.0.0.1:${port}`;
     const repo = options.sessionManager.getRepo();
-    const evals = repo.evals;
+
+    // Read optional eval names and model override from POST body
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
+    const evalNames = body['evalNames'] as string[] | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
+    const modelOverride = body['model'] as {provider: string; model: string} | undefined;
+
+    let evals = repo.evals;
+    if (evalNames && evalNames.length > 0) {
+      evals = evals.filter((e) => evalNames.includes(e.name));
+    }
 
     if (evals.length === 0) {
       res.status(400).json({error: 'No evals defined'});
@@ -215,6 +232,20 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
       'Connection': 'keep-alive',
     });
 
+    // Save original model config for restoration after override
+    const originalModelConfig = repo.config?.models?.['main'];
+
+    // If model override provided, swap main model config
+    if (modelOverride && repo.config?.models) {
+      repo.config.models['main'] = {
+        provider: modelOverride.provider,
+        model: modelOverride.model,
+      };
+    }
+
+    const evalSessionId = `eval-${Date.now()}`;
+    const judgeSessionId = `judge-${Date.now()}`;
+
     const judgeProvider = createLocalJudgeProvider(baseUrl);
     const modelInfo = repo.config ? {
       provider: repo.config.models?.['main']?.provider ?? 'unknown',
@@ -225,6 +256,13 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     const perCaseCosts: EvalCostInfo[] = [];
     const startTime = Date.now();
 
+    // Restore original model before judging so judge uses the original model
+    const restoreModel = () => {
+      if (originalModelConfig && repo.config?.models) {
+        repo.config.models['main'] = originalModelConfig;
+      }
+    };
+
     for (let i = 0; i < evals.length; i++) {
       const ev = evals[i];
       writeSSE(res, {type: 'eval_start', evalName: ev.name, current: i + 1, total: evals.length});
@@ -232,30 +270,49 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
       const evalStart = Date.now();
       try {
         // Run the query — streams agent events to client
-        const {response, toolCalls, toolResults, usage} = await streamQuery(baseUrl, ev.query, res, ev.name, ev.setup.app);
+        const {response, toolCalls, toolResults, usage, error: queryError} = await streamQuery(baseUrl, ev.query, res, ev.name, ev.setup.app, evalSessionId);
 
-        // Build enriched response for the judge — include tool results so it knows data was fetched
-        let enriched = response;
-        if (toolCalls.length > 0) {
-          enriched += '\n\n[Tool calls made: ' + toolCalls.map((tc) => `${tc.name}(${JSON.stringify(tc.parameters)})`).join(', ') + ']';
-        }
-        if (toolResults.length > 0) {
-          enriched += '\n\n[Tool results received:\n' + toolResults.join('\n') + ']';
+        // Restore original model for judging
+        restoreModel();
+
+        let assertions: Array<import('@amodalai/core').AssertionResult> = [];
+        let passed = false;
+        let judgeCost: EvalCostInfo | undefined;
+
+        // Skip judging if query had an error
+        if (!queryError) {
+          // Build enriched response for the judge — include tool results so it knows data was fetched
+          let enriched = response;
+          if (toolCalls.length > 0) {
+            enriched += '\n\n[Tool calls made: ' + toolCalls.map((tc) => `${tc.name}(${JSON.stringify(tc.parameters)})`).join(', ') + ']';
+          }
+          if (toolResults.length > 0) {
+            enriched += '\n\n[Tool results received:\n' + toolResults.join('\n') + ']';
+          }
+
+          // Judge assertions — track judge tokens separately
+          const judgeInputBefore = judgeProvider.totalInputTokens;
+          const judgeOutputBefore = judgeProvider.totalOutputTokens;
+          assertions = await judgeAllAssertions(enriched, ev.assertions, judgeProvider);
+          passed = assertions.every((a) => a.passed);
+
+          const judgeInputUsed = judgeProvider.totalInputTokens - judgeInputBefore;
+          const judgeOutputUsed = judgeProvider.totalOutputTokens - judgeOutputBefore;
+          judgeCost = judgeInputUsed > 0 ? computeEvalCost(judgeInputUsed, judgeOutputUsed, originalModelConfig?.model ?? modelInfo.model) : undefined;
         }
 
-        // Judge assertions — track judge tokens separately
-        const judgeInputBefore = judgeProvider.totalInputTokens;
-        const judgeOutputBefore = judgeProvider.totalOutputTokens;
-        const assertions = await judgeAllAssertions(enriched, ev.assertions, judgeProvider);
-        const passed = assertions.every((a) => a.passed);
+        // Re-apply model override for next eval query
+        if (modelOverride && repo.config?.models) {
+          repo.config.models['main'] = {
+            provider: modelOverride.provider,
+            model: modelOverride.model,
+          };
+        }
 
         const queryCost = usage ? computeEvalCost(
           usage.inputTokens, usage.outputTokens, modelInfo.model,
           usage.cacheReadInputTokens, usage.cacheCreationInputTokens,
         ) : undefined;
-        const judgeInputUsed = judgeProvider.totalInputTokens - judgeInputBefore;
-        const judgeOutputUsed = judgeProvider.totalOutputTokens - judgeOutputBefore;
-        const judgeCost = judgeInputUsed > 0 ? computeEvalCost(judgeInputUsed, judgeOutputUsed, modelInfo.model) : undefined;
 
         if (queryCost) perCaseCosts.push(queryCost);
 
@@ -267,6 +324,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
           passed,
           durationMs: Date.now() - evalStart,
           cost: queryCost,
+          ...(queryError ? {error: queryError} : {}),
         };
         results.push(result);
 
@@ -278,16 +336,26 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
           current: i + 1,
           total: evals.length,
           result: {
-            response: response.length > 1000 ? response.slice(0, 1000) + '...' : response,
+            response: response.length > 4000 ? response.slice(0, 4000) + '...' : response,
             toolCalls,
+            toolResults,
             assertions,
             durationMs: result.durationMs,
             queryCost,
             judgeCost,
+            ...(queryError ? {error: queryError} : {}),
           },
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        // Restore original model on error too
+        restoreModel();
+        if (modelOverride && repo.config?.models) {
+          repo.config.models['main'] = {
+            provider: modelOverride.provider,
+            model: modelOverride.model,
+          };
+        }
         const result: EvalResult = {
           eval: ev,
           response: '',
@@ -309,6 +377,9 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
       }
     }
 
+    // Restore original model config
+    restoreModel();
+
     // Build suite result
     const totalCost = perCaseCosts.length > 0 ? aggregateRunCost(perCaseCosts) : undefined;
     const suiteResult: EvalSuiteResult = {
@@ -325,9 +396,20 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     const run = buildEvalRun(suiteResult, modelInfo, {orgId: 'local', triggeredBy: 'manual'});
     options.evalStore.save(run as unknown as Record<string, unknown>); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
 
+    // Suppress unused variable warnings
+    void evalSessionId;
+    void judgeSessionId;
+
     writeSSE(res, {type: 'run_complete', run});
     writeSSE(res, {type: 'done'});
     res.end();
+  });
+
+  /** Get eval history for a specific eval */
+  router.get('/api/evals/runs/by-eval/:evalName', (req: Request, res: Response) => {
+    const evalName = req.params['evalName'] ?? '';
+    const entries = options.evalStore.listByEval(evalName);
+    res.json({entries});
   });
 
   /** Get arena model config */
@@ -344,11 +426,16 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
     const models = configModels ?? [
       {provider: 'anthropic', model: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4'},
+      {provider: 'anthropic', model: 'claude-opus-4-20250514', label: 'Claude Opus 4'},
       {provider: 'anthropic', model: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5'},
       {provider: 'openai', model: 'gpt-4o', label: 'GPT-4o'},
       {provider: 'openai', model: 'gpt-4o-mini', label: 'GPT-4o Mini'},
       {provider: 'google', model: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro'},
       {provider: 'google', model: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash'},
+      {provider: 'deepseek', model: 'deepseek-chat', label: 'DeepSeek Chat'},
+      {provider: 'deepseek', model: 'deepseek-reasoner', label: 'DeepSeek Reasoner'},
+      {provider: 'groq', model: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq)'},
+      {provider: 'groq', model: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (Groq)'},
     ];
 
     res.json({models});

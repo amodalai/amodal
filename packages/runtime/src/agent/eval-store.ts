@@ -7,6 +7,17 @@
 import {existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 
+interface EvalHistoryEntry {
+  runId: string;
+  passed: boolean;
+  durationMs: number;
+  queryCostMicros: number;
+  judgeCostMicros: number;
+  timestamp: string;
+  model: string;
+  assertions: Array<{passed: boolean}>;
+}
+
 interface EvalRunSummary {
   id: string;
   model: {provider: string; model: string};
@@ -101,6 +112,52 @@ export class EvalStore {
     }
 
     return runs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  listByEval(evalName: string): EvalHistoryEntry[] {
+    if (!existsSync(this.dir)) return [];
+    const files = readdirSync(this.dir).filter((f) => f.endsWith('.json'));
+    const entries: EvalHistoryEntry[] = [];
+
+    for (const file of files) {
+      try {
+        const raw: unknown = JSON.parse(readFileSync(join(this.dir, file), 'utf-8'));
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Trusted local file
+        const data = raw as Record<string, unknown>;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Trusted local file
+        const suite = (data['suite'] ?? {}) as Record<string, unknown>;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Trusted local file
+        const results = (suite['results'] ?? []) as Array<Record<string, unknown>>;
+
+        for (const r of results) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Trusted local file
+          const ev = (r['eval'] ?? {}) as Record<string, unknown>;
+          if (String(ev['name'] ?? '') !== evalName) continue;
+
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Trusted local file
+          const cost = (r['cost'] ?? {}) as Record<string, unknown>;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Trusted local file
+          const modelInfo = (data['model'] ?? {}) as Record<string, unknown>;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Trusted local file
+          const assertionResults = (r['assertions'] ?? []) as Array<Record<string, unknown>>;
+
+          entries.push({
+            runId: String(data['id'] ?? file.replace('.json', '')),
+            passed: Boolean(r['passed']),
+            durationMs: Number(r['durationMs'] ?? 0),
+            queryCostMicros: Number(cost['estimatedCostMicros'] ?? 0),
+            judgeCostMicros: 0,
+            timestamp: String(suite['timestamp'] ?? data['createdAt'] ?? new Date().toISOString()),
+            model: String(modelInfo['model'] ?? 'unknown'),
+            assertions: assertionResults.map((a) => ({passed: Boolean(a['passed'])})),
+          });
+        }
+      } catch {
+        // Skip corrupt files
+      }
+    }
+
+    return entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
   delete(id: string): boolean {
