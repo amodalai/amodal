@@ -186,6 +186,7 @@ async function runSingleModelEval(
   evalName: string,
   model: AvailableModel,
   timeoutMs?: number,
+  onJudging?: () => void,
 ): Promise<CompareResult> {
   return new Promise<CompareResult>((resolve) => {
     let resolved = false;
@@ -205,7 +206,10 @@ async function runSingleModelEval(
       [evalName],
       (event) => {
         const type = String(event['type'] ?? '');
-        if (type === 'eval_complete' && !resolved) {
+        if (type === 'done' && !resolved) {
+          // Query finished, judging begins
+          onJudging?.();
+        } else if (type === 'eval_complete' && !resolved) {
           resolved = true;
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE result
           const r = event['result'] as EvalResultDetail | undefined;
@@ -262,7 +266,17 @@ async function runSingleModelEval(
 /*  CompareTable                                                        */
 /* ------------------------------------------------------------------ */
 
-function CompareTable({ results, runningModel }: { results: CompareResult[]; runningModel?: AvailableModel | null }) {
+function ElapsedTimer({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!startTime) return;
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+  return <span className="font-mono tabular-nums">{elapsed}s</span>;
+}
+
+function CompareTable({ results, runningModel, runPhase, runStartTime }: { results: CompareResult[]; runningModel?: AvailableModel | null; runPhase?: 'querying' | 'judging'; runStartTime?: number }) {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   if (results.length === 0 && !runningModel) return null;
@@ -407,8 +421,11 @@ function CompareTable({ results, runningModel }: { results: CompareResult[]; run
               <td colSpan={6} className="px-3 py-2.5 border-t border-gray-100 dark:border-zinc-800/50">
                 <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-zinc-500">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
-                  <span>{runningModel.label || runningModel.model.replace(/-\d{8}$/, '')}</span>
-                  <span className="text-gray-300 dark:text-zinc-600">running...</span>
+                  <span className="text-gray-600 dark:text-zinc-300">{runningModel.label || runningModel.model.replace(/-\d{8}$/, '')}</span>
+                  <span className={runPhase === 'judging' ? 'text-amber-400' : 'text-indigo-400'}>
+                    {runPhase === 'judging' ? 'judging' : 'running'}
+                  </span>
+                  {runStartTime ? <ElapsedTimer startTime={runStartTime} /> : null}
                 </div>
               </td>
             </tr>
@@ -437,6 +454,8 @@ function EvalCard({
   const [timeout, setTimeoutVal] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
   const [currentRunningModel, setCurrentRunningModel] = useState<AvailableModel | null>(null);
+  const [runPhase, setRunPhase] = useState<'querying' | 'judging'>('querying');
+  const [runStartTime, setRunStartTime] = useState<number>(0);
   const [results, setResults] = useState<CompareResult[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -473,7 +492,12 @@ function EvalCard({
     // Run sequentially, each model result appears in table as it completes
     for (const model of selected) {
       setCurrentRunningModel(model);
-      const r = await runSingleModelEval(suite.name, model, timeout * 1000);
+      setRunPhase('querying');
+      setRunStartTime(Date.now());
+      const r = await runSingleModelEval(suite.name, model, timeout * 1000, () => {
+        setRunPhase('judging');
+        setRunStartTime(Date.now());
+      });
       setResults((prev) => [...prev, r]);
     }
 
@@ -580,7 +604,7 @@ function EvalCard({
           </button>
 
           {/* Results table */}
-          <CompareTable results={results} runningModel={currentRunningModel} />
+          <CompareTable results={results} runningModel={currentRunningModel} runPhase={runPhase} runStartTime={runStartTime} />
 
           {/* History */}
           {history.length > 0 && (
