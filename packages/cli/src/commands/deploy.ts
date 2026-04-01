@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {execSync} from 'node:child_process';
-import {createReadStream} from 'node:fs';
 import type {CommandModule} from 'yargs';
-import {loadRepo, buildSnapshot, serializeSnapshot, snapshotSizeBytes} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 import {PlatformClient} from '../shared/platform-client.js';
 import {runValidate} from './validate.js';
@@ -22,30 +19,7 @@ export interface DeployOptions {
 }
 
 /**
- * Get the current user from git config or fallback.
- */
-function getCurrentUser(): string {
-  try {
-    return execSync('git config user.email', {encoding: 'utf-8'}).trim();
-  } catch {
-    return process.env['USER'] ?? 'unknown';
-  }
-}
-
-/**
- * Get the current git commit SHA, or undefined if not in a git repo.
- */
-function getGitSha(): string | undefined {
-  try {
-    return execSync('git rev-parse HEAD', {encoding: 'utf-8'}).trim();
-  } catch {
-    return undefined;
-  }
-}
-
-
-/**
- * Deploy to the platform: resolve → validate → snapshot → upload.
+ * Deploy to the platform: validate → tarball → trigger build → poll.
  *
  * Returns 0 on success, 1 on error.
  */
@@ -67,39 +41,14 @@ export async function runDeploy(options: DeployOptions = {}): Promise<number> {
     return 1;
   }
 
-  // Load repo
-  process.stderr.write('[deploy] Loading repo...\n');
-  let repo;
-  try {
-    repo = await loadRepo({localPath: repoPath});
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[deploy] Failed to load repo: ${msg}\n`);
-    return 1;
-  }
-
-  // Build snapshot
-  const snapshot = buildSnapshot(repo, {
-    createdBy: getCurrentUser(),
-    source: 'cli',
-    commitSha: getGitSha(),
-    message: options.message,
-  });
-
-  const serialized = serializeSnapshot(snapshot);
-  const size = snapshotSizeBytes(serialized);
   const environment = options.env ?? 'production';
 
-  process.stderr.write(`[deploy] Snapshot ${snapshot.deployId} built (${(size / 1024).toFixed(1)} KB)\n`);
-  process.stderr.write(`[deploy] Connections: ${Object.keys(snapshot.connections).length}, Skills: ${snapshot.skills.length}, Automations: ${snapshot.automations.length}\n`);
-
   if (options.dryRun) {
-    process.stderr.write(`[deploy] Dry run — would deploy ${snapshot.deployId} to ${environment}\n`);
+    process.stderr.write(`[deploy] Dry run — would deploy to ${environment}\n`);
     return 0;
   }
 
-  // Upload to platform
-  process.stderr.write(`[deploy] Uploading to platform (${environment})...\n`);
+  // Create platform client
   let client: PlatformClient;
   try {
     client = await PlatformClient.create();
@@ -109,41 +58,58 @@ export async function runDeploy(options: DeployOptions = {}): Promise<number> {
     return 1;
   }
 
+  const projectLink = await readProjectLink();
+  const appId = projectLink?.appId;
+
+  if (!appId) {
+    process.stderr.write('[deploy] No app linked. Run `amodal deploy link` first.\n');
+    return 1;
+  }
+
+  // Create tarball
+  process.stderr.write('[deploy] Creating tarball...\n');
+  const tarballPath = await createRepoTarball(repoPath);
+
   try {
-    // Read appId from project link
-    const projectLink = await readProjectLink();
-    const appId = projectLink?.appId;
+    // Trigger remote build
+    process.stderr.write('[deploy] Triggering build...\n');
+    const buildResult = await client.triggerRemoteBuild(appId, environment, tarballPath, options.message);
+    const buildId = buildResult.buildId;
 
-    // 1. Upload snapshot to platform API
-    const result = await client.uploadSnapshot(snapshot, {environment, appId});
-    process.stderr.write(`[deploy] Deployed ${result.id} to ${result.environment}\n`);
-    if (result.message) {
-      process.stderr.write(`[deploy] Message: ${result.message}\n`);
-    }
+    process.stderr.write(`[deploy] Build ${buildId} accepted. Waiting for completion...\n`);
 
-    // 2. Build runtime-app on the build server
-    const buildServerUrl = process.env['BUILD_SERVER_URL'] ?? projectLink?.buildServerUrl;
-    if (buildServerUrl && appId) {
-      process.stderr.write('[deploy] Building runtime app...\n');
-      const tarballPath = await createRepoTarball(repoPath);
+    // Poll for completion
+    const maxWaitMs = 5 * 60 * 1000; // 5 minutes
+    const pollIntervalMs = 3000;
+    const startTime = Date.now();
 
-      try {
-        await client.triggerBuild(buildServerUrl, appId, result.id, createReadStream(tarballPath));
-        process.stderr.write(`[deploy] Runtime app built and uploaded.\n`);
-      } catch (buildErr: unknown) {
-        const msg = buildErr instanceof Error ? buildErr.message : String(buildErr);
-        process.stderr.write(`[deploy] Runtime app build failed (non-blocking): ${msg}\n`);
-      } finally {
-        const {unlinkSync} = await import('node:fs');
-        try { unlinkSync(tarballPath); } catch { /* best-effort */ }
+    while (Date.now() - startTime < maxWaitMs) {
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+
+      const status = await client.getBuildStatus(buildId);
+
+      if (status.status === 'complete') {
+        process.stderr.write(`[deploy] Deployed ${status.deployId} to ${status.environment ?? environment}\n`);
+        return 0;
       }
+
+      if (status.status === 'error') {
+        process.stderr.write(`[deploy] Build failed: ${status.error ?? 'unknown error'}\n`);
+        return 1;
+      }
+
+      // Still building — continue polling
     }
 
-    return 0;
+    process.stderr.write(`[deploy] Build timed out after 5 minutes. Build ${buildId} may still be running.\n`);
+    return 1;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[deploy] Upload failed: ${msg}\n`);
+    process.stderr.write(`[deploy] Deploy failed: ${msg}\n`);
     return 1;
+  } finally {
+    const {unlinkSync} = await import('node:fs');
+    try { unlinkSync(tarballPath); } catch { /* best-effort */ }
   }
 }
 

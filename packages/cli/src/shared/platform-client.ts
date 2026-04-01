@@ -237,6 +237,65 @@ export class PlatformClient {
   }
 
   /**
+   * Trigger a remote build via the platform API.
+   * Uploads the tarball, platform creates a Fly Machine to build everything.
+   * Returns a buildId for polling.
+   */
+  async triggerRemoteBuild(
+    appId: string,
+    environment: string,
+    tarballPath: string,
+    message?: string,
+  ): Promise<{ buildId: string }> {
+    const {createReadStream: fsCreateReadStream} = await import('node:fs');
+    const stream = fsCreateReadStream(tarballPath);
+
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of stream) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      chunks.push(chunk as Uint8Array);
+    }
+    const blob = new Blob(chunks, {type: 'application/gzip'});
+
+    const formData = new FormData();
+    formData.append('appId', appId);
+    formData.append('environment', environment);
+    if (message) formData.append('message', message);
+    formData.append('repo', blob, 'repo.tar.gz');
+
+    const resp = await fetch(`${this.baseUrl}/api/deploys/build`, {
+      method: 'POST',
+      headers: {Authorization: `Bearer ${this.apiKey}`},
+      body: formData,
+    });
+
+    if (!resp.ok) {
+      let detail = '';
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+        const errBody = await resp.json() as {error?: string; message?: string};
+        detail = errBody.message ?? errBody.error ?? '';
+      } catch { /* ignore */ }
+      throw new Error(`Deploy failed (${resp.status}): ${detail}`);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    return await resp.json() as { buildId: string };
+  }
+
+  /**
+   * Poll build status.
+   */
+  async getBuildStatus(buildId: string): Promise<{
+    status: 'building' | 'complete' | 'error';
+    deployId?: string;
+    environment?: string;
+    error?: string;
+  }> {
+    return this.request('GET', `/api/builds/${encodeURIComponent(buildId)}/status`);
+  }
+
+  /**
    * List deployments for the authenticated app.
    */
   async listDeployments(options: {
