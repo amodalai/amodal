@@ -17,12 +17,20 @@ import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo, ModelConf
  * The judge needs to verify data accuracy, not read every byte.
  */
 function summarizeForJudge(raw: string, maxStringLen = 120, maxArrayItems = 5): string {
+  // Strip HTTP status prefix (e.g. "HTTP 200\n") to get to the JSON
+  let jsonStr = raw;
+  const httpMatch = /^HTTP \d+\n(.*)$/s.exec(raw);
+  const prefix = httpMatch ? raw.slice(0, raw.length - httpMatch[1].length) : '';
+  if (httpMatch) {
+    jsonStr = httpMatch[1];
+  }
+
   try {
-    const parsed: unknown = JSON.parse(raw);
-    return JSON.stringify(summarizeValue(parsed, maxStringLen, maxArrayItems), null, 0);
+    const parsed: unknown = JSON.parse(jsonStr);
+    return prefix + JSON.stringify(summarizeValue(parsed, maxStringLen, maxArrayItems), null, 0);
   } catch {
-    // Not JSON — truncate as string
-    return raw.length > 2000 ? raw.slice(0, 2000) + '...' : raw;
+    // Not JSON — return full string (no truncation)
+    return raw;
   }
 }
 
