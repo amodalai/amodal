@@ -182,9 +182,9 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
       <div className={`flex-1 overflow-y-auto scrollbar-thin ${compact ? 'px-3 py-3' : 'px-6 py-4'}`}>
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <Bot className={`${compact ? 'h-8 w-8 mb-3' : 'h-12 w-12 mb-4'} text-indigo-500/30`} />
-            <h2 className={`${compact ? 'text-sm' : 'text-lg'} font-semibold text-gray-400 dark:text-white/40 mb-2`}>Admin Agent</h2>
-            <p className={`${compact ? 'text-xs' : 'text-sm'} text-gray-400 dark:text-white/25 max-w-md`}>
+            <Bot className={`${compact ? 'h-8 w-8 mb-3' : 'h-12 w-12 mb-4'} text-blue-600/30`} />
+            <h2 className={`${compact ? 'text-sm' : 'text-lg'} font-semibold text-gray-400 dark:text-white/60 mb-2`}>Admin Agent</h2>
+            <p className={`${compact ? 'text-xs' : 'text-sm'} text-gray-400 dark:text-white/45 max-w-md`}>
               Ask me to add connections, write skills, create automations, or validate your setup.
             </p>
           </div>
@@ -193,7 +193,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
         {messages.map((msg, i) => (
           <div key={i} className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : ''}`}>
             {msg.role === 'user' ? (
-              <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl rounded-br-md bg-indigo-600 text-white ${compact ? 'text-xs' : 'text-sm'}`}>
+              <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl rounded-br-md bg-blue-700 text-white ${compact ? 'text-xs' : 'text-sm'}`}>
                 {msg.content}
               </div>
             ) : (
@@ -224,7 +224,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
             onKeyDown={handleKeyDown}
             placeholder={compact ? 'Message admin agent...' : 'Ask me to add a connection, write a skill, or validate your config...'}
             rows={1}
-            className={`flex-1 resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/[0.04] ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm'} text-gray-900 dark:text-white/90 placeholder-gray-400 dark:placeholder-white/25 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-500/50 transition-colors`}
+            className={`flex-1 resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/[0.04] ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm'} text-gray-900 dark:text-white/90 placeholder-gray-400 dark:placeholder-white/25 focus:outline-none focus:border-blue-600 dark:focus:border-blue-600/50 transition-colors`}
             disabled={isStreaming}
           />
           {isStreaming ? (
@@ -239,7 +239,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
             <button
               type="submit"
               disabled={!input.trim()}
-              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-indigo-600 text-white disabled:opacity-30 hover:bg-indigo-500 transition-colors shrink-0`}
+              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-blue-700 text-white disabled:opacity-30 hover:bg-blue-600 transition-colors shrink-0`}
             >
               <Send className="h-4 w-4" />
             </button>

@@ -80,7 +80,7 @@ function NumberField({
       <div className="flex items-center gap-2">
         <div className="flex-1 h-2 bg-gray-100 dark:bg-zinc-800 rounded-full max-w-[200px]">
           <div
-            className="h-2 bg-indigo-600 dark:bg-indigo-500 rounded-full"
+            className="h-2 bg-blue-700 dark:bg-blue-600 rounded-full"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -206,7 +206,7 @@ function RefField({ value, field }: { value: unknown; field: StoreFieldDefinitio
   return (
     <Link
       to={`/entities/${targetStore}/${String(value)}`}
-      className="text-indigo-600 dark:text-indigo-400 hover:underline"
+      className="text-blue-700 dark:text-blue-400 hover:underline"
     >
       {String(value)}
     </Link>

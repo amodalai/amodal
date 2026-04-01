@@ -78,7 +78,7 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
             if (e.key === 'Enter') saveTitle();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="w-full text-[12px] px-1.5 py-0.5 rounded border border-indigo-500/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
+          className="w-full text-[12px] px-1.5 py-0.5 rounded border border-blue-600/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
           autoFocus
         />
       </div>
@@ -92,8 +92,8 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
         className={cn(
           'group flex items-center gap-2 w-full px-3 py-[6px] rounded-md text-[12px] text-left transition-colors duration-150 truncate',
           isActive
-            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-            : 'text-gray-400 dark:text-white/40 hover:text-gray-700 dark:hover:text-white/70 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
+            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400'
+            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
         )}
       >
         <MessageSquare className="h-3 w-3 shrink-0 opacity-40" />
@@ -127,7 +127,7 @@ function NavItem({ to, children, end }: { to: string; children: React.ReactNode;
         cn(
           'flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
           isActive
-            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium'
+            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400 font-medium'
             : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
         )
       }
@@ -140,7 +140,7 @@ function NavItem({ to, children, end }: { to: string; children: React.ReactNode;
 function SectionLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="px-3 pt-5 pb-1.5 flex items-center justify-between">
-      <span className="text-[10px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">{children}</span>
+      <span className="text-[10px] font-semibold text-gray-400 dark:text-white/45 uppercase tracking-widest">{children}</span>
       {action}
     </div>
   );
@@ -157,7 +157,7 @@ function CollapsibleSection({ label, icon, children, count }: { label: string; i
         <ChevronRight className={cn('h-3 w-3 shrink-0 transition-transform', open && 'rotate-90')} />
         {icon}
         <span className="flex-1 text-left">{label}</span>
-        <span className="text-[11px] text-gray-400 dark:text-white/25">{String(count)}</span>
+        <span className="text-[11px] text-gray-400 dark:text-white/45">{String(count)}</span>
       </button>
       {open && <div className="ml-3 space-y-0.5">{children}</div>}
     </div>
@@ -172,15 +172,15 @@ function InfoItem({ icon, label, to, status, badge }: { icon: React.ReactNode; l
         cn(
           'flex items-center gap-2.5 px-3 py-[6px] text-[13px] rounded-md transition-colors duration-150',
           isActive
-            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-            : 'text-gray-400 dark:text-white/40 hover:text-gray-700 dark:hover:text-white/70 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
+            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400'
+            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
         )
       }
     >
       {icon}
       <span className="flex-1 truncate">{label}</span>
       {badge && (
-        <span className="text-[11px] text-gray-400 dark:text-white/30 tabular-nums bg-gray-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded-full">
+        <span className="text-[11px] text-gray-400 dark:text-white/50 tabular-nums bg-gray-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded-full">
           {badge}
         </span>
       )}
@@ -278,7 +278,7 @@ export function Sidebar() {
           <>
             <SectionLabel
               action={
-                <NavLink to="/sessions" className="text-[10px] text-gray-400 dark:text-white/20 hover:text-gray-600 dark:hover:text-white/40 transition-colors">
+                <NavLink to="/sessions" className="text-[10px] text-gray-400 dark:text-white/60 hover:text-gray-600 dark:hover:text-white/80 transition-colors">
                   View all
                 </NavLink>
               }
@@ -384,7 +384,7 @@ export function Sidebar() {
                   <Database className="h-4 w-4 shrink-0" />
                   <span className="flex-1 truncate">{store.entity.name}</span>
                   {store.documentCount > 0 && (
-                    <span className="text-[11px] text-gray-400 dark:text-white/30 tabular-nums bg-gray-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded-full">
+                    <span className="text-[11px] text-gray-400 dark:text-white/50 tabular-nums bg-gray-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded-full">
                       {store.documentCount.toLocaleString()}
                     </span>
                   )}

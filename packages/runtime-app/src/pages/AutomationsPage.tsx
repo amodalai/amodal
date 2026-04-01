@@ -162,7 +162,7 @@ export function AutomationsPage() {
                             )}
                           </span>
                           {auto.lastRunSessionId && (
-                            <a href={`/sessions/${auto.lastRunSessionId}`} className="text-xs text-indigo-500 hover:text-indigo-400 ml-2">
+                            <a href={`/sessions/${auto.lastRunSessionId}`} className="text-xs text-blue-600 hover:text-blue-400 ml-2">
                               View session
                             </a>
                           )}

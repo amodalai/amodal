@@ -49,13 +49,13 @@ function FeedbackRow({ entry, expanded, onToggleExpand, selected, onToggleSelect
 }) {
   return (
     <div className={cn('border rounded-lg overflow-hidden transition-colors',
-      selected ? 'border-indigo-500/30 bg-indigo-500/5' : 'border-gray-200 dark:border-zinc-800',
+      selected ? 'border-blue-600/30 bg-blue-600/5' : 'border-gray-200 dark:border-zinc-800',
     )}>
       <div className={cn('flex items-center gap-2 px-3 py-2 text-xs')}>
         <button onClick={(e) => { e.stopPropagation(); onToggleSelect(); }} className="shrink-0">
           {selected
-            ? <CheckSquare className="h-3.5 w-3.5 text-indigo-400" />
-            : <Square className="h-3.5 w-3.5 text-gray-300 dark:text-zinc-600 hover:text-indigo-400 transition-colors" />
+            ? <CheckSquare className="h-3.5 w-3.5 text-blue-400" />
+            : <Square className="h-3.5 w-3.5 text-gray-300 dark:text-zinc-600 hover:text-blue-400 transition-colors" />
           }
         </button>
         {entry.rating === 'up'
@@ -193,7 +193,7 @@ Based on these patterns, recommend specific changes. Check existing config files
     <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
       <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
         <div className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5 text-indigo-500" />
+          <MessageSquare className="h-5 w-5 text-blue-600" />
           <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Feedback</h1>
         </div>
       </div>
@@ -231,11 +231,11 @@ Based on these patterns, recommend specific changes. Check existing config files
             {/* Toolbar */}
             <div className="flex items-center gap-3 mb-2 px-1">
               {/* Select all checkbox */}
-              <button onClick={toggleSelectAll} className="shrink-0 text-gray-400 dark:text-zinc-600 hover:text-indigo-400 transition-colors">
+              <button onClick={toggleSelectAll} className="shrink-0 text-gray-400 dark:text-zinc-600 hover:text-blue-400 transition-colors">
                 {allNewSelected
-                  ? <CheckSquare className="h-4 w-4 text-indigo-400" />
+                  ? <CheckSquare className="h-4 w-4 text-blue-400" />
                   : someNewSelected
-                    ? <MinusSquare className="h-4 w-4 text-indigo-400" />
+                    ? <MinusSquare className="h-4 w-4 text-blue-400" />
                     : <Square className="h-4 w-4" />
                 }
               </button>
@@ -261,7 +261,7 @@ Based on these patterns, recommend specific changes. Check existing config files
                   {selectedDown.length > 0 && (
                     <button
                       onClick={handleSynthesize}
-                      className="px-2 py-1 rounded bg-indigo-600 text-white text-[11px] font-medium hover:bg-indigo-500 transition-colors flex items-center gap-1"
+                      className="px-2 py-1 rounded bg-blue-700 text-white text-[11px] font-medium hover:bg-blue-600 transition-colors flex items-center gap-1"
                     >
                       <Sparkles className="h-3 w-3" />
                       Synthesize{selectedDown.length > 15 ? ' (15 max)' : ` (${selectedDown.length})`}

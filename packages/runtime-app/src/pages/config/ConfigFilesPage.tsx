@@ -31,7 +31,7 @@ function getFileIcon(name: string, dirPath: string): { icon: typeof File; color:
   if (dirPath.startsWith('skills')) return { icon: File, color: 'text-amber-500/60' };
   if (dirPath.startsWith('knowledge')) return { icon: File, color: 'text-blue-500/60' };
   if (dirPath.startsWith('automations')) return { icon: File, color: 'text-purple-500/60' };
-  if (name === 'config.json') return { icon: File, color: 'text-indigo-500/60' };
+  if (name === 'config.json') return { icon: File, color: 'text-blue-600/60' };
   return { icon: File, color: 'text-gray-400' };
 }
 
@@ -44,7 +44,7 @@ function getDirIcon(name: string): string {
     case 'agents': return 'text-cyan-500/60';
     case 'stores': return 'text-orange-500/60';
     case 'tools': return 'text-rose-500/60';
-    case '.amodal': return 'text-indigo-500/60';
+    case '.amodal': return 'text-blue-600/60';
     default: return 'text-gray-400';
   }
 }
@@ -67,12 +67,12 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
         className={cn(
           'flex items-center gap-2 w-full px-2 py-[5px] rounded text-[12px] text-left transition-colors',
           isSelected
-            ? 'bg-indigo-500/10 text-indigo-400'
-            : 'text-gray-400 dark:text-white/40 hover:text-gray-700 dark:hover:text-white/70 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
+            ? 'bg-blue-600/10 text-blue-400'
+            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
-        <FileIcon className={cn('h-3.5 w-3.5 shrink-0', isSelected ? 'text-indigo-400' : color)} />
+        <FileIcon className={cn('h-3.5 w-3.5 shrink-0', isSelected ? 'text-blue-400' : color)} />
         <span className="truncate font-mono">{entry.name}</span>
         {entry.source === 'package' && (
           <Package className="h-3 w-3 shrink-0 text-violet-400/50" title={entry.packageName ?? 'installed package'} />
@@ -98,7 +98,7 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
           <Package className="h-3 w-3 shrink-0 text-violet-400/50" title={entry.packageName ?? 'installed package'} />
         )}
         {entry.children && (
-          <span className="text-[10px] text-gray-400 dark:text-white/20 ml-auto">{String(entry.children.length)}</span>
+          <span className="text-[10px] text-gray-400 dark:text-white/60 ml-auto">{String(entry.children.length)}</span>
         )}
       </button>
       {open && entry.children && (
@@ -234,7 +234,7 @@ export function ConfigFilesPage() {
       {/* File tree */}
       <div className="w-[240px] border-r border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0c0c14] flex flex-col shrink-0 overflow-hidden">
         <div className="px-3 py-3 border-b border-gray-200 dark:border-white/[0.06]">
-          <span className="text-[10px] font-semibold text-gray-400 dark:text-white/25 uppercase tracking-widest">Agent Files</span>
+          <span className="text-[10px] font-semibold text-gray-400 dark:text-white/45 uppercase tracking-widest">Agent Files</span>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-thin py-1">
           {tree.map((entry) => (
@@ -253,7 +253,7 @@ export function ConfigFilesPage() {
             {/* Editor header */}
             <div className="h-10 border-b border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17] flex items-center justify-between px-4 shrink-0">
               <div className="flex items-center gap-2">
-                <span className="text-[12px] text-gray-500 dark:text-white/40 font-mono">{selectedPath}</span>
+                <span className="text-[12px] text-gray-500 dark:text-white/60 font-mono">{selectedPath}</span>
                 {fileData?.source === 'package' && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-medium">package</span>
                 )}
@@ -270,7 +270,7 @@ export function ConfigFilesPage() {
                 )}
                 <button
                   onClick={reloadFile}
-                  className="h-7 w-7 rounded flex items-center justify-center text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+                  className="h-7 w-7 rounded flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
                   title="Reload file from disk"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -282,8 +282,8 @@ export function ConfigFilesPage() {
                     className={cn(
                       'flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-medium transition-colors',
                       hasChanges
-                        ? 'bg-indigo-600 text-white hover:bg-indigo-500'
-                        : 'bg-gray-200 dark:bg-white/[0.06] text-gray-400 dark:text-white/20 cursor-not-allowed',
+                        ? 'bg-blue-700 text-white hover:bg-blue-600'
+                        : 'bg-gray-200 dark:bg-white/[0.06] text-gray-400 dark:text-white/60 cursor-not-allowed',
                     )}
                   >
                     {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}

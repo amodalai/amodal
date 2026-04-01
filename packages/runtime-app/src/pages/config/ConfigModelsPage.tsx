@@ -47,13 +47,13 @@ export function ConfigModelsPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <Cpu className="h-5 w-5 text-indigo-500 shrink-0" />
+                  <Cpu className="h-5 w-5 text-blue-600 shrink-0" />
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
                         {m.model.replace(/-\d{8}$/, '')}
                       </span>
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-medium">
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-600/10 text-blue-800 dark:text-blue-400 font-medium">
                         {key}
                       </span>
                     </div>
