@@ -8,8 +8,8 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import type {SessionManager} from '../../session/session-manager.js';
 import type {EvalStore} from '../eval-store.js';
-import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost} from '@amodalai/core';
-import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo} from '@amodalai/core';
+import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost, createRuntimeProvider} from '@amodalai/core';
+import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo, ModelConfig} from '@amodalai/core';
 
 export interface EvalRouterOptions {
   sessionManager: SessionManager;
@@ -68,24 +68,23 @@ async function streamQuery(
         toolCalls.push({name: String(event['tool_name'] ?? ''), parameters: params});
         writeSSE(evalRes, {type: 'agent_tool', evalName, toolName: event['tool_name'], parameters: params});
       } else if (eventType === 'tool_call_result') {
-        // Capture result data so the judge knows tool calls returned real data
-        const resultPreview = String(event['result'] ?? event['error'] ?? '');
-        toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${resultPreview.slice(0, 500)}`);
+        const resultRaw = String(event['result'] ?? event['error'] ?? '');
+        toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${resultRaw}`);
         writeSSE(evalRes, {type: 'agent_tool_result', evalName, toolName: event['tool_name'] ?? 'request', status: event['status'], durationMs: event['duration_ms']});
       } else if (eventType === 'error') {
         queryError = String(event['message'] ?? event['error'] ?? 'Unknown error');
         writeSSE(evalRes, {type: 'agent_error', evalName, error: queryError});
-      } else if (eventType === 'done' && event['usage']) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        const u = event['usage'] as {input_tokens: number; output_tokens: number; cached_tokens?: number; cache_creation_tokens?: number};
+      } else if (eventType === 'done') {
+         
+        const u = (event['usage'] ?? {}) as {input_tokens?: number; output_tokens?: number; cached_tokens?: number; cache_creation_tokens?: number};
         // Accumulate tokens across multiple done events (multi-turn agent loops
-        // emit one done per turn in the refactored session runner)
-        if (u.input_tokens > 0 || u.output_tokens > 0 || (u.cached_tokens ?? 0) > 0) {
+        // may emit one done per turn in the session runner)
+        if ((u.input_tokens ?? 0) > 0 || (u.output_tokens ?? 0) > 0 || (u.cached_tokens ?? 0) > 0) {
           if (!usage) {
             usage = {inputTokens: 0, outputTokens: 0};
           }
-          usage.inputTokens += u.input_tokens;
-          usage.outputTokens += u.output_tokens;
+          usage.inputTokens += u.input_tokens ?? 0;
+          usage.outputTokens += u.output_tokens ?? 0;
           if (u.cached_tokens) {
             usage.cacheReadInputTokens = (usage.cacheReadInputTokens ?? 0) + u.cached_tokens;
           }
@@ -114,43 +113,39 @@ interface TrackedJudgeProvider extends JudgeProvider {
 }
 
 /**
- * Create a JudgeProvider that uses the local /chat endpoint and tracks token usage.
+ * Create a JudgeProvider that calls the LLM directly — no session, no tools,
+ * no system prompt overhead. Just a simple prompt→response for each assertion.
+ * This is ~10x cheaper than routing through /chat with the full agent context.
  */
-function createLocalJudgeProvider(baseUrl: string): TrackedJudgeProvider {
+function createDirectJudgeProvider(modelConfig: ModelConfig): TrackedJudgeProvider {
+  const provider = createRuntimeProvider(modelConfig);
   const tracked: TrackedJudgeProvider = {
     totalInputTokens: 0,
     totalOutputTokens: 0,
     judge: async (prompt: string) => {
-      const response = await fetch(`${baseUrl}/chat`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({message: prompt, app_id: 'eval-judge', session_id: `judge-${Date.now()}`}),
-      });
-      const text = await response.text();
-      let result = '';
-      for (const line of text.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE parsing
-          const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
-          if (event['type'] === 'text_delta') {
-            result += String(event['content'] ?? '');
-          } else if (event['type'] === 'done' && event['usage']) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-            const u = event['usage'] as {input_tokens: number; output_tokens: number};
-            tracked.totalInputTokens += u.input_tokens || 0;
-            tracked.totalOutputTokens += u.output_tokens || 0;
-          }
-        } catch {
-          // skip
+      try {
+        const response = await provider.chat({
+          model: modelConfig.model,
+          systemPrompt: 'You are an eval judge. Be concise.',
+          messages: [{role: 'user', content: prompt}],
+          tools: [],
+          maxTokens: 256,
+        });
+
+        const text = response.content
+          .filter((b): b is {type: 'text'; text: string} => b.type === 'text')
+          .map((b) => b.text)
+          .join('');
+
+        if (response.usage) {
+          tracked.totalInputTokens += response.usage.inputTokens + (response.usage.cacheReadInputTokens ?? 0) + (response.usage.cacheCreationInputTokens ?? 0);
+          tracked.totalOutputTokens += response.usage.outputTokens;
         }
+
+        return text;
+      } catch (err) {
+        return `Judge error: ${err instanceof Error ? err.message : String(err)}`;
       }
-      // Estimate if no usage reported
-      if (tracked.totalInputTokens === 0) {
-        tracked.totalInputTokens += Math.ceil(prompt.length / 4);
-        tracked.totalOutputTokens += Math.ceil(result.length / 4);
-      }
-      return result;
     },
   };
   return tracked;
@@ -251,9 +246,8 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     }
 
     const evalSessionId = `eval-${Date.now()}`;
-    const judgeSessionId = `judge-${Date.now()}`;
 
-    const judgeProvider = createLocalJudgeProvider(baseUrl);
+    const judgeProvider = createDirectJudgeProvider(originalModelConfig);
     const modelInfo = repo.config ? {
       provider: repo.config.models?.['main']?.provider ?? 'unknown',
       model: repo.config.models?.['main']?.model ?? 'unknown',
@@ -343,7 +337,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
           current: i + 1,
           total: evals.length,
           result: {
-            response: response.length > 4000 ? response.slice(0, 4000) + '...' : response,
+            response,
             toolCalls,
             toolResults,
             assertions,
@@ -405,7 +399,6 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
     // Suppress unused variable warnings
     void evalSessionId;
-    void judgeSessionId;
 
     writeSSE(res, {type: 'run_complete', run});
     writeSSE(res, {type: 'done'});

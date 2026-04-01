@@ -15,6 +15,9 @@ import {
   PolicyDecision,
   AgentSDK,
   buildDefaultPrompt,
+  resolveScopeLabels,
+  generateFieldGuidance,
+  generateAlternativeLookupGuidance,
   PlanModeManager,
   McpManager,
   ensureAdminAgent,
@@ -232,7 +235,7 @@ export class SessionManager {
       }));
       sessionParams.basePrompt = this.repo.config.basePrompt;
       sessionParams.agentName = this.repo.config.name;
-      sessionParams.agentContext = this.repo.config.description;
+      sessionParams.agentContext = this.repo.config.userContext ?? this.repo.config.description;
 
       // Model config from repo
       const mainModel = this.repo.config.models?.main;
@@ -448,7 +451,36 @@ export class SessionManager {
       name: config.getAgentName() ?? 'Amodal Agent',
       description: config.getAgentDescription(),
       agentContext: config.getAgentContext(),
-      connectionNames: Object.keys(config.getConnections()).filter((k) => k !== '_secrets'),
+      agentOverride: this.repo?.agents?.main,
+      connections: this.repo?.connections ? Array.from(this.repo.connections.values()).map((conn) => ({
+        name: conn.name,
+        endpoints: (conn.surface ?? [])
+          .filter((ep) => ep.included)
+          .map((ep) => ({method: ep.method, path: ep.path, description: ep.description})),
+        entities: conn.entities,
+        rules: conn.rules,
+      })) : undefined,
+      skills: this.repo?.skills?.map((s) => ({
+        name: s.name,
+        description: s.description ?? '',
+        trigger: s.trigger,
+        body: s.body,
+      })),
+      knowledge: this.repo?.knowledge?.map((k) => ({
+        name: k.name,
+        title: k.title,
+        body: k.body,
+      })),
+      ...(this.repo?.connections ? (() => {
+        const {scopeLabels} = resolveScopeLabels(this.repo.connections, []);
+        const fieldGuidance = generateFieldGuidance(this.repo.connections, []);
+        const altLookup = generateAlternativeLookupGuidance(this.repo.connections);
+        return {
+          fieldGuidance: fieldGuidance || undefined,
+          scopeLabels: Object.keys(scopeLabels).length > 0 ? scopeLabels : undefined,
+          alternativeLookupGuidance: altLookup || undefined,
+        };
+      })() : {}),
     });
     try {
       geminiClient.getChat().setSystemInstruction(systemPrompt);
@@ -585,6 +617,68 @@ export class SessionManager {
     // Initialize MCP servers if repo has MCP connections
     if (this.repo) {
       await this.initMcp(session, this.repo);
+
+      // Register MCP tools on the upstream tool registry so the Gemini client can see them
+      if (session.mcpManager) {
+        try {
+          const upstream = config.getUpstreamConfig();
+          const toolRegistry = upstream.getToolRegistry();
+          const mcpTools = session.mcpManager.getDiscoveredTools();
+          for (const mcpTool of mcpTools) {
+            // Adapter matching upstream DeclarativeTool interface (build/silentBuild/schema/getSchema)
+            const mcpSession = session;
+            const adapter = {
+              name: mcpTool.name,
+              displayName: mcpTool.name,
+              description: mcpTool.description,
+              kind: 'declarative' as const,
+              parameterSchema: mcpTool.parameters,
+              get isReadOnly() { return true; },
+              get toolAnnotations() { return undefined; },
+              get schema() { return this.getSchema(); },
+              getSchema() {
+                return {
+                  name: mcpTool.name,
+                  description: mcpTool.description,
+                  parametersJsonSchema: mcpTool.parameters,
+                };
+              },
+              build(params: Record<string, unknown>) {
+                return {
+                  name: mcpTool.name,
+                  params,
+                  execute: async () => adapter.validateBuildAndExecute(params),
+                };
+              },
+              silentBuild(params: Record<string, unknown>) {
+                return this.build(params);
+              },
+              async validateBuildAndExecute(params: Record<string, unknown>) {
+                try {
+                  const result = await mcpSession.mcpManager!.callTool(mcpTool.name, params);
+                  const output = result.content
+                    .map((c: {type: string; text?: string}) => c.type === 'text' && c.text ? c.text : `[${c.type}]`)
+                    .join('\n');
+                  return {
+                    llmContent: result.isError ? `Error: ${output}` : output,
+                    returnDisplay: output.slice(0, 200),
+                    ...(result.isError ? {error: {message: output, type: 'EXECUTION_FAILED'}} : {}),
+                  };
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  return {llmContent: `Error: ${msg}`, returnDisplay: msg, error: {message: msg, type: 'EXECUTION_FAILED'}};
+                }
+              },
+            };
+            toolRegistry.registerTool(adapter as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+          }
+          await geminiClient.setTools();
+          process.stderr.write(`[MCP] Registered ${String(mcpTools.length)} MCP tools on tool registry\n`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`[MCP] Failed to register MCP tools: ${msg}\n`);
+        }
+      }
     }
 
     this.sessions.set(sessionId, session);

@@ -189,8 +189,7 @@ If the API returns an error:
           },
           params: {
             type: 'object',
-            additionalProperties: { type: 'string' },
-            description: 'Query parameters as key-value pairs.',
+            description: 'Query parameters as key-value pairs. Values will be converted to strings.',
           },
           data: {
             description: 'Request body (for POST/PUT/PATCH).',

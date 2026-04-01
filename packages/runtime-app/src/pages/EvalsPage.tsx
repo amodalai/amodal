@@ -186,6 +186,7 @@ async function runSingleModelEval(
   evalName: string,
   model: AvailableModel,
   timeoutMs?: number,
+  onJudging?: () => void,
 ): Promise<CompareResult> {
   return new Promise<CompareResult>((resolve) => {
     let resolved = false;
@@ -205,7 +206,10 @@ async function runSingleModelEval(
       [evalName],
       (event) => {
         const type = String(event['type'] ?? '');
-        if (type === 'eval_complete' && !resolved) {
+        if (type === 'done' && !resolved) {
+          // Query finished, judging begins
+          onJudging?.();
+        } else if (type === 'eval_complete' && !resolved) {
           resolved = true;
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE result
           const r = event['result'] as EvalResultDetail | undefined;
@@ -262,10 +266,51 @@ async function runSingleModelEval(
 /*  CompareTable                                                        */
 /* ------------------------------------------------------------------ */
 
-function CompareTable({ results }: { results: CompareResult[] }) {
+function CollapsibleText({ text, lines = 2 }: { text: string; lines?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const lineCount = text.split('\n').length;
+  const needsCollapse = text.length > 200 || lineCount > lines;
+
+  if (!needsCollapse) {
+    return <div className="whitespace-pre-wrap break-words" style={{overflowWrap: 'anywhere'}}>{text}</div>;
+  }
+
+  return (
+    <div>
+      <div
+        className={cn('whitespace-pre-wrap break-words', !expanded && 'line-clamp-2')}
+        style={{overflowWrap: 'anywhere'}}
+      >
+        {text}
+      </div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1 mt-1 text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
+      >
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          className={cn('transition-transform', expanded && 'rotate-90')}>
+          <polyline points="9 6 15 12 9 18" />
+        </svg>
+        {expanded ? 'collapse' : `show all (${text.length > 1000 ? Math.round(text.length / 1000) + 'K chars' : text.length + ' chars'})`}
+      </button>
+    </div>
+  );
+}
+
+function ElapsedTimer({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!startTime) return;
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+  return <span className="font-mono tabular-nums">{elapsed}s</span>;
+}
+
+function CompareTable({ results, runningModel, runPhase, runStartTime }: { results: CompareResult[]; runningModel?: AvailableModel | null; runPhase?: 'querying' | 'judging'; runStartTime?: number }) {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-  if (results.length === 0) return null;
+  if (results.length === 0 && !runningModel) return null;
 
   const times = results.map((r) => r.durationMs).filter((t) => t > 0);
   const costs = results.map((r) => r.queryCostMicros).filter((c) => c > 0);
@@ -280,7 +325,7 @@ function CompareTable({ results }: { results: CompareResult[] }) {
 
   return (
     <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm table-fixed">
         <thead>
           <tr className="bg-gray-50 dark:bg-zinc-900/50 text-xs text-gray-500 dark:text-zinc-500">
             <th className="text-left px-4 py-2 font-medium">Model</th>
@@ -341,7 +386,7 @@ function CompareTable({ results }: { results: CompareResult[] }) {
                 </tr>
                 {isExpanded && (
                   <tr className="border-t border-gray-100 dark:border-zinc-800/50">
-                    <td colSpan={5} className="px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/20 space-y-3">
+                    <td colSpan={5} className="px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/20 space-y-3" style={{overflowWrap: 'anywhere', wordBreak: 'break-word'}}>
                       {r.error && (
                         <div className={cn('text-xs border rounded px-3 py-2 font-mono',
                           isAuthError ? 'text-amber-400 bg-amber-500/5 border-amber-500/20' :
@@ -354,7 +399,7 @@ function CompareTable({ results }: { results: CompareResult[] }) {
                       {r.response && (
                         <div>
                           <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Response</div>
-                          <div className="text-xs text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap">
+                          <div className="text-xs text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
                             {r.response}
                           </div>
                         </div>
@@ -364,10 +409,12 @@ function CompareTable({ results }: { results: CompareResult[] }) {
                           <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Tool Calls</div>
                           <div className="space-y-1">
                             {r.toolCalls.map((tc, ti) => (
-                              <div key={ti} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono">
+                              <div key={ti} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono break-words">
                                 <span className="text-indigo-500 font-semibold">{tc.name}</span>
                                 {r.toolResults[ti] && (
-                                  <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px] truncate">{r.toolResults[ti]}</div>
+                                  <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px]">
+                                    <CollapsibleText text={r.toolResults[ti]} />
+                                  </div>
                                 )}
                               </div>
                             ))}
@@ -402,6 +449,20 @@ function CompareTable({ results }: { results: CompareResult[] }) {
               </Fragment>
             );
           })}
+          {runningModel && (
+            <tr>
+              <td colSpan={6} className="px-3 py-2.5 border-t border-gray-100 dark:border-zinc-800/50">
+                <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-zinc-500">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+                  <span className="text-gray-600 dark:text-zinc-300">{runningModel.label || runningModel.model.replace(/-\d{8}$/, '')}</span>
+                  <span className={runPhase === 'judging' ? 'text-amber-400' : 'text-indigo-400'}>
+                    {runPhase === 'judging' ? 'judging' : 'running'}
+                  </span>
+                  {runStartTime ? <ElapsedTimer startTime={runStartTime} /> : null}
+                </div>
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -425,6 +486,9 @@ function EvalCard({
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [timeout, setTimeoutVal] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
+  const [currentRunningModel, setCurrentRunningModel] = useState<AvailableModel | null>(null);
+  const [runPhase, setRunPhase] = useState<'querying' | 'judging'>('querying');
+  const [runStartTime, setRunStartTime] = useState<number>(0);
   const [results, setResults] = useState<CompareResult[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -460,10 +524,17 @@ function EvalCard({
 
     // Run sequentially, each model result appears in table as it completes
     for (const model of selected) {
-      const r = await runSingleModelEval(suite.name, model, timeout * 1000);
+      setCurrentRunningModel(model);
+      setRunPhase('querying');
+      setRunStartTime(Date.now());
+      const r = await runSingleModelEval(suite.name, model, timeout * 1000, () => {
+        setRunPhase('judging');
+        setRunStartTime(Date.now());
+      });
       setResults((prev) => [...prev, r]);
     }
 
+    setCurrentRunningModel(null);
     setIsRunning(false);
   };
 
@@ -494,7 +565,7 @@ function EvalCard({
           {/* Query */}
           <div>
             <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Query</div>
-            <div className="text-sm text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 font-mono">
+            <div className="text-sm text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 font-mono break-words">
               {suite.query}
             </div>
           </div>
@@ -566,7 +637,7 @@ function EvalCard({
           </button>
 
           {/* Results table */}
-          <CompareTable results={results} />
+          <CompareTable results={results} runningModel={currentRunningModel} runPhase={runPhase} runStartTime={runStartTime} />
 
           {/* History */}
           {history.length > 0 && (

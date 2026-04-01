@@ -139,7 +139,7 @@ class RequestToolInvocation extends BaseToolInvocation<
     if (this.params.params && Object.keys(this.params.params).length > 0) {
       const expandedParams: Record<string, string> = {};
       for (const [k, v] of Object.entries(this.params.params)) {
-        expandedParams[k] = expandEnvVars(v, this.sessionEnv);
+        expandedParams[k] = expandEnvVars(String(v), this.sessionEnv);
       }
       const searchParams = new URLSearchParams(expandedParams);
       const sep = fullUrl.includes('?') ? '&' : '?';

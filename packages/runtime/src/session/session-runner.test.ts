@@ -509,8 +509,8 @@ describe('runMessage', () => {
     const details = entry['details'] as Record<string, unknown>;
     const toolCalls = details['tool_calls'] as Array<Record<string, unknown>>;
     const result = toolCalls[0]?.['result'] as string;
-    expect(result).toHaveLength(2000 + '...[truncated]'.length);
-    expect(result).toContain('...[truncated]');
+    // Tool results are no longer truncated — full output is preserved
+    expect(result).toHaveLength(3000);
   });
 
   it('logs session_completed with error status on throw', async () => {

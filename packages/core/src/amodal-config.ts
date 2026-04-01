@@ -391,20 +391,21 @@ export class AmodalConfig implements ToolContext {
   async initializeAuth(): Promise<void> {
     const modelConfig = this.extensions.modelConfig;
 
-    if (modelConfig && modelConfig.provider !== 'google') {
-      // Create our multi-provider content generator
+    if (modelConfig) {
+      // Route ALL providers (including Google) through our multi-provider
+      // content generator for consistent token counting and caching support.
+      // The native Gemini streaming path undercounts tokens by excluding
+      // system instruction from promptTokenCount.
       const generator = new MultiProviderContentGenerator(modelConfig);
 
       // Replace the content generator on the upstream Config (private field).
-      // Skip refreshAuth entirely — it hangs without Gemini credentials and
-      // is unnecessary since we're replacing the content generator.
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       const raw = this.config as unknown as Record<string, unknown>;
       raw['contentGenerator'] = generator;
       return;
     }
 
-    // Default: use upstream Gemini content generator
+    // Fallback: use upstream Gemini content generator (no modelConfig)
     const authType = getAuthTypeFromEnv();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     await this.config.refreshAuth(authType ?? ('gemini-api-key' as AuthType));
