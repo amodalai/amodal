@@ -541,8 +541,7 @@ export function EvalCard({
 
     setCurrentRunningModel(null);
     setIsRunning(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- models and selectedModels are stable refs
-  }, [suite.name, timeout]);
+  }, [suite.name, timeout, models, selectedModels]);
 
   // Auto-run when triggered by parent (e.g., Run All)
   useEffect(() => {
