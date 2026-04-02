@@ -13,7 +13,7 @@ import {SessionManager} from '../session/session-manager.js';
 import {LocalShellExecutor} from './shell-executor-local.js';
 import {ConfigWatcher} from './config-watcher.js';
 import {ProactiveRunner} from './proactive/proactive-runner.js';
-import {createChatRouter} from './routes/chat.js';
+import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createAdminChatRouter} from './routes/admin-chat.js';
 import {createTaskRouter} from './routes/task.js';
 import {createInspectRouter} from './routes/inspect.js';
@@ -64,6 +64,9 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     }
   }
 
+  // Session persistence — created before SessionManager so hydration works
+  const sessionStore = new SessionStore(config.repoPath);
+
   const sessionManager = new SessionManager({
     baseParams: {
       sessionId: 'local-init',
@@ -77,19 +80,27 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     bundle: repo,
     shellExecutor,
     storeBackend,
+    sessionStore: {
+      async getSession(sessionId: string) {
+        const persisted = sessionStore.load(sessionId);
+        if (!persisted || !persisted.conversationHistory.length) return null;
+        return {
+          id: persisted.id,
+          app_id: persisted.appId,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted data
+          messages: persisted.conversationHistory as Array<import('../session/session-manager.js').SessionMessage>,
+          status: 'completed',
+        };
+      },
+    },
   });
-
-  // sessionStore is created later — use a lazy reference for the onSessionComplete callback
-  let sessionStoreRef: SessionStore | null = null;
 
   const runner = new ProactiveRunner(repo, {
     webhookSecret: config.webhookSecret,
     createSession: async () => sessionManager.create(LOCAL_APP_ID),
     destroySession: async (id) => sessionManager.destroy(id),
     onSessionComplete: (session, automationName) => {
-      if (sessionStoreRef) {
-        sessionStoreRef.save(session, automationName);
-      }
+      sessionStore.save(session, automationName);
     },
   });
 
@@ -129,10 +140,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       active_sessions: sessionManager.size,
     });
   });
-
-  // Session persistence
-  const sessionStore = new SessionStore(config.repoPath);
-  sessionStoreRef = sessionStore;
 
   // Auth token endpoint — local dev returns empty (no auth needed)
   app.post('/auth/token', (_req, res) => {
@@ -280,30 +287,14 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.use(createFeedbackRouter({feedbackStore}));
 
   // Routes
-  app.use(createChatRouter({
+  app.use(createChatStreamRouter({
     sessionManager,
-    sessionHydrator: async (_req: import('express').Request, _res: import('express').Response, sessionId: string) => {
-      const persisted = sessionStore.load(sessionId);
-      if (!persisted) return null;
-
-      // Create a fresh session and seed LLM history from stored conversation
-      const session = await sessionManager.create();
-      sessionManager.reregister(session, sessionId);
-
-      // Convert stored messages to history format and seed the LLM
-      const { convertSessionMessagesToHistory } = await import('../session/history-converter.js');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted data
-      const history = convertSessionMessagesToHistory(persisted.conversationHistory as Array<import('../session/session-manager.js').SessionMessage>);
-      if (history.length > 0) {
-        session.geminiClient.setHistory(history);
-      }
-
-      process.stderr.write(`[SESSION] Restored session ${sessionId} (${persisted.conversationHistory.length} messages)\n`);
-      return session;
-    },
-    onTurnComplete: (session) => {
-      sessionStore.save(session);
-    },
+    createStreamHooks: () => ({
+      onSessionPersist: (sessionId) => {
+        const session = sessionManager.get(sessionId);
+        if (session) sessionStore.save(session);
+      },
+    }),
   }));
   app.use(createTaskRouter({sessionManager}));
   app.use(createAdminChatRouter({sessionManager, getPort: () => config.port}));

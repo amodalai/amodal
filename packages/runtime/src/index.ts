@@ -28,8 +28,8 @@ export { createSnapshotServer } from './agent/snapshot-server.js';
 export type { SnapshotServerConfig } from './agent/snapshot-server.js';
 
 // Route creators (used by hosted-runtime to build its own server)
-export { createChatRouter } from './agent/routes/chat.js';
-export type { ChatRouterOptions, SessionCreator, SessionHydrator, TurnCompleteHandler } from './agent/routes/chat.js';
+export { createChatStreamRouter } from './routes/chat-stream.js';
+export type { ChatStreamRouterOptions } from './routes/chat-stream.js';
 export { createTaskRouter } from './agent/routes/task.js';
 export type { TaskRouterOptions } from './agent/routes/task.js';
 
@@ -68,9 +68,6 @@ async function main(): Promise<void> {
   const host = getEnvOrDefault('HOST', '0.0.0.0');
   const sessionTtlMs = getEnvInt('SESSION_TTL_MS', 30 * 60 * 1000);
 
-  // Platform API URL — used by SessionManager for AgentSDK config loading.
-  const platformApiUrl = process.env['PLATFORM_API_URL'];
-
   // LLM config comes from env. Default matches the platform API default.
   const model = getEnvOrDefault('MODEL', 'claude-sonnet-4-20250514');
 
@@ -107,7 +104,6 @@ async function main(): Promise<void> {
         corsOrigin,
       },
       version: SERVER_VERSION,
-      platformApiUrl,
     });
 
     await serverInstance.start();

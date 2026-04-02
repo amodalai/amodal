@@ -36,8 +36,6 @@ export interface CreateServerOptions {
   config: ServerConfig;
   /** Version string for /version endpoint */
   version?: string;
-  /** Platform API URL (used by SessionManager for AgentSDK config loading) */
-  platformApiUrl?: string;
   /** Middleware to mount before all routes (e.g., request enrichment) */
   preMiddleware?: express.RequestHandler;
   /** Middleware to mount before the error handler (e.g., static file serving) */
@@ -68,7 +66,6 @@ export function createServer(options: CreateServerOptions): ServerInstance {
   const sessionManager = new SessionManager({
     baseParams,
     ttlMs: config.sessionTtlMs,
-    platformApiUrl: options.platformApiUrl,
     sessionStore: options.sessionStore,
     bundleProvider: options.bundleProvider,
   });

@@ -14,7 +14,6 @@ import {
   type GeminiClient,
   ApprovalMode,
   PolicyDecision,
-  AgentSDK,
   buildDefaultPrompt,
   resolveScopeLabels,
   generateFieldGuidance,
@@ -94,8 +93,9 @@ export interface StoredSessionRecord {
  * Implementations are provided by the hosting layer.
  */
 export interface SessionStore {
-  /** Fetch a stored session record by ID. Returns null if not found. */
-  getSession(appId: string, sessionId: string, token: string): Promise<StoredSessionRecord | null>;
+  /** Fetch a stored session record by ID. Returns null if not found.
+   *  Optional context provides auth info for implementations that need it. */
+  getSession(sessionId: string, context?: { appId?: string; token?: string }): Promise<StoredSessionRecord | null>;
 }
 
 export interface SessionManagerOptions {
@@ -105,8 +105,6 @@ export interface SessionManagerOptions {
   ttlMs?: number;
   /** Cleanup interval in milliseconds (default 5 minutes) */
   cleanupIntervalMs?: number;
-  /** Platform API URL (for loading org-specific config per session) */
-  platformApiUrl?: string;
   /** AgentBundle for local dev mode — sessions initialized from bundle config instead of platform API */
   bundle?: AgentBundle;
   /** Custom tool executor (local dev) */
@@ -150,7 +148,6 @@ export class SessionManager {
   private readonly sessions = new Map<string, ManagedSession>();
   private baseParams: AmodalConfigParameters;
   private readonly ttlMs: number;
-  private readonly platformApiUrl?: string;
   private bundle?: AgentBundle;
   private readonly toolExecutor?: CustomToolExecutor;
   private readonly shellExecutor?: CustomShellExecutor;
@@ -169,7 +166,6 @@ export class SessionManager {
   constructor(options: SessionManagerOptions) {
     this.baseParams = options.baseParams;
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
-    this.platformApiUrl = options.platformApiUrl;
     this.bundle = options.bundle;
     this.toolExecutor = options.toolExecutor;
     this.shellExecutor = options.shellExecutor;
@@ -223,7 +219,7 @@ export class SessionManager {
     if (bundle) {
       sessionParams.coreTools = this.buildCoreToolsList(bundle);
       const { buildConnectionsMap } = await import('@amodalai/core');
-      const connectionsMap = buildConnectionsMap(bundle.connections);
+      const connectionsMap = buildConnectionsMap(bundle.connections, bundle.resolvedCredentials);
       sessionParams.connections = connectionsMap;
       sessionParams.appDocuments = bundle.knowledge.map((k) => ({
         id: k.name,
@@ -262,126 +258,80 @@ export class SessionManager {
       }
     }
 
-    let config: AmodalConfig;
+    const config = new AmodalConfig(sessionParams);
 
-    // Platform session: use AgentSDK to fetch KB docs, org details, secrets
-    // Skip SDK when bundle was resolved from a provider — bundle config takes precedence
-    if (auth?.token && this.platformApiUrl && !bundle) {
-      process.stderr.write(
-        `[SESSION] Creating platform session: app=${auth.applicationId}, ` +
-        `org=${auth.orgId}, key=${auth.token.slice(0, 12)}..., sessionType=${sessionType ?? '(none)'}\n`,
-      );
-      const sdk = new AgentSDK(
-        {
-          platform: {
-            apiUrl: this.platformApiUrl,
-            apiKey: auth.token, // JWT or ak_ key — both work as Bearer tokens
-          },
-          applicationId: auth.applicationId,
-          // base_prompt and agent_context fetched from application record during SDK initialize
-          activeRole: role,
-          sessionType,
-          deployId,
-        },
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AmodalConfigParameters → Record for AgentSDK constructor
-        sessionParams as unknown as Record<string, unknown>,
-      );
-      await sdk.initialize();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AgentSDK returns AmodalConfig
-      config = sdk.getConfig() as unknown as AmodalConfig;
-    } else {
-      // Non-platform session: use Config directly
-      if (auth && this.platformApiUrl) {
-        sessionParams.platformApiUrl = this.platformApiUrl;
-        sessionParams.applicationId = auth.applicationId;
-        if (auth.apiKey) {
-          sessionParams.platformApiKey = auth.apiKey;
-        }
+    // Skip the full upstream Config.initialize() which hangs trying to scan
+    // files, discover agents, and authenticate with Gemini. Instead, do a
+    // minimal init: create tool registry, initializeAuth(), registerTools().
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const upstreamRaw = config.getUpstreamConfig() as unknown as Record<string, unknown>;
+
+    // Initialize storage (required by many upstream components)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const storage = (upstreamRaw['storage'] ?? upstreamRaw['_storage']) as { initialize?: () => Promise<void> } | undefined;
+    if (storage?.initialize) {
+      await storage.initialize();
+    }
+    // Create agent registry and tool registry if not already created
+    if (!upstreamRaw['toolRegistry'] && !upstreamRaw['_toolRegistry']) {
+      // Agent registry must exist before tool registry (createToolRegistry references it).
+      // Use a minimal stub — we register Amodal subagents separately.
+      if (!upstreamRaw['agentRegistry']) {
+        upstreamRaw['agentRegistry'] = {
+          getAllDefinitions: () => [],
+          agents: new Map(),
+          allDefinitions: new Map(),
+          initialize: async () => {},
+        };
       }
-
-      config = new AmodalConfig(sessionParams);
-
-      // For non-platform sessions, skip the full upstream Config.initialize()
-      // which hangs trying to scan files, discover agents, and authenticate
-      // with Gemini. Instead, do a minimal init:
-      // 1. initializeAuth() — sets up MultiProviderContentGenerator for non-Google
-      // 2. registerTools() — registers amodal tools on the upstream registry
-      //
-      // We need to manually create the tool registry and message bus since
-      // the upstream Config only creates them in _initialize().
+      // Prompt registry stub (referenced by some tools)
+      if (!upstreamRaw['promptRegistry']) {
+        upstreamRaw['promptRegistry'] = { getPrompts: () => [] };
+      }
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      const upstreamRaw = config.getUpstreamConfig() as unknown as Record<string, unknown>;
+      const upstreamConfig = config.getUpstreamConfig() as unknown as { createToolRegistry: () => Promise<unknown> };
+      const registry = await upstreamConfig.createToolRegistry();
+      upstreamRaw['_toolRegistry'] = registry;
+    }
 
-      // Initialize storage (required by many upstream components)
+    // Initialize auth (replaces content generator for non-Google providers)
+    await config.initializeAuth();
+
+    // Register amodal tools (request, present, knowledge, stores)
+    await config.registerTools();
+
+    // Register custom tools from bundle tools/ directory
+    if (this.bundle && this.bundle.tools.length > 0) {
+      const { CustomToolAdapter } = await import('./custom-tool-adapter.js');
+      const { LocalToolExecutor } = await import('../agent/tool-executor-local.js');
+      const executor = this.toolExecutor ?? new LocalToolExecutor();
+      const registry = config.getUpstreamConfig().getToolRegistry();
+      for (const tool of this.bundle.tools) {
+        if (tool.confirm === 'never') continue; // hidden from LLM
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- partial session for tool context
+        const placeholder = { config, toolExecutor: executor } as unknown as ManagedSession;
+        const adapter = new CustomToolAdapter(tool, placeholder, executor);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- adapter matches upstream tool interface
+        registry.registerTool(adapter as never);
+      }
+      process.stderr.write(`[SESSION] Registered ${String(this.bundle.tools.length)} custom tool(s)\n`);
+    }
+
+    // Set model on upstream config so GeminiClient.startChat() can resolve it
+    if (sessionParams.modelConfig?.model) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      const storage = (upstreamRaw['storage'] ?? upstreamRaw['_storage']) as { initialize?: () => Promise<void> } | undefined;
-      if (storage?.initialize) {
-        await storage.initialize();
+      const upstreamForModel = config.getUpstreamConfig() as unknown as { model?: string; _model?: string };
+      if (!upstreamForModel.model && !upstreamForModel._model) {
+        upstreamForModel['model'] = sessionParams.modelConfig.model;
+        upstreamForModel['_model'] = sessionParams.modelConfig.model;
       }
-      // Create agent registry and tool registry if not already created
-      if (!upstreamRaw['toolRegistry'] && !upstreamRaw['_toolRegistry']) {
-        // Agent registry must exist before tool registry (createToolRegistry references it).
-        // Use a minimal stub — we register Amodal subagents separately.
-        if (!upstreamRaw['agentRegistry']) {
-          upstreamRaw['agentRegistry'] = {
-            getAllDefinitions: () => [],
-            agents: new Map(),
-            allDefinitions: new Map(),
-            initialize: async () => {},
-          };
-        }
-        // Prompt registry stub (referenced by some tools)
-        if (!upstreamRaw['promptRegistry']) {
-          upstreamRaw['promptRegistry'] = { getPrompts: () => [] };
-        }
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        const upstreamConfig = config.getUpstreamConfig() as unknown as { createToolRegistry: () => Promise<unknown> };
-        const registry = await upstreamConfig.createToolRegistry();
-        upstreamRaw['_toolRegistry'] = registry;
-      }
+    }
 
-      // Initialize auth (replaces content generator for non-Google providers)
-      await config.initializeAuth();
-
-      // Register amodal tools (request, present, knowledge, stores)
-      await config.registerTools();
-
-      // Register custom tools from bundle tools/ directory
-      if (this.bundle && this.bundle.tools.length > 0) {
-        const { CustomToolAdapter } = await import('./custom-tool-adapter.js');
-        const { LocalToolExecutor } = await import('../agent/tool-executor-local.js');
-        const executor = this.toolExecutor ?? new LocalToolExecutor();
-        const registry = config.getUpstreamConfig().getToolRegistry();
-        // Session isn't created yet — we'll set it after session construction
-        // For now store the tools to register after session is built
-        for (const tool of this.bundle.tools) {
-          if (tool.confirm === 'never') continue; // hidden from LLM
-          // Create a placeholder session for the adapter — will be updated below
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- partial session for tool context
-          const placeholder = { config, toolExecutor: executor } as unknown as ManagedSession;
-          const adapter = new CustomToolAdapter(tool, placeholder, executor);
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- adapter matches upstream tool interface
-          registry.registerTool(adapter as never);
-        }
-        process.stderr.write(`[SESSION] Registered ${String(this.bundle.tools.length)} custom tool(s)\n`);
-      }
-
-      // Set model on upstream config so GeminiClient.startChat() can resolve it
-      if (sessionParams.modelConfig?.model) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        const upstreamForModel = config.getUpstreamConfig() as unknown as { model?: string; _model?: string };
-        if (!upstreamForModel.model && !upstreamForModel._model) {
-          upstreamForModel['model'] = sessionParams.modelConfig.model;
-          upstreamForModel['_model'] = sessionParams.modelConfig.model;
-        }
-      }
-
-      // Initialize the GeminiClient (creates the Chat instance)
-      // Must happen after tool registry and content generator are set up.
-      const gemClient = config.getGeminiClient();
-      if (!gemClient.isInitialized()) {
-        await gemClient.initialize();
-      }
+    // Initialize the GeminiClient (creates the Chat instance)
+    // Must happen after tool registry and content generator are set up.
+    const gemClient = config.getGeminiClient();
+    if (!gemClient.isInitialized()) {
+      await gemClient.initialize();
     }
 
     // Inject app secrets as process env vars so shell_exec commands can
@@ -403,9 +353,8 @@ export class SessionManager {
       process.stderr.write(`[SESSION] no _secrets found in connections\n`);
     }
 
-    // Platform tool disabling is now handled entirely via the DB-backed
-    // disabled_platform_tools field on the application record. AgentSDK reads
-    // this during initialize() and calls config.setDisabledTools().
+    // Platform tool disabling is handled via the disabled_platform_tools
+    // field on the application record (propagated through the bundle config).
 
     // Pinned model (from hydrated session) takes highest priority
     if (pinnedModel) {
@@ -744,9 +693,7 @@ export class SessionManager {
     auth?: AuthContext,
     sessionType?: string,
   ): Promise<ManagedSession | null> {
-    // Guard: need platform API and auth to fetch stored conversation
-    if (!this.platformApiUrl) return null;
-    if (!auth?.applicationId || !auth.token) return null;
+    if (!this.sessionStore) return null;
 
     // Deduplicate concurrent hydration requests for the same conversation
     const pending = this.pendingHydrations.get(conversationId);
@@ -769,13 +716,16 @@ export class SessionManager {
     sessionType?: string,
   ): Promise<ManagedSession | null> {
     // Fetch stored conversation via pluggable session store
-    if (!this.sessionStore || !auth?.applicationId || !auth.token) {
+    if (!this.sessionStore) {
       return null;
     }
 
     let record: StoredSessionRecord | null;
     try {
-      record = await this.sessionStore.getSession(auth.applicationId, conversationId, auth.token);
+      record = await this.sessionStore.getSession(conversationId, {
+        appId: auth?.applicationId,
+        token: auth?.token,
+      });
     } catch (err: unknown) {
       process.stderr.write(
         `[HYDRATE] Error fetching conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}\n`,

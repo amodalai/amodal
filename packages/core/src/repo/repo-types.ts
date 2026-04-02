@@ -142,6 +142,8 @@ export interface AgentBundle {
   stores: LoadedStore[];
   /** MCP servers to connect to */
   mcpServers?: Record<string, RepoMcpServerConfig>;
+  /** Resolved credentials (hosted runtime injects these via service key, same shape as process.env) */
+  resolvedCredentials?: Record<string, string>;
   /** Warnings from package resolution */
   warnings?: string[];
 }

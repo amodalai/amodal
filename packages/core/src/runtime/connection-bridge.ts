@@ -42,7 +42,7 @@ function resolveEnvRef(value: string, credentials?: Record<string, string>): str
  */
 export function buildConnectionsMap(
   connections: Map<string, LoadedConnection>,
-  credentials?: Record<string, Record<string, string>>,
+  credentials?: Record<string, string>,
 ): ConnectionsMap {
   const result: ConnectionsMap = {};
 
@@ -50,10 +50,9 @@ export function buildConnectionsMap(
     // Skip MCP connections — they use MCP tools, not the request tool
     if (conn.spec.protocol === 'mcp') continue;
 
-    const connCredentials = credentials?.[name];
-    const auth = buildAuthHeaders(conn, connCredentials);
+    const auth = buildAuthHeaders(conn, credentials);
 
-    const resolvedBaseUrl = resolveEnvRef(conn.spec.baseUrl ?? '', connCredentials);
+    const resolvedBaseUrl = resolveEnvRef(conn.spec.baseUrl ?? '', credentials);
 
     const entry: Record<string, unknown> = {
       base_url: resolvedBaseUrl,
@@ -66,8 +65,8 @@ export function buildConnectionsMap(
 
     // Merge credential values into the connection config so
     // {{VAR}} templates in auth headers can be resolved at request time
-    if (connCredentials) {
-      for (const [key, val] of Object.entries(connCredentials)) {
+    if (credentials) {
+      for (const [key, val] of Object.entries(credentials)) {
         entry[key] = val;
       }
     }
