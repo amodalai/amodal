@@ -32,6 +32,7 @@ import type {StoreBackend} from '@amodalai/core';
 import {SessionStore} from './session-store.js';
 import {EvalStore} from './eval-store.js';
 import {buildPages} from './page-builder.js';
+import type {BuiltPage} from './page-builder.js';
 
 /**
  * Creates an Express server for repo-based agent mode.
@@ -309,7 +310,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   }
 
   // Build user pages (if pages/ directory exists)
-  let builtPages: Array<{name: string; outputPath: string}> = [];
+  let builtPages: BuiltPage[] = [];
   try {
     const result = await buildPages(config.repoPath);
     builtPages = result.pages;
@@ -326,7 +327,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Pages list endpoint
   app.get('/api/pages', (_req, res) => {
     res.json({
-      pages: builtPages.map((p) => ({name: p.name})),
+      pages: builtPages.map((p) => ({name: p.name, ...p.metadata})),
     });
   });
 

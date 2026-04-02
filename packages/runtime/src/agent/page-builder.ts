@@ -4,13 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {existsSync, readdirSync, mkdirSync, writeFileSync} from 'node:fs';
+import {existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {build} from 'esbuild';
+
+export interface PageMetadata {
+  description?: string;
+  stores?: string[];
+  automations?: string[];
+}
 
 export interface BuiltPage {
   name: string;
   outputPath: string;
+  metadata: PageMetadata;
 }
 
 /**
@@ -100,8 +107,42 @@ var require = function(m) {
       logLevel: 'warning',
     });
 
-    pages.push({name, outputPath});
+    const metadata = extractPageMetadata(entryPath);
+    pages.push({name, outputPath, metadata});
   }
 
   return {pages, outDir};
+}
+
+/**
+ * Extract page metadata from the `export const page = { ... }` declaration.
+ * Uses simple regex parsing — doesn't require evaluating the module.
+ */
+function extractPageMetadata(filePath: string): PageMetadata {
+  try {
+    const source = readFileSync(filePath, 'utf-8');
+    // Match: export const page = { ... };
+    const match = source.match(/export\s+const\s+page\s*=\s*(\{[\s\S]*?\n\});/);
+    if (!match) return {};
+    // Clean the object literal: strip trailing commas, convert single quotes to double
+    let objStr = match[1]
+      .replace(/,\s*}/g, '}')
+      .replace(/,\s*]/g, ']')
+      .replace(/'/g, '"');
+    // Remove unquoted keys and re-quote them
+    objStr = objStr.replace(/(\w+)\s*:/g, '"$1":');
+    // Fix double-quoted keys that were already quoted
+    objStr = objStr.replace(/""+/g, '"');
+    const parsed: unknown = JSON.parse(objStr);
+    if (!parsed || typeof parsed !== 'object') return {};
+     
+    const obj = parsed as { description?: unknown; stores?: unknown; automations?: unknown };
+    return {
+      description: typeof obj.description === 'string' ? obj.description : undefined,
+      stores: Array.isArray(obj.stores) ? obj.stores.filter((s): s is string => typeof s === 'string') : undefined,
+      automations: Array.isArray(obj.automations) ? obj.automations.filter((s): s is string => typeof s === 'string') : undefined,
+    };
+  } catch {
+    return {};
+  }
 }

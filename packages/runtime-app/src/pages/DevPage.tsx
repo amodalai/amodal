@@ -4,8 +4,96 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { Play, Loader2, ExternalLink } from 'lucide-react';
+
+interface PageInfo {
+  name: string;
+  description?: string;
+  stores?: string[];
+  automations?: string[];
+}
+
+interface AutomationStatus {
+  name: string;
+  running: boolean;
+  schedule?: string;
+}
+
+function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
+  const [automations, setAutomations] = useState<AutomationStatus[]>([]);
+  const [runningNames, setRunningNames] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!pageInfo.automations?.length) return;
+    fetch('/automations')
+      .then((res) => res.json())
+      .then((data: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
+        const d = data as { automations: AutomationStatus[] };
+        const relevant = (d.automations || []).filter((a) => pageInfo.automations!.includes(a.name));
+        setAutomations(relevant);
+      })
+      .catch(() => {});
+  }, [pageInfo.automations]);
+
+  const handleRun = useCallback((name: string) => {
+    setRunningNames((prev) => new Set([...prev, name]));
+    fetch(`/automations/${encodeURIComponent(name)}/run`, { method: 'POST' })
+      .then(() => {
+        setTimeout(() => setRunningNames((prev) => { const next = new Set(prev); next.delete(name); return next; }), 5000);
+      })
+      .catch(() => setRunningNames((prev) => { const next = new Set(prev); next.delete(name); return next; }));
+  }, []);
+
+  const hasStores = pageInfo.stores && pageInfo.stores.length > 0;
+  const hasAutomations = automations.length > 0;
+  if (!hasStores && !hasAutomations) return null;
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-200 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/30 text-xs">
+      <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Data</span>
+
+      {hasStores && pageInfo.stores!.map((store) => (
+        <Link
+          key={store}
+          to={`/entities/${store}`}
+          className="flex items-center gap-1 px-2 py-1 rounded bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors"
+        >
+          {store}
+          <ExternalLink className="h-2.5 w-2.5" />
+        </Link>
+      ))}
+
+      {hasAutomations && automations.map((auto) => {
+        const isRunning = runningNames.has(auto.name);
+        return (
+          <div key={auto.name} className="flex items-center gap-2">
+            <div className={`h-1.5 w-1.5 rounded-full ${auto.running ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]' : 'bg-zinc-500'}`} />
+            <Link
+              to={`/automations/${auto.name}`}
+              className="text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors"
+            >
+              {auto.name}
+            </Link>
+            {auto.schedule && (
+              <span className="text-gray-400 dark:text-zinc-600">{auto.schedule}</span>
+            )}
+            <button
+              onClick={() => handleRun(auto.name)}
+              disabled={isRunning}
+              className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors disabled:opacity-40"
+            >
+              {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+              {isRunning ? 'Running' : 'Run'}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * Developer page loader.
@@ -17,7 +105,22 @@ import { useParams } from 'react-router-dom';
 export function DevPage() {
   const { pageName } = useParams<{ pageName: string }>();
   const [PageComponent, setPageComponent] = useState<React.ComponentType | null>(null);
+  const [pageInfo, setPageInfo] = useState<PageInfo | null>(null);
   const [error, setError] = useState(false);
+
+  // Fetch page metadata
+  useEffect(() => {
+    if (!pageName) return;
+    fetch('/api/pages')
+      .then((res) => res.json())
+      .then((data: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
+        const d = data as { pages: PageInfo[] };
+        const info = (d.pages || []).find((p) => p.name === pageName);
+        if (info) setPageInfo(info);
+      })
+      .catch(() => {});
+  }, [pageName]);
 
   useEffect(() => {
     if (!pageName) return;
@@ -56,7 +159,16 @@ export function DevPage() {
     return <div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading page...</div>;
   }
 
-  return <PageComponent />;
+  return (
+    <div className="flex flex-col h-full">
+      {pageInfo && (pageInfo.stores?.length || pageInfo.automations?.length) && (
+        <DataSourceBar pageInfo={pageInfo} />
+      )}
+      <div className="flex-1 overflow-auto">
+        <PageComponent />
+      </div>
+    </div>
+  );
 }
 
 function PageNotFound({ name }: { name: string }) {
