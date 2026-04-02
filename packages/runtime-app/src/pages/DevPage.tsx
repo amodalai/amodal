@@ -7,6 +7,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Play, Loader2, ExternalLink } from 'lucide-react';
+import cronstrue from 'cronstrue';
 
 interface PageInfo {
   name: string;
@@ -68,6 +69,10 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
 
       {hasAutomations && automations.map((auto) => {
         const isRunning = runningNames.has(auto.name);
+        let scheduleLabel = '';
+        if (auto.schedule) {
+          try { scheduleLabel = cronstrue.toString(auto.schedule, { use24HourTimeFormat: true }).toLowerCase(); } catch { scheduleLabel = auto.schedule; }
+        }
         return (
           <div key={auto.name} className="flex items-center gap-2">
             <div className={`h-1.5 w-1.5 rounded-full ${auto.running ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]' : 'bg-zinc-500'}`} />
@@ -77,8 +82,11 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
             >
               {auto.name}
             </Link>
-            {auto.schedule && (
-              <span className="text-gray-400 dark:text-zinc-600">{auto.schedule}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${auto.running ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-500/10 text-zinc-500'}`}>
+              {auto.running ? 'live' : 'paused'}
+            </span>
+            {scheduleLabel && (
+              <span className="text-gray-400 dark:text-zinc-600">{scheduleLabel}</span>
             )}
             <button
               onClick={() => handleRun(auto.name)}
