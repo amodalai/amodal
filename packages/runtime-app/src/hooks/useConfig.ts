@@ -38,6 +38,12 @@ export function useConfig(): AppConfig {
 
         const data: Record<string, unknown> = await res.json();
         let token = String(data['token'] ?? '');
+
+        if (!token) {
+          // Empty token — local dev, no auth needed
+          setLoading(false);
+          return;
+        }
         let expiresAt = data['expires_at']
           ? new Date(String(data['expires_at'])).getTime() - 60_000
           : Date.now() + 50 * 60 * 1000;

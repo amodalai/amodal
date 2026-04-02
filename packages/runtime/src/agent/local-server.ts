@@ -126,6 +126,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   const sessionStore = new SessionStore(config.repoPath);
   sessionStoreRef = sessionStore;
 
+  // Auth token endpoint — local dev returns empty (no auth needed)
+  app.post('/auth/token', (_req, res) => {
+    res.json({ token: '', expires_at: null });
+  });
+
   // Unified config endpoint — same path as hosted, different response
   app.get('/api/config', (_req, res) => {
     const repoData = sessionManager.getRepo()!;
