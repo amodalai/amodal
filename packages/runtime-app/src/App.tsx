@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AmodalProvider } from '@amodalai/react';
 import { RuntimeProvider } from '@/contexts/RuntimeContext';
 import { router } from '@/router';
-import { useConfig } from '@/hooks/useConfig';
+import { useAuth } from '@/hooks/useAuth';
 
 const RUNTIME_URL = window.location.origin;
 
@@ -23,7 +23,7 @@ const queryClient = new QueryClient({
 });
 
 function AppContent() {
-  const { loading, error, getToken } = useConfig();
+  const { loading, error, getToken } = useAuth();
 
   if (loading) {
     return (

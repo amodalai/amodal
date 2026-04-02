@@ -18,7 +18,7 @@ interface AppConfig {
  * - Hosted: /auth/token returns a JWT → SPA sends it on requests
  * - Local dev: /auth/token 404s → no token, no auth headers
  */
-export function useConfig(): AppConfig {
+export function useAuth(): AppConfig {
   const [loading, setLoading] = useState(true);
   const [error] = useState<string | null>(null);
   const tokenGetterRef = useRef<(() => Promise<string>) | undefined>(undefined);
