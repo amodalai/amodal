@@ -190,11 +190,11 @@ export function AutomationDetailPage() {
           <div className="flex items-center gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-purple-500" />
+                <Zap className="h-4 w-4 text-indigo-500" />
                 <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">{automation.title}</h1>
               </div>
               <div className="flex items-center gap-3 mt-1">
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 font-medium">
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-medium">
                   {automation.trigger}
                 </span>
                 {automation.schedule && (
@@ -237,7 +237,7 @@ export function AutomationDetailPage() {
             <button
               onClick={() => { void handleRunNow(); }}
               disabled={isRunning}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
             >
               {isRunning ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
@@ -254,8 +254,8 @@ export function AutomationDetailPage() {
         <div className="max-w-3xl mx-auto px-4 py-6">
           {/* Live/latest run output */}
           {(isRunning || liveBlocks.length > 0) && (
-            <div className="mb-6 border border-purple-500/20 rounded-xl p-4 bg-purple-500/5">
-              <div className="flex items-center gap-2 mb-3 text-xs text-purple-400 font-medium">
+            <div className="mb-6 border border-indigo-500/20 rounded-xl p-4 bg-indigo-500/5">
+              <div className="flex items-center gap-2 mb-3 text-xs text-indigo-400 font-medium">
                 {isRunning ? (
                   <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running now...</>
                 ) : (
