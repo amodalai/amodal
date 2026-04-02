@@ -121,10 +121,30 @@ export class CustomToolAdapter {
         }
 
         const url = `${baseUrl}${endpoint}`;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+        // Apply connection auth
+         
+        const conn = connConfig as Record<string, unknown>;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- auth config shape
+        const auth = conn['auth'] as Record<string, unknown> | undefined;
+        if (auth) {
+          const token = String(auth['token'] ?? '');
+          const header = String(auth['header'] ?? 'Authorization');
+          const prefix = auth['prefix'] ? `${String(auth['prefix'])} ` : '';
+          // Resolve env: references
+          const resolvedToken = token.startsWith('env:')
+            ? process.env[token.slice(4)] ?? ''
+            : token;
+          if (resolvedToken) {
+            headers[header] = `${prefix}${resolvedToken}`;
+          }
+        }
+
         const fetchOpts: RequestInit = {
           method,
           signal: combinedSignal,
-          headers: { 'Content-Type': 'application/json' },
+          headers,
         };
         if (params?.data) {
           fetchOpts.body = JSON.stringify(params.data);
