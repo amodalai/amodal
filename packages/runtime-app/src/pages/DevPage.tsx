@@ -7,7 +7,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Play, Loader2, ExternalLink } from 'lucide-react';
-import cronstrue from 'cronstrue';
 
 interface PageInfo {
   name: string;
@@ -83,9 +82,17 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
 
       {hasAutomations && automations.map((auto) => {
         const isRunning = runningNames.has(auto.name);
-        let scheduleLabel = '';
-        if (auto.schedule) {
-          try { scheduleLabel = cronstrue.toString(auto.schedule, { use24HourTimeFormat: true }).toLowerCase(); } catch { scheduleLabel = auto.schedule; }
+        let scheduleLabel = auto.schedule ?? '';
+        if (scheduleLabel) {
+          // Simple cron-to-human for common patterns
+          const parts = scheduleLabel.split(' ');
+          if (parts.length === 5) {
+            const [min, hour] = parts;
+            if (hour === '*' && min === '0') scheduleLabel = 'every hour';
+            else if (hour?.startsWith('*/')) scheduleLabel = `every ${hour.slice(2)} hours`;
+            else if (min === '0' && hour && !hour.includes('*') && !hour.includes('/')) scheduleLabel = `daily at ${hour}:00`;
+            else if (parts[4] === '1-5' && min === '0') scheduleLabel = `weekdays at ${hour ?? '?'}:00`;
+          }
         }
         return (
           <div key={auto.name} className="flex items-center gap-2">
