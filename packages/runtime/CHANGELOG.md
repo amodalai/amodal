@@ -1,5 +1,14 @@
 # @amodalai/runtime
 
+## 0.1.21
+
+### Patch Changes
+
+- [#91](https://github.com/amodalai/amodal/pull/91) [`f489f19`](https://github.com/amodalai/amodal/commit/f489f19b1e776f53d70b8288ff675c177286377e) Thanks [@whodatdev](https://github.com/whodatdev)! - Pass caller's auth token to bundleProvider so the hosted runtime can fetch deploy snapshots using the user's JWT instead of requiring a service API key.
+
+- Updated dependencies []:
+  - @amodalai/core@0.1.21
+
 ## 0.1.20
 
 ### Patch Changes
