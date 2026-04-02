@@ -19,7 +19,7 @@ export interface TaskRouterOptions {
 
 const TaskRequestSchema = z.object({
   prompt: z.string().min(1),
-  app_id: z.string().min(1),
+  app_id: z.string().optional(),
   app_token: z.string().optional(),
 });
 
@@ -43,7 +43,8 @@ export function createTaskRouter(options: TaskRouterOptions): Router {
       return;
     }
 
-    const {prompt, app_id} = parsed.data;
+    const {prompt} = parsed.data;
+    const app_id = parsed.data.app_id ?? 'local';
     const taskId = randomUUID();
 
     const record: TaskRecord = {

@@ -57,7 +57,8 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       return;
     }
 
-    const {message, session_id, app_id, app_token} = parsed.data;
+    const {message, session_id, app_token} = parsed.data;
+    const app_id = parsed.data.app_id ?? 'local';
 
     // SSE headers
     res.writeHead(200, {
