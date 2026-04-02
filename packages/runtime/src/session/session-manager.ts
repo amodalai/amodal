@@ -117,7 +117,7 @@ export interface SessionManagerOptions {
   /** Pluggable session store for hydration (if not provided, falls back to platform API) */
   sessionStore?: SessionStore;
   /** Async callback that resolves an AgentBundle from a deploy ID (used by hosted runtime) */
-  bundleProvider?: (deployId: string) => Promise<AgentBundle | null>;
+  bundleProvider?: (deployId: string, token?: string) => Promise<AgentBundle | null>;
 }
 
 /**
@@ -155,7 +155,7 @@ export class SessionManager {
   private readonly shellExecutor?: CustomShellExecutor;
   private readonly sharedStoreBackend?: StoreBackend;
   private readonly sessionStore?: SessionStore;
-  private readonly bundleProvider?: (deployId: string) => Promise<AgentBundle | null>;
+  private readonly bundleProvider?: (deployId: string, token?: string) => Promise<AgentBundle | null>;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   /** Deduplicates concurrent hydration requests for the same conversation */
   private readonly pendingHydrations = new Map<string, Promise<ManagedSession | null>>();
@@ -216,7 +216,7 @@ export class SessionManager {
     }
 
     // Resolve bundle: static bundle (local dev), or dynamic via bundleProvider (hosted)
-    const bundle = this.bundle ?? (deployId && this.bundleProvider ? await this.bundleProvider(deployId) : null);
+    const bundle = this.bundle ?? (deployId && this.bundleProvider ? await this.bundleProvider(deployId, auth?.token) : null);
 
     // Inject bundle config into session params
     if (bundle) {
