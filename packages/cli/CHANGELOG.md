@@ -1,5 +1,14 @@
 # @amodalai/amodal
 
+## 0.1.22
+
+### Patch Changes
+
+- Updated dependencies [[`efb9a54`](https://github.com/amodalai/amodal/commit/efb9a54bc0095fd71e737d1ef04c5495a4171452), [`ba75ebe`](https://github.com/amodalai/amodal/commit/ba75ebeed040baeba4b82f80d9f42890a60e3d87)]:
+  - @amodalai/core@0.1.22
+  - @amodalai/runtime@0.1.22
+  - @amodalai/runtime-app@0.1.22
+
 ## 0.1.21
 
 ### Patch Changes
