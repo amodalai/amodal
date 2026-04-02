@@ -26,10 +26,6 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
   const [runningNames, setRunningNames] = useState<Set<string>>(new Set());
   const [togglingNames, setTogglingNames] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchAutomations();
-  }, [fetchAutomations]);
-
   const fetchAutomations = useCallback(() => {
     if (!pageInfo.automations?.length) return;
     fetch('/automations')
@@ -42,6 +38,10 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
       })
       .catch(() => {});
   }, [pageInfo.automations]);
+
+  useEffect(() => {
+    fetchAutomations();
+  }, [fetchAutomations]);
 
   const handleToggle = useCallback((name: string, currentlyRunning: boolean) => {
     setTogglingNames((prev) => new Set([...prev, name]));
