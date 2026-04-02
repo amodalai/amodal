@@ -6,4 +6,3 @@
 
 export * from './platform-types.js';
 export * from './platform-client.js';
-export * from './config-builder.js';

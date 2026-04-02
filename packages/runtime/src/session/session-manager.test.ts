@@ -63,17 +63,8 @@ const MockConfig = vi.fn(function (this: Record<string, unknown>) {
   this['getAppId'] = vi.fn().mockReturnValue('test-app');
 });
 
-// AgentSDK mock
-const mockSdkInitialize = vi.fn().mockResolvedValue(undefined);
-const mockSdkGetConfig = vi.fn();
-const MockAgentSDK = vi.fn(function (this: Record<string, unknown>) {
-  this['initialize'] = mockSdkInitialize;
-  this['getConfig'] = mockSdkGetConfig;
-});
-
 vi.mock('@amodalai/core', () => ({
   AmodalConfig: MockConfig,
-  AgentSDK: MockAgentSDK,
   Scheduler: vi.fn(function (this: Record<string, unknown>) {
     this['schedule'] = vi.fn();
   }),
@@ -102,34 +93,6 @@ const { SessionManager } = await import('./session-manager.js');
 describe('SessionManager', () => {
   let manager: InstanceType<typeof SessionManager>;
 
-  // Build a mock Config object for AgentSDK.getConfig() to return
-  function makeMockConfig() {
-    return {
-      initialize: mockInitialize,
-      shutdownAudit: mockShutdownAudit,
-      getGeminiClient: mockGetGeminiClient,
-      getMessageBus: mockGetMessageBus,
-      getConnections: mockGetConnections,
-      getUpstreamConfig: mockGetUpstreamConfig,
-      refreshAuth: vi.fn().mockResolvedValue(undefined),
-      initializeAuth: vi.fn().mockResolvedValue(undefined),
-      getModelConfig: vi.fn().mockReturnValue(undefined),
-      setModelConfig: vi.fn(),
-      getBasePrompt: vi.fn().mockReturnValue(undefined),
-      getAgentName: vi.fn().mockReturnValue('Test Agent'),
-      getAgentDescription: vi.fn().mockReturnValue(undefined),
-      getAgentContext: vi.fn().mockReturnValue(undefined),
-      getModel: vi.fn().mockReturnValue('test-model'),
-      getStores: vi.fn().mockReturnValue([]),
-      getStoreBackend: vi.fn().mockReturnValue(undefined),
-      setStoreBackend: vi.fn(),
-      registerTools: vi.fn().mockResolvedValue(undefined),
-      getBundleSubagents: vi.fn().mockReturnValue([]),
-      getDisabledSubagents: vi.fn().mockReturnValue([]),
-      getAppId: vi.fn().mockReturnValue('test-app'),
-    };
-  }
-
   beforeEach(() => {
     vi.clearAllMocks();
     // Re-attach default implementations after clearAllMocks
@@ -154,9 +117,6 @@ describe('SessionManager', () => {
       getAgentRegistry: vi.fn().mockReturnValue({ getAllDefinitions: () => [] }),
       registerSubAgentTools: vi.fn(),
     });
-    mockSdkInitialize.mockResolvedValue(undefined);
-    mockSdkGetConfig.mockReturnValue(makeMockConfig());
-
     manager = new SessionManager({
       baseParams: {
         sessionId: 'base',
@@ -231,178 +191,21 @@ describe('SessionManager', () => {
           debugMode: false,
         },
         cleanupIntervalMs: 60_000,
-        platformApiUrl: 'http://localhost:4000',
       });
 
       const auth = {
         apiKey: 'ak_test-key',
         orgId: 'org-123',
         applicationId: 'app-456',
-
-
         authMethod: 'api_key' as const,
       };
 
       const session = await authManager.create(undefined, auth);
       expect(session.orgId).toBe('org-123');
 
-      // No token → falls back to Config path, not AgentSDK
-      expect(MockAgentSDK).not.toHaveBeenCalled();
-
-      // Verify platform params were passed to Config
-      const calls = MockConfig.mock.calls as unknown[][];
-      const lastCall = calls[calls.length - 1]?.[0] as Record<string, unknown>;
-      expect(lastCall['platformApiUrl']).toBe('http://localhost:4000');
-      expect(lastCall['platformApiKey']).toBe('ak_test-key');
-      expect(lastCall['applicationId']).toBe('app-456');
-
-
-
       await authManager.shutdown();
     });
 
-    it('uses AgentSDK when auth token is provided', async () => {
-      const authManager = new SessionManager({
-        baseParams: {
-          sessionId: 'base',
-          model: 'test-model',
-          cwd: '/tmp',
-          targetDir: '/tmp',
-          debugMode: false,
-          agentContext: 'Test agent context',
-        },
-        cleanupIntervalMs: 60_000,
-        platformApiUrl: 'http://localhost:4000',
-      });
-
-      const auth = {
-        token: 'jwt.token.here',
-        orgId: 'org-jwt',
-        applicationId: 'app-jwt',
-        authMethod: 'platform_jwt' as const,
-      };
-
-      const session = await authManager.create(undefined, auth);
-      expect(session.orgId).toBe('org-jwt');
-
-      // Verify AgentSDK was used
-      expect(MockAgentSDK).toHaveBeenCalledOnce();
-      const sdkCalls = MockAgentSDK.mock.calls as unknown[][];
-      const sdkConfig = sdkCalls[0]?.[0] as Record<string, unknown>;
-      const platform = sdkConfig['platform'] as Record<string, unknown>;
-      expect(platform['apiUrl']).toBe('http://localhost:4000');
-      expect(platform['apiKey']).toBe('jwt.token.here');
-      expect(sdkConfig['applicationId']).toBe('app-jwt');
-      // base_prompt and agent_context fetched from application during SDK initialize
-
-      // Verify Config was NOT called directly (AgentSDK creates it internally)
-      expect(MockConfig).not.toHaveBeenCalled();
-      expect(mockSdkInitialize).toHaveBeenCalledOnce();
-      expect(mockSdkGetConfig).toHaveBeenCalledOnce();
-
-      await authManager.shutdown();
-    });
-
-    it('passes role to AgentSDK when auth token is provided', async () => {
-      const authManager = new SessionManager({
-        baseParams: {
-          sessionId: 'base',
-          model: 'test-model',
-          cwd: '/tmp',
-          targetDir: '/tmp',
-          debugMode: false,
-        },
-        cleanupIntervalMs: 60_000,
-        platformApiUrl: 'http://localhost:4000',
-      });
-
-      const auth = {
-        token: 'ak_test-key',
-        apiKey: 'ak_test-key',
-        orgId: 'org-123',
-        applicationId: 'app-456',
-
-
-        authMethod: 'api_key' as const,
-      };
-
-      await authManager.create('analyst', auth);
-
-      // Verify role was passed to AgentSDK config
-      const sdkCalls = MockAgentSDK.mock.calls as unknown[][];
-      const sdkConfig = sdkCalls[0]?.[0] as Record<string, unknown>;
-      expect(sdkConfig['activeRole']).toBe('analyst');
-
-      await authManager.shutdown();
-    });
-
-    it('handles JWT auth without token via Config fallback', async () => {
-      const authManager = new SessionManager({
-        baseParams: {
-          sessionId: 'base',
-          model: 'test-model',
-          cwd: '/tmp',
-          targetDir: '/tmp',
-          debugMode: false,
-        },
-        cleanupIntervalMs: 60_000,
-        platformApiUrl: 'http://localhost:4000',
-      });
-
-      const auth = {
-        orgId: 'org-jwt',
-        applicationId: 'app-jwt',
-        authMethod: 'platform_jwt' as const,
-      };
-
-      const session = await authManager.create(undefined, auth);
-      expect(session.orgId).toBe('org-jwt');
-
-      // No token → Config path, not AgentSDK
-      expect(MockAgentSDK).not.toHaveBeenCalled();
-
-      // Verify platform params — no platformApiKey set
-      const calls = MockConfig.mock.calls as unknown[][];
-      const lastCall = calls[calls.length - 1]?.[0] as Record<string, unknown>;
-      expect(lastCall['platformApiUrl']).toBe('http://localhost:4000');
-      expect(lastCall['platformApiKey']).toBeUndefined();
-      expect(lastCall['applicationId']).toBe('app-jwt');
-
-      await authManager.shutdown();
-    });
-
-    it('passes session params as configOverrides to AgentSDK', async () => {
-      const authManager = new SessionManager({
-        baseParams: {
-          sessionId: 'base',
-          model: 'test-model',
-          cwd: '/tmp',
-          targetDir: '/tmp',
-          debugMode: false,
-        },
-        cleanupIntervalMs: 60_000,
-        platformApiUrl: 'http://localhost:4000',
-      });
-
-      const auth = {
-        token: 'jwt.token.here',
-        orgId: 'org-1',
-        applicationId: 'app-1',
-        authMethod: 'platform_jwt' as const,
-      };
-
-      await authManager.create(undefined, auth);
-
-      // Verify configOverrides (second arg to AgentSDK constructor)
-      const sdkCalls = MockAgentSDK.mock.calls as unknown[][];
-      const overrides = sdkCalls[0]?.[1] as Record<string, unknown>;
-      expect(overrides['approvalMode']).toBe('yolo');
-      expect(overrides['interactive']).toBe(false);
-      expect(overrides['noBrowser']).toBe(true);
-      expect(overrides['model']).toBe('test-model');
-
-      await authManager.shutdown();
-    });
   });
 
   describe('get', () => {
@@ -504,7 +307,14 @@ describe('SessionManager', () => {
 
     function makeHydrateManager() {
       const mockSetHistory = vi.fn();
-      mockGetGeminiClient.mockReturnValue({ setHistory: mockSetHistory });
+      mockGetGeminiClient.mockReturnValue({
+        isInitialized: vi.fn().mockReturnValue(true),
+        initialize: vi.fn().mockResolvedValue(undefined),
+        getChat: vi.fn().mockReturnValue({ setSystemInstruction: vi.fn(), getHistory: vi.fn().mockReturnValue([]) }),
+        setHistory: mockSetHistory,
+        setTools: vi.fn().mockResolvedValue(undefined),
+        getCurrentSequenceModel: vi.fn().mockReturnValue(undefined),
+      });
       mockGetSession.mockReset();
 
       const mgr = new SessionManager({
@@ -516,15 +326,14 @@ describe('SessionManager', () => {
           debugMode: false,
         },
         cleanupIntervalMs: 60_000,
-        platformApiUrl: 'http://localhost:4000',
         sessionStore: { getSession: mockGetSession },
       });
 
       return { mgr, mockSetHistory };
     }
 
-    it('returns null when platformApiUrl is missing', async () => {
-      // manager has no platformApiUrl
+    it('returns null when sessionStore is missing', async () => {
+      // default manager has no sessionStore
       const result = await manager.hydrate('conv-1', undefined, platformAuth);
       expect(result).toBeNull();
     });

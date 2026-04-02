@@ -109,9 +109,6 @@ export { RequestTool } from './tools/request-tool.js';
 // MCP client manager
 export * from './mcp/index.js';
 
-// AgentSDK
-export { AgentSDK } from './sdk.js';
-
 // Admin agent
 export * from './admin/index.js';
 export * from './runtime/user-context.js';

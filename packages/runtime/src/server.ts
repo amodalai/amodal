@@ -36,8 +36,6 @@ export interface CreateServerOptions {
   config: ServerConfig;
   /** Version string for /version endpoint */
   version?: string;
-  /** Platform API URL (used by SessionManager for AgentSDK config loading) */
-  platformApiUrl?: string;
   /** Middleware to mount before all routes (e.g., request enrichment) */
   preMiddleware?: express.RequestHandler;
   /** Middleware to mount before the error handler (e.g., static file serving) */
@@ -53,7 +51,7 @@ export interface CreateServerOptions {
   /** Shutdown callback for hosting layer cleanup (e.g., drain audit batches) */
   onShutdown?: () => Promise<void>;
   /** Async callback that resolves an AgentBundle from a deploy ID (used by hosted runtime) */
-  bundleProvider?: (deployId: string, token?: string) => Promise<import('@amodalai/core').AgentBundle | null>;
+  bundleProvider?: (deployId: string) => Promise<import('@amodalai/core').AgentBundle | null>;
 }
 
 /**
@@ -68,7 +66,6 @@ export function createServer(options: CreateServerOptions): ServerInstance {
   const sessionManager = new SessionManager({
     baseParams,
     ttlMs: config.sessionTtlMs,
-    platformApiUrl: options.platformApiUrl,
     sessionStore: options.sessionStore,
     bundleProvider: options.bundleProvider,
   });
