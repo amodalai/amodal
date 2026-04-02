@@ -146,8 +146,9 @@ export async function loadRepoFromPlatform(
   apiUrl: string,
   apiKey: string,
 ): Promise<AgentBundle> {
-  // Normalize URL — strip trailing slash
-  const baseUrl = apiUrl.replace(/\/+$/, '');
+  // Normalize URL — strip trailing slashes
+  let baseUrl = apiUrl;
+  while (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
 
   // Fetch config
   const configText = await fetchText(baseUrl, '/api/repo/config', apiKey);
