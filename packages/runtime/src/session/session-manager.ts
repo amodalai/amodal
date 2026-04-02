@@ -575,7 +575,7 @@ export class SessionManager {
         const upstream = config.getUpstreamConfig();
         const toolRegistry = upstream.getToolRegistry();
         const messageBus = config.getMessageBus();
-        const appId = config.getAppId() ?? 'default';
+        const appId = config.getAppId() ?? auth?.applicationId ?? 'local';
 
         for (const store of stores) {
           toolRegistry.registerTool(
@@ -621,7 +621,7 @@ export class SessionManager {
       planModeManager: new PlanModeManager(),
       toolExecutor: this.toolExecutor,
       shellExecutor: this.shellExecutor,
-      appId: auth?.applicationId,
+      appId: auth?.applicationId ?? 'local',
     };
 
     // Share MCP connection across sessions — connect once, reuse for all
