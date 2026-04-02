@@ -126,7 +126,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   const sessionStore = new SessionStore(config.repoPath);
   sessionStoreRef = sessionStore;
 
-  // Full agent config for the config page
+  // Unified config endpoint — same path as hosted, different response
   app.get('/api/config', (_req, res) => {
     const repoData = sessionManager.getRepo()!;
     const cfg = repoData.config;
@@ -142,6 +142,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     }
 
     res.json({
+      // Common fields (used by useHostedConfig)
+      appId: 'local',
+      appName: cfg?.name ?? '',
+      // No authMode — signals to the SPA that no auth is needed
+      // Local dev fields (used by config pages)
       name: cfg?.name ?? '',
       version: cfg?.version ?? '',
       description: cfg?.description ?? '',
