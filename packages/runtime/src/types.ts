@@ -86,6 +86,7 @@ export enum SSEEventType {
   PlanMode = 'plan_mode',
   FieldScrub = 'field_scrub',
   ConfirmationRequired = 'confirmation_required',
+  ToolLog = 'tool_log',
   Error = 'error',
   Done = 'done',
 }
@@ -249,8 +250,16 @@ export type SSEEvent =
   | SSEPlanModeEvent
   | SSEFieldScrubEvent
   | SSEConfirmationRequiredEvent
+  | SSEToolLogEvent
   | SSEErrorEvent
   | SSEDoneEvent;
+
+export interface SSEToolLogEvent {
+  type: SSEEventType.ToolLog;
+  tool_name: string;
+  message: string;
+  timestamp: string;
+}
 
 // ---------------------------------------------------------------------------
 // Server config

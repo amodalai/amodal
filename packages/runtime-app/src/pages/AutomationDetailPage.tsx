@@ -63,7 +63,7 @@ export function AutomationDetailPage() {
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [sessionMessages, setSessionMessages] = useState<Record<string, HistoryMessage[]>>({});
   const [isRunning, setIsRunning] = useState(false);
-  const [liveBlocks, setLiveBlocks] = useState<Array<{type: 'text'; content: string} | {type: 'tool'; name: string; params?: Record<string, unknown>; status: 'running' | 'done'; durationMs?: number}>>([]);
+  const [liveBlocks, setLiveBlocks] = useState<Array<{type: 'text'; content: string} | {type: 'tool'; name: string; params?: Record<string, unknown>; status: 'running' | 'done'; durationMs?: number} | {type: 'log'; toolName: string; message: string}>>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -132,7 +132,6 @@ export function AutomationDetailPage() {
               } else if (type === 'tool_call_result') {
                 const duration = typeof event['duration_ms'] === 'number' ? event['duration_ms'] : undefined;
                 setLiveBlocks((prev) => {
-                  // Find the last running tool and mark it done
                   const updated = [...prev];
                   for (let i = updated.length - 1; i >= 0; i--) {
                     if (updated[i].type === 'tool' && updated[i].status === 'running') {
@@ -142,6 +141,10 @@ export function AutomationDetailPage() {
                   }
                   return updated;
                 });
+              } else if (type === 'tool_log') {
+                const toolName = String(event['tool_name'] ?? '');
+                const message = String(event['message'] ?? '');
+                setLiveBlocks((prev) => [...prev, {type: 'log', toolName, message}]);
               }
             } catch { /* skip */ }
           }
@@ -266,6 +269,14 @@ export function AutomationDetailPage() {
                       return (
                         <div key={i} className="text-[13px] text-gray-700 dark:text-zinc-300 prose dark:prose-invert prose-sm max-w-none">
                           <Markdown>{block.content}</Markdown>
+                        </div>
+                      );
+                    }
+                    if (block.type === 'log') {
+                      return (
+                        <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-gray-500 dark:text-zinc-500">
+                          <span className="text-[10px] font-semibold text-indigo-400/60 uppercase">{block.toolName}</span>
+                          <span>{block.message}</span>
                         </div>
                       );
                     }

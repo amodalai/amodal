@@ -20,6 +20,7 @@ export function buildToolContext(
   session: AgentSession,
   tool: LoadedTool,
   signal: AbortSignal,
+  onLog?: (toolName: string, message: string) => void,
 ): CustomToolContext {
   // Combine the tool's timeout with the external signal
   const timeoutSignal = AbortSignal.timeout(tool.timeout);
@@ -116,6 +117,7 @@ export function buildToolContext(
 
     log(message) {
       process.stderr.write(`[tool:${tool.name}] ${message}\n`);
+      if (onLog) onLog(tool.name, message);
     },
 
     user: {

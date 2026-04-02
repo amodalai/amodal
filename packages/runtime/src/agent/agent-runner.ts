@@ -149,6 +149,13 @@ export async function* runAgentTurn(
           const execResult = await executeTool(session, block.name, block.input, block.id, signal);
           const durationMs = Date.now() - startMs;
 
+          // Emit tool logs (e.g., store writes, progress messages)
+          if (execResult.toolLogs) {
+            for (const evt of execResult.toolLogs) {
+              yield evt;
+            }
+          }
+
           // Emit subagent events from explore
           if (execResult.subagentEvents) {
             for (const evt of execResult.subagentEvents) {
@@ -440,6 +447,7 @@ interface ToolExecutionResult {
   result: ToolResult;
   subagentEvents?: SSESubagentEvent[];
   exploreResult?: {summary: string; tokensUsed: number};
+  toolLogs?: SSEEvent[];
 }
 
 async function executeTool(
@@ -545,15 +553,20 @@ async function executeCustomTool(
   tool: LoadedTool,
   args: Record<string, unknown>,
   signal: AbortSignal,
-): Promise<ToolResult> {
+): Promise<ToolExecutionResult> {
   // Confirmation gating for tools that require it
   if (tool.confirm === true || tool.confirm === 'review') {
     if (session.planModeManager.isActive()) {
-      return {error: 'Custom tool writes are blocked in plan mode. Present your plan for approval first.'};
+      return {result: {error: 'Custom tool writes are blocked in plan mode. Present your plan for approval first.'}};
     }
   }
 
-  const ctx = buildToolContext(session, tool, signal);
+  const toolLogs: SSEEvent[] = [];
+  const onLog = (toolName: string, message: string) => {
+    toolLogs.push({type: SSEEventType.ToolLog, tool_name: toolName, message, timestamp: new Date().toISOString()});
+  };
+
+  const ctx = buildToolContext(session, tool, signal, onLog);
 
   if (!localToolExecutor) {
     localToolExecutor = new LocalToolExecutor();
@@ -563,10 +576,10 @@ async function executeCustomTool(
 
   try {
     const result = await executor.execute(tool, args, ctx);
-    return {output: JSON.stringify(result)};
+    return {result: {output: JSON.stringify(result)}, toolLogs};
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return {error: message};
+    return {result: {error: message}, toolLogs};
   }
 }
 
