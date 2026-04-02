@@ -1,5 +1,38 @@
 # @amodalai/runtime-app
 
+## 0.1.20
+
+### Patch Changes
+
+- [#89](https://github.com/amodalai/amodal/pull/89) [`5fa7089`](https://github.com/amodalai/amodal/commit/5fa7089e2ee8ee92432fc3891fa859779507d1bb) Thanks [@whodatdev](https://github.com/whodatdev)! - Remove monorepo-relative @amodalai/react alias from vite config. The published @amodalai/react package has proper exports, so vite resolves it from node_modules without the alias. This fixes build server builds that use the npm package outside the monorepo.
+
+- Updated dependencies [[`5fa7089`](https://github.com/amodalai/amodal/commit/5fa7089e2ee8ee92432fc3891fa859779507d1bb)]:
+  - @amodalai/react@0.1.20
+
+## 0.1.19
+
+### Patch Changes
+
+- [#87](https://github.com/amodalai/amodal/pull/87) [`fb31766`](https://github.com/amodalai/amodal/commit/fb31766bcd04861f5d51dcffe345383c15909580) Thanks [@whodatdev](https://github.com/whodatdev)! - Remove monorepo-relative @amodalai/react alias from vite config. The published @amodalai/react package has proper exports, so vite resolves it from node_modules without the alias. This fixes build server builds that use the npm package outside the monorepo.
+
+- Updated dependencies []:
+  - @amodalai/react@0.1.19
+
+## 0.1.18
+
+### Patch Changes
+
+- [#80](https://github.com/amodalai/amodal/pull/80) [`7cac298`](https://github.com/amodalai/amodal/commit/7cac298da6411b0df9bb798aece918aeb6f8faba) Thanks [@gte620v](https://github.com/gte620v)! - Add stop button to main chat and admin chat. Appears as a gray square icon during streaming, replacing the send button. Remove unused test/.amodal fixture and stale root CHANGELOG.md.
+
+- [#85](https://github.com/amodalai/amodal/pull/85) [`c8b5bae`](https://github.com/amodalai/amodal/commit/c8b5bae686a8225cf80331d339db4c79eaf0009d) Thanks [@whodatdev](https://github.com/whodatdev)! - Remove app_id from client-server protocol. Server resolves app from hostname/auth context.
+
+  Breaking: AmodalProvider no longer accepts appId prop. RuntimeClient no longer sends app_id. SessionCreator and SessionHydrator signatures changed. Chat/task schemas no longer include app_id.
+
+  New: POST /auth/token on local dev returns empty token. useAuth hook replaces useHostedConfig. runtime-app publishes source for hosted builds. CLI deploy triggers remote Fly build.
+
+- Updated dependencies [[`c8b5bae`](https://github.com/amodalai/amodal/commit/c8b5bae686a8225cf80331d339db4c79eaf0009d)]:
+  - @amodalai/react@0.1.18
+
 ## 0.1.17
 
 ### Patch Changes

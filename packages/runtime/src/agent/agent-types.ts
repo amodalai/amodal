@@ -16,8 +16,6 @@ import type {CustomToolExecutor, CustomShellExecutor, StoreBackend, McpManager} 
 export const AgentChatRequestSchema = z.object({
   message: z.string().min(1),
   session_id: z.string().optional(),
-  app_id: z.string().min(1),
-  app_token: z.string().optional(),
   context: z.record(z.unknown()).optional(),
 });
 

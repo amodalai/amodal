@@ -7,7 +7,7 @@
 import {describe, it, expect, vi} from 'vitest';
 import {runMultiModelEval} from './multi-model-runner.js';
 import type {MultiModelProgress} from './multi-model-runner.js';
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {EvalRunRecord} from './eval-types.js';
 
 vi.mock('../providers/runtime/provider-factory.js', () => ({
@@ -20,7 +20,7 @@ vi.mock('../providers/runtime/provider-factory.js', () => ({
   })),
 }));
 
-function makeRepo(evals: AmodalRepo['evals']): AmodalRepo {
+function makeRepo(evals: AgentBundle['evals']): AgentBundle {
   return {
     source: 'local',
     origin: '/test',

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { Send, Square, Loader2, CheckCircle2, XCircle, Wrench, Pencil, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { useAmodalChat } from '@amodalai/react';
 import type { ToolCallInfo, ContentBlock, ConfirmationInfo } from '@amodalai/react';
@@ -341,11 +341,30 @@ export function ChatPage() {
   const initialPrompt = searchParams.get('prompt');
   const activeResumeId = useMemo(() => urlResumeId ?? serverResumeId, [urlResumeId, serverResumeId]);
 
-  const { messages, send, stop, isStreaming, activeToolCalls, respondToConfirmation, usage, sessionId } = useAmodalChat({
+  const location = useLocation();
+  const locState: unknown = location.state;
+  const newChatKey = typeof locState === 'object' && locState !== null && 'newChat' in locState
+    ? (locState as {newChat: unknown}).newChat
+    : undefined;
+
+  const { messages, send, stop, isStreaming, activeToolCalls, respondToConfirmation, usage, sessionId, reset } = useAmodalChat({
     initialSessionId: activeResumeId,
   });
   const [input, setInput] = useState('');
   const promptSent = useRef(false);
+
+  // Reset chat state when switching sessions or clicking "New chat"
+  const prevResumeRef = useRef(activeResumeId);
+  const prevNewChatKeyRef = useRef(newChatKey);
+  useEffect(() => {
+    const resumeChanged = prevResumeRef.current !== activeResumeId;
+    const newChatClicked = prevNewChatKeyRef.current !== newChatKey;
+    prevResumeRef.current = activeResumeId;
+    prevNewChatKeyRef.current = newChatKey;
+    if (resumeChanged || newChatClicked) {
+      reset();
+    }
+  }, [activeResumeId, newChatKey, reset]);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);

@@ -18,13 +18,13 @@ import type {SSEEvent} from '../../types.js';
  * When provided, called instead of sessionManager.create().
  * Receives the Express request and response (for auth context access).
  */
-export type SessionCreator = (req: Request, res: Response, appId: string, appToken?: string) => Promise<ManagedSession>;
+export type SessionCreator = (req: Request, res: Response) => Promise<ManagedSession>;
 
 /**
  * Optional hook for hydrating a session from external storage.
  * Called when session_id is provided but not found in memory.
  */
-export type SessionHydrator = (req: Request, res: Response, sessionId: string, appId: string) => Promise<ManagedSession | null>;
+export type SessionHydrator = (req: Request, res: Response, sessionId: string) => Promise<ManagedSession | null>;
 
 /**
  * Optional hook called after each agent turn completes.
@@ -57,7 +57,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       return;
     }
 
-    const {message, session_id, app_id, app_token} = parsed.data;
+    const {message, session_id} = parsed.data;
 
     // SSE headers
     res.writeHead(200, {
@@ -72,7 +72,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     // Try hydration if session not in memory
     if (!session && session_id && options.sessionHydrator) {
       try {
-        session = await options.sessionHydrator(req, res, session_id, app_id) ?? undefined;
+        session = await options.sessionHydrator(req, res, session_id) ?? undefined;
       } catch {
         // Hydration failed — fall through to create new session
       }
@@ -81,8 +81,8 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     if (!session) {
       try {
         session = options.sessionCreator
-          ? await options.sessionCreator(req, res, app_id, app_token)
-          : await options.sessionManager.create(app_id);
+          ? await options.sessionCreator(req, res)
+          : await options.sessionManager.create();
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         writeSSE(res, {type: SSEEventType.Error, message: errMsg, timestamp: ts()});

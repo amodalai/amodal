@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type {AmodalRepo} from '@amodalai/core';
+import type {AgentBundle} from '@amodalai/core';
 import {bridgeAutomations, type RunnableAutomation} from '../automation-bridge.js';
 import {deliverResult} from './delivery.js';
 import {streamMessage} from '../../session/session-runner.js';
@@ -52,7 +52,7 @@ export class ProactiveRunner {
   private readonly cronJobs: Map<string, CronJob> = new Map();
   private readonly runHistory: Map<string, {timestamp: string; status: 'success' | 'error'; error?: string; sessionId?: string}> = new Map();
 
-  constructor(repo: AmodalRepo, config: ProactiveRunnerConfig) {
+  constructor(repo: AgentBundle, config: ProactiveRunnerConfig) {
     this.config = config;
     const bridged = bridgeAutomations(repo.automations);
     for (const a of bridged) {

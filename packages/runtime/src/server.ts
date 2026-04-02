@@ -52,6 +52,8 @@ export interface CreateServerOptions {
   sessionStore?: SessionStore;
   /** Shutdown callback for hosting layer cleanup (e.g., drain audit batches) */
   onShutdown?: () => Promise<void>;
+  /** Async callback that resolves an AgentBundle from a deploy ID (used by hosted runtime) */
+  bundleProvider?: (deployId: string) => Promise<import('@amodalai/core').AgentBundle | null>;
 }
 
 /**
@@ -68,6 +70,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     ttlMs: config.sessionTtlMs,
     platformApiUrl: options.platformApiUrl,
     sessionStore: options.sessionStore,
+    bundleProvider: options.bundleProvider,
   });
 
   // --- Automation runner ---

@@ -6,10 +6,10 @@
 
 import {describe, it, expect, vi, beforeEach} from 'vitest';
 import {fetchUserContext, _parseUserContextSpecForTesting as parseSpec} from './user-context-fetcher.js';
-import type {AmodalRepo} from '@amodalai/core';
+import type {AgentBundle} from '@amodalai/core';
 import type {ConnectionsMap} from '@amodalai/core';
 
-function makeRepo(userContext?: string): AmodalRepo {
+function makeRepo(userContext?: string): AgentBundle {
   return {
     source: 'local',
     origin: '/test',

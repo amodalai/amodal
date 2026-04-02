@@ -6,10 +6,10 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
-import type {AmodalRepo, StoreBackend} from '@amodalai/core';
+import type {AgentBundle, StoreBackend} from '@amodalai/core';
 
 export interface StoreRouterOptions {
-  repo: AmodalRepo;
+  repo: AgentBundle;
   storeBackend: StoreBackend;
   appId: string;
 }

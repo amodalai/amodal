@@ -7,7 +7,7 @@
 import {describe, it, expect} from 'vitest';
 
 import type {SessionRuntime} from './session-setup.js';
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {ModelConfig} from '../repo/config-schema.js';
 import type {ConnectionsMap} from '../templates/connections.js';
 import {
@@ -48,7 +48,7 @@ function makeSessionRuntime(overrides?: {
 
   const repo = {
     config: {models},
-  } as unknown as AmodalRepo;
+  } as unknown as AgentBundle;
 
   return {
     repo,

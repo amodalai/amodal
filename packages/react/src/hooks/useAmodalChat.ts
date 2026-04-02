@@ -409,6 +409,7 @@ export function useAmodalChat(options?: UseAmodalChatOptions): UseAmodalChatRetu
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    sessionIdRef.current = null;
     dispatch({ type: 'RESET' });
   }, []);
 

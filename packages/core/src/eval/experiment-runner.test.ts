@@ -9,9 +9,9 @@ import {runExperiment, assignExperiment} from './experiment-runner.js';
 import type {ExperimentConfig} from './experiment-types.js';
 import type {EvalQueryProvider} from './eval-runner.js';
 import type {JudgeProvider} from './eval-judge.js';
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 
-function makeRepo(): AmodalRepo {
+function makeRepo(): AgentBundle {
   return {
     source: 'local',
     origin: '/test',

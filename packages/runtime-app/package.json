@@ -1,9 +1,14 @@
 {
   "name": "@amodalai/runtime-app",
-  "version": "0.1.17",
+  "version": "0.1.20",
   "files": [
     "dist",
-    "dist-dev"
+    "dist-dev",
+    "src",
+    "index.html",
+    "vite.config.ts",
+    "tsconfig.json",
+    "tailwind.config.js"
   ],
   "license": "MIT",
   "type": "module",
@@ -38,6 +43,11 @@
     "react-router-dom": "^6.8.1",
     "recharts": "^3.8.0",
     "tailwind-merge": "^2.6.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "typescript": "^5.7.3",
     "vite": "^6.0.5"
   },
   "exports": {
@@ -49,14 +59,11 @@
     "./package.json": "./package.json"
   },
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "jsdom": "^25.0.1",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.7.3",
     "vitest": "^3.1.1"
   }
 }

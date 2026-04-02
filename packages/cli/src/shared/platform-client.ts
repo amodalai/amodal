@@ -237,6 +237,65 @@ export class PlatformClient {
   }
 
   /**
+   * Trigger a remote build:
+   * 1. Get a presigned R2 upload URL from the platform API
+   * 2. Upload the tarball directly to R2
+   * 3. Tell the platform API to trigger a Fly Machine build
+   *
+   * Returns a buildId for polling.
+   */
+  async triggerRemoteBuild(
+    appId: string,
+    environment: string,
+    tarballPath: string,
+    message?: string,
+  ): Promise<{ buildId: string }> {
+    // Step 1: Get presigned upload URL
+     
+    const uploadInfo = await this.request<{buildId: string; tarballKey: string; uploadUrl: string}>(
+      'POST',
+      '/api/deploys/build?action=upload-url',
+      {appId},
+    );
+
+    // Step 2: Upload tarball directly to R2
+    const {readFileSync} = await import('node:fs');
+    const tarball = readFileSync(tarballPath);
+
+    const uploadResp = await fetch(uploadInfo.uploadUrl, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/gzip'},
+      body: tarball,
+    });
+
+    if (!uploadResp.ok) {
+      throw new Error(`Tarball upload failed: ${uploadResp.status}`);
+    }
+
+    // Step 3: Trigger the build
+     
+    const result = await this.request<{buildId: string}>(
+      'POST',
+      '/api/deploys/build?action=trigger',
+      {appId, tarballKey: uploadInfo.tarballKey, environment, message},
+    );
+
+    return result;
+  }
+
+  /**
+   * Poll build status.
+   */
+  async getBuildStatus(buildId: string): Promise<{
+    status: 'building' | 'complete' | 'error';
+    deployId?: string;
+    environment?: string;
+    error?: string;
+  }> {
+    return this.request('GET', `/api/builds/${encodeURIComponent(buildId)}/status`);
+  }
+
+  /**
    * List deployments for the authenticated app.
    */
   async listDeployments(options: {

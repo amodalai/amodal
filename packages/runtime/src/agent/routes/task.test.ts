@@ -34,7 +34,7 @@ function makeSessionManager(): SessionManager {
     get: vi.fn(),
     destroy: vi.fn(),
     cleanup: vi.fn(),
-    updateRepo: vi.fn(),
+    updateBundle: vi.fn(),
     shutdown: vi.fn(),
    
   } as unknown as SessionManager;

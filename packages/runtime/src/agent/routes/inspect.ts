@@ -38,7 +38,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   router.get('/inspect/context', async (_req: Request, res: Response) => {
     try {
-      const repo = options.sessionManager.getRepo()!;
+      const repo = options.sessionManager.getBundle()!;
       if (!repo) {
         res.status(500).json({error: {code: 'INSPECT_FAILED', message: 'No repo available'}});
         return;
@@ -132,7 +132,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   /** Connection detail by name — reads repo directly, no session needed. */
   router.get('/inspect/connections/:name', async (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo()!;
+    const repo = options.sessionManager.getBundle()!;
     const connName = _req.params['name'] ?? '';
     const conn = repo.connections.get(connName);
 
@@ -217,7 +217,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
         }));
 
       // Get transport info from repo config
-      const repo = options.sessionManager.getRepo()!;
+      const repo = options.sessionManager.getBundle()!;
       const mcpConfig = repo.mcpServers?.[serverName];
 
       res.json({
@@ -238,7 +238,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   /** Skill detail by name — reads repo directly, no session needed. */
   router.get('/inspect/skills/:name', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo()!;
+    const repo = options.sessionManager.getBundle()!;
     const skill = repo.skills.find((s) => s.name === _req.params['name']);
 
     if (!skill) {
@@ -257,7 +257,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   /** Knowledge document detail by name — reads repo directly, no session needed. */
   router.get('/inspect/knowledge/:name', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getRepo()!;
+    const repo = options.sessionManager.getBundle()!;
     const doc = repo.knowledge.find((k) => k.name === _req.params['name']);
 
     if (!doc) {

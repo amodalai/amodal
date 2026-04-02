@@ -66,7 +66,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       targetDir: config.repoPath,
     },
     ttlMs: config.sessionTtlMs,
-    repo,
+    bundle: repo,
     shellExecutor,
     storeBackend,
   });
@@ -126,14 +126,19 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   const sessionStore = new SessionStore(config.repoPath);
   sessionStoreRef = sessionStore;
 
-  // Full agent config for the config page
+  // Auth token endpoint — local dev returns empty (no auth needed)
+  app.post('/auth/token', (_req, res) => {
+    res.json({ token: '', expires_at: null });
+  });
+
+  // Unified config endpoint — same path as hosted, different response
   app.get('/api/config', (_req, res) => {
-    const repoData = sessionManager.getRepo()!;
-    const cfg = repoData.config;
+    const bundleData = sessionManager.getBundle()!;
+    const cfg = bundleData.config;
 
     // Collect all env:* references from connection specs
     const envRefs: Array<{name: string; connection: string; set: boolean}> = [];
-    for (const [connName, conn] of repoData.connections) {
+    for (const [connName, conn] of bundleData.connections) {
       const token = conn.spec.auth?.token;
       if (token && typeof token === 'string' && token.startsWith('env:')) {
         const envName = token.slice(4);
@@ -142,6 +147,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     }
 
     res.json({
+      // Common fields (used by useHostedConfig)
+      appId: 'local',
+      appName: cfg?.name ?? '',
+      // No authMode — signals to the SPA that no auth is needed
+      // Local dev fields (used by config pages)
       name: cfg?.name ?? '',
       version: cfg?.version ?? '',
       description: cfg?.description ?? '',
@@ -264,12 +274,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Routes
   app.use(createChatRouter({
     sessionManager,
-    sessionHydrator: async (_req, _res, sessionId, tenantId) => {
+    sessionHydrator: async (_req: import('express').Request, _res: import('express').Response, sessionId: string) => {
       const persisted = sessionStore.load(sessionId);
       if (!persisted) return null;
 
       // Create a fresh session and seed LLM history from stored conversation
-      const session = await sessionManager.create(tenantId);
+      const session = await sessionManager.create();
       sessionManager.reregister(session, sessionId);
 
       // Convert stored messages to history format and seed the LLM
@@ -355,8 +365,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     async start(): Promise<http.Server> {
       // Start hot reload watcher
       if (config.hotReload) {
-        watcher = new ConfigWatcher(config.repoPath, (newRepo) => {
-          sessionManager.updateRepo(newRepo);
+        watcher = new ConfigWatcher(config.repoPath, (newBundle) => {
+          sessionManager.updateBundle(newBundle);
         });
         watcher.start();
       }

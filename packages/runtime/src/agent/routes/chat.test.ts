@@ -23,10 +23,9 @@ function makeSessionManager(): SessionManager {
 
   return {
     size: 0,
-    create: vi.fn(async (appId: string) => {
+    create: vi.fn(async () => {
       const session = {
         id: 'session-1',
-        appId,
         runtime: {compiledContext: {systemPrompt: 'test'}},
         conversationHistory: [],
         createdAt: Date.now(),
@@ -40,9 +39,9 @@ function makeSessionManager(): SessionManager {
     get: vi.fn((id: string) => sessions.get(id)),
     destroy: vi.fn(),
     cleanup: vi.fn(),
-    updateRepo: vi.fn(),
+    updateBundle: vi.fn(),
     shutdown: vi.fn(),
-   
+
   } as unknown as SessionManager;
 }
 
@@ -66,17 +65,21 @@ describe('repo-chat route', () => {
     expect(res.status).toBe(400);
   });
 
-  it('should reject missing app_id', async () => {
+  it('should accept request without app_id', async () => {
     const app = createTestApp(sessionManager);
-    const res = await request(app).post('/chat').send({message: 'hello'});
-    expect(res.status).toBe(400);
+    const res = await request(app)
+      .post('/chat')
+      .send({message: 'hello'})
+      .set('Accept', 'text/event-stream');
+
+    expect(res.status).toBe(200);
   });
 
   it('should return SSE events for valid request', async () => {
     const app = createTestApp(sessionManager);
     const res = await request(app)
       .post('/chat')
-      .send({message: 'hello', app_id: 'tenant-1'})
+      .send({message: 'hello'})
       .set('Accept', 'text/event-stream');
 
     expect(res.status).toBe(200);
@@ -88,9 +91,9 @@ describe('repo-chat route', () => {
     const app = createTestApp(sessionManager);
     await request(app)
       .post('/chat')
-      .send({message: 'hello', app_id: 'tenant-1'});
+      .send({message: 'hello'});
 
-    expect(sessionManager.create).toHaveBeenCalledWith('tenant-1');
+    expect(sessionManager.create).toHaveBeenCalled();
   });
 
   it('should reuse existing session if session_id provided', async () => {
@@ -99,12 +102,12 @@ describe('repo-chat route', () => {
     // Create a session first
     await request(app)
       .post('/chat')
-      .send({message: 'hello', app_id: 'tenant-1'});
+      .send({message: 'hello'});
 
     // Reuse it
     await request(app)
       .post('/chat')
-      .send({message: 'follow up', app_id: 'tenant-1', session_id: 'session-1'});
+      .send({message: 'follow up', session_id: 'session-1'});
 
     expect(sessionManager.get).toHaveBeenCalledWith('session-1');
   });
@@ -113,30 +116,20 @@ describe('repo-chat route', () => {
     const app = createTestApp(sessionManager);
     const res = await request(app)
       .post('/chat')
-      .send({message: 'hello', app_id: 'tenant-1'});
+      .send({message: 'hello'});
 
     expect(res.text).toContain('"type":"init"');
   });
 
   it('should handle session creation failure', async () => {
-     
+
     (sessionManager.create as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Setup failed'));
 
     const app = createTestApp(sessionManager);
     const res = await request(app)
       .post('/chat')
-      .send({message: 'hello', app_id: 'tenant-1'});
+      .send({message: 'hello'});
 
     expect(res.text).toContain('"type":"error"');
-  });
-
-  it('should create session with app_id as role', async () => {
-    const app = createTestApp(sessionManager);
-    await request(app)
-      .post('/chat')
-      .send({message: 'hello', app_id: 'tenant-1', app_token: 'tok-123'});
-
-    // app_id is passed as role to SessionManager.create()
-    expect(sessionManager.create).toHaveBeenCalledWith('tenant-1');
   });
 });
