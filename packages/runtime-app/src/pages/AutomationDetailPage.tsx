@@ -63,7 +63,7 @@ export function AutomationDetailPage() {
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [sessionMessages, setSessionMessages] = useState<Record<string, HistoryMessage[]>>({});
   const [isRunning, setIsRunning] = useState(false);
-  const [liveText, setLiveText] = useState('');
+  const [liveBlocks, setLiveBlocks] = useState<Array<{type: 'text'; content: string} | {type: 'tool'; name: string; params?: Record<string, unknown>; status: 'running' | 'done'; durationMs?: number}>>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -94,7 +94,7 @@ export function AutomationDetailPage() {
   const handleRunNow = useCallback(async () => {
     if (!automationName) return;
     setIsRunning(true);
-    setLiveText('');
+    setLiveBlocks([]);
 
     try {
       const res = await fetch(`/automations/${encodeURIComponent(automationName)}/stream`, { method: 'POST' });
@@ -114,8 +114,34 @@ export function AutomationDetailPage() {
             try {
               // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE event parsing
               const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
-              if (event['type'] === 'text_delta' && typeof event['content'] === 'string') {
-                setLiveText((prev) => prev + String(event['content']));
+              const type = String(event['type'] ?? '');
+
+              if (type === 'text_delta' && typeof event['content'] === 'string') {
+                setLiveBlocks((prev) => {
+                  const last = prev[prev.length - 1];
+                  if (last && last.type === 'text') {
+                    return [...prev.slice(0, -1), {type: 'text', content: last.content + String(event['content'])}];
+                  }
+                  return [...prev, {type: 'text', content: String(event['content'])}];
+                });
+              } else if (type === 'tool_call_start') {
+                const toolName = String(event['toolName'] ?? event['name'] ?? 'tool');
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE params
+                const params = (event['parameters'] ?? event['args']) as Record<string, unknown> | undefined;
+                setLiveBlocks((prev) => [...prev, {type: 'tool', name: toolName, params, status: 'running'}]);
+              } else if (type === 'tool_call_result') {
+                const duration = typeof event['durationMs'] === 'number' ? event['durationMs'] : undefined;
+                setLiveBlocks((prev) => {
+                  // Find the last running tool and mark it done
+                  const updated = [...prev];
+                  for (let i = updated.length - 1; i >= 0; i--) {
+                    if (updated[i].type === 'tool' && updated[i].status === 'running') {
+                      updated[i] = {...updated[i], status: 'done', durationMs: duration};
+                      break;
+                    }
+                  }
+                  return updated;
+                });
               }
             } catch { /* skip */ }
           }
@@ -124,7 +150,6 @@ export function AutomationDetailPage() {
     } catch { /* */ }
 
     setIsRunning(false);
-    // Keep liveText visible so user can read the result
     void fetchData();
   }, [automationName, fetchData]);
 
@@ -225,7 +250,7 @@ export function AutomationDetailPage() {
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="max-w-3xl mx-auto px-4 py-6">
           {/* Live/latest run output */}
-          {(isRunning || liveText) && (
+          {(isRunning || liveBlocks.length > 0) && (
             <div className="mb-6 border border-purple-500/20 rounded-xl p-4 bg-purple-500/5">
               <div className="flex items-center gap-2 mb-3 text-xs text-purple-400 font-medium">
                 {isRunning ? (
@@ -234,9 +259,44 @@ export function AutomationDetailPage() {
                   <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Latest run</>
                 )}
               </div>
-              {liveText ? (
-                <div className="text-[13px] text-gray-700 dark:text-zinc-300 prose dark:prose-invert prose-sm max-w-none">
-                  <Markdown>{liveText}</Markdown>
+              {liveBlocks.length > 0 ? (
+                <div className="space-y-1">
+                  {liveBlocks.map((block, i) => {
+                    if (block.type === 'text') {
+                      return (
+                        <div key={i} className="text-[13px] text-gray-700 dark:text-zinc-300 prose dark:prose-invert prose-sm max-w-none">
+                          <Markdown>{block.content}</Markdown>
+                        </div>
+                      );
+                    }
+                    // Tool call block
+                    const isRequest = block.name === 'request' && block.params && typeof block.params['connection'] === 'string';
+                    const connection = isRequest ? String(block.params!['connection']) : null;
+                    const method = isRequest ? String(block.params!['method'] ?? 'GET').toUpperCase() : null;
+                    const endpoint = isRequest ? String(block.params!['endpoint'] ?? block.params!['path'] ?? '') : null;
+
+                    return (
+                      <div key={i} className="flex items-center gap-2 px-3 py-2 my-1 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 text-xs font-mono">
+                        {block.status === 'running' ? (
+                          <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                        )}
+                        {isRequest && connection ? (
+                          <>
+                            <span className="font-semibold text-gray-800 dark:text-zinc-200">{connection}</span>
+                            {method && <span className={`text-[10px] font-bold ${method === 'GET' ? 'text-blue-500' : method === 'POST' ? 'text-emerald-500' : 'text-amber-500'}`}>{method}</span>}
+                            {endpoint && <span className="text-gray-500 dark:text-zinc-400 truncate">{endpoint}</span>}
+                          </>
+                        ) : (
+                          <span className="text-blue-700 dark:text-blue-300 font-semibold">{block.name}</span>
+                        )}
+                        {block.durationMs != null && (
+                          <span className="text-zinc-500 ml-auto">{String(block.durationMs)}ms</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-xs text-gray-400 dark:text-zinc-600">Waiting for agent response...</div>
