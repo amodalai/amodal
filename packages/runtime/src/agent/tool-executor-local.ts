@@ -5,6 +5,8 @@
  */
 
 import {pathToFileURL} from 'node:url';
+import path from 'node:path';
+import {mkdirSync} from 'node:fs';
 import type {CustomToolExecutor, CustomToolContext, LoadedTool, ToolHandlerDefinition} from '@amodalai/core';
 
 type HandlerFn = (params: Record<string, unknown>, ctx: CustomToolContext) => Promise<unknown>;
@@ -56,7 +58,25 @@ export class LocalToolExecutor implements CustomToolExecutor {
       return cached;
     }
 
-    const moduleUrl = pathToFileURL(tool.handlerPath).href;
+    // Compile .ts handlers to .mjs before importing
+    let importPath = tool.handlerPath;
+    if (tool.handlerPath.endsWith('.ts')) {
+      const {build} = await import('esbuild');
+      const outDir = path.join(path.dirname(tool.handlerPath), '.build');
+      const outFile = path.join(outDir, `${tool.name}.mjs`);
+      mkdirSync(outDir, {recursive: true});
+      await build({
+        entryPoints: [tool.handlerPath],
+        outfile: outFile,
+        bundle: false,
+        format: 'esm',
+        platform: 'node',
+        logLevel: 'warning',
+      });
+      importPath = outFile;
+    }
+
+    const moduleUrl = pathToFileURL(importPath).href;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic import returns unknown
     const mod = await import(moduleUrl) as unknown as HandlerModule;
 
