@@ -6,7 +6,7 @@
 
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {ProactiveRunner} from './proactive-runner.js';
-import type {AmodalRepo, LoadedAutomation} from '@amodalai/core';
+import type {AgentBundle, LoadedAutomation} from '@amodalai/core';
 
 // Mock dependencies — use hoisted refs so beforeEach can re-apply implementations
 // after vi.restoreAllMocks() from global test-setup.ts
@@ -35,7 +35,7 @@ function makeAutomation(overrides?: Partial<LoadedAutomation>): LoadedAutomation
   };
 }
 
-function makeRepo(automations: LoadedAutomation[]): AmodalRepo {
+function makeRepo(automations: LoadedAutomation[]): AgentBundle {
   return {
     source: 'local',
     origin: '/test',

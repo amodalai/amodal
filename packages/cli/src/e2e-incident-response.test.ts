@@ -39,7 +39,7 @@ import {
 } from './fixtures/incident-response.js';
 import {runBuild} from './commands/build.js';
 import type {DeploySnapshot} from '@amodalai/core';
-import {loadRepo, loadSnapshotFromFile, snapshotToRepo} from '@amodalai/core';
+import {loadRepo, loadSnapshotFromFile, snapshotToBundle} from '@amodalai/core';
 
 // ---------------------------------------------------------------------------
 // Helper: send chat and parse SSE events
@@ -248,7 +248,7 @@ describe('E2E: Incident Response Agent', () => {
     });
 
     it('should round-trip all content through snapshot', () => {
-      const restored = snapshotToRepo(builtSnapshot, 'test');
+      const restored = snapshotToBundle(builtSnapshot, 'test');
 
       // Connection
       expect(restored.connections.size).toBe(1);

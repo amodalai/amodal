@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {
   CompiledContext,
   ContextSection,
@@ -19,10 +19,10 @@ import type {TokenAllocator} from './token-allocator.js';
  * for budget trimming.
  */
 export class ContextCompiler {
-  private readonly repo: AmodalRepo;
+  private readonly repo: AgentBundle;
   private readonly allocator: TokenAllocator;
 
-  constructor(config: {repo: AmodalRepo; allocator: TokenAllocator}) {
+  constructor(config: {repo: AgentBundle; allocator: TokenAllocator}) {
     this.repo = config.repo;
     this.allocator = config.allocator;
   }

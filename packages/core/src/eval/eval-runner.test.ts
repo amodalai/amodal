@@ -8,10 +8,10 @@ import {describe, it, expect, vi} from 'vitest';
 import {runEvalSuite} from './eval-runner.js';
 import type {EvalQueryProvider} from './eval-runner.js';
 import type {JudgeProvider} from './eval-judge.js';
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {EvalProgress, EvalSuiteResult} from './eval-types.js';
 
-function makeRepo(evals: AmodalRepo['evals']): AmodalRepo {
+function makeRepo(evals: AgentBundle['evals']): AgentBundle {
   return {
     source: 'local',
     origin: '/test',

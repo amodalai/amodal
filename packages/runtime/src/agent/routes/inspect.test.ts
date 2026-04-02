@@ -36,9 +36,9 @@ function makeSessionManager(): SessionManager {
     destroy: vi.fn(),
     get: vi.fn(),
     cleanup: vi.fn(),
-    updateRepo: vi.fn(),
+    updateBundle: vi.fn(),
     shutdown: vi.fn(),
-    getRepo: vi.fn(() => ({
+    getBundle: vi.fn(() => ({
       connections: new Map([['crm', {name: 'crm', spec: {baseUrl: 'https://api.example.com', testPath: undefined}, surface: [], entities: null, rules: null, location: 'connections/crm'}]]),
       config: {name: 'test-agent', models: {main: {model: 'test-model', provider: 'test'}}},
       skills: [{name: 'triage'}, {name: 'investigate'}],
@@ -76,7 +76,7 @@ describe('repo-inspect route', () => {
   });
 
   it('should handle missing repo', async () => {
-    (sessionManager.getRepo as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+    (sessionManager.getBundle as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
 
     const app = createTestApp(sessionManager);
     const res = await request(app).get('/inspect/context');

@@ -23,7 +23,7 @@ import {
   ensureAdminAgent,
   loadAdminAgent,
 } from '@amodalai/core';
-import type { AmodalRepo, CustomToolExecutor, CustomShellExecutor, StoreBackend } from '@amodalai/core';
+import type { AgentBundle, CustomToolExecutor, CustomShellExecutor, StoreBackend } from '@amodalai/core';
 import type { AuthContext } from '../middleware/auth.js';
 import { convertSessionMessagesToHistory } from './history-converter.js';
 
@@ -106,8 +106,8 @@ export interface SessionManagerOptions {
   cleanupIntervalMs?: number;
   /** Platform API URL (for loading org-specific config per session) */
   platformApiUrl?: string;
-  /** Repo for local dev mode — sessions initialized from repo config instead of platform API */
-  repo?: AmodalRepo;
+  /** AgentBundle for local dev mode — sessions initialized from bundle config instead of platform API */
+  bundle?: AgentBundle;
   /** Custom tool executor (local dev) */
   toolExecutor?: CustomToolExecutor;
   /** Custom shell executor (local dev) */
@@ -116,6 +116,8 @@ export interface SessionManagerOptions {
   storeBackend?: StoreBackend;
   /** Pluggable session store for hydration (if not provided, falls back to platform API) */
   sessionStore?: SessionStore;
+  /** Async callback that resolves an AgentBundle from a deploy ID (used by hosted runtime) */
+  bundleProvider?: (deployId: string) => Promise<AgentBundle | null>;
 }
 
 /**
@@ -148,11 +150,12 @@ export class SessionManager {
   private baseParams: AmodalConfigParameters;
   private readonly ttlMs: number;
   private readonly platformApiUrl?: string;
-  private repo?: AmodalRepo;
+  private bundle?: AgentBundle;
   private readonly toolExecutor?: CustomToolExecutor;
   private readonly shellExecutor?: CustomShellExecutor;
   private readonly sharedStoreBackend?: StoreBackend;
   private readonly sessionStore?: SessionStore;
+  private readonly bundleProvider?: (deployId: string) => Promise<AgentBundle | null>;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   /** Deduplicates concurrent hydration requests for the same conversation */
   private readonly pendingHydrations = new Map<string, Promise<ManagedSession | null>>();
@@ -166,11 +169,12 @@ export class SessionManager {
     this.baseParams = options.baseParams;
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     this.platformApiUrl = options.platformApiUrl;
-    this.repo = options.repo;
+    this.bundle = options.bundle;
     this.toolExecutor = options.toolExecutor;
     this.shellExecutor = options.shellExecutor;
     this.sharedStoreBackend = options.storeBackend;
     this.sessionStore = options.sessionStore;
+    this.bundleProvider = options.bundleProvider;
 
     const cleanupIntervalMs =
       options.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS;
@@ -195,8 +199,7 @@ export class SessionManager {
       approvalMode: ApprovalMode.YOLO,
       interactive: false,
       noBrowser: true,
-      // Build coreTools list based on repo config
-      coreTools: this.repo ? this.buildCoreToolsList(this.repo) : [],
+      coreTools: [],
       policyEngineConfig: {
         approvalMode: ApprovalMode.YOLO,
         defaultDecision: PolicyDecision.ALLOW,
@@ -212,12 +215,16 @@ export class SessionManager {
       sessionParams.activeRole = role;
     }
 
-    // Inject repo config into session params when in local mode
-    if (this.repo) {
+    // Resolve bundle: static bundle (local dev), or dynamic via bundleProvider (hosted)
+    const bundle = this.bundle ?? (deployId && this.bundleProvider ? await this.bundleProvider(deployId) : null);
+
+    // Inject bundle config into session params
+    if (bundle) {
+      sessionParams.coreTools = this.buildCoreToolsList(bundle);
       const { buildConnectionsMap } = await import('@amodalai/core');
-      const connectionsMap = buildConnectionsMap(this.repo.connections);
+      const connectionsMap = buildConnectionsMap(bundle.connections);
       sessionParams.connections = connectionsMap;
-      sessionParams.appDocuments = this.repo.knowledge.map((k) => ({
+      sessionParams.appDocuments = bundle.knowledge.map((k) => ({
         id: k.name,
         scope_type: 'application' as const,
         scope_id: 'local',
@@ -230,17 +237,17 @@ export class SessionManager {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }));
-      sessionParams.bundleSkills = this.repo.skills.map((s) => ({
+      sessionParams.bundleSkills = bundle.skills.map((s) => ({
         name: s.name,
         description: s.description ?? '',
         body: s.body,
       }));
-      sessionParams.basePrompt = this.repo.config.basePrompt;
-      sessionParams.agentName = this.repo.config.name;
-      sessionParams.agentContext = this.repo.config.userContext ?? this.repo.config.description;
+      sessionParams.basePrompt = bundle.config.basePrompt;
+      sessionParams.agentName = bundle.config.name;
+      sessionParams.agentContext = bundle.config.userContext ?? bundle.config.description;
 
-      // Model config from repo
-      const mainModel = this.repo.config.models?.main;
+      // Model config from bundle
+      const mainModel = bundle.config.models?.main;
       if (mainModel) {
         sessionParams.modelConfig = {
           provider: mainModel.provider ?? 'anthropic',
@@ -249,15 +256,16 @@ export class SessionManager {
       }
 
       // Stores
-      if (this.repo.stores.length > 0) {
-        sessionParams.stores = this.repo.stores;
+      if (bundle.stores.length > 0) {
+        sessionParams.stores = bundle.stores;
       }
     }
 
     let config: AmodalConfig;
 
     // Platform session: use AgentSDK to fetch KB docs, org details, secrets
-    if (auth?.token && this.platformApiUrl) {
+    // Skip SDK when bundle was resolved from a provider — bundle config takes precedence
+    if (auth?.token && this.platformApiUrl && !bundle) {
       process.stderr.write(
         `[SESSION] Creating platform session: app=${auth.applicationId}, ` +
         `org=${auth.orgId}, key=${auth.token.slice(0, 12)}..., sessionType=${sessionType ?? '(none)'}\n`,
@@ -337,15 +345,15 @@ export class SessionManager {
       // Register amodal tools (request, present, knowledge, stores)
       await config.registerTools();
 
-      // Register custom tools from repo tools/ directory
-      if (this.repo && this.repo.tools.length > 0) {
+      // Register custom tools from bundle tools/ directory
+      if (this.bundle && this.bundle.tools.length > 0) {
         const { CustomToolAdapter } = await import('./custom-tool-adapter.js');
         const { LocalToolExecutor } = await import('../agent/tool-executor-local.js');
         const executor = this.toolExecutor ?? new LocalToolExecutor();
         const registry = config.getUpstreamConfig().getToolRegistry();
         // Session isn't created yet — we'll set it after session construction
         // For now store the tools to register after session is built
-        for (const tool of this.repo.tools) {
+        for (const tool of this.bundle.tools) {
           if (tool.confirm === 'never') continue; // hidden from LLM
           // Create a placeholder session for the adapter — will be updated below
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- partial session for tool context
@@ -354,7 +362,7 @@ export class SessionManager {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- adapter matches upstream tool interface
           registry.registerTool(adapter as never);
         }
-        process.stderr.write(`[SESSION] Registered ${String(this.repo.tools.length)} custom tool(s)\n`);
+        process.stderr.write(`[SESSION] Registered ${String(this.bundle.tools.length)} custom tool(s)\n`);
       }
 
       // Set model on upstream config so GeminiClient.startChat() can resolve it
@@ -453,8 +461,8 @@ export class SessionManager {
       name: config.getAgentName() ?? 'Amodal Agent',
       description: config.getAgentDescription(),
       agentContext: config.getAgentContext(),
-      agentOverride: this.repo?.agents?.main,
-      connections: this.repo?.connections ? Array.from(this.repo.connections.values()).map((conn) => ({
+      agentOverride: this.bundle?.agents?.main,
+      connections: this.bundle?.connections ? Array.from(this.bundle.connections.values()).map((conn) => ({
         name: conn.name,
         endpoints: (conn.surface ?? [])
           .filter((ep) => ep.included)
@@ -462,21 +470,21 @@ export class SessionManager {
         entities: conn.entities,
         rules: conn.rules,
       })) : undefined,
-      skills: this.repo?.skills?.map((s) => ({
+      skills: this.bundle?.skills?.map((s) => ({
         name: s.name,
         description: s.description ?? '',
         trigger: s.trigger,
         body: s.body,
       })),
-      knowledge: this.repo?.knowledge?.map((k) => ({
+      knowledge: this.bundle?.knowledge?.map((k) => ({
         name: k.name,
         title: k.title,
         body: k.body,
       })),
-      ...(this.repo?.connections ? (() => {
-        const {scopeLabels} = resolveScopeLabels(this.repo.connections, []);
-        const fieldGuidance = generateFieldGuidance(this.repo.connections, []);
-        const altLookup = generateAlternativeLookupGuidance(this.repo.connections);
+      ...(this.bundle?.connections ? (() => {
+        const {scopeLabels} = resolveScopeLabels(this.bundle.connections, []);
+        const fieldGuidance = generateFieldGuidance(this.bundle.connections, []);
+        const altLookup = generateAlternativeLookupGuidance(this.bundle.connections);
         return {
           fieldGuidance: fieldGuidance || undefined,
           scopeLabels: Object.keys(scopeLabels).length > 0 ? scopeLabels : undefined,
@@ -617,8 +625,8 @@ export class SessionManager {
     };
 
     // Share MCP connection across sessions — connect once, reuse for all
-    if (this.repo && !this.sharedMcpManager) {
-      await this.initSharedMcp(this.repo);
+    if (this.bundle && !this.sharedMcpManager) {
+      await this.initSharedMcp(this.bundle);
     }
     if (this.sharedMcpManager) {
       session.mcpManager = this.sharedMcpManager;
@@ -682,6 +690,20 @@ export class SessionManager {
           const msg = err instanceof Error ? err.message : String(err);
           process.stderr.write(`[MCP] Failed to register MCP tools: ${msg}\n`);
         }
+    }
+
+    // Guard: reject sessions with no agent configuration.
+    // If there are no skills, no base prompt, and no agent context, the agent
+    // would fall back to a generic assistant response — which is never correct
+    // for a deployed agent.
+    const hasSkills = sessionParams.bundleSkills && sessionParams.bundleSkills.length > 0;
+    const hasPrompt = !!sessionParams.basePrompt;
+    const hasContext = !!sessionParams.agentContext;
+    if (!hasSkills && !hasPrompt && !hasContext && deployId) {
+      throw new Error(
+        `Agent not configured: deploy ${deployId} has no skills, base prompt, or context. ` +
+        'Ensure the deployment snapshot includes agent configuration.',
+      );
     }
 
     this.sessions.set(sessionId, session);
@@ -811,18 +833,18 @@ export class SessionManager {
   // ---------------------------------------------------------------------------
 
   /**
-   * Get the repo (local dev mode).
+   * Get the bundle (local dev mode).
    */
-  getRepo(): AmodalRepo | undefined {
-    return this.repo;
+  getBundle(): AgentBundle | undefined {
+    return this.bundle;
   }
 
   /**
-   * Update the repo for new sessions (hot reload).
+   * Update the bundle for new sessions (hot reload).
    * Existing sessions keep their old config.
    */
-  updateRepo(repo: AmodalRepo): void {
-    this.repo = repo;
+  updateBundle(bundle: AgentBundle): void {
+    this.bundle = bundle;
     // Reset inspect MCP manager so it picks up new connections
     this.inspectMcpInitialized = false;
     this.inspectMcp = undefined;
@@ -839,56 +861,56 @@ export class SessionManager {
 
   /**
    * Create an admin session for the config chat.
-   * Uses admin agent skills/knowledge but the current repo's connections/stores.
+   * Uses admin agent skills/knowledge but the current bundle's connections/stores.
    *
-   * Temporarily swaps repo fields so create() builds the prompt with admin
-   * content, then restores the original repo. This mirrors the old approach
+   * Temporarily swaps bundle fields so create() builds the prompt with admin
+   * content, then restores the original bundle. This mirrors the old approach
    * of building an adminRepo overlay.
    */
   async createAdminSession(getPort?: () => number | null): Promise<ManagedSession> {
-    if (!this.repo) {
-      throw new Error('Admin sessions require a repo');
+    if (!this.bundle) {
+      throw new Error('Admin sessions require a bundle');
     }
-    if (this.repo.source !== 'local') {
+    if (this.bundle.source !== 'local') {
       throw new Error('Admin sessions are only available for local repos');
     }
 
-    const agentDir = await ensureAdminAgent(this.repo.origin);
+    const agentDir = await ensureAdminAgent(this.bundle.origin);
     const adminContent = await loadAdminAgent(agentDir);
 
-    // Save original repo fields
-    const origSkills = this.repo.skills;
-    const origKnowledge = this.repo.knowledge;
-    const origAgents = this.repo.agents;
-    const origAutomations = this.repo.automations;
+    // Save original bundle fields
+    const origSkills = this.bundle.skills;
+    const origKnowledge = this.bundle.knowledge;
+    const origAgents = this.bundle.agents;
+    const origAutomations = this.bundle.automations;
 
     // Swap in admin content so create() builds the prompt correctly
-    this.repo.skills = adminContent.skills;
-    this.repo.knowledge = adminContent.knowledge;
-    this.repo.agents = {
+    this.bundle.skills = adminContent.skills;
+    this.bundle.knowledge = adminContent.knowledge;
+    this.bundle.agents = {
       main: adminContent.agentPrompt ?? undefined,
       simple: undefined,
       subagents: [],
     };
-    this.repo.automations = [];
+    this.bundle.automations = [];
 
     let session: ManagedSession;
     try {
       session = await this.create('admin');
     } finally {
-      // Restore original repo fields
-      this.repo.skills = origSkills;
-      this.repo.knowledge = origKnowledge;
-      this.repo.agents = origAgents;
-      this.repo.automations = origAutomations;
+      // Restore original bundle fields
+      this.bundle.skills = origSkills;
+      this.bundle.knowledge = origKnowledge;
+      this.bundle.agents = origAgents;
+      this.bundle.automations = origAutomations;
     }
 
     session.appId = 'admin';
 
-    // Register admin file tools (read/write/delete repo files)
+    // Register admin file tools (read/write/delete agent files)
     try {
       const { createReadRepoFileTool, createWriteRepoFileTool, createDeleteRepoFileTool } = await import('./admin-file-tools.js');
-      const repoRoot = this.repo.origin;
+      const repoRoot = this.bundle.origin;
       const upstream = session.config.getUpstreamConfig();
       const toolRegistry = upstream.getToolRegistry();
 
@@ -920,10 +942,10 @@ export class SessionManager {
     if (this.inspectMcpInitialized) return this.inspectMcp;
     this.inspectMcpInitialized = true;
 
-    if (!this.repo) return undefined;
+    if (!this.bundle) return undefined;
 
-    // Build MCP server configs from repo connections
-    const mcpServers = this.buildMcpConfigs(this.repo);
+    // Build MCP server configs from bundle connections
+    const mcpServers = this.buildMcpConfigs(this.bundle);
     if (Object.keys(mcpServers).length === 0) return undefined;
 
     const manager = new McpManager();
@@ -940,14 +962,14 @@ export class SessionManager {
   }
 
   /**
-   * Initialize MCP servers for a session from repo connections.
+   * Initialize MCP servers for a session from bundle connections.
    */
   /**
    * Initialize the shared MCP manager (once, reused across sessions).
    * Avoids reconnecting MCP servers for every eval/judge/admin session.
    */
-  private async initSharedMcp(repo: AmodalRepo): Promise<void> {
-    const mcpServers = this.buildMcpConfigs(repo);
+  private async initSharedMcp(bundle: AgentBundle): Promise<void> {
+    const mcpServers = this.buildMcpConfigs(bundle);
     if (Object.keys(mcpServers).length === 0) return;
 
     const manager = new McpManager();
@@ -963,10 +985,10 @@ export class SessionManager {
   }
 
   /**
-   * Build the list of upstream core tools to enable based on repo config.
+   * Build the list of upstream core tools to enable based on bundle config.
    * Only tools relevant to the Amodal runtime are included.
    */
-  private buildCoreToolsList(repo: AmodalRepo): string[] {
+  private buildCoreToolsList(bundle: AgentBundle): string[] {
     const tools: string[] = [
       // Always available
       'enter_plan_mode',
@@ -975,7 +997,7 @@ export class SessionManager {
     ];
 
     // Shell execution (opt-in via config.sandbox.shellExec)
-    if (repo.config.sandbox?.shellExec) {
+    if (bundle.config.sandbox?.shellExec) {
       tools.push('shell');
     }
 
@@ -983,12 +1005,12 @@ export class SessionManager {
   }
 
   /**
-   * Build MCP server configs from repo connections.
+   * Build MCP server configs from bundle connections.
    */
-  private buildMcpConfigs(repo: AmodalRepo): Record<string, { transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean }> {
+  private buildMcpConfigs(bundle: AgentBundle): Record<string, { transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean }> {
     const mcpServers: Record<string, { transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean }> = {};
 
-    for (const [name, conn] of repo.connections) {
+    for (const [name, conn] of bundle.connections) {
       if (conn.spec.protocol === 'mcp') {
         const resolvedHeaders = conn.spec.headers ? resolveEnvRefs(conn.spec.headers) : undefined;
         const resolvedEnv = conn.spec.env ? resolveEnvRefs(conn.spec.env) : undefined;
@@ -1004,8 +1026,8 @@ export class SessionManager {
       }
     }
 
-    if (repo.mcpServers) {
-      for (const [name, config] of Object.entries(repo.mcpServers)) {
+    if (bundle.mcpServers) {
+      for (const [name, config] of Object.entries(bundle.mcpServers)) {
         if (!mcpServers[name]) {
           mcpServers[name] = config;
         }

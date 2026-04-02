@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {ExperimentConfig, ExperimentEvalResult, ExperimentAssignment, ExperimentDeployment} from './experiment-types.js';
 import type {EvalRunnerOptions} from './eval-runner.js';
 import {runEvalSuite} from './eval-runner.js';
@@ -13,7 +13,7 @@ import {runEvalSuite} from './eval-runner.js';
  * Run an experiment: eval suite against both control and variant configs.
  */
 export async function runExperiment(
-  repo: AmodalRepo,
+  repo: AgentBundle,
   config: ExperimentConfig,
   evalOptions: Omit<EvalRunnerOptions, 'gitSha'>,
 ): Promise<ExperimentEvalResult> {

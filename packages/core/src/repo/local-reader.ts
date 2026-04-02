@@ -7,7 +7,7 @@
 import {readFile, readdir, stat} from 'node:fs/promises';
 import * as path from 'node:path';
 
-import type {AmodalRepo, LoadedAgent, LoadedEval} from './repo-types.js';
+import type {AgentBundle, LoadedAgent, LoadedEval} from './repo-types.js';
 import {RepoError} from './repo-types.js';
 import {
   parseAgent,
@@ -152,7 +152,7 @@ async function loadEvals(repoPath: string): Promise<LoadedEval[]> {
 /**
  * Load the full amodal repo from disk.
  */
-export async function loadRepoFromDisk(repoPath: string): Promise<AmodalRepo> {
+export async function loadRepoFromDisk(repoPath: string): Promise<AgentBundle> {
   const absolutePath = path.resolve(repoPath);
 
   // Verify the path exists

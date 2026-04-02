@@ -117,7 +117,7 @@ export interface LoadedEval {
 /**
  * The fully loaded amodal repo — the complete runtime configuration.
  */
-export interface AmodalRepo {
+export interface AgentBundle {
   /** Where the repo was loaded from */
   source: 'local' | 'platform';
   /** Absolute path (local) or platform API URL */

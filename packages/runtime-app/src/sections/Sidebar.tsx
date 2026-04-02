@@ -267,7 +267,7 @@ export function Sidebar() {
     <aside className="w-[260px] border-r border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17] flex flex-col shrink-0 overflow-hidden">
       <nav className="flex-1 overflow-y-auto scrollbar-thin px-2 py-2">
         <button
-          onClick={() => { void navigate('/'); }}
+          onClick={() => { void navigate('/', { state: { newChat: Date.now() } }); }}
           className="flex items-center gap-2.5 w-full px-3 py-2 mb-1 rounded-md text-[13px] text-gray-500 dark:text-white/60 hover:text-gray-800 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.04] transition-colors"
         >
           <SquarePen className="h-4 w-4 shrink-0" />

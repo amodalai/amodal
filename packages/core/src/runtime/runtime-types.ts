@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 
 /**
  * Configuration for a single chat or task session.
  */
 export interface SessionConfig {
-  repo: AmodalRepo;
+  repo: AgentBundle;
   userRoles: string[];
   scopeLabels: Record<string, string>;
   fieldGuidance: string;
