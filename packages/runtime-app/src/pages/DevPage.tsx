@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Play, Loader2, ExternalLink } from 'lucide-react';
+import { Play, Loader2, ExternalLink, AlertTriangle } from 'lucide-react';
 
 interface PageInfo {
   name: string;
@@ -199,10 +199,53 @@ export function DevPage() {
         <DataSourceBar pageInfo={pageInfo} />
       )}
       <div className="flex-1 overflow-auto">
-        <PageComponent />
+        <PageErrorBoundary pageName={pageName ?? ''}>
+          <PageComponent />
+        </PageErrorBoundary>
       </div>
     </div>
   );
+}
+
+class PageErrorBoundary extends React.Component<
+  { pageName: string; children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { pageName: string; children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 max-w-2xl">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-5 w-5 text-amber-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Page Error</h2>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-zinc-400 mb-3">
+            The page <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-xs">{this.props.pageName}</code> threw an error during rendering.
+          </p>
+          <pre className="text-xs text-red-400 bg-red-500/5 border border-red-500/20 rounded-lg p-3 overflow-auto whitespace-pre-wrap">
+            {this.state.error?.message ?? 'Unknown error'}
+            {this.state.error?.stack && `\n\n${this.state.error.stack}`}
+          </pre>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="mt-3 px-3 py-1.5 rounded text-xs bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function PageNotFound({ name }: { name: string }) {
