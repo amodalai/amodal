@@ -66,25 +66,31 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
   if (!hasStores && !hasAutomations) return null;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-200 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/30 text-xs">
-      <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Data</span>
+    <div className="border-b border-gray-200 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/30 px-4 py-2.5 text-xs space-y-1.5">
+      {/* Stores row */}
+      {hasStores && (
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest w-16 shrink-0">Stores</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {pageInfo.stores!.map((store) => (
+              <Link
+                key={store}
+                to={`/entities/${store}`}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors"
+              >
+                {store}
+                <ExternalLink className="h-2.5 w-2.5" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {hasStores && pageInfo.stores!.map((store) => (
-        <Link
-          key={store}
-          to={`/entities/${store}`}
-          className="flex items-center gap-1 px-2 py-1 rounded bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors"
-        >
-          {store}
-          <ExternalLink className="h-2.5 w-2.5" />
-        </Link>
-      ))}
-
+      {/* Automations rows */}
       {hasAutomations && automations.map((auto) => {
         const isRunning = runningNames.has(auto.name);
         let scheduleLabel = auto.schedule ?? '';
         if (scheduleLabel) {
-          // Simple cron-to-human for common patterns
           const parts = scheduleLabel.split(' ');
           if (parts.length === 5) {
             const [min, hour] = parts;
@@ -96,7 +102,8 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
         }
         return (
           <div key={auto.name} className="flex items-center gap-2">
-            <div className={`h-1.5 w-1.5 rounded-full ${auto.running ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]' : 'bg-zinc-500'}`} />
+            <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest w-16 shrink-0">Auto</span>
+            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${auto.running ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]' : 'bg-zinc-500'}`} />
             <Link
               to={`/automations/${auto.name}`}
               className="text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors"
