@@ -95,7 +95,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
 
   return (
     <div className="border-b border-gray-200 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/30 px-4 py-2 text-xs">
-      <div className="grid gap-y-1.5" style={{ gridTemplateColumns: 'minmax(120px, 1fr) minmax(140px, 1fr) 52px minmax(80px, auto) 56px' }}>
+      <div className="grid gap-y-1.5 gap-x-4 w-fit" style={{ gridTemplateColumns: 'auto auto auto auto auto' }}>
         {/* Header */}
         <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Store</span>
         <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Automation</span>
@@ -112,7 +112,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
                 {row.store ? (
                   <Link
                     to={`/entities/${row.store}`}
-                    className="flex items-center gap-1 text-indigo-500 dark:text-indigo-400 hover:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                    className="flex items-center gap-1 text-blue-500 dark:text-blue-400 hover:text-blue-400 dark:hover:text-blue-300 transition-colors"
                   >
                     {row.store}
                     <ExternalLink className="h-2.5 w-2.5" />
@@ -161,7 +161,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
                   <button
                     onClick={() => handleRun(row.auto!.name)}
                     disabled={isRunning}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors disabled:opacity-40"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 dark:text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-40"
                   >
                     {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                     {isRunning ? 'Run' : 'Run'}
@@ -241,11 +241,11 @@ export function DevPage() {
   }
 
   return (
-    <div className="flex flex-col h-full border-t-2 border-indigo-500/40">
+    <div className="flex flex-col h-full border-t-2 border-blue-500/40">
       {/* Custom page header */}
-      <div className="flex items-center gap-2 px-4 py-1.5 bg-indigo-500/[0.03] border-b border-gray-200 dark:border-zinc-800/50">
-        <LayoutDashboard className="h-3 w-3 text-indigo-500/50" />
-        <span className="text-[10px] font-medium text-indigo-500/60 uppercase tracking-widest">
+      <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/[0.03] border-b border-gray-200 dark:border-zinc-800/50">
+        <LayoutDashboard className="h-3 w-3 text-blue-500/50" />
+        <span className="text-[10px] font-medium text-blue-500/60 uppercase tracking-widest">
           {pageInfo?.description ?? pageName}
         </span>
       </div>
@@ -292,7 +292,7 @@ class PageErrorBoundary extends React.Component<
           </pre>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="mt-3 px-3 py-1.5 rounded text-xs bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition-colors"
+            className="mt-3 px-3 py-1.5 rounded text-xs bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
           >
             Try again
           </button>
