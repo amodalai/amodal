@@ -1,5 +1,14 @@
 # @amodalai/runtime-app
 
+## 0.1.19
+
+### Patch Changes
+
+- [#87](https://github.com/amodalai/amodal/pull/87) [`fb31766`](https://github.com/amodalai/amodal/commit/fb31766bcd04861f5d51dcffe345383c15909580) Thanks [@whodatdev](https://github.com/whodatdev)! - Remove monorepo-relative @amodalai/react alias from vite config. The published @amodalai/react package has proper exports, so vite resolves it from node_modules without the alias. This fixes build server builds that use the npm package outside the monorepo.
+
+- Updated dependencies []:
+  - @amodalai/react@0.1.19
+
 ## 0.1.18
 
 ### Patch Changes
