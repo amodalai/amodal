@@ -23,7 +23,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
-      '@amodalai/react': path.resolve(__dirname, '../react/src/index.ts'),
       'recharts': path.resolve(__dirname, 'node_modules/recharts'),
     },
   },
