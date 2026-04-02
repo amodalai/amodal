@@ -65,73 +65,113 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
   const hasAutomations = automations.length > 0;
   if (!hasStores && !hasAutomations) return null;
 
-  return (
-    <div className="border-b border-gray-200 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/30 px-4 py-2.5 text-xs space-y-1.5">
-      {/* Stores row */}
-      {hasStores && (
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest w-16 shrink-0">Stores</span>
-          <div className="flex items-center gap-2 flex-wrap">
-            {pageInfo.stores!.map((store) => (
-              <Link
-                key={store}
-                to={`/entities/${store}`}
-                className="flex items-center gap-1 px-2 py-1 rounded bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors"
-              >
-                {store}
-                <ExternalLink className="h-2.5 w-2.5" />
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+  // Build rows: pair each automation with its store if names overlap, otherwise show separately
+  const rows: Array<{ store?: string; auto?: AutomationStatus; scheduleLabel?: string }> = [];
 
-      {/* Automations rows */}
-      {hasAutomations && automations.map((auto) => {
-        const isRunning = runningNames.has(auto.name);
-        let scheduleLabel = auto.schedule ?? '';
-        if (scheduleLabel) {
-          const parts = scheduleLabel.split(' ');
-          if (parts.length === 5) {
-            const [min, hour] = parts;
-            if (hour === '*' && min === '0') scheduleLabel = 'every hour';
-            else if (hour?.startsWith('*/')) scheduleLabel = `every ${hour.slice(2)} hours`;
-            else if (min === '0' && hour && !hour.includes('*') && !hour.includes('/')) scheduleLabel = `daily at ${hour}:00`;
-            else if (parts[4] === '1-5' && min === '0') scheduleLabel = `weekdays at ${hour ?? '?'}:00`;
-          }
-        }
-        return (
-          <div key={auto.name} className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest w-16 shrink-0">Auto</span>
-            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${auto.running ? 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]' : 'bg-zinc-500'}`} />
-            <Link
-              to={`/automations/${auto.name}`}
-              className="text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors"
-            >
-              {auto.name}
-            </Link>
-            <button
-              onClick={() => handleToggle(auto.name, auto.running)}
-              disabled={togglingNames.has(auto.name)}
-              className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors ${auto.running ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20'}`}
-              title={auto.running ? 'Click to pause' : 'Click to start'}
-            >
-              {togglingNames.has(auto.name) ? '...' : auto.running ? 'live' : 'paused'}
-            </button>
-            {scheduleLabel && (
-              <span className="text-gray-400 dark:text-zinc-600">{scheduleLabel}</span>
-            )}
-            <button
-              onClick={() => handleRun(auto.name)}
-              disabled={isRunning}
-              className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors disabled:opacity-40"
-            >
-              {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-              {isRunning ? 'Running' : 'Run'}
-            </button>
-          </div>
-        );
-      })}
+  // Match automations to stores by position, then add any extras
+  const usedStores = new Set<string>();
+  for (const auto of automations) {
+    // Try to find a matching store (by name similarity)
+    const matchingStore = pageInfo.stores?.find((s) => !usedStores.has(s));
+    if (matchingStore) usedStores.add(matchingStore);
+
+    let scheduleLabel = auto.schedule ?? '';
+    if (scheduleLabel) {
+      const parts = scheduleLabel.split(' ');
+      if (parts.length === 5) {
+        const [min, hour] = parts;
+        if (hour === '*' && min === '0') scheduleLabel = 'every hour';
+        else if (hour?.startsWith('*/')) scheduleLabel = `every ${hour.slice(2)} hours`;
+        else if (min === '0' && hour && !hour.includes('*') && !hour.includes('/')) scheduleLabel = `daily at ${hour}:00`;
+        else if (parts[4] === '1-5' && min === '0') scheduleLabel = `weekdays at ${hour ?? '?'}:00`;
+      }
+    }
+    rows.push({ store: matchingStore, auto, scheduleLabel });
+  }
+  // Any remaining stores without automations
+  for (const store of pageInfo.stores ?? []) {
+    if (!usedStores.has(store)) rows.push({ store });
+  }
+
+  return (
+    <div className="border-b border-gray-200 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/30 px-4 py-2 text-xs">
+      <div className="grid gap-y-1.5" style={{ gridTemplateColumns: 'minmax(120px, 1fr) minmax(140px, 1fr) 52px minmax(80px, auto) 56px' }}>
+        {/* Header */}
+        <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Store</span>
+        <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Automation</span>
+        <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Status</span>
+        <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Schedule</span>
+        <span />
+
+        {rows.map((row, i) => {
+          const isRunning = row.auto ? runningNames.has(row.auto.name) : false;
+          return (
+            <React.Fragment key={i}>
+              {/* Store */}
+              <div>
+                {row.store ? (
+                  <Link
+                    to={`/entities/${row.store}`}
+                    className="flex items-center gap-1 text-indigo-500 dark:text-indigo-400 hover:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                  >
+                    {row.store}
+                    <ExternalLink className="h-2.5 w-2.5" />
+                  </Link>
+                ) : (
+                  <span className="text-gray-300 dark:text-zinc-700">-</span>
+                )}
+              </div>
+
+              {/* Automation */}
+              <div>
+                {row.auto ? (
+                  <Link
+                    to={`/automations/${row.auto.name}`}
+                    className="text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors"
+                  >
+                    {row.auto.name}
+                  </Link>
+                ) : (
+                  <span className="text-gray-300 dark:text-zinc-700">-</span>
+                )}
+              </div>
+
+              {/* Toggle */}
+              <div>
+                {row.auto ? (
+                  <button
+                    onClick={() => handleToggle(row.auto!.name, row.auto!.running)}
+                    disabled={togglingNames.has(row.auto.name)}
+                    className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors ${row.auto.running ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20'}`}
+                    title={row.auto.running ? 'Click to pause' : 'Click to start'}
+                  >
+                    {togglingNames.has(row.auto.name) ? '...' : row.auto.running ? 'live' : 'paused'}
+                  </button>
+                ) : <span />}
+              </div>
+
+              {/* Schedule */}
+              <div className="text-gray-400 dark:text-zinc-600">
+                {row.scheduleLabel || '-'}
+              </div>
+
+              {/* Run */}
+              <div>
+                {row.auto ? (
+                  <button
+                    onClick={() => handleRun(row.auto!.name)}
+                    disabled={isRunning}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors disabled:opacity-40"
+                  >
+                    {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                    {isRunning ? 'Run' : 'Run'}
+                  </button>
+                ) : <span />}
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 }
