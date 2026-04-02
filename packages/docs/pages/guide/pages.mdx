@@ -18,27 +18,27 @@ pages/
 Each page file exports a `page` config object and a default React component:
 
 ```tsx
-import { useStoreList } from '@amodalai/react'
-
 export const page = {
   name: 'ops-dashboard',
-  icon: 'shield',
-  description: 'Facility overview — zones, alerts, and device status',
+  description: 'Facility overview — alerts and device status',
+  stores: ['active-alerts', 'zone-status'],
+  automations: ['scan-alerts'],
 }
 
 export default function OpsDashboard() {
-  const { data: alerts } = useStoreList('classified-alerts', {
-    sort: { field: 'timestamp', order: 'desc' },
-    limit: 20,
-  })
+  const [alerts, setAlerts] = React.useState([])
 
-  const { data: zones } = useStoreList('zone-status')
+  React.useEffect(() => {
+    fetch('/api/stores/active-alerts')
+      .then((res) => res.json())
+      .then((data) => setAlerts(data.documents || []))
+      .catch(() => {})
+  }, [])
 
   return (
-    <div>
+    <div style={{ padding: '24px', background: '#0f1117', minHeight: '100%', color: '#e4e4e7' }}>
       <h1>Operations Dashboard</h1>
-      <AlertsTable alerts={alerts} />
-      <ZoneMap zones={zones} />
+      <p>{alerts.length} active alerts</p>
     </div>
   )
 }
@@ -49,10 +49,13 @@ export default function OpsDashboard() {
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `name` | string | filename | Page identifier and URL slug |
+| `description` | string | — | Shown in the page header and sidebar tooltip |
+| `stores` | `string[]` | — | Stores this page reads from. Shown in the data source bar with links. |
+| `automations` | `string[]` | — | Automations that populate the page data. Shown in the data source bar with status, toggle, and run button. |
 | `icon` | string | — | Lucide icon name (e.g., `'shield'`, `'monitor'`, `'bar-chart'`) |
-| `description` | string | — | Shown in sidebar tooltip |
-| `context` | `Record<string, string>` | — | Route params (e.g., `{ dealId: 'string' }`) |
 | `hidden` | boolean | `false` | If true, excluded from sidebar |
+
+When `stores` or `automations` are declared, the runtime automatically shows a **data source bar** above the page with store links, automation live/paused toggle, schedule, and a run button. This is a platform feature — no code required in the page itself.
 
 ## SDK Hooks
 
