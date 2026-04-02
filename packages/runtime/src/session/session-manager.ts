@@ -572,7 +572,7 @@ export class SessionManager {
     // so we need to register them separately here.
     if (storeBackend && stores.length > 0) {
       try {
-        const { StoreWriteTool, StoreQueryTool } = await import('@amodalai/core');
+        const { StoreWriteTool, StoreBatchTool, StoreQueryTool } = await import('@amodalai/core');
         const upstream = config.getUpstreamConfig();
         const toolRegistry = upstream.getToolRegistry();
         const messageBus = config.getMessageBus();
@@ -582,6 +582,10 @@ export class SessionManager {
           toolRegistry.registerTool(
             // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tool types match upstream interface
             new StoreWriteTool(store, storeBackend, appId, messageBus) as never,
+          );
+          toolRegistry.registerTool(
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tool types match upstream interface
+            new StoreBatchTool(store, storeBackend, appId, messageBus) as never,
           );
         }
         toolRegistry.registerTool(
