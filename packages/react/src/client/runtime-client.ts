@@ -9,17 +9,30 @@ import { streamSSE, streamSSEGet } from './sse-client';
 
 export interface RuntimeClientOptions {
   runtimeUrl: string;
+  getToken?: () => string | Promise<string> | null | undefined;
 }
 
 /**
  * Client for the Amodal runtime's repo routes.
- * Auth is handled server-side via cookies — no tokens needed from the client.
  */
 export class RuntimeClient {
   private readonly runtimeUrl: string;
+  private readonly getToken?: () => string | Promise<string> | null | undefined;
 
   constructor(options: RuntimeClientOptions) {
     this.runtimeUrl = options.runtimeUrl.replace(/\/$/, '');
+    this.getToken = options.getToken;
+  }
+
+  private async authHeaders(): Promise<Record<string, string>> {
+    const headers: Record<string, string> = {};
+    if (this.getToken) {
+      const token = await this.getToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+    return headers;
   }
 
   /**
@@ -44,8 +57,11 @@ export class RuntimeClient {
       body['context'] = options.context;
     }
 
+    const headers = await this.authHeaders();
+
     yield* streamSSE(url, body, {
       signal: options?.signal,
+      headers,
     });
   }
 
@@ -55,11 +71,11 @@ export class RuntimeClient {
   async startTask(prompt: string): Promise<{ task_id: string }> {
     const url = `${this.runtimeUrl}/task`;
     const body: Record<string, unknown> = { prompt };
+    const headers = await this.authHeaders();
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
     });
 
@@ -77,10 +93,8 @@ export class RuntimeClient {
   async getTaskStatus(taskId: string): Promise<TaskStatus> {
     const url = `${this.runtimeUrl}/task/${taskId}`;
 
-    const response = await fetch(url, {
-      method: 'GET',
-      credentials: 'include',
-    });
+    const headers = await this.authHeaders();
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       throw new Error(`Get task status failed: ${String(response.status)} ${response.statusText}`);
@@ -98,7 +112,8 @@ export class RuntimeClient {
     signal?: AbortSignal,
   ): AsyncGenerator<SSEEvent> {
     const url = `${this.runtimeUrl}/task/${taskId}/stream`;
-    yield* streamSSEGet(url, { signal });
+    const headers = await this.authHeaders();
+    yield* streamSSEGet(url, { signal, headers });
   }
 
   // ---------------------------------------------------------------------------
@@ -107,7 +122,8 @@ export class RuntimeClient {
 
   async getStores(signal?: AbortSignal): Promise<StoreDefinitionInfo[]> {
     const url = `${this.runtimeUrl}/api/stores`;
-    const response = await fetch(url, { credentials: 'include', signal });
+    const authH = await this.authHeaders();
+    const response = await fetch(url, { headers: authH, signal });
     if (!response.ok) {
       throw new Error(`Failed to fetch stores: ${String(response.status)}`);
     }
@@ -142,7 +158,8 @@ export class RuntimeClient {
 
     const qs = params.toString();
     const url = `${this.runtimeUrl}/api/stores/${storeName}${qs ? `?${qs}` : ''}`;
-    const response = await fetch(url, { credentials: 'include', signal: options?.signal });
+    const authH = await this.authHeaders();
+    const response = await fetch(url, { headers: authH, signal: options?.signal });
     if (!response.ok) {
       throw new Error(`Failed to fetch store documents: ${String(response.status)}`);
     }
@@ -156,7 +173,8 @@ export class RuntimeClient {
     signal?: AbortSignal,
   ): Promise<StoreDocumentResult> {
     const url = `${this.runtimeUrl}/api/stores/${storeName}/${encodeURIComponent(key)}`;
-    const response = await fetch(url, { credentials: 'include', signal });
+    const authH = await this.authHeaders();
+    const response = await fetch(url, { headers: authH, signal });
     if (!response.ok) {
       if (response.status === 404) {
         return { document: null, history: [] };

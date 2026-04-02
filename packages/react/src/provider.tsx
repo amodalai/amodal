@@ -11,6 +11,8 @@ import { RuntimeClient } from './client/runtime-client';
 export interface AmodalProviderProps {
   /** Base URL of the Amodal runtime server (e.g., "http://localhost:3001"). */
   runtimeUrl: string;
+  /** Optional token getter for auth (hosted mode). */
+  getToken?: () => string | Promise<string> | null | undefined;
   children: ReactNode;
 }
 
@@ -24,10 +26,10 @@ const AmodalContext = createContext<AmodalContextValue | null>(null);
 /**
  * Provides a RuntimeClient to all child hooks and components.
  */
-export function AmodalProvider({ runtimeUrl, children }: AmodalProviderProps) {
+export function AmodalProvider({ runtimeUrl, getToken, children }: AmodalProviderProps) {
   const client = useMemo(
-    () => new RuntimeClient({ runtimeUrl }),
-    [runtimeUrl],
+    () => new RuntimeClient({ runtimeUrl, getToken }),
+    [runtimeUrl, getToken],
   );
 
   const value = useMemo(
