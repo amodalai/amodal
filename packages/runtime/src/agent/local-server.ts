@@ -274,12 +274,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Routes
   app.use(createChatRouter({
     sessionManager,
-    sessionHydrator: async (_req, _res, sessionId, tenantId) => {
+    sessionHydrator: async (_req: import('express').Request, _res: import('express').Response, sessionId: string) => {
       const persisted = sessionStore.load(sessionId);
       if (!persisted) return null;
 
       // Create a fresh session and seed LLM history from stored conversation
-      const session = await sessionManager.create(tenantId);
+      const session = await sessionManager.create();
       sessionManager.reregister(session, sessionId);
 
       // Convert stored messages to history format and seed the LLM
