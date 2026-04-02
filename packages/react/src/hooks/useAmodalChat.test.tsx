@@ -21,7 +21,7 @@ import type { ReactNode } from 'react';
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} appId="t1">
+    <AmodalProvider runtimeUrl={RUNTIME_TEST_URL}>
       {children}
     </AmodalProvider>
   );

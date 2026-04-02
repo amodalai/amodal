@@ -126,7 +126,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   const sessionStore = new SessionStore(config.repoPath);
   sessionStoreRef = sessionStore;
 
-  // Full agent config for the config page
+  // Auth token endpoint — local dev returns empty (no auth needed)
+  app.post('/auth/token', (_req, res) => {
+    res.json({ token: '', expires_at: null });
+  });
+
+  // Unified config endpoint — same path as hosted, different response
   app.get('/api/config', (_req, res) => {
     const repoData = sessionManager.getRepo()!;
     const cfg = repoData.config;
@@ -142,6 +147,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     }
 
     res.json({
+      // Common fields (used by useHostedConfig)
+      appId: 'local',
+      appName: cfg?.name ?? '',
+      // No authMode — signals to the SPA that no auth is needed
+      // Local dev fields (used by config pages)
       name: cfg?.name ?? '',
       version: cfg?.version ?? '',
       description: cfg?.description ?? '',
@@ -264,12 +274,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Routes
   app.use(createChatRouter({
     sessionManager,
-    sessionHydrator: async (_req, _res, sessionId, tenantId) => {
+    sessionHydrator: async (_req: import('express').Request, _res: import('express').Response, sessionId: string) => {
       const persisted = sessionStore.load(sessionId);
       if (!persisted) return null;
 
       // Create a fresh session and seed LLM history from stored conversation
-      const session = await sessionManager.create(tenantId);
+      const session = await sessionManager.create();
       sessionManager.reregister(session, sessionId);
 
       // Convert stored messages to history format and seed the LLM

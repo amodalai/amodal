@@ -10,30 +10,27 @@ import { AmodalProvider, useAmodalContext } from './provider';
 import { RUNTIME_TEST_URL } from '../test/mocks/handlers';
 
 function TestConsumer() {
-  const { runtimeUrl, appId, client } = useAmodalContext();
+  const { runtimeUrl, client } = useAmodalContext();
   return (
     <div>
       <span data-testid="url">{runtimeUrl}</span>
-      <span data-testid="app">{appId}</span>
       <span data-testid="client">{client ? 'ok' : 'missing'}</span>
     </div>
   );
 }
 
 describe('AmodalProvider', () => {
-  it('provides runtimeUrl and appId to children', () => {
+  it('provides runtimeUrl and client to children', () => {
     render(
-      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} appId="t1">
+      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL}>
         <TestConsumer />
       </AmodalProvider>,
     );
     expect(screen.getByTestId('url').textContent).toBe(RUNTIME_TEST_URL);
-    expect(screen.getByTestId('app').textContent).toBe('t1');
     expect(screen.getByTestId('client').textContent).toBe('ok');
   });
 
   it('throws when useAmodalContext is called outside provider', () => {
-    // Suppress React error boundary noise
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => render(<TestConsumer />)).toThrow(
       'useAmodalContext must be used within an <AmodalProvider>',
@@ -43,39 +40,23 @@ describe('AmodalProvider', () => {
 
   it('creates a new client when runtimeUrl changes', () => {
     const { rerender } = render(
-      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} appId="t1">
+      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL}>
         <TestConsumer />
       </AmodalProvider>,
     );
     expect(screen.getByTestId('url').textContent).toBe(RUNTIME_TEST_URL);
 
     rerender(
-      <AmodalProvider runtimeUrl="http://other:9999" appId="t1">
+      <AmodalProvider runtimeUrl="http://other:9999">
         <TestConsumer />
       </AmodalProvider>,
     );
     expect(screen.getByTestId('url').textContent).toBe('http://other:9999');
   });
 
-  it('creates a new client when appId changes', () => {
-    const { rerender } = render(
-      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} appId="t1">
-        <TestConsumer />
-      </AmodalProvider>,
-    );
-    expect(screen.getByTestId('app').textContent).toBe('t1');
-
-    rerender(
-      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} appId="t2">
-        <TestConsumer />
-      </AmodalProvider>,
-    );
-    expect(screen.getByTestId('app').textContent).toBe('t2');
-  });
-
   it('accepts getToken prop', () => {
     render(
-      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} appId="t1" getToken={() => 'tok'}>
+      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} getToken={() => 'tok'}>
         <TestConsumer />
       </AmodalProvider>,
     );
@@ -84,7 +65,7 @@ describe('AmodalProvider', () => {
 
   it('renders children', () => {
     render(
-      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL} appId="t1">
+      <AmodalProvider runtimeUrl={RUNTIME_TEST_URL}>
         <div data-testid="child">hello</div>
       </AmodalProvider>,
     );

@@ -9,22 +9,18 @@ import { streamSSE, streamSSEGet } from './sse-client';
 
 export interface RuntimeClientOptions {
   runtimeUrl: string;
-  appId: string;
   getToken?: () => string | Promise<string> | null | undefined;
 }
 
 /**
  * Client for the Amodal runtime's repo routes.
- * Targets POST /chat, POST /task, GET /task/:id, GET /task/:id/stream.
  */
 export class RuntimeClient {
   private readonly runtimeUrl: string;
-  private readonly appId: string;
   private readonly getToken?: () => string | Promise<string> | null | undefined;
 
   constructor(options: RuntimeClientOptions) {
     this.runtimeUrl = options.runtimeUrl.replace(/\/$/, '');
-    this.appId = options.appId;
     this.getToken = options.getToken;
   }
 
@@ -53,7 +49,6 @@ export class RuntimeClient {
     const url = `${this.runtimeUrl}/chat`;
     const body: Record<string, unknown> = {
       message,
-      app_id: this.appId,
     };
     if (options?.sessionId) {
       body['session_id'] = options.sessionId;
@@ -73,20 +68,10 @@ export class RuntimeClient {
   /**
    * Start a fire-and-forget task via POST /task.
    */
-  async startTask(
-    prompt: string,
-    appToken?: string,
-  ): Promise<{ task_id: string }> {
+  async startTask(prompt: string): Promise<{ task_id: string }> {
     const url = `${this.runtimeUrl}/task`;
+    const body: Record<string, unknown> = { prompt };
     const headers = await this.authHeaders();
-
-    const body: Record<string, unknown> = {
-      prompt,
-      app_id: this.appId,
-    };
-    if (appToken) {
-      body['app_token'] = appToken;
-    }
 
     const response = await fetch(url, {
       method: 'POST',
@@ -107,12 +92,9 @@ export class RuntimeClient {
    */
   async getTaskStatus(taskId: string): Promise<TaskStatus> {
     const url = `${this.runtimeUrl}/task/${taskId}`;
-    const headers = await this.authHeaders();
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers,
-    });
+    const headers = await this.authHeaders();
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       throw new Error(`Get task status failed: ${String(response.status)} ${response.statusText}`);
@@ -131,7 +113,6 @@ export class RuntimeClient {
   ): AsyncGenerator<SSEEvent> {
     const url = `${this.runtimeUrl}/task/${taskId}/stream`;
     const headers = await this.authHeaders();
-
     yield* streamSSEGet(url, { signal, headers });
   }
 
@@ -139,26 +120,18 @@ export class RuntimeClient {
   // Store API
   // ---------------------------------------------------------------------------
 
-  /**
-   * List all store definitions with document counts.
-   */
   async getStores(signal?: AbortSignal): Promise<StoreDefinitionInfo[]> {
     const url = `${this.runtimeUrl}/api/stores`;
-    const headers = await this.authHeaders();
-
-    const response = await fetch(url, { headers, signal });
+    const authH = await this.authHeaders();
+    const response = await fetch(url, { headers: authH, signal });
     if (!response.ok) {
       throw new Error(`Failed to fetch stores: ${String(response.status)}`);
     }
-
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
     const body = (await response.json()) as { stores: StoreDefinitionInfo[] };
     return body.stores;
   }
 
-  /**
-   * List documents from a store with optional filtering.
-   */
   async getStoreDocuments(
     storeName: string,
     options?: {
@@ -185,36 +158,29 @@ export class RuntimeClient {
 
     const qs = params.toString();
     const url = `${this.runtimeUrl}/api/stores/${storeName}${qs ? `?${qs}` : ''}`;
-    const headers = await this.authHeaders();
-
-    const response = await fetch(url, { headers, signal: options?.signal });
+    const authH = await this.authHeaders();
+    const response = await fetch(url, { headers: authH, signal: options?.signal });
     if (!response.ok) {
       throw new Error(`Failed to fetch store documents: ${String(response.status)}`);
     }
-
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
     return (await response.json()) as StoreListResult;
   }
 
-  /**
-   * Get a single document by key, optionally with version history.
-   */
   async getStoreDocument(
     storeName: string,
     key: string,
     signal?: AbortSignal,
   ): Promise<StoreDocumentResult> {
     const url = `${this.runtimeUrl}/api/stores/${storeName}/${encodeURIComponent(key)}`;
-    const headers = await this.authHeaders();
-
-    const response = await fetch(url, { headers, signal });
+    const authH = await this.authHeaders();
+    const response = await fetch(url, { headers: authH, signal });
     if (!response.ok) {
       if (response.status === 404) {
         return { document: null, history: [] };
       }
       throw new Error(`Failed to fetch store document: ${String(response.status)}`);
     }
-
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
     return (await response.json()) as StoreDocumentResult;
   }
