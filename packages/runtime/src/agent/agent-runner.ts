@@ -488,7 +488,7 @@ async function executeTool(
       // Check custom tools
       const customTool = session.runtime.repo.tools.find((t) => t.name === toolName);
       if (customTool) {
-        return {result: await executeCustomTool(session, customTool, args, signal)};
+        return executeCustomTool(session, customTool, args, signal);
       }
 
       // Check MCP tools (namespaced as serverName__toolName)
