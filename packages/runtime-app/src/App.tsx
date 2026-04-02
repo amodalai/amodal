@@ -9,7 +9,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AmodalProvider } from '@amodalai/react';
 import { RuntimeProvider } from '@/contexts/RuntimeContext';
 import { router } from '@/router';
-import { useConfig } from '@/hooks/useConfig';
 
 const RUNTIME_URL = window.location.origin;
 
@@ -22,38 +21,14 @@ const queryClient = new QueryClient({
   },
 });
 
-function AppContent() {
-  const { appId, loading, error } = useConfig();
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div style={{ color: '#71717a', fontSize: 14 }}>Loading...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div style={{ color: '#dc2626', fontSize: 14 }}>{error}</div>
-      </div>
-    );
-  }
-
-  return (
-    <AmodalProvider runtimeUrl={RUNTIME_URL} appId={appId}>
-      <RuntimeProvider runtimeUrl={RUNTIME_URL}>
-        <RouterProvider router={router} />
-      </RuntimeProvider>
-    </AmodalProvider>
-  );
-}
-
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <AmodalProvider runtimeUrl={RUNTIME_URL}>
+        <RuntimeProvider runtimeUrl={RUNTIME_URL}>
+          <RouterProvider router={router} />
+        </RuntimeProvider>
+      </AmodalProvider>
     </QueryClientProvider>
   );
 }
