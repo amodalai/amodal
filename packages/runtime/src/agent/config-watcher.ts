@@ -7,7 +7,7 @@
 import {watch, type FSWatcher} from 'node:fs';
 import {join} from 'node:path';
 import {loadRepo} from '@amodalai/core';
-import type {AmodalRepo} from '@amodalai/core';
+import type {AgentBundle} from '@amodalai/core';
 
 const DEBOUNCE_MS = 300;
 
@@ -16,11 +16,11 @@ const DEBOUNCE_MS = 300;
  */
 export class ConfigWatcher {
   private readonly repoPath: string;
-  private readonly onChange: (repo: AmodalRepo) => void;
+  private readonly onChange: (repo: AgentBundle) => void;
   private watchers: FSWatcher[] = [];
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(repoPath: string, onChange: (repo: AmodalRepo) => void) {
+  constructor(repoPath: string, onChange: (repo: AgentBundle) => void) {
     this.repoPath = repoPath;
     this.onChange = onChange;
   }

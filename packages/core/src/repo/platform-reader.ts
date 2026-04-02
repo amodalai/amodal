@@ -5,7 +5,7 @@
  */
 
 import type {
-  AmodalRepo,
+  AgentBundle,
   LoadedSkill,
 } from './repo-types.js';
 import type {LoadedTool} from './tool-types.js';
@@ -145,7 +145,7 @@ async function loadPlatformConnection(
 export async function loadRepoFromPlatform(
   apiUrl: string,
   apiKey: string,
-): Promise<AmodalRepo> {
+): Promise<AgentBundle> {
   // Normalize URL — strip trailing slash
   const baseUrl = apiUrl.replace(/\/+$/, '');
 

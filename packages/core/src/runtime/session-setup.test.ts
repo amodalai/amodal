@@ -6,7 +6,7 @@
 
 import {describe, it, expect} from 'vitest';
 
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {AmodalConfig} from '../repo/config-schema.js';
 import type {LoadedConnection} from '../repo/connection-types.js';
 import type {AccessConfig, ConnectionSpec} from '../repo/connection-schemas.js';
@@ -53,7 +53,7 @@ function makeConnection(
   };
 }
 
-function makeRepo(overrides: Partial<AmodalRepo> = {}): AmodalRepo {
+function makeRepo(overrides: Partial<AgentBundle> = {}): AgentBundle {
   return {
     source: 'local',
     origin: '/test',

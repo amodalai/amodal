@@ -5,8 +5,8 @@
  */
 
 import type {CommandModule} from 'yargs';
-import {loadSnapshotFromFile, snapshotToRepo} from '@amodalai/core';
-import type {AmodalRepo} from '@amodalai/core';
+import {loadSnapshotFromFile, snapshotToBundle} from '@amodalai/core';
+import type {AgentBundle} from '@amodalai/core';
 import {createLocalServer} from '@amodalai/runtime';
 import {PlatformClient} from '../shared/platform-client.js';
 
@@ -24,12 +24,12 @@ const DEFAULT_PORT = 3847;
 /**
  * Load a repo from a snapshot file or from the platform.
  */
-async function loadFromSource(options: ServeOptions): Promise<AmodalRepo | null> {
+async function loadFromSource(options: ServeOptions): Promise<AgentBundle | null> {
   if (options.config) {
     process.stderr.write(`[serve] Loading snapshot from ${options.config}...\n`);
     try {
       const snapshot = await loadSnapshotFromFile(options.config);
-      const repo = snapshotToRepo(snapshot, options.config);
+      const repo = snapshotToBundle(snapshot, options.config);
       process.stderr.write(`[serve] Loaded ${snapshot.deployId} (${snapshot.skills.length} skills, ${Object.keys(snapshot.connections).length} connections)\n`);
       return repo;
     } catch (err) {
@@ -53,7 +53,7 @@ async function loadFromSource(options: ServeOptions): Promise<AmodalRepo | null>
     const environment = options.env ?? 'production';
     try {
       const snapshot = await client.getActiveSnapshot(environment);
-      const repo = snapshotToRepo(snapshot, `platform:${environment}`);
+      const repo = snapshotToBundle(snapshot, `platform:${environment}`);
       process.stderr.write(`[serve] Loaded ${snapshot.deployId} from ${environment}\n`);
       return repo;
     } catch (err) {
@@ -72,7 +72,7 @@ async function loadFromSource(options: ServeOptions): Promise<AmodalRepo | null>
  *
  * Returns the loaded repo, or exits with error.
  */
-export async function runServe(options: ServeOptions): Promise<AmodalRepo | null> {
+export async function runServe(options: ServeOptions): Promise<AgentBundle | null> {
   const repo = await loadFromSource(options);
   if (!repo) return null;
 

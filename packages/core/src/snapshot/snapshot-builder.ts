@@ -5,7 +5,7 @@
  */
 
 import {randomBytes} from 'node:crypto';
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {SurfaceEndpoint} from '../repo/connection-types.js';
 import type {
   BuildSnapshotOptions,
@@ -47,13 +47,13 @@ export function serializeSurface(endpoints: SurfaceEndpoint[]): string {
 }
 
 /**
- * Build an immutable deploy snapshot from a loaded AmodalRepo.
+ * Build an immutable deploy snapshot from a loaded AgentBundle.
  *
  * The snapshot contains the fully-resolved configuration with `env:VAR_NAME`
  * references left intact (not resolved) — secrets are resolved at runtime.
  */
 export function buildSnapshot(
-  repo: AmodalRepo,
+  repo: AgentBundle,
   options: BuildSnapshotOptions,
 ): DeploySnapshot {
   // Transform connections Map to Record

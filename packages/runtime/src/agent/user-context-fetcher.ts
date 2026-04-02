@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type {AmodalRepo} from '@amodalai/core';
+import type {AgentBundle} from '@amodalai/core';
 import type {ConnectionsMap} from '@amodalai/core';
 
 /**
@@ -15,7 +15,7 @@ import type {ConnectionsMap} from '@amodalai/core';
  * the connections map.
  */
 export async function fetchUserContext(
-  repo: AmodalRepo,
+  repo: AgentBundle,
   appToken: string,
   connectionsMap: ConnectionsMap,
 ): Promise<Record<string, unknown>> {

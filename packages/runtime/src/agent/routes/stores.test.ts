@@ -7,7 +7,7 @@
 import {describe, it, expect, vi} from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import type {AmodalRepo, StoreBackend, LoadedStore} from '@amodalai/core';
+import type {AgentBundle, StoreBackend, LoadedStore} from '@amodalai/core';
 import {createStoresRouter} from './stores.js';
 
 function makeStore(name: string): LoadedStore {
@@ -25,7 +25,7 @@ function makeStore(name: string): LoadedStore {
   };
 }
 
-function makeRepo(stores: LoadedStore[]): AmodalRepo {
+function makeRepo(stores: LoadedStore[]): AgentBundle {
   return {
     source: 'local',
     origin: '/test',
@@ -58,7 +58,7 @@ function makeMockBackend(): StoreBackend {
   };
 }
 
-function createApp(repo: AmodalRepo, backend: StoreBackend) {
+function createApp(repo: AgentBundle, backend: StoreBackend) {
   const app = express();
   app.use(express.json());
   app.use(createStoresRouter({repo, storeBackend: backend, appId: 'test-tenant'}));

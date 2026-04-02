@@ -6,7 +6,7 @@
 
 import {readFile} from 'node:fs/promises';
 import {ZodError} from 'zod';
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {LoadedConnection, SurfaceEndpoint} from '../repo/connection-types.js';
 import {DeploySnapshotSchema} from './snapshot-types.js';
 import type {DeploySnapshot} from './snapshot-types.js';
@@ -105,10 +105,10 @@ export async function loadSnapshotFromFile(filePath: string): Promise<DeploySnap
 }
 
 /**
- * Convert a deploy snapshot back into an AmodalRepo for runtime use
+ * Convert a deploy snapshot back into an AgentBundle for runtime use
  * (e.g., `amodal serve --config ./resolved-config.json`).
  */
-export function snapshotToRepo(snapshot: DeploySnapshot, origin: string): AmodalRepo {
+export function snapshotToBundle(snapshot: DeploySnapshot, origin: string): AgentBundle {
   const connections = new Map<string, LoadedConnection>();
   for (const [name, conn] of Object.entries(snapshot.connections)) {
     connections.set(name, {

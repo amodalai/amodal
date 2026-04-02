@@ -6,7 +6,7 @@
 
 import {randomUUID} from 'node:crypto';
 
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {CompiledContext, SessionConfig} from './runtime-types.js';
 import type {ConnectionsMap} from '../templates/connections.js';
 import type {RuntimeTelemetryEvent} from './telemetry-hooks.js';
@@ -29,7 +29,7 @@ import {
  * Options for setting up a new session.
  */
 export interface SessionSetupOptions {
-  repo: AmodalRepo;
+  repo: AgentBundle;
   userId?: string;
   userRoles?: string[];
   isDelegated?: boolean;
@@ -40,7 +40,7 @@ export interface SessionSetupOptions {
  * The fully initialized session runtime — all components ready.
  */
 export interface SessionRuntime {
-  repo: AmodalRepo;
+  repo: AgentBundle;
   scrubTracker: ScrubTracker;
   fieldScrubber: FieldScrubber;
   outputGuard: OutputGuard;

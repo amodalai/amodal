@@ -6,8 +6,8 @@
 
 import express from 'express';
 import type http from 'node:http';
-import {loadSnapshotFromFile, snapshotToRepo} from '@amodalai/core';
-import type {AmodalRepo, DeploySnapshot, CustomToolExecutor, CustomShellExecutor} from '@amodalai/core';
+import {loadSnapshotFromFile, snapshotToBundle} from '@amodalai/core';
+import type {AgentBundle, DeploySnapshot, CustomToolExecutor, CustomShellExecutor} from '@amodalai/core';
 import {SessionManager} from '../session/session-manager.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
 import {createChatRouter} from './routes/chat.js';
@@ -21,15 +21,15 @@ import type {ServerInstance} from '../server.js';
  * Exactly one source must be provided:
  * - `snapshotPath` — load from a local JSON file
  * - `snapshot` — use a pre-loaded DeploySnapshot object
- * - `repo` — use a pre-loaded AmodalRepo
+ * - `bundle` — use a pre-loaded AgentBundle
  */
 export interface SnapshotServerConfig {
   /** Path to a resolved-config.json snapshot file. */
   snapshotPath?: string;
   /** A pre-loaded DeploySnapshot object. */
   snapshot?: DeploySnapshot;
-  /** A pre-loaded AmodalRepo (e.g. from snapshotToRepo). */
-  repo?: AmodalRepo;
+  /** A pre-loaded AgentBundle (e.g. from snapshotToBundle). */
+  bundle?: AgentBundle;
   port: number;
   host?: string;
   sessionTtlMs?: number;
@@ -47,26 +47,26 @@ export interface SnapshotServerConfig {
  * locally before deploying to the platform.
  */
 export async function createSnapshotServer(config: SnapshotServerConfig): Promise<ServerInstance> {
-  let repo: AmodalRepo;
+  let bundle: AgentBundle;
   let deployId: string;
 
-  if (config.repo) {
-    repo = config.repo;
-    deployId = repo.origin;
+  if (config.bundle) {
+    bundle = config.bundle;
+    deployId = bundle.origin;
   } else if (config.snapshot) {
-    repo = snapshotToRepo(config.snapshot, `snapshot:${config.snapshot.deployId}`);
+    bundle = snapshotToBundle(config.snapshot, `snapshot:${config.snapshot.deployId}`);
     deployId = config.snapshot.deployId;
   } else if (config.snapshotPath) {
     const snapshot = await loadSnapshotFromFile(config.snapshotPath);
-    repo = snapshotToRepo(snapshot, config.snapshotPath);
+    bundle = snapshotToBundle(snapshot, config.snapshotPath);
     deployId = snapshot.deployId;
   } else {
-    throw new Error('One of snapshotPath, snapshot, or repo must be provided');
+    throw new Error('One of snapshotPath, snapshot, or bundle must be provided');
   }
 
   // Set up tool executor — use injected executor if provided, otherwise local
   let toolExecutor: CustomToolExecutor | undefined = config.toolExecutor;
-  if (!toolExecutor && repo.tools.length > 0) {
+  if (!toolExecutor && bundle.tools.length > 0) {
     toolExecutor = new LocalToolExecutor();
   }
 
@@ -79,7 +79,7 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
       targetDir: process.cwd(),
     },
     ttlMs: config.sessionTtlMs,
-    repo,
+    bundle,
     toolExecutor,
     shellExecutor: config.shellExecutor,
   });
@@ -114,9 +114,9 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
       status: 'ok',
       mode: 'snapshot',
       deploy_id: deployId,
-      agent_name: repo.config.name,
-      connections: repo.connections.size,
-      skills: repo.skills.length,
+      agent_name: bundle.config.name,
+      connections: bundle.connections.size,
+      skills: bundle.skills.length,
       uptime_ms: Date.now() - startedAt,
       active_sessions: sessionManager.size,
     });
@@ -140,7 +140,7 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
       return new Promise((resolve) => {
         const httpServer = app.listen(port, host, () => {
           process.stderr.write(`[INFO] Snapshot server listening on ${host}:${port}\n`);
-          process.stderr.write(`[INFO] Deploy: ${deployId}, Agent: ${repo.config.name}\n`);
+          process.stderr.write(`[INFO] Deploy: ${deployId}, Agent: ${bundle.config.name}\n`);
           resolve(httpServer);
         });
         server = httpServer;

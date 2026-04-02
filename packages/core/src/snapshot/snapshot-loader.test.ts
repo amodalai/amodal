@@ -9,7 +9,7 @@ import {writeFileSync, mkdirSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomBytes} from 'node:crypto';
-import {parseSurfaceFromSnapshot, loadSnapshotFromFile, snapshotToRepo} from './snapshot-loader.js';
+import {parseSurfaceFromSnapshot, loadSnapshotFromFile, snapshotToBundle} from './snapshot-loader.js';
 import type {DeploySnapshot} from './snapshot-types.js';
 
 const testDir = join(tmpdir(), `snapshot-test-${randomBytes(4).toString('hex')}`);
@@ -96,10 +96,10 @@ describe('loadSnapshotFromFile', () => {
   });
 });
 
-describe('snapshotToRepo', () => {
-  it('converts a minimal snapshot to AmodalRepo', () => {
+describe('snapshotToBundle', () => {
+  it('converts a minimal snapshot to AgentBundle', () => {
     const snapshot = makeSnapshot();
-    const repo = snapshotToRepo(snapshot, '/tmp/snapshot.json');
+    const repo = snapshotToBundle(snapshot, '/tmp/snapshot.json');
 
     expect(repo.source).toBe('platform');
     expect(repo.origin).toBe('/tmp/snapshot.json');
@@ -124,7 +124,7 @@ describe('snapshotToRepo', () => {
       },
     });
 
-    const repo = snapshotToRepo(snapshot, 'test');
+    const repo = snapshotToBundle(snapshot, 'test');
     const conn = repo.connections.get('stripe');
     expect(conn).toBeDefined();
     expect(conn?.surface).toHaveLength(2);
@@ -144,7 +144,7 @@ describe('snapshotToRepo', () => {
       agents: {main: '# Main agent', simple: '# Explorer'},
     });
 
-    const repo = snapshotToRepo(snapshot, 'test');
+    const repo = snapshotToBundle(snapshot, 'test');
     expect(repo.skills).toHaveLength(1);
     expect(repo.skills[0].name).toBe('triage');
     expect(repo.skills[0].trigger).toBe('on request');

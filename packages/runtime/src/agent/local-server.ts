@@ -66,7 +66,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       targetDir: config.repoPath,
     },
     ttlMs: config.sessionTtlMs,
-    repo,
+    bundle: repo,
     shellExecutor,
     storeBackend,
   });
@@ -133,12 +133,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Unified config endpoint — same path as hosted, different response
   app.get('/api/config', (_req, res) => {
-    const repoData = sessionManager.getRepo()!;
-    const cfg = repoData.config;
+    const bundleData = sessionManager.getBundle()!;
+    const cfg = bundleData.config;
 
     // Collect all env:* references from connection specs
     const envRefs: Array<{name: string; connection: string; set: boolean}> = [];
-    for (const [connName, conn] of repoData.connections) {
+    for (const [connName, conn] of bundleData.connections) {
       const token = conn.spec.auth?.token;
       if (token && typeof token === 'string' && token.startsWith('env:')) {
         const envName = token.slice(4);
@@ -365,8 +365,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     async start(): Promise<http.Server> {
       // Start hot reload watcher
       if (config.hotReload) {
-        watcher = new ConfigWatcher(config.repoPath, (newRepo) => {
-          sessionManager.updateRepo(newRepo);
+        watcher = new ConfigWatcher(config.repoPath, (newBundle) => {
+          sessionManager.updateBundle(newBundle);
         });
         watcher.start();
       }

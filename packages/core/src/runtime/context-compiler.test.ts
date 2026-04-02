@@ -8,7 +8,7 @@ import {describe, expect, it} from 'vitest';
 
 import type {LoadedConnection} from '../repo/connection-types.js';
 import type {
-  AmodalRepo,
+  AgentBundle,
   LoadedKnowledge,
   LoadedSkill,
 } from '../repo/repo-types.js';
@@ -74,7 +74,7 @@ function makeKnowledge(name: string, title: string): LoadedKnowledge {
   };
 }
 
-function makeRepo(overrides?: Partial<AmodalRepo>): AmodalRepo {
+function makeRepo(overrides?: Partial<AgentBundle>): AgentBundle {
   const connections = new Map<string, LoadedConnection>();
   connections.set('crm', makeConnection('CRM'));
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {LoadedEval} from '../repo/repo-types.js';
 import type {EvalResult, EvalSuiteResult, EvalProgress, EvalCostInfo, EvalModelInfo} from './eval-types.js';
 import type {JudgeProvider} from './eval-judge.js';
@@ -35,7 +35,7 @@ export interface EvalRunnerOptions {
  * Yields progress events and returns the full suite result.
  */
 export async function* runEvalSuite(
-  repo: AmodalRepo,
+  repo: AgentBundle,
   options: EvalRunnerOptions,
 ): AsyncGenerator<EvalProgress, EvalSuiteResult> {
   const startTime = Date.now();

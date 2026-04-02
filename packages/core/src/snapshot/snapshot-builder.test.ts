@@ -5,7 +5,7 @@
  */
 
 import {describe, it, expect} from 'vitest';
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {SurfaceEndpoint} from '../repo/connection-types.js';
 import {
   generateDeployId,
@@ -16,7 +16,7 @@ import {
 } from './snapshot-builder.js';
 import {DeploySnapshotSchema} from './snapshot-types.js';
 
-function makeRepo(overrides: Partial<AmodalRepo> = {}): AmodalRepo {
+function makeRepo(overrides: Partial<AgentBundle> = {}): AgentBundle {
   return {
     source: 'local',
     origin: '/tmp/test-repo',

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type {AmodalRepo} from '../repo/repo-types.js';
+import type {AgentBundle} from '../repo/repo-types.js';
 import type {ModelConfig} from '../repo/config-schema.js';
 import type {EvalRunRecord, EvalModelInfo} from './eval-types.js';
 import type {EvalRunnerOptions} from './eval-runner.js';
@@ -48,7 +48,7 @@ export interface MultiModelEvalOptions {
  * Yields progress events and returns an EvalRunRecord per model.
  */
 export async function* runMultiModelEval(
-  repo: AmodalRepo,
+  repo: AgentBundle,
   options: MultiModelEvalOptions,
 ): AsyncGenerator<MultiModelProgress, EvalRunRecord[]> {
   const runs: EvalRunRecord[] = [];
