@@ -83,15 +83,14 @@ describe('deploy command', () => {
     stderrSpy.mockRestore();
   });
 
-  it('dry run includes snapshot info in output', async () => {
+  it('dry run shows environment in output', async () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     const code = await runDeploy({cwd: testDir, dryRun: true, message: 'test deploy'});
     expect(code).toBe(0);
 
     const messages = stderrSpy.mock.calls.map((c) => String(c[0]));
-    expect(messages.some((m) => m.includes('Snapshot deploy-'))).toBe(true);
-    expect(messages.some((m) => m.includes('Connections:'))).toBe(true);
+    expect(messages.some((m) => m.includes('would deploy to production'))).toBe(true);
 
     stderrSpy.mockRestore();
   });
