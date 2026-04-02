@@ -30,7 +30,7 @@ describe('RuntimeClient', () => {
       expect(events[3]).toMatchObject({ type: 'done' });
     });
 
-    it('sends app_id in body', async () => {
+    it('sends message in body', async () => {
       let capturedBody: Record<string, unknown> | null = null;
       server.use(
         http.post(`${RUNTIME_TEST_URL}/chat`, async ({ request }) => {
@@ -46,7 +46,7 @@ describe('RuntimeClient', () => {
       for await (const event of client.chatStream('hi')) {
         events.push(event);
       }
-      expect(capturedBody).toMatchObject({ message: 'hi', app_id: 'app-1' });
+      expect(capturedBody).toMatchObject({ message: 'hi' });
     });
 
     it('includes session_id and context when provided', async () => {
@@ -67,7 +67,6 @@ describe('RuntimeClient', () => {
       }
       expect(capturedBody).toMatchObject({
         message: 'hi',
-        app_id: 'app-1',
         session_id: 'sess-1',
         context: { foo: 'bar' },
       });
