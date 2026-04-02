@@ -5,6 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { LOCAL_APP_ID } from '../constants.js';
 import {
   AmodalConfig,
   type AmodalConfigParameters,
@@ -575,7 +576,7 @@ export class SessionManager {
         const upstream = config.getUpstreamConfig();
         const toolRegistry = upstream.getToolRegistry();
         const messageBus = config.getMessageBus();
-        const appId = config.getAppId() ?? auth?.applicationId ?? 'local';
+        const appId = config.getAppId() ?? auth?.applicationId ?? LOCAL_APP_ID;
 
         for (const store of stores) {
           toolRegistry.registerTool(
@@ -621,7 +622,7 @@ export class SessionManager {
       planModeManager: new PlanModeManager(),
       toolExecutor: this.toolExecutor,
       shellExecutor: this.shellExecutor,
-      appId: auth?.applicationId ?? 'local',
+      appId: auth?.applicationId ?? LOCAL_APP_ID,
     };
 
     // Share MCP connection across sessions — connect once, reuse for all

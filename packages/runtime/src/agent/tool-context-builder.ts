@@ -10,6 +10,7 @@ import type {CustomToolContext, LoadedTool} from '@amodalai/core';
 import type {AgentSession} from './agent-types.js';
 import {makeApiRequest} from './request-helper.js';
 import {resolveKey} from '../stores/key-resolver.js';
+import {LOCAL_APP_ID} from '../constants.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -72,7 +73,7 @@ export function buildToolContext(
         throw new Error(`Store "${storeName}" not found. Available: ${session.runtime.repo.stores.map((s) => s.name).join(', ')}`);
       }
       const key = resolveKey(storeDef.entity.key, payload);
-      const appId = session.appId ?? 'local';
+      const appId = session.appId ?? LOCAL_APP_ID;
       await session.storeBackend.put(appId, storeName, key, payload, {});
       return {key};
     },

@@ -33,6 +33,7 @@ import {SessionStore} from './session-store.js';
 import {EvalStore} from './eval-store.js';
 import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
+import {LOCAL_APP_ID} from '../constants.js';
 
 /**
  * Creates an Express server for repo-based agent mode.
@@ -83,7 +84,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   const runner = new ProactiveRunner(repo, {
     webhookSecret: config.webhookSecret,
-    createSession: async () => sessionManager.create('local'),
+    createSession: async () => sessionManager.create(LOCAL_APP_ID),
     destroySession: async (id) => sessionManager.destroy(id),
     onSessionComplete: (session, automationName) => {
       if (sessionStoreRef) {
@@ -155,7 +156,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
     res.json({
       // Common fields (used by useHostedConfig)
-      appId: 'local',
+      appId: LOCAL_APP_ID,
       appName: cfg?.name ?? '',
       // No authMode — signals to the SPA that no auth is needed
       // Local dev fields (used by config pages)
@@ -312,7 +313,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Store REST API (if stores are defined)
   if (storeBackend) {
-    app.use(createStoresRouter({repo, storeBackend, appId: 'local'}));
+    app.use(createStoresRouter({repo, storeBackend, appId: LOCAL_APP_ID}));
   }
 
   // Build user pages (if pages/ directory exists)

@@ -6,6 +6,7 @@
 
 import type { LoadedTool, CustomToolExecutor, CustomToolContext } from '@amodalai/core';
 import { resolveKey } from '../stores/key-resolver.js';
+import { LOCAL_APP_ID } from '../constants.js';
 import type { ManagedSession } from './session-manager.js';
 
 /**
@@ -153,7 +154,7 @@ export class CustomToolAdapter {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- store entity shape
         const entityKey = (storeDef as unknown as {entity: {key: string}}).entity.key;
         const key = resolveKey(entityKey, payload);
-        const appId = session.appId ?? 'local';
+        const appId = session.appId ?? LOCAL_APP_ID;
         await session.storeBackend.put(appId, storeName, key, payload, {});
         return { key };
       },
