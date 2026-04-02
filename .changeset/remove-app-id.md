@@ -2,7 +2,7 @@
 "@amodalai/react": patch
 "@amodalai/runtime": patch
 "@amodalai/runtime-app": patch
-"@amodalai/cli": patch
+"@amodalai/amodal": patch
 ---
 
 Remove app_id from client-server protocol. Server resolves app from hostname/auth context.
