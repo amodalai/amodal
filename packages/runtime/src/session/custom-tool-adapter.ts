@@ -5,6 +5,8 @@
  */
 
 import type { LoadedTool, CustomToolExecutor, CustomToolContext } from '@amodalai/core';
+import { resolveKey } from '../stores/key-resolver.js';
+import { LOCAL_APP_ID } from '../constants.js';
 import type { ManagedSession } from './session-manager.js';
 
 /**
@@ -138,6 +140,23 @@ export class CustomToolAdapter {
         } catch {
           return { text: body, status: res.status };
         }
+      },
+
+      async store(storeName: string, payload: Record<string, unknown>) {
+        if (!session.storeBackend) {
+          throw new Error('Store backend not available');
+        }
+        const stores = session.config.getStores();
+        const storeDef = stores.find((s: {name: string}) => s.name === storeName);
+        if (!storeDef) {
+          throw new Error(`Store "${storeName}" not found`);
+        }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- store entity shape
+        const entityKey = (storeDef as unknown as {entity: {key: string}}).entity.key;
+        const key = resolveKey(entityKey, payload);
+        const appId = session.appId ?? LOCAL_APP_ID;
+        await session.storeBackend.put(appId, storeName, key, payload, {});
+        return { key };
       },
 
       async exec(command, options) {

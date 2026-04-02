@@ -90,6 +90,7 @@ export { buildDefaultPrompt } from './runtime/default-prompt.js';
 
 // Store tools
 export { StoreWriteTool } from './tools/store-write-tool.js';
+export { StoreBatchTool } from './tools/store-batch-tool.js';
 export { StoreQueryTool, QUERY_STORE_TOOL_NAME } from './tools/store-query-tool.js';
 
 // Custom tool types

@@ -157,7 +157,8 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
     }
 
     void fetchManifest();
-    return () => { cancelled = true; };
+    const timer = setInterval(() => { void fetchManifest(); }, 10000);
+    return () => { cancelled = true; clearInterval(timer); };
   }, [runtimeUrl]);
 
   return (

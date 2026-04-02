@@ -5,6 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { LOCAL_APP_ID } from '../constants.js';
 import {
   AmodalConfig,
   type AmodalConfigParameters,
@@ -571,16 +572,20 @@ export class SessionManager {
     // so we need to register them separately here.
     if (storeBackend && stores.length > 0) {
       try {
-        const { StoreWriteTool, StoreQueryTool } = await import('@amodalai/core');
+        const { StoreWriteTool, StoreBatchTool, StoreQueryTool } = await import('@amodalai/core');
         const upstream = config.getUpstreamConfig();
         const toolRegistry = upstream.getToolRegistry();
         const messageBus = config.getMessageBus();
-        const appId = config.getAppId() ?? 'default';
+        const appId = config.getAppId() ?? auth?.applicationId ?? LOCAL_APP_ID;
 
         for (const store of stores) {
           toolRegistry.registerTool(
             // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tool types match upstream interface
             new StoreWriteTool(store, storeBackend, appId, messageBus) as never,
+          );
+          toolRegistry.registerTool(
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tool types match upstream interface
+            new StoreBatchTool(store, storeBackend, appId, messageBus) as never,
           );
         }
         toolRegistry.registerTool(
@@ -621,7 +626,7 @@ export class SessionManager {
       planModeManager: new PlanModeManager(),
       toolExecutor: this.toolExecutor,
       shellExecutor: this.shellExecutor,
-      appId: auth?.applicationId,
+      appId: auth?.applicationId ?? LOCAL_APP_ID,
     };
 
     // Share MCP connection across sessions — connect once, reuse for all
@@ -818,7 +823,8 @@ export class SessionManager {
     const session = this.sessions.get(id);
     if (!session) return;
     this.sessions.delete(id);
-    if (session.storeBackend) {
+    // Only close the store backend if it was created for this session (not the shared one)
+    if (session.storeBackend && session.storeBackend !== this.sharedStoreBackend) {
       try {
         await session.storeBackend.close();
       } catch {

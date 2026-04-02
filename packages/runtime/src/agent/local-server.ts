@@ -32,6 +32,8 @@ import type {StoreBackend} from '@amodalai/core';
 import {SessionStore} from './session-store.js';
 import {EvalStore} from './eval-store.js';
 import {buildPages} from './page-builder.js';
+import type {BuiltPage} from './page-builder.js';
+import {LOCAL_APP_ID} from '../constants.js';
 
 /**
  * Creates an Express server for repo-based agent mode.
@@ -53,7 +55,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   if (repo.stores.length > 0) {
     const dataDir = repo.config.stores?.dataDir
       ?? `${config.repoPath}/.amodal/store-data`;
-    storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
+    try {
+      storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
+      process.stderr.write(`[dev] Store backend ready (${String(repo.stores.length)} stores, dir: ${dataDir})\n`);
+    } catch (err) {
+      process.stderr.write(`[dev] Store backend failed to initialize: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(`[dev] Try deleting ${dataDir} and restarting\n`);
+    }
   }
 
   const sessionManager = new SessionManager({
@@ -76,7 +84,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   const runner = new ProactiveRunner(repo, {
     webhookSecret: config.webhookSecret,
-    createSession: async () => sessionManager.create('local'),
+    createSession: async () => sessionManager.create(LOCAL_APP_ID),
     destroySession: async (id) => sessionManager.destroy(id),
     onSessionComplete: (session, automationName) => {
       if (sessionStoreRef) {
@@ -148,7 +156,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
     res.json({
       // Common fields (used by useHostedConfig)
-      appId: 'local',
+      appId: LOCAL_APP_ID,
       appName: cfg?.name ?? '',
       // No authMode — signals to the SPA that no auth is needed
       // Local dev fields (used by config pages)
@@ -305,11 +313,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Store REST API (if stores are defined)
   if (storeBackend) {
-    app.use(createStoresRouter({repo, storeBackend, appId: 'local'}));
+    app.use(createStoresRouter({repo, storeBackend, appId: LOCAL_APP_ID}));
   }
 
   // Build user pages (if pages/ directory exists)
-  let builtPages: Array<{name: string; outputPath: string}> = [];
+  let builtPages: BuiltPage[] = [];
   try {
     const result = await buildPages(config.repoPath);
     builtPages = result.pages;
@@ -326,7 +334,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Pages list endpoint
   app.get('/api/pages', (_req, res) => {
     res.json({
-      pages: builtPages.map((p) => ({name: p.name})),
+      pages: builtPages.map((p) => ({name: p.name, ...p.metadata})),
     });
   });
 

@@ -249,19 +249,28 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
-    fetch('/sessions')
-      .then((res) => (res.ok ? res.json() : { sessions: [] }))
-      .then((data: unknown) => {
-        if (data && typeof data === 'object' && 'sessions' in data && Array.isArray((data as Record<string, unknown>)['sessions'])) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const all = (data as Record<string, unknown>)['sessions'] as Array<SessionSummary & {automationName?: string}>;
-          // Filter out automation sessions — those show in the automation detail page
-          const EVAL_APP_IDS = new Set(['eval-runner', 'eval-judge', 'admin']);
-          setSessions(all.filter((s) => !s.automationName && !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
-        }
-      })
-      .catch(() => {});
-  }, [location.pathname]);
+    let lastJson = '';
+    const fetchSessions = () => {
+      fetch('/sessions')
+        .then((res) => (res.ok ? res.json() : { sessions: [] }))
+        .then((data: unknown) => {
+          const json = JSON.stringify(data);
+          if (json === lastJson) return;
+          lastJson = json;
+          if (data && typeof data === 'object' && 'sessions' in data && Array.isArray((data as Record<string, unknown>)['sessions'])) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+            const all = (data as Record<string, unknown>)['sessions'] as Array<SessionSummary & {automationName?: string}>;
+            // Filter out automation sessions — those show in the automation detail page
+            const EVAL_APP_IDS = new Set(['eval-runner', 'eval-judge', 'admin']);
+            setSessions(all.filter((s) => !s.automationName && !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
+          }
+        })
+        .catch(() => {});
+    };
+    fetchSessions();
+    const timer = setInterval(fetchSessions, 3000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <aside className="w-[260px] border-r border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17] flex flex-col shrink-0 overflow-hidden">

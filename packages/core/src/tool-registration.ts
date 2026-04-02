@@ -11,6 +11,7 @@ import { LoadKnowledgeTool } from './knowledge/load-knowledge.js';
 import { PresentTool } from './widgets/present-tool.js';
 import { RequestTool } from './tools/request-tool.js';
 import { StoreWriteTool } from './tools/store-write-tool.js';
+import { StoreBatchTool } from './tools/store-batch-tool.js';
 import { StoreQueryTool } from './tools/store-query-tool.js';
 import {
   registerHttpTools,
@@ -59,6 +60,7 @@ export async function registerAmodalTools(
     const appId = ctx.getApplicationId() ?? 'default';
     for (const store of stores) {
       registry.registerTool(new StoreWriteTool(store, storeBackend, appId, messageBus));
+      registry.registerTool(new StoreBatchTool(store, storeBackend, appId, messageBus));
     }
     registry.registerTool(new StoreQueryTool(stores, storeBackend, appId, messageBus));
   }

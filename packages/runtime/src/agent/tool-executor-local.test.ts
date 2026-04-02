@@ -57,6 +57,7 @@ describe('LocalToolExecutor', () => {
     return {
       exec: async () => ({stdout: '', stderr: '', exitCode: 0}),
       request: async () => ({}),
+      store: async () => ({key: 'test'}),
       env: () => undefined,
       log: () => {},
       user: {roles: []},

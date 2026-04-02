@@ -9,6 +9,8 @@ import {promisify} from 'node:util';
 import type {CustomToolContext, LoadedTool} from '@amodalai/core';
 import type {AgentSession} from './agent-types.js';
 import {makeApiRequest} from './request-helper.js';
+import {resolveKey} from '../stores/key-resolver.js';
+import {LOCAL_APP_ID} from '../constants.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -19,6 +21,7 @@ export function buildToolContext(
   session: AgentSession,
   tool: LoadedTool,
   signal: AbortSignal,
+  onLog?: (toolName: string, message: string) => void,
 ): CustomToolContext {
   // Combine the tool's timeout with the external signal
   const timeoutSignal = AbortSignal.timeout(tool.timeout);
@@ -61,6 +64,20 @@ export function buildToolContext(
       return undefined;
     },
 
+    async store(storeName, payload) {
+      if (!session.storeBackend) {
+        throw new Error('Store backend not available');
+      }
+      const storeDef = session.runtime.repo.stores.find((s) => s.name === storeName);
+      if (!storeDef) {
+        throw new Error(`Store "${storeName}" not found. Available: ${session.runtime.repo.stores.map((s) => s.name).join(', ')}`);
+      }
+      const key = resolveKey(storeDef.entity.key, payload);
+      const appId = session.appId ?? LOCAL_APP_ID;
+      await session.storeBackend.put(appId, storeName, key, payload, {});
+      return {key};
+    },
+
     async exec(command, options) {
       const timeout = options?.timeout ?? tool.timeout;
 
@@ -101,6 +118,7 @@ export function buildToolContext(
 
     log(message) {
       process.stderr.write(`[tool:${tool.name}] ${message}\n`);
+      if (onLog) onLog(tool.name, message);
     },
 
     user: {
