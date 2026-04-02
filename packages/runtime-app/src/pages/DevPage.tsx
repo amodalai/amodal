@@ -25,8 +25,13 @@ interface AutomationStatus {
 function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
   const [automations, setAutomations] = useState<AutomationStatus[]>([]);
   const [runningNames, setRunningNames] = useState<Set<string>>(new Set());
+  const [togglingNames, setTogglingNames] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    fetchAutomations();
+  }, [fetchAutomations]);
+
+  const fetchAutomations = useCallback(() => {
     if (!pageInfo.automations?.length) return;
     fetch('/automations')
       .then((res) => res.json())
@@ -38,6 +43,15 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
       })
       .catch(() => {});
   }, [pageInfo.automations]);
+
+  const handleToggle = useCallback((name: string, currentlyRunning: boolean) => {
+    setTogglingNames((prev) => new Set([...prev, name]));
+    const action = currentlyRunning ? 'stop' : 'start';
+    fetch(`/automations/${encodeURIComponent(name)}/${action}`, { method: 'POST' })
+      .then(() => fetchAutomations())
+      .catch(() => {})
+      .finally(() => setTogglingNames((prev) => { const next = new Set(prev); next.delete(name); return next; }));
+  }, [fetchAutomations]);
 
   const handleRun = useCallback((name: string) => {
     setRunningNames((prev) => new Set([...prev, name]));
@@ -82,9 +96,14 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
             >
               {auto.name}
             </Link>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded ${auto.running ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-500/10 text-zinc-500'}`}>
-              {auto.running ? 'live' : 'paused'}
-            </span>
+            <button
+              onClick={() => handleToggle(auto.name, auto.running)}
+              disabled={togglingNames.has(auto.name)}
+              className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors ${auto.running ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20'}`}
+              title={auto.running ? 'Click to pause' : 'Click to start'}
+            >
+              {togglingNames.has(auto.name) ? '...' : auto.running ? 'live' : 'paused'}
+            </button>
             {scheduleLabel && (
               <span className="text-gray-400 dark:text-zinc-600">{scheduleLabel}</span>
             )}
