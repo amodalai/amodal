@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Play, Loader2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Play, Loader2, ExternalLink, AlertTriangle, LayoutDashboard } from 'lucide-react';
 
 interface PageInfo {
   name: string;
@@ -241,7 +241,15 @@ export function DevPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full border-t-2 border-indigo-500/40">
+      {/* Custom page header */}
+      <div className="flex items-center gap-2 px-4 py-1.5 bg-indigo-500/[0.03] border-b border-gray-200 dark:border-zinc-800/50">
+        <LayoutDashboard className="h-3 w-3 text-indigo-500/50" />
+        <span className="text-[10px] font-medium text-indigo-500/60 uppercase tracking-widest">
+          {pageInfo?.description ?? pageName}
+        </span>
+      </div>
+
       {pageInfo && (pageInfo.stores?.length || pageInfo.automations?.length) && (
         <DataSourceBar pageInfo={pageInfo} />
       )}
