@@ -54,7 +54,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   if (repo.stores.length > 0) {
     const dataDir = repo.config.stores?.dataDir
       ?? `${config.repoPath}/.amodal/store-data`;
-    storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
+    try {
+      storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
+      process.stderr.write(`[dev] Store backend ready (${String(repo.stores.length)} stores, dir: ${dataDir})\n`);
+    } catch (err) {
+      process.stderr.write(`[dev] Store backend failed to initialize: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(`[dev] Try deleting ${dataDir} and restarting\n`);
+    }
   }
 
   const sessionManager = new SessionManager({
