@@ -9,6 +9,7 @@ import {promisify} from 'node:util';
 import type {CustomToolContext, LoadedTool} from '@amodalai/core';
 import type {AgentSession} from './agent-types.js';
 import {makeApiRequest} from './request-helper.js';
+import {resolveKey} from '../stores/key-resolver.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -59,6 +60,20 @@ export function buildToolContext(
       }
 
       return undefined;
+    },
+
+    async store(storeName, payload) {
+      if (!session.storeBackend) {
+        throw new Error('Store backend not available');
+      }
+      const storeDef = session.runtime.repo.stores.find((s) => s.name === storeName);
+      if (!storeDef) {
+        throw new Error(`Store "${storeName}" not found. Available: ${session.runtime.repo.stores.map((s) => s.name).join(', ')}`);
+      }
+      const key = resolveKey(storeDef.entity.key, payload);
+      const appId = session.appId ?? 'local';
+      await session.storeBackend.put(appId, storeName, key, payload, {});
+      return {key};
     },
 
     async exec(command, options) {

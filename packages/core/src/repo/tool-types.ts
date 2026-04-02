@@ -90,6 +90,8 @@ export interface CustomToolContext {
     stderr: string;
     exitCode: number;
   }>;
+  /** Write a document to a store. Returns the stored key. */
+  store(storeName: string, payload: Record<string, unknown>): Promise<{key: string}>;
   /** Read an environment variable (only if in the tool's env allowlist) */
   env(name: string): string | undefined;
   /** Log a message for debugging */
