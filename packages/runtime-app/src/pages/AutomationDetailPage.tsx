@@ -125,12 +125,12 @@ export function AutomationDetailPage() {
                   return [...prev, {type: 'text', content: String(event['content'])}];
                 });
               } else if (type === 'tool_call_start') {
-                const toolName = String(event['toolName'] ?? event['name'] ?? 'tool');
+                const toolName = String(event['tool_name'] ?? event['toolName'] ?? 'tool');
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE params
-                const params = (event['parameters'] ?? event['args']) as Record<string, unknown> | undefined;
+                const params = event['parameters'] as Record<string, unknown> | undefined;
                 setLiveBlocks((prev) => [...prev, {type: 'tool', name: toolName, params, status: 'running'}]);
               } else if (type === 'tool_call_result') {
-                const duration = typeof event['durationMs'] === 'number' ? event['durationMs'] : undefined;
+                const duration = typeof event['duration_ms'] === 'number' ? event['duration_ms'] : undefined;
                 setLiveBlocks((prev) => {
                   // Find the last running tool and mark it done
                   const updated = [...prev];

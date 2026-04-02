@@ -818,7 +818,8 @@ export class SessionManager {
     const session = this.sessions.get(id);
     if (!session) return;
     this.sessions.delete(id);
-    if (session.storeBackend) {
+    // Only close the store backend if it was created for this session (not the shared one)
+    if (session.storeBackend && session.storeBackend !== this.sharedStoreBackend) {
       try {
         await session.storeBackend.close();
       } catch {
