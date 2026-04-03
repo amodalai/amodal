@@ -223,7 +223,7 @@ function MessageContent({ blocks, respondToConfirmation }: {
         switch (block.type) {
           case 'text':
             return (
-              <div key={`t-${String(i)}`} className="prose dark:prose-invert max-w-none text-[15px] leading-relaxed prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border prose-a:text-primary">
+              <div key={`t-${String(i)}`} className="text-foreground prose dark:prose-invert max-w-none text-[15px] leading-relaxed prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border prose-a:text-primary">
                 <Markdown>{block.text}</Markdown>
               </div>
             );

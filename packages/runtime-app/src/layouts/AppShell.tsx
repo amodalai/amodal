@@ -77,18 +77,18 @@ export function AppShell() {
               </>
             )}
           </div>
-        </div>
-        <div className="flex items-center gap-3">
           <Link
             to="/config"
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-muted transition-colors"
+            className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title="Configuration"
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-3.5 w-3.5" />
           </Link>
+        </div>
+        <div className="flex items-center gap-3">
           <button
             onClick={toggle}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-muted transition-colors"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
