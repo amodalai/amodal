@@ -17,7 +17,7 @@ export function getModelContextWindow(model: string): number {
     return 1_000_000;
   }
   if (lower.includes('claude')) {
-    return 200_000;
+    return 1_000_000;
   }
   if (lower.includes('gpt-4o')) {
     return 128_000;

@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Sun, Moon, Settings, Bot, Cpu, KeyRound, FileText, Server, ArrowLeft, FolderCode, MessageSquare, PanelRightOpen, PanelRightClose, FlaskConical, Swords } from 'lucide-react';
+import { Sun, Moon, Settings, Bot, KeyRound, FileText, ArrowLeft, FolderCode, MessageSquare, PanelRightOpen, PanelRightClose, FlaskConical, Swords } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { AdminChatPanel } from './ConfigChatPage';
 import { cn } from '@/lib/utils';
@@ -156,11 +156,7 @@ export function ConfigLayout() {
             <div className="space-y-0.5">
               <ConfigNavItem to="/config" end>
                 <Bot className="h-4 w-4 shrink-0" />
-                Agent
-              </ConfigNavItem>
-              <ConfigNavItem to="/config/models">
-                <Cpu className="h-4 w-4 shrink-0" />
-                Models
+                Overview
               </ConfigNavItem>
               <ConfigNavItem to="/config/prompt">
                 <FileText className="h-4 w-4 shrink-0" />
@@ -185,10 +181,6 @@ export function ConfigLayout() {
               <ConfigNavItem to="/config/feedback">
                 <MessageSquare className="h-4 w-4 shrink-0" />
                 Feedback
-              </ConfigNavItem>
-              <ConfigNavItem to="/config/system">
-                <Server className="h-4 w-4 shrink-0" />
-                System
               </ConfigNavItem>
 
               <div className="mt-3 mb-1 px-3 pt-3 border-t border-border">

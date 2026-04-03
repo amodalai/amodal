@@ -48,6 +48,18 @@ export function createRuntimeProvider(modelConfig: ModelConfig): RuntimeProvider
         baseUrl: modelConfig.baseUrl ?? 'https://api.groq.com/openai/v1',
         credentials: modelConfig.credentials ?? {OPENAI_API_KEY: process.env['GROQ_API_KEY'] ?? ''},
       });
+    case 'mistral':
+      return new OpenAIRuntimeProvider({
+        ...modelConfig,
+        baseUrl: modelConfig.baseUrl ?? 'https://api.mistral.ai/v1',
+        credentials: modelConfig.credentials ?? {OPENAI_API_KEY: process.env['MISTRAL_API_KEY'] ?? ''},
+      });
+    case 'xai':
+      return new OpenAIRuntimeProvider({
+        ...modelConfig,
+        baseUrl: modelConfig.baseUrl ?? 'https://api.x.ai/v1',
+        credentials: modelConfig.credentials ?? {OPENAI_API_KEY: process.env['XAI_API_KEY'] ?? ''},
+      });
     default:
       if (modelConfig.baseUrl) {
         // OpenAI-compatible endpoint
