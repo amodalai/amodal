@@ -45,7 +45,7 @@ export type { StreamHooks } from './session/session-runner.js';
 export { errorHandler } from './middleware/error-handler.js';
 
 // Logger
-export { log, setLogLevel, getLogLevel, LogLevel } from './logger.js';
+export { log, setLogLevel, getLogLevel, LogLevel, initLogLevel, interceptConsole, verbosityToLogLevel } from './logger.js';
 
 // ---------------------------------------------------------------------------
 // Environment variable parsing
