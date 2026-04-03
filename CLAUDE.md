@@ -112,6 +112,11 @@ These rules apply to ALL code in this repo. They are non-negotiable.
 - No circular dependencies between modules.
 - Each module wraps errors at its boundary with module-specific error types.
 
+### Tool Schemas
+
+- **Code-defined tools** (store, connection, admin): use Zod schemas for TypeScript type inference on the execute function.
+- **External-schema tools** (MCP tools, custom tools from `tool.json`): use `jsonSchema()` from the AI SDK. Pass the schema through unchanged — never convert to Zod and back (lossy round-trip that can lose `nullable`, `oneOf`, `$ref`, `format` constraints).
+
 ### Testing
 
 - Integration tests over unit tests for tool execution — test the real path, not mocks.

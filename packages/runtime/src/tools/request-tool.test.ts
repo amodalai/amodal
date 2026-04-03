@@ -255,6 +255,27 @@ describe('createRequestTool', () => {
     expect(url).toContain('limit=10');
   });
 
+  it('handles non-string query param values without crashing (G7)', async () => {
+    const tool = createRequestTool({
+      connectionsMap: makeConnectionsMap(),
+      permissionChecker: allowAllChecker,
+    });
+
+    const result = await tool.execute({
+      connection: 'test-api',
+      method: 'GET',
+      endpoint: '/search',
+      intent: 'read',
+      params: {per_page: 30, tag: 'ai', active: true} as unknown as Record<string, string>,
+    }, mockCtx) as Record<string, unknown>;
+
+    const data = result['data'] as Record<string, unknown>;
+    const url = data['url'] as string;
+    expect(url).toContain('per_page=30');
+    expect(url).toContain('tag=ai');
+    expect(url).toContain('active=true');
+  });
+
   it('passes permission checker the correct request shape', async () => {
     const checkSpy = vi.fn().mockReturnValue({allowed: true});
     const spyChecker: PermissionChecker = {check: checkSpy};

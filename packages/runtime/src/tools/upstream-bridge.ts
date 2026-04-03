@@ -16,7 +16,37 @@
  * tools directly from our local ToolRegistry.
  */
 
+import {zodToJsonSchema} from 'zod-to-json-schema';
 import type {ToolDefinition, ToolContext} from './types.js';
+
+// ---------------------------------------------------------------------------
+// Schema extraction helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract JSON Schema from a ToolDefinition's parameters.
+ *
+ * Handles both Zod schemas (converted via zod-to-json-schema) and
+ * AI SDK jsonSchema() (which already holds raw JSON Schema).
+ */
+export function extractJsonSchema(def: ToolDefinition): Record<string, unknown> {
+  const params = def.parameters;
+
+  // AI SDK jsonSchema() — has a jsonSchema property
+  if (params && typeof params === 'object' && 'jsonSchema' in params) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AI SDK Schema boundary
+    return (params as unknown as {jsonSchema: Record<string, unknown>}).jsonSchema;
+  }
+
+  // Zod schema — convert via zod-to-json-schema
+  if (params && typeof params === 'object' && '_def' in params) {
+     
+    return zodToJsonSchema(params as import('zod').ZodTypeAny) as Record<string, unknown>;
+  }
+
+  // Fallback
+  return {type: 'object', properties: {}};
+}
 
 // ---------------------------------------------------------------------------
 // Registration helper
@@ -101,7 +131,7 @@ export function bridgeToUpstream(
     try {
       const ctx = makeContext();
       const result = await def.execute(params, ctx);
-      const output = typeof result === 'string' ? result : JSON.stringify(result);
+      const output = typeof result === 'string' ? result : JSON.stringify(result ?? {ok: true});
       return {llmContent: output, returnDisplay: output.slice(0, 200)};
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

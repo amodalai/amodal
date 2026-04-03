@@ -61,7 +61,7 @@ function buildStoreZodSchema(store: LoadedStore): z.ZodObject<Record<string, z.Z
     shape[name] = fieldToZod(field);
   }
 
-  return z.object(shape);
+  return z.object(shape).passthrough();
 }
 
 function fieldToZod(field: StoreFieldDefinition): z.ZodTypeAny {
@@ -142,7 +142,7 @@ export function createStoreWriteTool(
     async execute(params: Record<string, unknown>, _ctx: ToolContext): Promise<unknown> {
       const key = resolveKey(store.entity.key, params);
       const result = await backend.put(appId, store.name, key, params, {});
-      return result;
+      return {stored: true, key, version: result.version};
     },
   };
 }

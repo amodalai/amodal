@@ -41,6 +41,11 @@ Run `git diff main...HEAD --name-only` to get changed files, then review each on
 - Missing discriminated union where state is represented as strings
 - Overly broad interfaces that leak implementation details
 
+### Tool Schemas
+
+- External-schema tools (MCP, custom `tool.json`) using Zod instead of AI SDK `jsonSchema()` passthrough — lossy round-trip that can lose `nullable`, `oneOf`, `$ref`, `format`
+- Code-defined tools (store, connection, admin) NOT using Zod — these should use Zod for type inference
+
 ### Module Boundaries
 
 - Imports reaching into another module's internal files
