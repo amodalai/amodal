@@ -35,6 +35,51 @@ import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
 import {LOCAL_APP_ID} from '../constants.js';
 
+interface ProviderStatus {
+  provider: string;
+  envVar: string;
+  keySet: boolean;
+  verified: boolean;
+  error?: string;
+}
+
+const PROVIDER_CHECKS: Array<{provider: string; envVar: string; url: string; authHeader: (key: string) => Record<string, string>}> = [
+  {provider: 'anthropic', envVar: 'ANTHROPIC_API_KEY', url: 'https://api.anthropic.com/v1/models', authHeader: (k) => ({'x-api-key': k, 'anthropic-version': '2023-06-01'})},
+  {provider: 'openai', envVar: 'OPENAI_API_KEY', url: 'https://api.openai.com/v1/models?limit=1', authHeader: (k) => ({Authorization: `Bearer ${k}`})},
+  {provider: 'google', envVar: 'GOOGLE_API_KEY', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', authHeader: (k) => ({'x-goog-api-key': k})},
+  {provider: 'deepseek', envVar: 'DEEPSEEK_API_KEY', url: 'https://api.deepseek.com/v1/models', authHeader: (k) => ({Authorization: `Bearer ${k}`})},
+  {provider: 'groq', envVar: 'GROQ_API_KEY', url: 'https://api.groq.com/openai/v1/models', authHeader: (k) => ({Authorization: `Bearer ${k}`})},
+  {provider: 'mistral', envVar: 'MISTRAL_API_KEY', url: 'https://api.mistral.ai/v1/models', authHeader: (k) => ({Authorization: `Bearer ${k}`})},
+  {provider: 'xai', envVar: 'XAI_API_KEY', url: 'https://api.x.ai/v1/models', authHeader: (k) => ({Authorization: `Bearer ${k}`})},
+];
+
+async function checkProviders(): Promise<ProviderStatus[]> {
+  const results = await Promise.allSettled(
+    PROVIDER_CHECKS.map(async (check) => {
+      const key = process.env[check.envVar];
+      if (!key) {
+        return {provider: check.provider, envVar: check.envVar, keySet: false, verified: false};
+      }
+      try {
+        // globalThis.fetch is available in Node 18+
+        const res: {ok: boolean; status: number} = await globalThis.fetch(check.url, {
+          method: 'GET',
+          headers: check.authHeader(key),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok) {
+          return {provider: check.provider, envVar: check.envVar, keySet: true, verified: true};
+        }
+        return {provider: check.provider, envVar: check.envVar, keySet: true, verified: false, error: `HTTP ${String(res.status)}`};
+      } catch (err) {
+        return {provider: check.provider, envVar: check.envVar, keySet: true, verified: false, error: err instanceof Error ? err.message : String(err)};
+      }
+    }),
+  );
+
+  return results.map((r) => r.status === 'fulfilled' ? r.value : {provider: 'unknown', envVar: '', keySet: false, verified: false});
+}
+
 /**
  * Creates an Express server for repo-based agent mode.
  *
@@ -44,6 +89,22 @@ import {LOCAL_APP_ID} from '../constants.js';
  */
 export async function createLocalServer(config: LocalServerConfig): Promise<ServerInstance> {
   const repo = await loadRepo({localPath: config.repoPath});
+
+  // Check provider API keys in the background at startup
+  let providerStatuses: ProviderStatus[] = PROVIDER_CHECKS.map((c) => ({
+    provider: c.provider, envVar: c.envVar, keySet: !!process.env[c.envVar], verified: false,
+  }));
+  checkProviders().then((results) => {
+    providerStatuses = results;
+    const verified = results.filter((r) => r.verified).map((r) => r.provider);
+    if (verified.length > 0) {
+      process.stderr.write(`[dev] Provider keys verified: ${verified.join(', ')}\n`);
+    }
+    const failed = results.filter((r) => r.keySet && !r.verified);
+    for (const f of failed) {
+      process.stderr.write(`[dev] Provider key invalid: ${f.provider} (${f.error ?? 'unknown'})\n`);
+    }
+  }).catch(() => {});
 
   // Create shell executor if sandbox.shellExec is enabled
   const shellExecutor = repo.config.sandbox?.shellExec
@@ -211,6 +272,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       }
     }
 
+
     res.json({
       // Common fields (used by useHostedConfig)
       appId: LOCAL_APP_ID,
@@ -224,6 +286,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       stores: cfg?.stores ? {...cfg.stores, activeBackend: storeBackendType} : null,
       repoPath: config.repoPath,
       envRefs,
+      providerStatuses,
       nodeVersion: process.version,
       runtimeVersion: '0.1.10',
       uptime: Math.floor(process.uptime()),

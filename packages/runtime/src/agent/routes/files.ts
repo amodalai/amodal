@@ -78,19 +78,14 @@ async function buildTree(
  * Merge package file tree entries into the local tree.
  * Package entries appear inside the same convention directories as local files.
  * Local entries with the same path take precedence (aren't duplicated).
+ * Recurses into subdirectories so package files appear alongside local files.
  */
 function mergePackageTree(localTree: FileTreeEntry[], packageEntries: FileTreeEntry[]): void {
   for (const pkgEntry of packageEntries) {
-    // Find matching top-level directory in local tree
-    const existing = localTree.find((e) => e.name === pkgEntry.name && e.type === 'directory');
-    if (existing && existing.children && pkgEntry.children) {
-      // Merge children: add package children that don't already exist locally
-      const localPaths = new Set(existing.children.map((c) => c.path));
-      for (const child of pkgEntry.children) {
-        if (!localPaths.has(child.path)) {
-          existing.children.push(child);
-        }
-      }
+    const existing = localTree.find((e) => e.name === pkgEntry.name && e.type === pkgEntry.type);
+    if (existing && existing.type === 'directory' && existing.children && pkgEntry.children) {
+      // Recurse into matching directories to merge at every level
+      mergePackageTree(existing.children, pkgEntry.children);
       // Re-sort: directories first, then alphabetical
       existing.children.sort((a, b) => {
         if (a.type === 'directory' && b.type !== 'directory') return -1;
@@ -98,9 +93,10 @@ function mergePackageTree(localTree: FileTreeEntry[], packageEntries: FileTreeEn
         return a.name.localeCompare(b.name);
       });
     } else if (!existing) {
-      // Convention directory only exists in packages, add it
+      // Entry only exists in package, add it
       localTree.push(pkgEntry);
     }
+    // If a local file exists with the same name, local takes precedence (skip package version)
   }
 }
 

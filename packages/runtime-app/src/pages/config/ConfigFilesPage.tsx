@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ChevronRight, File, FolderOpen, Folder, Save, Package, Loader2, RefreshCw } from 'lucide-react';
 import { CodeEditor } from '@/components/CodeEditor';
 import { cn } from '@/lib/utils';
@@ -113,6 +114,7 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
 }
 
 export function ConfigFilesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tree, setTree] = useState<FileTreeEntry[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [fileData, setFileData] = useState<FileData | null>(null);
@@ -143,6 +145,26 @@ export function ConfigFilesPage() {
     const interval = setInterval(fetchTree, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-open file from ?open= query param (e.g. from prompt page links)
+  useEffect(() => {
+    const openPath = searchParams.get('open');
+    if (openPath && tree.length > 0 && !selectedPath) {
+      setSelectedPath(openPath);
+      // Clear the query param so it doesn't re-trigger
+      setSearchParams({}, { replace: true });
+      // Fetch the file
+      fetch(`/api/files/${openPath}`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((data: unknown) => {
+          if (data) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+            setFileData(data as FileData);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [searchParams, tree, selectedPath, setSearchParams]);
 
   // Fetch file contents when a file is selected
   const selectFile = useCallback((filePath: string) => {

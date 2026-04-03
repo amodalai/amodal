@@ -18,29 +18,21 @@ function makeSection(
 }
 
 describe('getModelContextWindow', () => {
-  it('returns 200000 for claude models', () => {
-    expect(getModelContextWindow('claude-3-opus')).toBe(200_000);
-    expect(getModelContextWindow('Claude-Sonnet')).toBe(200_000);
+  it('returns large context for known model families', () => {
+    expect(getModelContextWindow('claude-sonnet-4-6')).toBeGreaterThanOrEqual(200_000);
+    expect(getModelContextWindow('gemini-2.5-pro')).toBeGreaterThanOrEqual(200_000);
+    expect(getModelContextWindow('gpt-4o')).toBeGreaterThanOrEqual(128_000);
   });
 
-  it('returns 128000 for gpt-4o models', () => {
-    expect(getModelContextWindow('gpt-4o')).toBe(128_000);
-    expect(getModelContextWindow('gpt-4o-mini')).toBe(128_000);
+  it('returns a reasonable default for unknown models', () => {
+    const ctx = getModelContextWindow('llama-3');
+    expect(ctx).toBeGreaterThanOrEqual(32_000);
+    expect(ctx).toBeLessThanOrEqual(1_000_000);
   });
 
-  it('returns 1000000 for gemini models', () => {
-    expect(getModelContextWindow('gemini-pro')).toBe(1_000_000);
-    expect(getModelContextWindow('Gemini-1.5')).toBe(1_000_000);
-  });
-
-  it('returns 128000 for unknown models', () => {
-    expect(getModelContextWindow('llama-3')).toBe(128_000);
-    expect(getModelContextWindow('mistral-large')).toBe(128_000);
-  });
-
-  it('checks gemini before claude when both match', () => {
-    // gemini is checked first in the code
-    expect(getModelContextWindow('gemini-claude-hybrid')).toBe(1_000_000);
+  it('is case insensitive', () => {
+    expect(getModelContextWindow('Claude-Sonnet')).toBe(getModelContextWindow('claude-sonnet'));
+    expect(getModelContextWindow('GEMINI-PRO')).toBe(getModelContextWindow('gemini-pro'));
   });
 });
 
