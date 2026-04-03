@@ -225,7 +225,10 @@ describe('createMcpToolDefinition', () => {
       originalName: 'search_repos',
     });
     // Parameters should be a valid Zod schema
-    expect(def.parameters.safeParse({query: 'amodal'}).success).toBe(true);
+    expect('safeParse' in def.parameters).toBe(true);
+    if ('safeParse' in def.parameters) {
+      expect((def.parameters as import('zod').ZodType).safeParse({query: 'amodal'}).success).toBe(true);
+    }
   });
 
   it('execute calls mcpManager.callTool with correct args', async () => {
