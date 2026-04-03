@@ -151,6 +151,20 @@ const DEFAULT_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const ASK_USER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
+ * Replace the content generator on an AmodalConfig with the Vercel AI SDK bridge.
+ * No-op if no modelConfig is set (e.g. bare Gemini provider).
+ */
+async function overrideContentGenerator(config: AmodalConfig): Promise<void> {
+  const mc = config.getModelConfig();
+  if (!mc) return;
+  const {VercelContentGenerator} = await import('../providers/vercel-content-generator.js');
+  const generator = new VercelContentGenerator(mc);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+  const raw = config.getUpstreamConfig() as unknown as Record<string, unknown>;
+  raw['contentGenerator'] = generator;
+}
+
+/**
  * Manages per-request sessions: creates Config + GeminiClient + Scheduler
  * instances, tracks them by ID, and cleans up expired sessions.
  */
@@ -312,14 +326,7 @@ export class SessionManager {
     await config.initializeAuth();
 
     // Phase 1.3: Replace content generator with Vercel AI SDK bridge
-    const adminModelConfig = config.getModelConfig();
-    if (adminModelConfig) {
-      const {VercelContentGenerator} = await import('../providers/vercel-content-generator.js');
-      const vercelGenerator = new VercelContentGenerator(adminModelConfig);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      const adminRaw = config.getUpstreamConfig() as unknown as Record<string, unknown>;
-      adminRaw['contentGenerator'] = vercelGenerator;
-    }
+    await overrideContentGenerator(config);
 
     // Register amodal tools (request, present, knowledge, stores)
     await config.registerTools();
@@ -426,17 +433,8 @@ export class SessionManager {
     // when the runtime uses non-Gemini providers (Anthropic, OpenAI).
     await config.initializeAuth();
 
-    // Phase 1.3: Replace the old MultiProviderContentGenerator with the
-    // Vercel AI SDK bridge. The old generator routes through our custom
-    // RuntimeProvider implementations; the new one uses the AI SDK directly.
-    const modelConfig = config.getModelConfig();
-    if (modelConfig) {
-      const {VercelContentGenerator} = await import('../providers/vercel-content-generator.js');
-      const vercelGenerator = new VercelContentGenerator(modelConfig);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      const raw = config.getUpstreamConfig() as unknown as Record<string, unknown>;
-      raw['contentGenerator'] = vercelGenerator;
-    }
+    // Phase 1.3: Replace content generator with Vercel AI SDK bridge
+    await overrideContentGenerator(config);
 
     const geminiClient = config.getGeminiClient();
 

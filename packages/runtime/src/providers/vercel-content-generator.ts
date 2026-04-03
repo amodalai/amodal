@@ -20,6 +20,7 @@ import type {ModelMessage, ToolSet, ToolCallPart, ToolResultPart, TextPart} from
 import {jsonSchema, tool} from 'ai';
 
 import {log} from '../logger.js';
+import {ProviderError} from '../errors.js';
 import {createProvider} from './create-provider.js';
 import type {
   LLMProvider,
@@ -368,9 +369,9 @@ export class VercelContentGenerator {
    * Embeddings are not supported.
    */
   async embedContent(_request: unknown): Promise<{embeddings: never[]}> {
-    throw new Error(
-      'Embeddings are not supported. Use a dedicated embedding service.',
-    );
+    throw new ProviderError('Embeddings are not supported. Use a dedicated embedding service.', {
+      provider: this.provider.provider,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -416,8 +417,10 @@ export class VercelContentGenerator {
         );
 
       case 'error':
-        log.error('stream_error', {error: String(event.error), tag: 'llm'});
-        return null;
+        throw new ProviderError(`LLM stream error: ${String(event.error)}`, {
+          provider: this.provider.provider,
+          cause: event.error instanceof Error ? event.error : undefined,
+        });
 
       default:
         return null;
