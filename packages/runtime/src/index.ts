@@ -48,6 +48,21 @@ export { routeOutput } from './output/output-router.js';
 // Error handler
 export { errorHandler } from './middleware/error-handler.js';
 
+// Typed error classes
+export {
+  AmodalError,
+  ProviderError,
+  RateLimitError,
+  ProviderTimeoutError,
+  ToolExecutionError,
+  StoreError,
+  ConnectionError,
+  SessionError,
+  CompactionError,
+  ConfigError,
+} from './errors.js';
+export type { Result } from './errors.js';
+
 // Logger
 export { log, setLogLevel, getLogLevel, LogLevel, initLogLevel, interceptConsole, verbosityToLogLevel } from './logger.js';
 
@@ -55,8 +70,6 @@ export { log, setLogLevel, getLogLevel, LogLevel, initLogLevel, interceptConsole
 export { loadConfig } from './config.js';
 export type { AgentConfig, ConfigOverrides, LoadConfigOptions, McpServerConfig } from './config.js';
 
-// Errors
-export { AmodalError, ConfigError } from './errors.js';
 
 // ---------------------------------------------------------------------------
 // Environment variable parsing

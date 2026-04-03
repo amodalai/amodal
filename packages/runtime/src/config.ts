@@ -187,9 +187,11 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
   const configPath = findConfigFile(repoPath);
   if (!configPath) {
     throw new ConfigError(
-      'amodal.json',
       'Config file not found',
-      `Create an amodal.json in ${repoPath} or run 'amodal init' to scaffold a new agent.`,
+      {
+        key: 'amodal.json',
+        suggestion: `Create an amodal.json in ${repoPath} or run 'amodal init' to scaffold a new agent.`,
+      },
     );
   }
 
@@ -198,9 +200,11 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
     raw = readFileSync(configPath, 'utf-8');
   } catch {
     throw new ConfigError(
-      'amodal.json',
       `Cannot read config file: ${configPath}`,
-      'Check file permissions.',
+      {
+        key: 'amodal.json',
+        suggestion: 'Check file permissions.',
+      },
     );
   }
 
@@ -214,15 +218,20 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
       const match = err.message.match(/"(\w+)" is not set/);
       const varName = match?.[1] ?? 'UNKNOWN';
       throw new ConfigError(
-        `env:${varName}`,
         `Environment variable "${varName}" is not set`,
-        `Set ${varName} in your .env file or environment. This is referenced in amodal.json.`,
+        {
+          key: `env:${varName}`,
+          suggestion: `Set ${varName} in your .env file or environment. This is referenced in amodal.json.`,
+        },
       );
     }
     throw new ConfigError(
-      'amodal.json',
       err instanceof Error ? err.message : String(err),
-      'Check your amodal.json for syntax errors or invalid values.',
+      {
+        key: 'amodal.json',
+        suggestion: 'Check your amodal.json for syntax errors or invalid values.',
+        cause: err,
+      },
     );
   }
 
@@ -242,9 +251,11 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
     postgresUrl = process.env[envVar];
     if (!postgresUrl && storeBackend === 'postgres') {
       throw new ConfigError(
-        'stores.postgresUrl',
         `Postgres URL environment variable "${envVar}" is not set`,
-        `Set ${envVar} in your .env file. Required when stores.backend is 'postgres'.`,
+        {
+          key: 'stores.postgresUrl',
+          suggestion: `Set ${envVar} in your .env file. Required when stores.backend is 'postgres'.`,
+        },
       );
     }
   }
@@ -329,9 +340,11 @@ function validateProviderKey(model: ModelConfig): void {
       const key = model.credentials?.['OPENAI_API_KEY'] ?? process.env['OPENAI_API_KEY'];
       if (!key) {
         throw new ConfigError(
-          'models.main.credentials',
           `OpenAI-compatible provider "${provider}" requires an API key`,
-          `Set OPENAI_API_KEY in your environment or add credentials.OPENAI_API_KEY to the model config.`,
+          {
+            key: 'models.main.credentials',
+            suggestion: `Set OPENAI_API_KEY in your environment or add credentials.OPENAI_API_KEY to the model config.`,
+          },
         );
       }
     }
@@ -341,9 +354,11 @@ function validateProviderKey(model: ModelConfig): void {
   const key = process.env[envKey];
   if (!key) {
     throw new ConfigError(
-      `models.main.provider (${provider})`,
       `Provider API key not found`,
-      `Set ${envKey} in your .env file or environment.\n  Checked: amodal.json → models.main.credentials\n  Checked: env → ${envKey}`,
+      {
+        key: `models.main.provider (${provider})`,
+        suggestion: `Set ${envKey} in your .env file or environment.\n  Checked: amodal.json → models.main.credentials\n  Checked: env → ${envKey}`,
+      },
     );
   }
 }
