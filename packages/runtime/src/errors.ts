@@ -295,14 +295,17 @@ export class CompactionError extends AmodalError {
 
 /**
  * Error in configuration loading or validation.
+ * Includes a `suggestion` field with actionable fix instructions.
  */
 export class ConfigError extends AmodalError {
   readonly key: string;
+  readonly suggestion: string;
 
   constructor(
     message: string,
     options: {
       key: string;
+      suggestion?: string;
       cause?: unknown;
       context?: Record<string, unknown>;
     },
@@ -313,5 +316,14 @@ export class ConfigError extends AmodalError {
     }, options.cause);
     this.name = 'ConfigError';
     this.key = options.key;
+    this.suggestion = options.suggestion ?? '';
+  }
+
+  /** Format as a multi-line error message for CLI output. */
+  format(): string {
+    const lines = [`Config error: ${this.message}`];
+    if (this.key) lines.push(`  Key: ${this.key}`);
+    if (this.suggestion) lines.push(`  Fix: ${this.suggestion}`);
+    return lines.join('\n');
   }
 }

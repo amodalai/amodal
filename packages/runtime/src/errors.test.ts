@@ -185,6 +185,26 @@ describe('ConfigError', () => {
     expect(err.context['checked']).toEqual(['env:ANTHROPIC_API_KEY', 'amodal.json']);
     expect(err).toBeInstanceOf(AmodalError);
   });
+
+  it('formats a multi-line error with key and suggestion', () => {
+    const err = new ConfigError('API key not found', {
+      key: 'models.main.provider',
+      suggestion: 'Set ANTHROPIC_API_KEY in your .env file.',
+    });
+    expect(err.format()).toBe(
+      'Config error: API key not found\n' +
+      '  Key: models.main.provider\n' +
+      '  Fix: Set ANTHROPIC_API_KEY in your .env file.',
+    );
+  });
+
+  it('formats without suggestion when omitted', () => {
+    const err = new ConfigError('bad value', {key: 'stores.backend'});
+    expect(err.suggestion).toBe('');
+    expect(err.format()).toBe(
+      'Config error: bad value\n  Key: stores.backend',
+    );
+  });
 });
 
 describe('unique error codes', () => {

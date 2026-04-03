@@ -67,6 +67,11 @@ export type { Result } from './errors.js';
 export { log, setLogLevel, getLogLevel, setLogFormat, getLogFormat, setSanitize, LogLevel, initLogLevel, interceptConsole, verbosityToLogLevel, createLogger } from './logger.js';
 export type { Logger, LoggerConfig, LogFormat } from './logger.js';
 
+// Config
+export { loadConfig } from './config.js';
+export type { AgentConfig, ConfigOverrides, LoadConfigOptions, McpServerConfig } from './config.js';
+
+
 // ---------------------------------------------------------------------------
 // Environment variable parsing
 // ---------------------------------------------------------------------------
