@@ -219,6 +219,9 @@ export class PGLiteStoreBackend implements StoreBackend {
 
       if (filter) {
         for (const [field, value] of Object.entries(filter)) {
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field)) {
+            throw new Error(`Invalid store filter field name: ${field}`);
+          }
           where += ` AND payload->>'${field}' = $${paramIndex}`;
           params.push(String(value));
           paramIndex++;
@@ -235,6 +238,9 @@ export class PGLiteStoreBackend implements StoreBackend {
       if (sort) {
         const desc = sort.startsWith('-');
         const field = desc ? sort.slice(1) : sort;
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field)) {
+          throw new Error(`Invalid store sort field name: ${field}`);
+        }
         const dir = desc ? 'DESC' : 'ASC';
         orderBy = `ORDER BY payload->>'${field}' ${dir}`;
       }
