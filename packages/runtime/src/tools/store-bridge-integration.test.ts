@@ -202,6 +202,58 @@ describe('Store tools through upstream bridge', () => {
     expect(parsed.documents[0].payload['source']).toBe('twitter');
   });
 
+  it('batch write via build().execute() path (Scheduler path)', async () => {
+    const schedBackend = createInMemoryBackend();
+    const batchDef = createStoreBatchTool(STORE_DEF, schedBackend, APP_ID);
+    const queryDef = createStoreQueryTool([STORE_DEF], schedBackend, APP_ID);
+
+    const batchBridge = bridgeToUpstream(
+      `${storeToToolName(STORE_DEF.name)}_batch`, batchDef, extractJsonSchema(batchDef), makeCtx,
+    ) as { build(p: Record<string, unknown>): {execute(): Promise<{llmContent: string}>} };
+
+    const queryBridge = bridgeToUpstream(
+      'query_store', queryDef, extractJsonSchema(queryDef), makeCtx,
+    ) as { build(p: Record<string, unknown>): {execute(): Promise<{llmContent: string}>} };
+
+    // Batch write via build().execute() — this is the path the Scheduler uses
+    const invocation = batchBridge.build({
+      items: [
+        {topic_id: 't1', title: 'Topic 1', source: 'twitter', score: 80},
+        {topic_id: 't2', title: 'Topic 2', source: 'hackernews', score: 90},
+      ],
+    });
+    const batchResult = await invocation.execute();
+    expect(batchResult.llmContent).not.toContain('Error');
+    const batchParsed = JSON.parse(batchResult.llmContent) as {stored: number};
+    expect(batchParsed.stored).toBe(2);
+
+    // Query via build().execute()
+    const queryInvocation = queryBridge.build({store: 'trending-topics'});
+    const queryResult = await queryInvocation.execute();
+    const queryParsed = JSON.parse(queryResult.llmContent) as {total: number};
+    expect(queryParsed.total).toBe(2);
+  });
+
+  it('batch write with extra fields LLM might add', async () => {
+    const extraBackend = createInMemoryBackend();
+    const batchDef = createStoreBatchTool(STORE_DEF, extraBackend, APP_ID);
+
+    const batchBridge = bridgeToUpstream(
+      `${storeToToolName(STORE_DEF.name)}_batch`, batchDef, extractJsonSchema(batchDef), makeCtx,
+    ) as { validateBuildAndExecute(p: Record<string, unknown>): Promise<{llmContent: string}> };
+
+    // LLM might send extra fields not in the schema
+    const result = await batchBridge.validateBuildAndExecute({
+      items: [
+        {topic_id: 't1', title: 'Topic 1', source: 'twitter', score: 80, url: 'https://example.com', tags: ['ai']},
+      ],
+    });
+    expect(result.llmContent).not.toContain('Error');
+    const parsed = JSON.parse(result.llmContent) as {stored: number; failed: number};
+    expect(parsed.stored).toBe(1);
+    expect(parsed.failed).toBe(0);
+  });
+
   it('extractJsonSchema produces real schemas for store tools', () => {
     const writeDef = createStoreWriteTool(STORE_DEF, backend, APP_ID);
     const schema = extractJsonSchema(writeDef);
