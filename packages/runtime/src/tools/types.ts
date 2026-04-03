@@ -14,6 +14,7 @@
  */
 
 import type {z} from 'zod';
+import type {FlexibleSchema} from 'ai';
 
 // ---------------------------------------------------------------------------
 // Tool context (provided to execute functions)
@@ -88,8 +89,8 @@ export interface ToolDefinition<TParams = unknown> {
   /** Description shown to the LLM */
   description: string;
 
-  /** Zod schema for parameter validation (converted to JSON Schema for the LLM) */
-  parameters: z.ZodType<TParams>;
+  /** Schema for parameter validation — Zod schema or AI SDK jsonSchema() */
+  parameters: z.ZodType<TParams> | FlexibleSchema<TParams>;
 
   /** Execute the tool with validated parameters */
   execute(params: TParams, ctx: ToolContext): Promise<unknown>;
