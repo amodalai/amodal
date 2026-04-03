@@ -62,10 +62,11 @@ export async function handleStreaming(
         // Pre-execute read-only tools while the model might still be generating
         const toolDef = ctx.toolRegistry.get(event.toolName);
         if (toolDef?.readOnly) {
-          ctx.preExecutionCache.set(
-            event.toolCallId,
-            executeTool(call, toolDef, ctx),
-          );
+          const promise = executeTool(call, toolDef, ctx);
+          // Suppress unhandled rejection — errors are handled when awaited in EXECUTING.
+          // Without this, abort before reaching EXECUTING causes unhandled rejection.
+          promise.catch(() => {});
+          ctx.preExecutionCache.set(event.toolCallId, promise);
         }
         break;
       }

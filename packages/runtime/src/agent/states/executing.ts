@@ -193,9 +193,9 @@ function nextAfterToolResult(
   const resultMessage = buildToolResultMessage(result);
   ctx.messages = [...ctx.messages, resultMessage];
 
-  // Snip oversized tool output inline
+  // Flag oversized tool output (actual snipping implemented in Phase 3.3)
   if (result.content.length > ctx.config.maxResultSize) {
-    ctx.logger.debug('tool_result_snipped', {
+    ctx.logger.debug('tool_result_oversized', {
       callId: result.callId,
       tool: result.toolName,
       originalSize: result.content.length,

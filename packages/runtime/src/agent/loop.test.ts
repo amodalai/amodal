@@ -498,6 +498,48 @@ describe('handleConfirming (via transition)', () => {
   });
 });
 
+describe('handleCompacting (via transition)', () => {
+  it('stub passes through to thinking with unchanged messages', async () => {
+    const ctx = makeMockContext();
+    const messages = [{role: 'user', content: 'Hello'}] as ModelMessage[];
+
+    const result = await transition({type: 'compacting', messages}, ctx);
+
+    expect(result.next.type).toBe('thinking');
+    if (result.next.type === 'thinking') {
+      expect(result.next.messages).toBe(messages);
+    }
+    expect(result.effects).toEqual([]);
+    expect(ctx.logger.debug).toHaveBeenCalledWith('compacting_skipped', expect.objectContaining({
+      reason: 'stub_implementation',
+    }));
+  });
+});
+
+describe('handleDispatching (via transition)', () => {
+  it('stub transitions to done with error', async () => {
+    const ctx = makeMockContext();
+
+    const result = await transition({
+      type: 'dispatching',
+      task: {agentName: 'research-agent', toolSubset: ['search'], prompt: 'Find info'},
+      parentMessages: [],
+    }, ctx);
+
+    expect(result.next.type).toBe('done');
+    if (result.next.type === 'done') {
+      expect(result.next.reason).toBe('error');
+    }
+
+    const errorEvents = result.effects.filter((e) => e.type === SSEEventType.Error);
+    expect(errorEvents.length).toBe(1);
+
+    expect(ctx.logger.warn).toHaveBeenCalledWith('dispatching_not_implemented', expect.objectContaining({
+      agent: 'research-agent',
+    }));
+  });
+});
+
 // ---------------------------------------------------------------------------
 // 3. Integration: runAgent() full flow
 // ---------------------------------------------------------------------------

@@ -16,7 +16,7 @@
  */
 
 import type {Tool} from 'ai';
-import {SSEEventType} from '../../types.js';
+import type {SSEEvent} from '../../types.js';
 import type {
   ThinkingState,
   AgentContext,
@@ -33,7 +33,7 @@ export function handleThinking(
   state: ThinkingState,
   ctx: AgentContext,
 ): TransitionResult {
-  const effects = [];
+  const effects: SSEEvent[] = [];
 
   // 1. Increment turn counter
   ctx.turnCount++;
@@ -51,14 +51,6 @@ export function handleThinking(
       inputSchema: def.parameters,
     } as Tool;
   }
-
-  // 3. Emit thinking_start
-  const timestamp = new Date().toISOString();
-  effects.push({
-    type: SSEEventType.TextDelta as const,
-    content: '',
-    timestamp,
-  });
 
   ctx.logger.debug('agent_thinking_start', {
     session: ctx.sessionId,
