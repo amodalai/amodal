@@ -96,6 +96,13 @@ export type {
   ToolRegistry,
 } from './tools/types.js';
 
+// MCP tool adapter
+export {
+  createMcpToolDefinition,
+  registerMcpTools,
+  jsonSchemaToZod,
+} from './tools/mcp-tool-adapter.js';
+
 // Store tools (new Zod-based implementations)
 export {
   createStoreWriteTool,
