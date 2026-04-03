@@ -84,6 +84,15 @@ export type {
   StreamEvent,
 } from './providers/types.js';
 
+// Tool registry
+export { createToolRegistry } from './tools/registry.js';
+export type {
+  ToolDefinition,
+  ToolContext,
+  ToolCategory,
+  ToolMetadata,
+  ToolRegistry,
+} from './tools/types.js';
 
 // ---------------------------------------------------------------------------
 // Environment variable parsing
