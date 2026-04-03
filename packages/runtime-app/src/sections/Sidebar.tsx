@@ -78,7 +78,7 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
             if (e.key === 'Enter') saveTitle();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="w-full text-[12px] px-1.5 py-0.5 rounded border border-blue-600/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
+          className="w-full text-[12px] px-1.5 py-0.5 rounded border border-primary/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
           autoFocus
         />
       </div>
@@ -92,7 +92,7 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
         className={cn(
           'group flex items-center gap-2 w-full px-3 py-[6px] rounded-md text-[12px] text-left transition-colors duration-150 truncate',
           isActive
-            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400'
+            ? 'bg-primary/10 text-primary dark:text-primary'
             : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
         )}
       >
@@ -127,7 +127,7 @@ function NavItem({ to, children, end }: { to: string; children: React.ReactNode;
         cn(
           'flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
           isActive
-            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400 font-medium'
+            ? 'bg-primary/10 text-primary dark:text-primary font-medium'
             : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
         )
       }
@@ -172,7 +172,7 @@ function InfoItem({ icon, label, to, status, badge }: { icon: React.ReactNode; l
         cn(
           'flex items-center gap-2.5 px-3 py-[6px] text-[13px] rounded-md transition-colors duration-150',
           isActive
-            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400'
+            ? 'bg-primary/10 text-primary dark:text-primary'
             : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
         )
       }
@@ -338,9 +338,9 @@ export function Sidebar() {
               return (
                 <NavItem key={name} to={`/automations/${encodeURIComponent(name)}`}>
                   {isRunning ? (
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 text-purple-400 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 text-primary animate-spin" />
                   ) : (
-                    <Zap className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-purple-500' : 'text-purple-500/30')} />
+                    <Zap className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-primary' : 'text-primary/30')} />
                   )}
                   <span className={cn('truncate', !isActive && !isRunning && 'opacity-40')}>
                     {name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}

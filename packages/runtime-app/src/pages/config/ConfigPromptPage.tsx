@@ -61,7 +61,7 @@ export function ConfigPromptPage() {
         </div>
         <div className="h-3 bg-gray-200 dark:bg-zinc-800 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all ${usedPct > 80 ? 'bg-amber-500' : 'bg-blue-600'}`}
+            className={`h-full rounded-full transition-all ${usedPct > 80 ? 'bg-amber-500' : 'bg-primary'}`}
             style={{ width: `${String(usedPct)}%` }}
           />
         </div>
@@ -80,7 +80,7 @@ export function ConfigPromptPage() {
               <div key={s.name} className="flex items-center gap-3">
                 <div className="w-28 text-xs text-gray-600 dark:text-zinc-400 font-medium truncate">{s.name}</div>
                 <div className="flex-1 h-2 bg-gray-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-400/60 rounded-full" style={{ width: `${String(pct)}%` }} />
+                  <div className="h-full bg-primary/60 rounded-full" style={{ width: `${String(pct)}%` }} />
                 </div>
                 <div className="w-20 text-right text-xs text-gray-500 dark:text-zinc-500 tabular-nums">
                   {s.tokens.toLocaleString()}
@@ -98,7 +98,7 @@ export function ConfigPromptPage() {
       <div>
         <button
           onClick={() => setShowPrompt(!showPrompt)}
-          className="flex items-center gap-2 text-sm text-gray-600 dark:text-zinc-400 hover:text-blue-700 dark:hover:text-blue-400 transition-colors mb-3"
+          className="flex items-center gap-2 text-sm text-gray-600 dark:text-zinc-400 hover:text-primary dark:hover:text-primary transition-colors mb-3"
         >
           <FileText className="h-4 w-4" />
           {showPrompt ? 'Hide full prompt' : 'View full prompt'} ({data.system_prompt_length.toLocaleString()} chars)

@@ -118,12 +118,12 @@ export function AutomationsPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <a href={`/automations/${encodeURIComponent(auto.name)}`} className="flex items-center gap-2 mb-1 hover:opacity-80 transition-opacity">
-                        <Zap className="h-4 w-4 text-purple-500 shrink-0" />
+                        <Zap className="h-4 w-4 text-primary shrink-0" />
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-200">{auto.title}</h3>
                       </a>
 
                       <div className="flex items-center gap-3 mb-3">
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 font-medium">
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary font-medium">
                           {auto.trigger}
                         </span>
                         {auto.schedule && (
@@ -162,7 +162,7 @@ export function AutomationsPage() {
                             )}
                           </span>
                           {auto.lastRunSessionId && (
-                            <a href={`/sessions/${auto.lastRunSessionId}`} className="text-xs text-blue-600 hover:text-blue-400 ml-2">
+                            <a href={`/sessions/${auto.lastRunSessionId}`} className="text-xs text-primary hover:text-primary ml-2">
                               View session
                             </a>
                           )}
@@ -173,7 +173,7 @@ export function AutomationsPage() {
                     <button
                       onClick={() => { void handleRunNow(auto.name); }}
                       disabled={isRunning}
-                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-primary text-white hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                     >
                       {isRunning ? (
                         <>

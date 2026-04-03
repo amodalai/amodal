@@ -285,7 +285,7 @@ function CollapsibleText({ text, lines = 2 }: { text: string; lines?: number }) 
       </div>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+        className="flex items-center gap-1 mt-1 text-[10px] text-primary hover:text-primary/70 transition-colors"
       >
         <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
           className={cn('transition-transform', expanded && 'rotate-90')}>
@@ -410,7 +410,7 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
                           <div className="space-y-1">
                             {r.toolCalls.map((tc, ti) => (
                               <div key={ti} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono break-words">
-                                <span className="text-blue-600 font-semibold">{tc.name}</span>
+                                <span className="text-primary font-semibold">{tc.name}</span>
                                 {r.toolResults[ti] && (
                                   <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px]">
                                     <CollapsibleText text={r.toolResults[ti]} />
@@ -453,9 +453,9 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
             <tr>
               <td colSpan={6} className="px-3 py-2.5 border-t border-gray-100 dark:border-zinc-800/50">
                 <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-zinc-500">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
                   <span className="text-gray-600 dark:text-zinc-300">{runningModel.label || runningModel.model.replace(/-\d{8}$/, '')}</span>
-                  <span className={runPhase === 'judging' ? 'text-amber-400' : 'text-blue-400'}>
+                  <span className={runPhase === 'judging' ? 'text-amber-400' : 'text-primary'}>
                     {runPhase === 'judging' ? 'judging' : 'running'}
                   </span>
                   {runStartTime ? <ElapsedTimer startTime={runStartTime} /> : null}
@@ -573,9 +573,9 @@ export function EvalCard({
     : 'border-gray-200 dark:border-zinc-800';
 
   // Icon: spinner when running, green/red beaker in suite mode with results, default otherwise
-  let headerIcon = <FlaskConical className="h-4 w-4 text-blue-600/60 shrink-0" />;
+  let headerIcon = <FlaskConical className="h-4 w-4 text-primary/60 shrink-0" />;
   if (isRunning) {
-    headerIcon = <Loader2 className="h-4 w-4 animate-spin text-blue-400 shrink-0" />;
+    headerIcon = <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />;
   } else if (hasSuiteResult && allPassed) {
     headerIcon = <FlaskConical className="h-4 w-4 text-emerald-400 shrink-0" />;
   } else if (hasSuiteResult && anyFailed) {
@@ -629,8 +629,8 @@ export function EvalCard({
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Models</div>
-                <button onClick={selectAll} className="text-[10px] text-blue-400 hover:text-blue-300">all</button>
-                <button onClick={selectNone} className="text-[10px] text-blue-400 hover:text-blue-300">none</button>
+                <button onClick={selectAll} className="text-[10px] text-primary hover:text-primary/70">all</button>
+                <button onClick={selectNone} className="text-[10px] text-primary hover:text-primary/70">none</button>
               </div>
               <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
                 {models.map((m) => {
@@ -643,7 +643,7 @@ export function EvalCard({
                       className={cn(
                         'px-2 py-1.5 rounded text-xs font-medium border transition-colors text-center truncate',
                         selected
-                          ? 'border-blue-600/50 bg-blue-600/10 text-blue-400'
+                          ? 'border-primary/50 bg-primary/10 text-primary'
                           : 'border-gray-200 dark:border-zinc-700/50 text-gray-400 dark:text-zinc-500 hover:border-gray-300 dark:hover:border-zinc-600',
                       )}
                     >
@@ -675,7 +675,7 @@ export function EvalCard({
           <button
             onClick={() => { void handleRun(); }}
             disabled={isRunning || selectedCount === 0}
-            className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-medium hover:bg-blue-600 disabled:opacity-30 transition-colors flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary disabled:opacity-30 transition-colors flex items-center gap-2"
           >
             {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Run {selectedCount} model{selectedCount !== 1 ? 's' : ''}
@@ -774,7 +774,7 @@ export function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll 
   if (suites.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <FlaskConical className="h-12 w-12 text-blue-600/20 mb-4" />
+        <FlaskConical className="h-12 w-12 text-primary/20 mb-4" />
         <h3 className="text-sm font-semibold text-gray-400 dark:text-zinc-400 mb-2">No evals defined</h3>
         <p className="text-xs text-gray-400 dark:text-zinc-500 max-w-sm">
           Create eval files in the <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-zinc-800">evals/</code> directory. Each eval is a markdown file with a query and assertions.
@@ -829,14 +829,14 @@ export function ModelArenaPage() {
       <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <FlaskConical className="h-5 w-5 text-blue-600" />
+            <FlaskConical className="h-5 w-5 text-primary" />
             <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Model Arena</h1>
           </div>
           {suites.length > 0 && (
             <div className="flex items-center gap-2 text-[11px]">
-              <button onClick={() => setExpandAll(true)} className="text-blue-400 hover:text-blue-300 transition-colors">expand all</button>
+              <button onClick={() => setExpandAll(true)} className="text-primary hover:text-primary/70 transition-colors">expand all</button>
               <span className="text-gray-300 dark:text-zinc-700">/</span>
-              <button onClick={() => setExpandAll(false)} className="text-blue-400 hover:text-blue-300 transition-colors">collapse all</button>
+              <button onClick={() => setExpandAll(false)} className="text-primary hover:text-primary/70 transition-colors">collapse all</button>
             </div>
           )}
         </div>

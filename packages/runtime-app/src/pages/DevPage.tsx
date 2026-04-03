@@ -112,7 +112,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
                 {row.store ? (
                   <Link
                     to={`/entities/${row.store}`}
-                    className="flex items-center gap-1 text-blue-500 dark:text-blue-400 hover:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                    className="flex items-center gap-1 text-primary hover:text-primary dark:hover:text-primary/70 transition-colors"
                   >
                     {row.store}
                     <ExternalLink className="h-2.5 w-2.5" />
@@ -161,7 +161,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
                   <button
                     onClick={() => handleRun(row.auto!.name)}
                     disabled={isRunning}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 dark:text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-40"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-40"
                   >
                     {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                     {isRunning ? 'Run' : 'Run'}
@@ -241,11 +241,11 @@ export function DevPage() {
   }
 
   return (
-    <div className="flex flex-col h-full border-t-2 border-blue-500/40">
+    <div className="flex flex-col h-full border-t-2 border-primary/40">
       {/* Custom page header */}
-      <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/[0.03] border-b border-gray-200 dark:border-zinc-800/50">
-        <LayoutDashboard className="h-3 w-3 text-blue-500/50" />
-        <span className="text-[10px] font-medium text-blue-500/60 uppercase tracking-widest">
+      <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/[0.03] border-b border-gray-200 dark:border-zinc-800/50">
+        <LayoutDashboard className="h-3 w-3 text-primary/50" />
+        <span className="text-[10px] font-medium text-primary/60 uppercase tracking-widest">
           {pageInfo?.description ?? pageName}
         </span>
       </div>
@@ -292,7 +292,7 @@ class PageErrorBoundary extends React.Component<
           </pre>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="mt-3 px-3 py-1.5 rounded text-xs bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+            className="mt-3 px-3 py-1.5 rounded text-xs bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
           >
             Try again
           </button>

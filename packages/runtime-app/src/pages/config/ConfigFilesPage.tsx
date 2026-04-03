@@ -30,8 +30,8 @@ function getFileIcon(name: string, dirPath: string): { icon: typeof File; color:
   if (dirPath.startsWith('connections')) return { icon: File, color: 'text-emerald-500/60' };
   if (dirPath.startsWith('skills')) return { icon: File, color: 'text-amber-500/60' };
   if (dirPath.startsWith('knowledge')) return { icon: File, color: 'text-blue-500/60' };
-  if (dirPath.startsWith('automations')) return { icon: File, color: 'text-purple-500/60' };
-  if (name === 'config.json') return { icon: File, color: 'text-blue-600/60' };
+  if (dirPath.startsWith('automations')) return { icon: File, color: 'text-primary/60' };
+  if (name === 'config.json') return { icon: File, color: 'text-primary/60' };
   return { icon: File, color: 'text-gray-400' };
 }
 
@@ -40,11 +40,11 @@ function getDirIcon(name: string): string {
     case 'connections': return 'text-emerald-500/60';
     case 'skills': return 'text-amber-500/60';
     case 'knowledge': return 'text-blue-500/60';
-    case 'automations': return 'text-purple-500/60';
+    case 'automations': return 'text-primary/60';
     case 'agents': return 'text-cyan-500/60';
     case 'stores': return 'text-orange-500/60';
     case 'tools': return 'text-rose-500/60';
-    case '.amodal': return 'text-blue-600/60';
+    case '.amodal': return 'text-primary/60';
     default: return 'text-gray-400';
   }
 }
@@ -67,12 +67,12 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
         className={cn(
           'flex items-center gap-2 w-full px-2 py-[5px] rounded text-[12px] text-left transition-colors',
           isSelected
-            ? 'bg-blue-600/10 text-blue-400'
+            ? 'bg-primary/10 text-primary'
             : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
-        <FileIcon className={cn('h-3.5 w-3.5 shrink-0', isSelected ? 'text-blue-400' : color)} />
+        <FileIcon className={cn('h-3.5 w-3.5 shrink-0', isSelected ? 'text-primary' : color)} />
         <span className="truncate font-mono">{entry.name}</span>
         {entry.source === 'package' && (
           <Package className="h-3 w-3 shrink-0 text-violet-400/50" title={entry.packageName ?? 'installed package'} />
@@ -282,7 +282,7 @@ export function ConfigFilesPage() {
                     className={cn(
                       'flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-medium transition-colors',
                       hasChanges
-                        ? 'bg-blue-700 text-white hover:bg-blue-600'
+                        ? 'bg-primary text-white hover:bg-primary'
                         : 'bg-gray-200 dark:bg-white/[0.06] text-gray-400 dark:text-white/60 cursor-not-allowed',
                     )}
                   >

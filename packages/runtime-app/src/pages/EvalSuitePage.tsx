@@ -43,19 +43,19 @@ export function EvalSuitePage() {
       <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <FlaskConical className="h-5 w-5 text-blue-600" />
+            <FlaskConical className="h-5 w-5 text-primary" />
             <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Eval Suite</h1>
           </div>
           {suites.length > 0 && (
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 text-[11px]">
-                <button onClick={() => setExpandAll(true)} className="text-blue-400 hover:text-blue-300 transition-colors">expand all</button>
+                <button onClick={() => setExpandAll(true)} className="text-primary hover:text-primary/70 transition-colors">expand all</button>
                 <span className="text-gray-300 dark:text-zinc-700">/</span>
-                <button onClick={() => setExpandAll(false)} className="text-blue-400 hover:text-blue-300 transition-colors">collapse all</button>
+                <button onClick={() => setExpandAll(false)} className="text-primary hover:text-primary/70 transition-colors">collapse all</button>
               </div>
               <button
                 onClick={() => setRunAllTrigger((prev) => prev + 1)}
-                className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-medium hover:bg-blue-600 transition-colors flex items-center gap-2"
+                className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary transition-colors flex items-center gap-2"
               >
                 <Play className="h-3.5 w-3.5" />
                 Run All

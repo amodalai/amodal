@@ -49,7 +49,7 @@ export function ConfigAgentPage() {
             <div className="bg-gray-50 dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-900 dark:text-zinc-200 font-medium">{mainModel.model.replace(/-\d{8}$/, '')}</span>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-600/10 text-blue-800 dark:text-blue-400 font-medium">
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary font-medium">
                   {mainModel.provider}
                 </span>
               </div>

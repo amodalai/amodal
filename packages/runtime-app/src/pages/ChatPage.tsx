@@ -131,7 +131,7 @@ function ToolCallCard({ call }: { call: ToolCallInfo }) {
       <div className="my-1.5 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2">
           {isRunning ? (
-            <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0" />
+            <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
           ) : isError ? (
             <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
           ) : (
@@ -163,13 +163,13 @@ function ToolCallCard({ call }: { call: ToolCallInfo }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2 my-1.5 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 text-xs font-mono">
       {isRunning ? (
-        <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0" />
+        <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
       ) : isError ? (
         <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
       ) : (
         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
       )}
-      <span className="text-blue-700 dark:text-blue-300 font-semibold">{call.toolName}</span>
+      <span className="text-primary dark:text-primary font-semibold">{call.toolName}</span>
       {call.duration_ms != null && (
         <span className="text-zinc-500 ml-auto">{String(call.duration_ms)}ms</span>
       )}
@@ -187,7 +187,7 @@ function ConfirmationCard({ confirmation, onApprove, onDeny }: {
     <div className="my-2 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
       <div className="flex items-center gap-2 text-sm font-medium text-amber-300 mb-1">
         <Wrench className="h-4 w-4" />
-        <span className="uppercase text-[11px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded">
+        <span className="uppercase text-[11px] font-bold bg-primary text-white px-1.5 py-0.5 rounded">
           {confirmation.method}
         </span>
         <span className="text-zinc-300">{confirmation.endpoint}</span>
@@ -223,7 +223,7 @@ function MessageContent({ blocks, respondToConfirmation }: {
         switch (block.type) {
           case 'text':
             return (
-              <div key={`t-${String(i)}`} className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-900 dark:prose-headings:text-zinc-200 prose-p:text-gray-900 dark:prose-p:text-zinc-300 prose-strong:text-gray-900 dark:prose-strong:text-zinc-200 prose-code:text-blue-800 dark:prose-code:text-blue-300 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-50 prose-pre:text-gray-800 dark:prose-pre:bg-zinc-800/80 dark:prose-pre:text-zinc-200 prose-pre:border prose-pre:border-gray-200 dark:prose-pre:border-zinc-700/50 prose-a:text-blue-800 dark:prose-a:text-blue-400 prose-li:text-gray-900 dark:prose-li:text-zinc-300">
+              <div key={`t-${String(i)}`} className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-900 dark:prose-headings:text-zinc-200 prose-p:text-gray-900 dark:prose-p:text-zinc-300 prose-strong:text-gray-900 dark:prose-strong:text-zinc-200 prose-code:text-primary dark:prose-code:text-primary prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-50 prose-pre:text-gray-800 dark:prose-pre:bg-zinc-800/80 dark:prose-pre:text-zinc-200 prose-pre:border prose-pre:border-gray-200 dark:prose-pre:border-zinc-700/50 prose-a:text-primary dark:prose-a:text-primary prose-li:text-gray-900 dark:prose-li:text-zinc-300">
                 <Markdown>{block.text}</Markdown>
               </div>
             );
@@ -311,7 +311,7 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
             if (e.key === 'Enter') save();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="flex-1 text-sm font-medium px-2 py-1 rounded border border-blue-600/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
+          className="flex-1 text-sm font-medium px-2 py-1 rounded border border-primary/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
           autoFocus
         />
         <button onClick={save} className="text-emerald-500 hover:text-emerald-400">
@@ -453,7 +453,7 @@ export function ChatPage() {
             {history.map((msg, i) => (
               <div key={`hist-${String(i)}`} className={msg.role === 'user' ? 'mb-6 flex justify-end' : 'mb-6'}>
                 {msg.role === 'user' ? (
-                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-blue-700/60 text-white/80 text-[14px] leading-relaxed">
+                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary/60 text-white/80 text-[14px] leading-relaxed">
                     {msg.text}
                   </div>
                 ) : (
@@ -466,7 +466,7 @@ export function ChatPage() {
                       </div>
                     )}
                     {msg.text && (
-                      <div className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-700 dark:prose-headings:text-zinc-300 prose-p:text-gray-600 dark:prose-p:text-zinc-400 prose-code:text-gray-800 dark:prose-code:text-zinc-200 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-blue-700 dark:prose-a:text-blue-400">
+                      <div className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-700 dark:prose-headings:text-zinc-300 prose-p:text-gray-600 dark:prose-p:text-zinc-400 prose-code:text-gray-800 dark:prose-code:text-zinc-200 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-primary dark:prose-a:text-primary">
                         <Markdown>{msg.text}</Markdown>
                       </div>
                     )}
@@ -485,7 +485,7 @@ export function ChatPage() {
                 case 'user':
                   return (
                     <div key={msg.id} className="mb-6 flex justify-end">
-                      <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-blue-700 text-white text-[14px] leading-relaxed">
+                      <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary text-white text-[14px] leading-relaxed">
                         {msg.text}
                       </div>
                     </div>
@@ -555,7 +555,7 @@ export function ChatPage() {
             placeholder="Message..."
             disabled={isStreaming}
             rows={1}
-            className="w-full resize-none rounded-xl bg-white dark:bg-zinc-800/80 border border-gray-300 dark:border-zinc-700/60 px-4 py-3 pr-12 text-[14px] text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 outline-none focus:border-blue-600/60 focus:ring-1 focus:ring-blue-600/20 transition-colors disabled:opacity-50 overflow-y-auto"
+            className="w-full resize-none rounded-xl bg-white dark:bg-zinc-800/80 border border-gray-300 dark:border-zinc-700/60 px-4 py-3 pr-12 text-[14px] text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 outline-none focus:border-primary/60 focus:ring-1 focus:ring-blue-600/20 transition-colors disabled:opacity-50 overflow-y-auto"
             style={{ minHeight: '48px', maxHeight: '160px' }}
           />
           {isStreaming ? (
@@ -570,7 +570,7 @@ export function ChatPage() {
             <button
               type="submit"
               disabled={input.trim().length === 0}
-              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-blue-700 text-white flex items-center justify-center hover:bg-blue-600 transition-colors disabled:opacity-20 disabled:hover:bg-blue-700"
+              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-primary text-white flex items-center justify-center hover:bg-primary transition-colors disabled:opacity-20 disabled:hover:bg-primary"
             >
               <Send className="h-4 w-4" />
             </button>

@@ -62,7 +62,7 @@ function ConfigNavItem({ to, children, end }: { to: string; children: React.Reac
         cn(
           'flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
           isActive
-            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400 font-medium'
+            ? 'bg-primary/10 text-primary dark:text-primary font-medium'
             : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
         )
       }
@@ -108,7 +108,7 @@ export function ConfigLayout() {
         <div className="flex items-center gap-3">
           <NavLink
             to="/config"
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-600/10 transition-colors"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-primary dark:text-primary bg-primary/10 transition-colors"
             title="Configuration"
           >
             <Settings className="h-4 w-4" />
@@ -200,7 +200,7 @@ export function ConfigLayout() {
                 className={cn(
                   'flex items-center gap-2.5 w-full px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
                   chatOpen
-                    ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400 font-medium'
+                    ? 'bg-primary/10 text-primary dark:text-primary font-medium'
                     : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
                 )}
               >

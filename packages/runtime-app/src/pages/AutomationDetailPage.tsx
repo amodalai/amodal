@@ -190,11 +190,11 @@ export function AutomationDetailPage() {
           <div className="flex items-center gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-indigo-500" />
+                <Zap className="h-4 w-4 text-primary" />
                 <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">{automation.title}</h1>
               </div>
               <div className="flex items-center gap-3 mt-1">
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-medium">
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary font-medium">
                   {automation.trigger}
                 </span>
                 {automation.schedule && (
@@ -237,7 +237,7 @@ export function AutomationDetailPage() {
             <button
               onClick={() => { void handleRunNow(); }}
               disabled={isRunning}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary transition-colors disabled:opacity-50"
             >
               {isRunning ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
@@ -254,8 +254,8 @@ export function AutomationDetailPage() {
         <div className="max-w-3xl mx-auto px-4 py-6">
           {/* Live/latest run output */}
           {(isRunning || liveBlocks.length > 0) && (
-            <div className="mb-6 border border-indigo-500/20 rounded-xl p-4 bg-indigo-500/5">
-              <div className="flex items-center gap-2 mb-3 text-xs text-indigo-400 font-medium">
+            <div className="mb-6 border border-primary/20 rounded-xl p-4 bg-primary/5">
+              <div className="flex items-center gap-2 mb-3 text-xs text-primary font-medium">
                 {isRunning ? (
                   <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running now...</>
                 ) : (
@@ -275,7 +275,7 @@ export function AutomationDetailPage() {
                     if (block.type === 'log') {
                       return (
                         <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-gray-500 dark:text-zinc-500">
-                          <span className="text-[10px] font-semibold text-indigo-400/60 uppercase">{block.toolName}</span>
+                          <span className="text-[10px] font-semibold text-primary/60 uppercase">{block.toolName}</span>
                           <span>{block.message}</span>
                         </div>
                       );
@@ -289,7 +289,7 @@ export function AutomationDetailPage() {
                     return (
                       <div key={i} className="flex items-center gap-2 px-3 py-2 my-1 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 text-xs font-mono">
                         {block.status === 'running' ? (
-                          <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0" />
+                          <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
                         ) : (
                           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                         )}
@@ -300,7 +300,7 @@ export function AutomationDetailPage() {
                             {endpoint && <span className="text-gray-500 dark:text-zinc-400 truncate">{endpoint}</span>}
                           </>
                         ) : (
-                          <span className="text-blue-700 dark:text-blue-300 font-semibold">{block.name}</span>
+                          <span className="text-primary dark:text-primary font-semibold">{block.name}</span>
                         )}
                         {block.durationMs != null && (
                           <span className="text-zinc-500 ml-auto">{String(block.durationMs)}ms</span>

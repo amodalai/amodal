@@ -61,7 +61,7 @@ export function SessionDetailPage() {
         </div>
         <button
           onClick={() => { void navigate(`/?resume=${sessionId ?? ''}`); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-700 text-white hover:bg-blue-600 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-white hover:bg-primary transition-colors"
         >
           <Play className="h-3 w-3" />
           Resume
@@ -79,11 +79,11 @@ export function SessionDetailPage() {
             {messages.map((msg, i) => (
               <div key={`msg-${String(i)}`} className={msg.role === 'user' ? 'mb-6 flex justify-end' : 'mb-6'}>
                 {msg.role === 'user' ? (
-                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-blue-700/70 text-white text-[14px] leading-relaxed">
+                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary/70 text-white text-[14px] leading-relaxed">
                     {msg.text}
                   </div>
                 ) : (
-                  <div className="text-[14px] text-zinc-300 prose prose-invert prose-sm max-w-none prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-strong:text-zinc-200 prose-code:text-blue-300 prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-zinc-800/80 prose-pre:border prose-pre:border-zinc-700/50 prose-a:text-blue-400 prose-li:text-zinc-300">
+                  <div className="text-[14px] text-zinc-300 prose prose-invert prose-sm max-w-none prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-strong:text-zinc-200 prose-code:text-primary prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-zinc-800/80 prose-pre:border prose-pre:border-zinc-700/50 prose-a:text-primary prose-li:text-zinc-300">
                     <Markdown>{msg.text}</Markdown>
                   </div>
                 )}
