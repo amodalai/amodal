@@ -81,10 +81,16 @@ These rules apply to ALL code in this repo. They are non-negotiable.
 
 ### Error Handling
 
-- **Never swallow errors silently.** No empty catch blocks. No `catch (e) { /* ignore */ }`.
-- Every catch must: (a) log with context and re-throw, OR (b) return a typed error value.
+- **Never swallow errors silently.** No empty catch blocks. No `catch (e) { return null }`. No `catch (e) { log(e) }` without re-throw. These hide failures and cause cascading bugs that are impossible to diagnose.
+- Functions that can fail return `Result<T, E>` — the caller is forced to handle both cases. Never return `null` to indicate failure (caller can't distinguish "not found" from "broken").
+- **Four valid reasons to catch:**
+  1. Enrich and re-throw (add context: `throw new StoreWriteError(store, id, err)`)
+  2. Module boundary → structured error response (API routes, tool executors)
+  3. Specific expected failure with specific handling (retry, fallback — then re-throw everything else)
+  4. Cleanup — use `finally`, not `catch`
 - Use typed error classes (`ProviderError`, `ToolExecutionError`, `StoreError`, etc.), not bare `new Error('...')`.
 - Errors carry context: what operation failed, what the inputs were, what state the system was in.
+- Error boundaries live at **module edges** (API route, tool executor, session manager), NOT inside store backends, NOT inside utility functions.
 
 ### Types
 

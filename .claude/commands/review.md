@@ -20,10 +20,13 @@ Run `git diff main...HEAD --name-only` to get changed files, then review each on
 
 ### Error Handling
 
-- Empty catch blocks or catch blocks that swallow errors
+- **Silent swallows:** `catch (e) { }`, `catch (e) { return null }`, `catch (e) { return [] }`, `catch (e) { log(e) }` without re-throw. These are ALWAYS wrong.
+- Functions returning `null` to indicate failure instead of `Result<T, E>`
 - Bare `throw new Error('...')` instead of typed error classes
-- Missing context on errors (what operation, what inputs)
+- Missing context on errors (what operation, what inputs, what state)
+- try/catch inside store backends, utility functions, or tool implementations (error boundaries belong at module edges only)
 - try/catch around code that can't actually throw
+- `catch` used for cleanup instead of `finally`
 
 ### Types
 
