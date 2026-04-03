@@ -61,7 +61,7 @@ export function SessionDetailPage() {
         </div>
         <button
           onClick={() => { void navigate(`/?resume=${sessionId ?? ''}`); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-white hover:bg-primary transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-primary-solid text-white hover:bg-primary-solid/90 transition-colors"
         >
           <Play className="h-3 w-3" />
           Resume

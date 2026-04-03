@@ -7,6 +7,8 @@
     /* Brand — matches docs theme (#1E40AF light / #60A5FA dark) */
     --primary: 224 71% 40%;
     --primary-foreground: 0 0% 100%;
+    /* Always-dark variant for surfaces with white text (buttons, chat bubbles) */
+    --primary-solid: 224 71% 40%;
 
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -30,6 +32,7 @@
     /* Brand — blue-400 in dark mode */
     --primary: 217 91% 68%;
     --primary-foreground: 0 0% 100%;
+    --primary-solid: 224 71% 40%;
 
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;

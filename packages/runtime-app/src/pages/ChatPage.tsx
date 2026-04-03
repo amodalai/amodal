@@ -187,7 +187,7 @@ function ConfirmationCard({ confirmation, onApprove, onDeny }: {
     <div className="my-2 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
       <div className="flex items-center gap-2 text-sm font-medium text-amber-300 mb-1">
         <Wrench className="h-4 w-4" />
-        <span className="uppercase text-[11px] font-bold bg-primary text-white px-1.5 py-0.5 rounded">
+        <span className="uppercase text-[11px] font-bold bg-primary-solid text-white px-1.5 py-0.5 rounded">
           {confirmation.method}
         </span>
         <span className="text-zinc-300">{confirmation.endpoint}</span>
@@ -453,7 +453,7 @@ export function ChatPage() {
             {history.map((msg, i) => (
               <div key={`hist-${String(i)}`} className={msg.role === 'user' ? 'mb-6 flex justify-end' : 'mb-6'}>
                 {msg.role === 'user' ? (
-                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary/60 text-white/80 text-[14px] leading-relaxed">
+                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary-solid/80 text-white text-[14px] leading-relaxed">
                     {msg.text}
                   </div>
                 ) : (
@@ -485,7 +485,7 @@ export function ChatPage() {
                 case 'user':
                   return (
                     <div key={msg.id} className="mb-6 flex justify-end">
-                      <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary text-white text-[14px] leading-relaxed">
+                      <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary-solid text-white text-[14px] leading-relaxed">
                         {msg.text}
                       </div>
                     </div>
@@ -570,7 +570,7 @@ export function ChatPage() {
             <button
               type="submit"
               disabled={input.trim().length === 0}
-              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-primary text-white flex items-center justify-center hover:bg-primary transition-colors disabled:opacity-20 disabled:hover:bg-primary"
+              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-primary-solid text-white flex items-center justify-center hover:bg-primary-solid/90 transition-colors disabled:opacity-20"
             >
               <Send className="h-4 w-4" />
             </button>

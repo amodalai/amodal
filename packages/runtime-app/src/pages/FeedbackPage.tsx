@@ -261,7 +261,7 @@ Based on these patterns, recommend specific changes. Check existing config files
                   {selectedDown.length > 0 && (
                     <button
                       onClick={handleSynthesize}
-                      className="px-2 py-1 rounded bg-primary text-white text-[11px] font-medium hover:bg-primary transition-colors flex items-center gap-1"
+                      className="px-2 py-1 rounded bg-primary-solid text-white text-[11px] font-medium hover:bg-primary-solid/90 transition-colors flex items-center gap-1"
                     >
                       <Sparkles className="h-3 w-3" />
                       Synthesize{selectedDown.length > 15 ? ' (15 max)' : ` (${selectedDown.length})`}

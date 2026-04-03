@@ -282,7 +282,7 @@ export function ConfigFilesPage() {
                     className={cn(
                       'flex items-center gap-1.5 px-3 py-1 rounded text-[12px] font-medium transition-colors',
                       hasChanges
-                        ? 'bg-primary text-white hover:bg-primary'
+                        ? 'bg-primary-solid text-white hover:bg-primary'
                         : 'bg-gray-200 dark:bg-white/[0.06] text-gray-400 dark:text-white/60 cursor-not-allowed',
                     )}
                   >

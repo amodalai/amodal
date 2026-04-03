@@ -675,7 +675,7 @@ export function EvalCard({
           <button
             onClick={() => { void handleRun(); }}
             disabled={isRunning || selectedCount === 0}
-            className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary disabled:opacity-30 transition-colors flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-primary-solid text-white text-sm font-medium hover:bg-primary-solid/90 disabled:opacity-30 transition-colors flex items-center gap-2"
           >
             {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Run {selectedCount} model{selectedCount !== 1 ? 's' : ''}

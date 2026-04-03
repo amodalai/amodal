@@ -237,7 +237,7 @@ export function AutomationDetailPage() {
             <button
               onClick={() => { void handleRunNow(); }}
               disabled={isRunning}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary-solid text-white hover:bg-primary-solid/90 transition-colors disabled:opacity-50"
             >
               {isRunning ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>

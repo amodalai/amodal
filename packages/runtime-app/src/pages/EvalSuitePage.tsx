@@ -55,7 +55,7 @@ export function EvalSuitePage() {
               </div>
               <button
                 onClick={() => setRunAllTrigger((prev) => prev + 1)}
-                className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary transition-colors flex items-center gap-2"
+                className="px-4 py-2 rounded-lg bg-primary-solid text-white text-sm font-medium hover:bg-primary-solid/90 transition-colors flex items-center gap-2"
               >
                 <Play className="h-3.5 w-3.5" />
                 Run All

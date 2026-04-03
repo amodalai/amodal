@@ -173,7 +173,7 @@ export function AutomationsPage() {
                     <button
                       onClick={() => { void handleRunNow(auto.name); }}
                       disabled={isRunning}
-                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-primary text-white hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-primary-solid text-white hover:bg-primary-solid/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                     >
                       {isRunning ? (
                         <>

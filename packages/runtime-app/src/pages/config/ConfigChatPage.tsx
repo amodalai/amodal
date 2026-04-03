@@ -193,11 +193,11 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
         {messages.map((msg, i) => (
           <div key={i} className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : ''}`}>
             {msg.role === 'user' ? (
-              <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl rounded-br-md bg-primary text-white ${compact ? 'text-xs' : 'text-sm'}`}>
+              <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl rounded-br-md bg-primary-solid text-white ${compact ? 'text-xs' : 'text-sm'}`}>
                 {msg.content}
               </div>
             ) : (
-              <div className={`max-w-[90%] ${compact ? 'text-xs' : 'text-sm'} text-gray-800 dark:text-white/80 prose prose-sm dark:prose-invert prose-pre:bg-gray-100 dark:prose-pre:bg-zinc-800 prose-pre:text-xs max-w-none`}>
+              <div className={`max-w-[90%] ${compact ? 'text-xs' : 'text-sm'} text-gray-800 dark:text-white/80 prose prose-sm dark:prose-invert prose-code:text-gray-800 dark:prose-code:text-zinc-200 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-100 prose-pre:text-gray-800 dark:prose-pre:bg-zinc-800 dark:prose-pre:text-zinc-200 prose-pre:text-xs max-w-none`}>
                 <Markdown>{msg.content}</Markdown>
               </div>
             )}
@@ -239,7 +239,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
             <button
               type="submit"
               disabled={!input.trim()}
-              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-primary text-white disabled:opacity-30 hover:bg-primary transition-colors shrink-0`}
+              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-primary-solid text-white disabled:opacity-30 hover:bg-primary-solid/90 transition-colors shrink-0`}
             >
               <Send className="h-4 w-4" />
             </button>
