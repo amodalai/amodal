@@ -22,6 +22,9 @@ import type {ToolDefinition, ToolContext, ToolRegistry} from './types.js';
 import {ConnectionError} from '../errors.js';
 import type {Logger} from '@amodalai/core';
 
+/** Default timeout for MCP tool calls (60 seconds). */
+const MCP_TOOL_TIMEOUT_MS = 60_000;
+
 // ---------------------------------------------------------------------------
 // JSON Schema → Zod conversion
 // ---------------------------------------------------------------------------
@@ -155,7 +158,28 @@ export function createMcpToolDefinition(
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- params validated by Zod before execute; MCP tools always have object schemas
-        const result = await mcpManager.callTool(tool.name, (params ?? {}) as Record<string, unknown>);
+        const callPromise = mcpManager.callTool(tool.name, (params ?? {}) as Record<string, unknown>);
+
+        // Race against timeout — McpManager.callTool doesn't accept AbortSignal
+        const timeoutSignal = ctx.signal ?? AbortSignal.timeout(MCP_TOOL_TIMEOUT_MS);
+        const result = await Promise.race([
+          callPromise,
+          new Promise<never>((_resolve, reject) => {
+            if (timeoutSignal.aborted) {
+              reject(new ConnectionError(
+                `MCP tool call "${tool.name}" timed out`,
+                {connection: tool.serverName, action: `callTool(${tool.originalName})`},
+              ));
+              return;
+            }
+            timeoutSignal.addEventListener('abort', () => {
+              reject(new ConnectionError(
+                `MCP tool call "${tool.name}" timed out`,
+                {connection: tool.serverName, action: `callTool(${tool.originalName})`},
+              ));
+            }, {once: true});
+          }),
+        ]);
 
         const durationMs = Date.now() - startTime;
         logger.info('mcp_tool_call_complete', {

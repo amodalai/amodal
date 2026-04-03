@@ -326,6 +326,29 @@ describe('createMcpToolDefinition', () => {
     await expect(def.execute({}, makeMockContext())).rejects.toThrow(ConnectionError);
     await expect(def.execute({}, makeMockContext())).rejects.toThrow(/authentication failed/i);
   });
+
+  it('throws ConnectionError when ctx.signal is already aborted (timeout)', async () => {
+    const mcpManager = makeMockMcpManager({
+      callTool: vi.fn().mockImplementation(() => new Promise(() => {})), // never resolves
+    });
+
+    const tool: McpDiscoveredTool = {
+      name: 'slow__tool',
+      originalName: 'tool',
+      serverName: 'slow',
+      description: 'Slow',
+      parameters: {type: 'object'},
+    };
+
+    const def = createMcpToolDefinition(tool, mcpManager, logger);
+
+    const abortController = new AbortController();
+    abortController.abort();
+    const ctx = makeMockContext({signal: abortController.signal});
+
+    await expect(def.execute({}, ctx)).rejects.toThrow(ConnectionError);
+    await expect(def.execute({}, ctx)).rejects.toThrow(/timed out/);
+  });
 });
 
 // ---------------------------------------------------------------------------
