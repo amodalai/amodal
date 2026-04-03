@@ -548,19 +548,15 @@ export default async (params) => {
 
         if (toolResults[0].type === SSEEventType.ToolCallResult) {
           expect(toolResults[0].status).toBe('success');
-          const result = JSON.parse(toolResults[0].result ?? '{}') as Record<string, unknown>;
 
-          // The custom tool result is JSON-stringified by executeCustomTool, so it's nested
-          const parsed = typeof result['output'] === 'string'
-            ? JSON.parse(result['output']) as Record<string, unknown>
-            : result;
-
-          // Find the actual payload — may be at top level or wrapped
-          const payload = parsed['deal_id'] ? parsed : (parsed['output'] ? JSON.parse(parsed['output'] as string) as Record<string, unknown> : parsed);
-
-          expect(payload['deal_id']).toBe('deal_42');
-          expect(payload['risk_score']).toBe('healthy');
-          expect(payload['factors']).toEqual({days_stale: 5, revenue: 250000});
+          // executeCustomTool returns {output: JSON.stringify(handlerResult)}
+          // The SSE event's result field is that output string directly.
+          const payload = JSON.parse(toolResults[0].result ?? '{}') as Record<string, unknown>;
+          expect(payload).toEqual({
+            deal_id: 'deal_42',
+            risk_score: 'healthy',
+            factors: {days_stale: 5, revenue: 250000},
+          });
         }
 
         // Verify text response and done event
