@@ -75,7 +75,7 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit('down', comment || undefined); }}
             placeholder="What went wrong? (optional)"
-            className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-800/50 text-foreground placeholder:text-gray-400 dark:placeholder:text-zinc-600"
+            className="flex-1 text-xs px-2 py-1.5 rounded border border-border bg-muted text-foreground placeholder:text-muted-foreground"
             autoFocus
           />
           <button
@@ -88,6 +88,17 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
       )}
     </div>
   );
+}
+
+function ElapsedTimer({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!startTime) return;
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+  if (elapsed < 1) return null;
+  return <span className="text-muted-foreground font-mono tabular-nums text-xs">{elapsed}s</span>;
 }
 
 const METHOD_COLORS: Record<string, string> = {
@@ -128,7 +139,7 @@ function ToolCallCard({ call }: { call: ToolCallInfo }) {
 
   if (isRequest && connection) {
     return (
-      <div className="my-1.5 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 overflow-hidden">
+      <div className="my-1.5 rounded-lg bg-muted border border-border overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2">
           {isRunning ? (
             <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
@@ -161,7 +172,7 @@ function ToolCallCard({ call }: { call: ToolCallInfo }) {
 
   // Generic tool call — compact badge
   return (
-    <div className="flex items-center gap-2 px-3 py-2 my-1.5 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 text-xs font-mono">
+    <div className="flex items-center gap-2 px-3 py-2 my-1.5 rounded-lg bg-muted border border-border text-xs font-mono">
       {isRunning ? (
         <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
       ) : isError ? (
@@ -190,17 +201,17 @@ function ConfirmationCard({ confirmation, onApprove, onDeny }: {
         <span className="uppercase text-[11px] font-bold bg-primary-solid text-white px-1.5 py-0.5 rounded">
           {confirmation.method}
         </span>
-        <span className="text-zinc-300">{confirmation.endpoint}</span>
+        <span className="text-muted-foreground">{confirmation.endpoint}</span>
       </div>
       {confirmation.reason && (
-        <p className="text-xs text-zinc-400 mb-2">{confirmation.reason}</p>
+        <p className="text-xs text-muted-foreground mb-2">{confirmation.reason}</p>
       )}
       {!resolved ? (
         <div className="flex gap-2">
           <button onClick={onApprove} className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-500 transition-colors">
             Approve
           </button>
-          <button onClick={onDeny} className="px-3 py-1.5 text-xs font-medium rounded-md bg-zinc-700 text-zinc-300 border border-zinc-600 hover:bg-zinc-600 transition-colors">
+          <button onClick={onDeny} className="px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-muted-foreground border border-border hover:bg-muted/80 transition-colors">
             Deny
           </button>
         </div>
@@ -311,7 +322,7 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
             if (e.key === 'Enter') save();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="flex-1 text-sm font-medium px-2 py-1 rounded border border-primary/50 bg-white dark:bg-zinc-800 text-foreground outline-none"
+          className="flex-1 text-sm font-medium px-2 py-1 rounded border border-primary/50 bg-background text-foreground outline-none"
           autoFocus
         />
         <button onClick={save} className="text-emerald-500 hover:text-emerald-400">
@@ -352,6 +363,16 @@ export function ChatPage() {
   });
   const [input, setInput] = useState('');
   const promptSent = useRef(false);
+  const [streamStartTime, setStreamStartTime] = useState(0);
+
+  // Track when streaming starts/stops
+  useEffect(() => {
+    if (isStreaming && streamStartTime === 0) {
+      setStreamStartTime(Date.now());
+    } else if (!isStreaming && streamStartTime > 0) {
+      setStreamStartTime(0);
+    }
+  }, [isStreaming, streamStartTime]);
 
   // Reset chat state when switching sessions or clicking "New chat"
   const prevResumeRef = useRef(activeResumeId);
@@ -444,7 +465,7 @@ export function ChatPage() {
               <circle cx="22" cy="11" r="10" fill="#60A5FA" fillOpacity="0.85" />
               <circle cx="22" cy="11" r="10" fill="#3B82F6" clipPath="url(#empty-sq)" />
             </svg>
-            <h2 className="text-lg font-medium text-gray-400 dark:text-zinc-400 mb-1">What can I help with?</h2>
+            <h2 className="text-lg font-medium text-gray-400 dark:text-muted-foreground mb-1">What can I help with?</h2>
             <p className="text-sm text-muted-foreground max-w-sm">Ask me anything. I can search, analyze, and connect to your tools.</p>
           </div>
         ) : (
@@ -457,7 +478,7 @@ export function ChatPage() {
                     {msg.text}
                   </div>
                 ) : (
-                  <div className="text-[14px] text-gray-400 dark:text-zinc-400">
+                  <div className="text-[14px] text-gray-400 dark:text-muted-foreground">
                     {msg.toolCalls && msg.toolCalls.length > 0 && (
                       <div>
                         {msg.toolCalls.map((tc) => (
@@ -529,10 +550,11 @@ export function ChatPage() {
                   return null;
               }
             })}
-            {isStreaming && activeToolCalls.length === 0 && (
-              <div className="flex items-center gap-2 text-zinc-500 text-sm mb-4">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Thinking...</span>
+            {isStreaming && (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm mb-4">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                <span>{activeToolCalls.length > 0 ? 'Working...' : 'Thinking...'}</span>
+                <ElapsedTimer startTime={streamStartTime} />
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -555,14 +577,14 @@ export function ChatPage() {
             placeholder="Message..."
             disabled={isStreaming}
             rows={1}
-            className="w-full resize-none rounded-xl bg-white dark:bg-zinc-800/80 border border-border px-4 py-3 pr-12 text-[14px] text-foreground placeholder-gray-400 dark:placeholder-zinc-500 outline-none focus:border-primary/60 focus:ring-1 focus:ring-blue-600/20 transition-colors disabled:opacity-50 overflow-y-auto"
+            className="w-full resize-none rounded-xl bg-background border border-border px-4 py-3 pr-12 text-[14px] text-foreground placeholder-muted-foreground outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50 overflow-y-auto"
             style={{ minHeight: '48px', maxHeight: '160px' }}
           />
           {isStreaming ? (
             <button
               type="button"
               onClick={stop}
-              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-gray-500 dark:bg-zinc-600 text-white flex items-center justify-center hover:bg-gray-400 dark:hover:bg-zinc-500 transition-colors"
+              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-muted-foreground text-white flex items-center justify-center hover:bg-muted-foreground/80 transition-colors"
             >
               <Square className="h-3.5 w-3.5" />
             </button>

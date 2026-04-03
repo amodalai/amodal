@@ -114,15 +114,63 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Create shared store backend if stores are defined
   let storeBackend: StoreBackend | undefined;
+  let storeBackendType = 'none';
   if (repo.stores.length > 0) {
-    const dataDir = repo.config.stores?.dataDir
-      ?? `${config.repoPath}/.amodal/store-data`;
-    try {
-      storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
-      log.info(`Store backend ready (${String(repo.stores.length)} stores, dir: ${dataDir})`, 'dev');
-    } catch (err) {
-      log.error(`Store backend failed to initialize: ${err instanceof Error ? err.message : String(err)}`, 'dev');
-      log.error(`Try deleting ${dataDir} and restarting`, 'dev');
+    const storeConfig = repo.config.stores;
+    const backend = storeConfig?.backend ?? 'pglite';
+
+    if (backend === 'postgres' && storeConfig?.postgresUrl) {
+      const connUrl = storeConfig.postgresUrl.startsWith('env:')
+        ? process.env[storeConfig.postgresUrl.slice(4)] ?? ''
+        : storeConfig.postgresUrl;
+      if (!connUrl) {
+        log.error(`Postgres URL not set (${storeConfig.postgresUrl})`, 'dev');
+      } else {
+        try {
+          const pgModPath = ['..', 'stores', 'postgres-store-backend.js'].join('/');
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic import for optional postgres backend
+          const mod = await import(pgModPath).catch(() => null) as {createPostgresStoreBackend?: (stores: typeof repo.stores, url: string) => Promise<StoreBackend>} | null;
+          if (mod?.createPostgresStoreBackend) {
+            storeBackend = await mod.createPostgresStoreBackend(repo.stores, connUrl);
+            storeBackendType = 'postgres';
+            log.info(`Store backend ready (postgres, ${String(repo.stores.length)} stores)`, 'dev');
+          } else {
+            log.error('Postgres backend not available — install @amodalai/store-postgres', 'dev');
+          }
+        } catch (err) {
+          log.error(`Postgres store backend failed: ${err instanceof Error ? err.message : String(err)}`, 'dev');
+          log.info('Falling back to PGLite', 'dev');
+        }
+      }
+    }
+
+    // Default: PGLite
+    if (!storeBackend) {
+      const dataDir = storeConfig?.dataDir ?? `${config.repoPath}/.amodal/store-data`;
+
+      // Check for lock file — another instance may be using this data dir
+      const lockPath = `${dataDir}/server.lock`;
+      try {
+        const {readFileSync, writeFileSync, mkdirSync, unlinkSync} = await import('node:fs');
+        mkdirSync(dataDir, {recursive: true});
+        try {
+          const existing = readFileSync(lockPath, 'utf-8').trim();
+          try { process.kill(Number(existing), 0); log.warn(`Another amodal instance (PID ${existing}) may be using this store directory. PGLite does not support concurrent access.`, 'dev'); }
+          catch { /* PID not running, stale lock */ }
+        } catch { /* no lock file */ }
+        writeFileSync(lockPath, String(process.pid));
+        const lockCleanup = lockPath;
+        process.on('exit', () => { try { unlinkSync(lockCleanup); } catch { /* */ } });
+      } catch { /* lock file handling failed, proceed anyway */ }
+
+      try {
+        storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
+        storeBackendType = 'pglite';
+        log.info(`Store backend ready (pglite, ${String(repo.stores.length)} stores, dir: ${dataDir})`, 'dev');
+      } catch (err) {
+        log.error(`Store backend failed to initialize: ${err instanceof Error ? err.message : String(err)}`, 'dev');
+        log.error(`Try deleting ${dataDir} and restarting`, 'dev');
+      }
     }
   }
 
@@ -234,7 +282,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       version: cfg?.version ?? '',
       description: cfg?.description ?? '',
       models: cfg?.models ?? {},
-      stores: cfg?.stores ?? null,
+      stores: cfg?.stores ? {...cfg.stores, activeBackend: storeBackendType} : null,
       repoPath: config.repoPath,
       envRefs,
       providerStatuses,
