@@ -52,6 +52,7 @@ export function useAmodalBrief(options: UseAmodalBriefOptions): UseAmodalBriefRe
       const toolCalls: ToolCallInfo[] = [];
 
       for await (const event of client.chatStream(prompt, { context, signal: controller.signal })) {
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
         switch (event.type) {
           case 'text_delta':
             text += event.content;

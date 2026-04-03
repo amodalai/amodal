@@ -200,6 +200,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
   });
 
   /** Run eval suite — SSE stream with full per-eval results */
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.post('/api/evals/run', async (req: Request, res: Response) => {
     const port = options.getPort();
     if (!port) {

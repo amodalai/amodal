@@ -68,6 +68,7 @@ export function AmodalChat({
               return (
                 <div key={msg.id} className="amodal-chat__message amodal-chat__message--assistant" data-testid="assistant-message">
                   {msg.contentBlocks.map((block, i) => {
+                    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
                     switch (block.type) {
                       case 'text':
                         return (

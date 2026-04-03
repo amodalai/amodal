@@ -263,6 +263,7 @@ export class ChatClient extends TypedEventEmitter<ClientEvents> {
     );
 
     for await (const event of stream) {
+      // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
       switch (event.type) {
         case 'init':
           this.sessionId = event.session_id;

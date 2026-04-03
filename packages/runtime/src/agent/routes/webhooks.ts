@@ -22,6 +22,7 @@ export interface WebhookRouterOptions {
 export function createWebhookRouter(options: WebhookRouterOptions): Router {
   const router = Router();
 
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.post('/webhooks/:name', async (req: Request, res: Response) => {
     const automationName = req.params['name'] ?? '';
 

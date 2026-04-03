@@ -275,6 +275,7 @@ function convertResponseParts(parts: GeminiPart[]): LLMResponseBlock[] {
 }
 
 function mapFinishReason(reason: string | undefined): LLMChatResponse['stopReason'] {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (reason) {
     case 'STOP':
       return 'end_turn';

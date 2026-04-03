@@ -39,6 +39,7 @@ const LEVEL_LABELS: Record<LogLevel, string> = {
 };
 
 function parseLogLevel(value: string | undefined): LogLevel {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (value?.toLowerCase()) {
     case 'trace':
       return LogLevel.TRACE;

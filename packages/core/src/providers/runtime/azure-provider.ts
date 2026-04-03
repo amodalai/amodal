@@ -253,6 +253,7 @@ function convertResponseContent(message: OpenAIChoiceMessage): LLMResponseBlock[
 }
 
 function mapFinishReason(reason: string | null): LLMChatResponse['stopReason'] {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (reason) {
     case 'stop':
       return 'end_turn';

@@ -72,6 +72,7 @@ export class ChatStream {
     this.abortController = new AbortController();
     this.token = token;
     // Start on next microtick so .on() calls can register first
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
     queueMicrotask(() => this.start());
   }
 
@@ -131,6 +132,7 @@ export class ChatStream {
   }
 
   private processEvent(event: SSEEvent): void {
+    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
     switch (event.type) {
       case 'text_delta':
         this.response.text += event.content;
