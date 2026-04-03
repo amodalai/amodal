@@ -11,6 +11,7 @@
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["src/**/*.test.ts", "dist"],
   "references": [
+    { "path": "../types" },
     { "path": "../core" },
     { "path": "../runtime" }
   ]
