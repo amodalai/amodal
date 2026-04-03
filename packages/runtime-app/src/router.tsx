@@ -16,11 +16,9 @@ import { AutomationDetailPage } from '@/pages/AutomationDetailPage';
 import { DevPage } from '@/pages/DevPage';
 import { InspectDetailPage } from '@/pages/InspectDetailPage';
 import { ConfigLayout } from '@/pages/config/ConfigLayout';
-import { ConfigAgentPage } from '@/pages/config/ConfigAgentPage';
-import { ConfigModelsPage } from '@/pages/config/ConfigModelsPage';
+import { ConfigOverviewPage } from '@/pages/config/ConfigOverviewPage';
 import { ConfigPromptPage } from '@/pages/config/ConfigPromptPage';
 import { ConfigSecretsPage } from '@/pages/config/ConfigSecretsPage';
-import { ConfigSystemPage } from '@/pages/config/ConfigSystemPage';
 import { ConfigFilesPage } from '@/pages/config/ConfigFilesPage';
 import { EvalSuitePage } from '@/pages/EvalSuitePage';
 import { ModelArenaPage } from '@/pages/ModelArenaPage';
@@ -46,11 +44,9 @@ export const router = createBrowserRouter([
     path: '/config',
     element: <ConfigLayout />,
     children: [
-      { index: true, element: <ConfigAgentPage /> },
-      { path: 'models', element: <ConfigModelsPage /> },
+      { index: true, element: <ConfigOverviewPage /> },
       { path: 'prompt', element: <ConfigPromptPage /> },
       { path: 'secrets', element: <ConfigSecretsPage /> },
-      { path: 'system', element: <ConfigSystemPage /> },
       { path: 'files', element: <ConfigFilesPage /> },
       { path: 'evals', element: <EvalSuitePage /> },
       { path: 'arena', element: <ModelArenaPage /> },

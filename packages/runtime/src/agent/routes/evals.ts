@@ -442,6 +442,11 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
       {provider: 'groq', model: 'qwen/qwen3-32b', label: 'Qwen 3 32B (Groq)'},
       {provider: 'groq', model: 'moonshotai/kimi-k2-instruct', label: 'Kimi K2 (Groq)'},
       {provider: 'groq', model: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (Groq)'},
+      {provider: 'mistral', model: 'mistral-large-latest', label: 'Mistral Large'},
+      {provider: 'mistral', model: 'mistral-small-latest', label: 'Mistral Small'},
+      {provider: 'mistral', model: 'codestral-latest', label: 'Codestral'},
+      {provider: 'xai', model: 'grok-3', label: 'Grok 3'},
+      {provider: 'xai', model: 'grok-3-mini', label: 'Grok 3 Mini'},
     ];
 
     res.json({models});

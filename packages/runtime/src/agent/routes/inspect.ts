@@ -75,44 +75,126 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
         return {name, status: 'error' as const, error: 'Health check failed'};
       });
 
-      // Build the system prompt so the UI can display it
+      // Build system prompt matching the real session path (buildDefaultPrompt)
+      // Also compute per-item token contributions for the breakdown UI
+      const modelId = repo.config?.models?.['main']?.model ?? '';
       let systemPrompt = '';
-      let estimatedTokens = 0;
+      const contributions: Array<{name: string; category: string; tokens: number; filePath?: string}> = [];
+
       try {
+        const { buildDefaultPrompt, resolveScopeLabels, generateFieldGuidance, generateAlternativeLookupGuidance } = await import('@amodalai/core');
+        const est = (text: string) => Math.ceil(text.length / 4);
+
+        const connArray = repo.connections?.size ? Array.from(repo.connections.values()).map((conn: {name: string; surface?: Array<{included: boolean; method: string; path: string; description: string}>; entities?: string; rules?: string}) => ({
+          name: conn.name,
+          endpoints: (conn.surface ?? []).filter((ep) => ep.included).map((ep) => ({method: ep.method, path: ep.path, description: ep.description})),
+          entities: conn.entities,
+          rules: conn.rules,
+        })) : undefined;
+        const skillArray = repo.skills?.map((s: {name: string; description?: string; trigger?: string; body?: string}) => ({name: s.name, description: s.description ?? '', trigger: s.trigger, body: s.body ?? ''}));
+        const knowledgeArray = repo.knowledge?.map((k: {name: string; title?: string; body?: string}) => ({name: k.name, title: k.title, body: k.body ?? ''}));
+
+        // Compute scope/field/alt guidance same as session-manager
+        let scopeLabels: Record<string, string> = {};
+        let fieldGuidance: string | undefined;
+        let altLookup: string | undefined;
+        if (repo.connections?.size) {
+          const scopeResult = resolveScopeLabels(repo.connections, []);
+          scopeLabels = scopeResult.scopeLabels;
+          fieldGuidance = generateFieldGuidance(repo.connections, []);
+          altLookup = generateAlternativeLookupGuidance(repo.connections);
+        }
+
+        // Full prompt (matches session-manager)
+        systemPrompt = repo.config?.basePrompt ?? buildDefaultPrompt({
+          name: repo.config?.name ?? 'Agent',
+          description: repo.config?.description,
+          agentContext: String((repo.config as Record<string, unknown> | undefined)?.['userContext'] ?? repo.config?.description ?? ''),
+          agentOverride: repo.agents?.main,
+          connections: connArray,
+          skills: skillArray,
+          knowledge: knowledgeArray,
+          fieldGuidance,
+          scopeLabels,
+          alternativeLookupGuidance: altLookup,
+        });
+
+        // Per-item contributions
+        const baseOnly = buildDefaultPrompt({name: repo.config?.name ?? 'Agent', description: repo.config?.description});
+        contributions.push({name: 'Base prompt', category: 'system', tokens: est(baseOnly)});
+
+        if (repo.agents?.main) {
+          contributions.push({name: 'Agent override', category: 'system', tokens: est(repo.agents.main)});
+        }
+
+        // Individual connections
+        if (repo.connections?.size) {
+          for (const [, conn] of repo.connections) {
+            const surface = (conn.surface ?? []).filter((ep: {included: boolean}) => ep.included);
+            const parts: string[] = [];
+            for (const ep of surface) {
+              parts.push(`${ep.method} ${ep.path} — ${ep.description}`);
+            }
+            if (conn.entities) parts.push(conn.entities);
+            if (conn.rules) parts.push(conn.rules);
+            contributions.push({name: conn.name, category: 'connection', tokens: est(parts.join('\n')), filePath: `connections/${conn.name}/surface.md`});
+          }
+        }
+
+        // Individual skills
+        if (repo.skills) {
+          for (const skill of repo.skills) {
+            const parts = [skill.description ?? ''];
+            if (skill.trigger) parts.push(skill.trigger);
+            if (skill.body) parts.push(skill.body);
+            contributions.push({name: skill.name, category: 'skill', tokens: est(parts.join('\n')), filePath: `skills/${skill.name}/SKILL.md`});
+          }
+        }
+
+        // Individual knowledge docs
+        if (repo.knowledge) {
+          for (const doc of repo.knowledge) {
+            const knowledgePath = doc.location ? doc.location.replace(/^.*?\/(knowledge\/)/, '$1') : undefined;
+            contributions.push({name: doc.title ?? doc.name, category: 'knowledge', tokens: est(doc.body ?? ''), filePath: knowledgePath});
+          }
+        }
+
+        if (fieldGuidance) {
+          contributions.push({name: 'Field guidance', category: 'system', tokens: est(fieldGuidance)});
+        }
+        if (altLookup) {
+          contributions.push({name: 'Alternative lookups', category: 'system', tokens: est(altLookup)});
+        }
+      } catch {
         const { buildDefaultPrompt } = await import('@amodalai/core');
         systemPrompt = repo.config?.basePrompt ?? buildDefaultPrompt({
           name: repo.config?.name ?? 'Agent',
           description: repo.config?.description,
-          agentContext: String((repo.config as Record<string, unknown> | undefined)?.['userContext'] ?? repo.config?.description ?? ''),  
-          agentOverride: repo.agents?.main,
-          connections: repo.connections?.size ? Array.from(repo.connections.values()).map((conn: {name: string; surface?: Array<{included: boolean; method: string; path: string; description: string}>; entities?: string; rules?: string}) => ({
-            name: conn.name,
-            endpoints: (conn.surface ?? []).filter((ep) => ep.included).map((ep) => ({method: ep.method, path: ep.path, description: ep.description})),
-            entities: conn.entities,
-            rules: conn.rules,
-          })) : undefined,
-          skills: repo.skills?.map((s: {name: string; description?: string; trigger?: string; body?: string}) => ({name: s.name, description: s.description ?? '', trigger: s.trigger, body: s.body ?? ''})),
-          knowledge: repo.knowledge?.map((k: {name: string; title?: string; body?: string}) => ({name: k.name, title: k.title, body: k.body ?? ''})),
         });
-        estimatedTokens = Math.ceil(systemPrompt.length / 4);
-      } catch {
-        // Prompt generation failed — non-fatal, return empty
       }
+
+      // Sort by tokens descending, take top 10
+      contributions.sort((a, b) => b.tokens - a.tokens);
+
+      const { getModelContextWindow } = await import('@amodalai/core');
+      const contextWindow = getModelContextWindow(modelId);
+      const estimatedTokens = Math.ceil(systemPrompt.length / 4);
+      const tokenUsage = {
+        total: contextWindow,
+        used: estimatedTokens,
+        remaining: contextWindow - estimatedTokens,
+        sectionBreakdown: Object.fromEntries(contributions.map((c) => [c.name, c.tokens])),
+      };
 
       res.json({
         repo_path: options.repoPath,
         name: repo.config?.name ?? '',
-        model: repo.config?.models?.['main']?.model ?? '',
+        model: modelId,
         provider: repo.config?.models?.['main']?.provider ?? '',
         system_prompt: systemPrompt,
         system_prompt_length: systemPrompt.length,
-        token_usage: {
-          total: estimatedTokens * 2,
-          used: estimatedTokens,
-          remaining: estimatedTokens,
-          sectionBreakdown: {},
-        },
-        sections: [],
+        token_usage: tokenUsage,
+        contributions,
         connections,
         mcpServers,
         skills: repo.skills.map((s: { name: string }) => s.name),
