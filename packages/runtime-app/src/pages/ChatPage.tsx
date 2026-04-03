@@ -223,7 +223,7 @@ function MessageContent({ blocks, respondToConfirmation }: {
         switch (block.type) {
           case 'text':
             return (
-              <div key={`t-${String(i)}`} className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-900 dark:prose-headings:text-zinc-200 prose-p:text-gray-900 dark:prose-p:text-zinc-300 prose-strong:text-gray-900 dark:prose-strong:text-zinc-200 prose-code:text-primary dark:prose-code:text-primary prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-50 prose-pre:text-gray-800 dark:prose-pre:bg-zinc-800/80 dark:prose-pre:text-zinc-200 prose-pre:border prose-pre:border-gray-200 dark:prose-pre:border-zinc-700/50 prose-a:text-primary dark:prose-a:text-primary prose-li:text-gray-900 dark:prose-li:text-zinc-300">
+              <div key={`t-${String(i)}`} className="prose dark:prose-invert max-w-none text-[15px] leading-relaxed prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border prose-a:text-primary">
                 <Markdown>{block.text}</Markdown>
               </div>
             );
@@ -466,7 +466,7 @@ export function ChatPage() {
                       </div>
                     )}
                     {msg.text && (
-                      <div className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-700 dark:prose-headings:text-zinc-300 prose-p:text-gray-600 dark:prose-p:text-zinc-400 prose-code:text-gray-800 dark:prose-code:text-zinc-200 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-primary dark:prose-a:text-primary">
+                      <div className="prose dark:prose-invert max-w-none text-[14px] leading-relaxed prose-p:text-muted-foreground prose-headings:text-foreground prose-code:text-foreground prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-primary">
                         <Markdown>{msg.text}</Markdown>
                       </div>
                     )}
