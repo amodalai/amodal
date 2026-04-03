@@ -61,7 +61,7 @@ function buildStoreZodSchema(store: LoadedStore): z.ZodObject<Record<string, z.Z
     shape[name] = fieldToZod(field);
   }
 
-  return z.object(shape);
+  return z.object(shape).passthrough();
 }
 
 function fieldToZod(field: StoreFieldDefinition): z.ZodTypeAny {
