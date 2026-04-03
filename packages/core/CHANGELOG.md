@@ -1,5 +1,13 @@
 # @amodalai/core
 
+## 0.1.23
+
+### Patch Changes
+
+- [#96](https://github.com/amodalai/amodal/pull/96) [`7714733`](https://github.com/amodalai/amodal/commit/77147335bc999f4e5d23a0840a23406b8b62f8e7) Thanks [@gte620v](https://github.com/gte620v)! - Fix custom tool ctx.request() to use correct connection config field names (base_url, \_request_config.auth) and enforce write intent for mutating HTTP methods
+
+- [#101](https://github.com/amodalai/amodal/pull/101) [`2351f6f`](https://github.com/amodalai/amodal/commit/2351f6fe807fb4039c1b6d1d67def3e142af1880) Thanks [@whodatdev](https://github.com/whodatdev)! - Add structured logging with configurable log levels (LOG_LEVEL env var). Replace all process.stderr.write calls with a shared logger supporting debug/info/warn/error/fatal levels. Add debug-level logging of the full LLM request payload in MultiProviderContentGenerator.
+
 ## 0.1.22
 
 ### Patch Changes
