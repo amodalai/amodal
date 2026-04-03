@@ -92,6 +92,12 @@ These rules apply to ALL code in this repo. They are non-negotiable.
 - Errors carry context: what operation failed, what the inputs were, what state the system was in.
 - Error boundaries live at **module edges** (API route, tool executor, session manager), NOT inside store backends, NOT inside utility functions.
 
+### Async Discipline
+
+- **No floating promises.** Every async call is `await`ed or explicitly `void`ed with `.catch()`. Enable ESLint `@typescript-eslint/no-floating-promises`.
+- **Timeouts on all external operations.** Every provider call, MCP call, tool execution, and store operation gets `AbortSignal.timeout()`. No hanging forever on a broken external system.
+- **Exhaustive switch on discriminated unions.** Use the `never` trick in `default:` so adding a new variant causes a compile error, not a silent fallthrough.
+
 ### Types
 
 - **No `any`** — use `unknown` and narrow with type guards.

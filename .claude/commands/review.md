@@ -28,6 +28,12 @@ Run `git diff main...HEAD --name-only` to get changed files, then review each on
 - try/catch around code that can't actually throw
 - `catch` used for cleanup instead of `finally`
 
+### Async Discipline
+
+- Floating promises: async function called without `await` or `.catch()` (use `void` prefix if intentional fire-and-forget)
+- External calls (fetch, database, MCP) without `AbortSignal.timeout()`
+- Switch on discriminated union without `default: { const _exhaustive: never = x; }` exhaustive check
+
 ### Types
 
 - `any` usage (should be `unknown` with narrowing)
