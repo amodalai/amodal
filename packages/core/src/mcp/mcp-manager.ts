@@ -11,6 +11,7 @@ import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/st
 import type {Transport} from '@modelcontextprotocol/sdk/shared/transport.js';
 import type {Tool as McpToolSchema} from '@modelcontextprotocol/sdk/types.js';
 import type {RepoMcpServerConfig} from '../repo/repo-types.js';
+import {log} from '../logger.js';
 
 /**
  * A discovered tool from an MCP server.
@@ -77,7 +78,7 @@ export class McpManager {
         const msg = err instanceof Error ? err.message : String(err);
         this.serverStatuses.set(name, 'error');
         this.serverErrors.set(name, msg);
-        process.stderr.write(`[MCP] Failed to connect to ${name}: ${msg}\n`);
+        log.error(`Failed to connect to ${name}: ${msg}`, 'mcp');
       }
     });
 
@@ -102,12 +103,10 @@ export class McpManager {
     try {
       const toolsResult = await client.listTools();
       this.serverTools.set(name, toolsResult.tools);
-      process.stderr.write(
-        `[MCP] Connected to ${name}: ${toolsResult.tools.length} tools discovered\n`,
-      );
+      log.debug(`Connected to ${name}: ${toolsResult.tools.length} tools discovered`, 'mcp');
     } catch {
       this.serverTools.set(name, []);
-      process.stderr.write(`[MCP] Connected to ${name} but tool discovery failed\n`);
+      log.warn(`Connected to ${name} but tool discovery failed`, 'mcp');
     }
   }
 
@@ -235,7 +234,7 @@ export class McpManager {
     const closePromises = [...this.clients.entries()].map(async ([name, client]) => {
       try {
         await client.close();
-        process.stderr.write(`[MCP] Disconnected from ${name}\n`);
+        log.debug(`Disconnected from ${name}`, 'mcp');
       } catch {
         // Best effort
       }

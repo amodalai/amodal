@@ -810,11 +810,23 @@ export class SessionManager {
    * Existing sessions keep their old config.
    */
   updateBundle(bundle: AgentBundle): void {
+    // Only reset MCP if the MCP config actually changed
+    const oldMcpConfig = this.bundle ? JSON.stringify(this.buildMcpConfigs(this.bundle)) : '';
+    const newMcpConfig = JSON.stringify(this.buildMcpConfigs(bundle));
+
     this.bundle = bundle;
-    log.debug(`Bundle updated:\n${serializeBundle(bundle)}`, 'session');
-    // Reset inspect MCP manager so it picks up new connections
-    this.inspectMcpInitialized = false;
-    this.inspectMcp = undefined;
+    log.debug('Config reloaded', 'session');
+
+    if (oldMcpConfig !== newMcpConfig) {
+      log.debug('MCP config changed, resetting connections', 'session');
+      this.inspectMcpInitialized = false;
+      this.inspectMcp = undefined;
+      // Also reset shared MCP so next session gets fresh connections
+      if (this.sharedMcpManager) {
+        void this.sharedMcpManager.shutdown().catch(() => {});
+        this.sharedMcpManager = undefined;
+      }
+    }
   }
 
   /**
