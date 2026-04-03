@@ -37,12 +37,10 @@ import type {ToolDefinition, ToolContext} from './types.js';
  * permissive runtime validator — the LLM's arguments are objects with
  * arbitrary string keys. Strict validation happens in the handler itself.
  */
-function jsonSchemaToZod(jsonSchema: Record<string, unknown>): z.ZodType {
-  // If the schema has properties, create a passthrough object schema
-  // so Zod doesn't strip unknown keys.
-  if (jsonSchema['type'] === 'object') {
-    return z.record(z.string(), z.unknown());
-  }
+function jsonSchemaToZod(_jsonSchema: Record<string, unknown>): z.ZodType {
+  // Custom tool params are always objects with arbitrary keys. The actual
+  // JSON Schema is passed to the LLM for function calling; at runtime we
+  // use a permissive validator since strict validation lives in the handler.
   return z.record(z.string(), z.unknown());
 }
 
