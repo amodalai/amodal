@@ -61,12 +61,13 @@ async function checkProviders(): Promise<ProviderStatus[]> {
         return {provider: check.provider, envVar: check.envVar, keySet: false, verified: false};
       }
       try {
-        const res = await fetch(check.url, {
+        // globalThis.fetch is available in Node 18+
+        const res: {ok: boolean; status: number} = await globalThis.fetch(check.url, {
           method: 'GET',
           headers: check.authHeader(key),
           signal: AbortSignal.timeout(5000),
         });
-        if (res.ok || res.status === 200) {
+        if (res.ok) {
           return {provider: check.provider, envVar: check.envVar, keySet: true, verified: true};
         }
         return {provider: check.provider, envVar: check.envVar, keySet: true, verified: false, error: `HTTP ${String(res.status)}`};
