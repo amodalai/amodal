@@ -7,16 +7,17 @@
 /**
  * MCP tool adapter (Phase 2.5).
  *
- * Converts MCP discovered tools (JSON Schema) into ToolDefinition objects
- * with Zod schemas that can be registered on our ToolRegistry. Each tool's
- * execute function delegates to the McpManager.callTool() method.
+ * Converts MCP discovered tools into ToolDefinition objects that can be
+ * registered on our ToolRegistry. Each tool's execute function delegates
+ * to the McpManager.callTool() method.
  *
- * The JSON Schema → Zod conversion handles the subset of JSON Schema that
- * MCP servers actually use for tool parameters (object schemas with typed
- * properties, optional fields, enums, arrays, nested objects).
+ * MCP tools already have JSON Schema parameter definitions from the server.
+ * We pass these through to the AI SDK via jsonSchema() — no Zod conversion
+ * needed. The AI SDK sends the schema to the LLM as-is, preserving all
+ * parameter descriptions, types, and constraints the server defined.
  */
 
-import {z} from 'zod';
+import {jsonSchema} from 'ai';
 import type {McpManager, McpDiscoveredTool} from '@amodalai/core';
 import type {ToolDefinition, ToolContext, ToolRegistry} from './types.js';
 import {ConnectionError} from '../errors.js';
@@ -24,104 +25,6 @@ import type {Logger} from '@amodalai/core';
 
 /** Default timeout for MCP tool calls (60 seconds). */
 const MCP_TOOL_TIMEOUT_MS = 60_000;
-
-// ---------------------------------------------------------------------------
-// JSON Schema → Zod conversion
-// ---------------------------------------------------------------------------
-
-/**
- * Convert a JSON Schema object to a Zod schema.
- *
- * Handles the subset used by MCP tool parameters:
- * - object with properties
- * - string, number, integer, boolean
- * - enum (string values)
- * - array with items
- * - nested objects
- * - required fields
- * - descriptions
- *
- * Unknown types fall back to z.unknown().
- */
-export function jsonSchemaToZod(schema: Record<string, unknown>): z.ZodTypeAny {
-  const type = typeof schema['type'] === 'string' ? schema['type'] : undefined;
-  const description = typeof schema['description'] === 'string' ? schema['description'] : undefined;
-
-  let result: z.ZodTypeAny;
-
-  // Handle enum first (can appear on any type, but most commonly strings)
-  const enumValues = Array.isArray(schema['enum']) ? schema['enum'] : undefined;
-  if (enumValues && enumValues.length > 0 && enumValues.every((v): v is string => typeof v === 'string')) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by length > 0 + type check
-    result = z.enum(enumValues as [string, ...string[]]);
-    if (description) result = result.describe(description);
-    return result;
-  }
-
-  switch (type) {
-    case 'object': {
-      const rawProps = schema['properties'];
-      const isPropsObject = rawProps !== null && typeof rawProps === 'object' && !Array.isArray(rawProps);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON Schema boundary: properties is an object of property schemas
-      const properties = isPropsObject ? rawProps as Record<string, Record<string, unknown>> : undefined;
-      const rawRequired = Array.isArray(schema['required']) ? schema['required'] : [];
-      const required = new Set(rawRequired.filter((r): r is string => typeof r === 'string'));
-
-      if (!properties || Object.keys(properties).length === 0) {
-        result = z.record(z.unknown());
-      } else {
-        const shape: Record<string, z.ZodTypeAny> = {};
-        for (const [name, propSchema] of Object.entries(properties)) {
-          let propZod = jsonSchemaToZod(propSchema);
-          if (!required.has(name)) {
-            propZod = propZod.optional();
-          }
-          shape[name] = propZod;
-        }
-        result = z.object(shape);
-      }
-      break;
-    }
-
-    case 'string':
-      result = z.string();
-      break;
-
-    case 'number':
-    case 'integer':
-      result = z.number();
-      break;
-
-    case 'boolean':
-      result = z.boolean();
-      break;
-
-    case 'array': {
-      const rawItems = schema['items'];
-      const isItemsObject = rawItems !== null && typeof rawItems === 'object' && !Array.isArray(rawItems);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON Schema boundary: items is a schema object
-      const items = isItemsObject ? rawItems as Record<string, unknown> : undefined;
-      result = z.array(items ? jsonSchemaToZod(items) : z.unknown());
-      break;
-    }
-
-    case 'null':
-      result = z.null();
-      break;
-
-    case undefined:
-    default:
-      // Unrecognized or missing type — accept anything
-      result = z.unknown();
-      break;
-  }
-
-  if (description) {
-    result = result.describe(description);
-  }
-
-  return result;
-}
 
 // ---------------------------------------------------------------------------
 // MCP tool → ToolDefinition
@@ -135,7 +38,10 @@ export function createMcpToolDefinition(
   mcpManager: McpManager,
   logger: Logger,
 ): ToolDefinition {
-  const parametersSchema = jsonSchemaToZod(tool.parameters);
+  // Pass the MCP server's JSON Schema directly to the AI SDK.
+  // No Zod conversion — the schema goes to the LLM as-is, preserving
+  // all parameter descriptions, types, and constraints.
+  const parametersSchema = jsonSchema(tool.parameters);
 
   return {
     description: tool.description,
