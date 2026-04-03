@@ -253,7 +253,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
             <button
               type="button"
               onClick={handleStop}
-              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-gray-500 dark:bg-zinc-600 text-white hover:bg-gray-400 dark:hover:bg-zinc-500 transition-colors shrink-0`}
+              className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-xl flex items-center justify-center bg-muted-foreground text-white hover:bg-muted-foreground/80 transition-colors shrink-0`}
             >
               <Square className="h-3.5 w-3.5" />
             </button>
