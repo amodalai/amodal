@@ -164,6 +164,11 @@ async function overrideContentGenerator(config: AmodalConfig): Promise<void> {
   raw['contentGenerator'] = generator;
 }
 
+/** Stub ToolContext for the upstream bridge. The bridge only needs this to satisfy the ToolDefinition.execute signature — the upstream DeclarativeTool execution path doesn't actually use it. */
+function makeBridgeContext(sessionId: string, tenantId: string): import('../tools/types.js').ToolContext {
+  return {request: async () => ({}), store: async () => ({key: ''}), env: () => undefined, log: () => {}, user: {roles: []}, signal: AbortSignal.timeout(60000), sessionId, tenantId};
+}
+
 /**
  * Manages per-request sessions: creates Config + GeminiClient + Scheduler
  * instances, tracks them by ID, and cleans up expired sessions.
@@ -559,7 +564,7 @@ export class SessionManager {
         const upstream = config.getUpstreamConfig();
         const toolRegistry = upstream.getToolRegistry();
         const appId = config.getAppId() ?? auth?.applicationId ?? LOCAL_APP_ID;
-        const makeContext = () => ({ request: async () => ({}), store: async () => ({key: ''}), env: () => undefined, log: () => {}, user: {roles: []}, signal: AbortSignal.timeout(60000), sessionId: session.id, tenantId: session.appId ?? 'local' });
+        const makeContext = () => makeBridgeContext(session.id, session.appId ?? 'local');
 
         for (const store of stores) {
           const writeName = storeToToolName(store.name);
@@ -624,7 +629,7 @@ export class SessionManager {
           const upstream = config.getUpstreamConfig();
           const toolRegistry = upstream.getToolRegistry();
           const mcpTools = session.mcpManager.getDiscoveredTools();
-          const makeContext = () => ({ request: async () => ({}), store: async () => ({key: ''}), env: () => undefined, log: () => {}, user: {roles: []}, signal: AbortSignal.timeout(60000), sessionId: session.id, tenantId: session.appId ?? 'local' });
+          const makeContext = () => makeBridgeContext(session.id, session.appId ?? 'local');
 
           for (const mcpTool of mcpTools) {
             const def = createMcpToolDefinition(mcpTool, session.mcpManager, log);
@@ -871,7 +876,7 @@ export class SessionManager {
       const repoRoot = this.bundle.origin;
       const upstream = session.config.getUpstreamConfig();
       const toolRegistry = upstream.getToolRegistry();
-      const makeContext = () => ({ request: async () => ({}), store: async () => ({key: ''}), env: () => undefined, log: () => {}, user: {roles: []}, signal: AbortSignal.timeout(60000), sessionId: session.id, tenantId: session.appId ?? 'local' });
+      const makeContext = () => makeBridgeContext(session.id, session.appId ?? 'local');
 
       const adminTools: Array<{name: string; def: import('../tools/types.js').ToolDefinition}> = [
         {name: 'read_repo_file', def: createReadRepoFileTool(repoRoot)},

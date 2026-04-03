@@ -80,21 +80,15 @@ interface UpstreamToolResult {
 /**
  * Adapt a ToolDefinition + its JSON Schema to the upstream DeclarativeTool interface.
  *
- * Returns an object that satisfies the upstream ToolRegistry.registerTool()
- * signature. This is the ONE place where we cast to the upstream type —
- * callers can pass the result directly to registerTool() without `as never`.
- *
  * @param name — Tool name for the upstream registry
  * @param def — Our ToolDefinition (Zod schema + execute function)
  * @param jsonSchema — JSON Schema for the tool parameters (the upstream
  *   registry needs JSON Schema, not Zod). For MCP tools this is the
  *   discovered schema; for store/admin/custom tools it's defined inline.
  * @param makeContext — Factory to create a ToolContext for execution
- */
-/**
  * @returns An object satisfying the upstream AnyDeclarativeTool interface.
  *   Typed as `unknown` because we can't import the upstream type directly.
- *   Callers pass the result directly to `toolRegistry.registerTool()`.
+ *   Callers pass the result directly to `registerOnUpstream()`.
  *   Phase 3 removes this bridge entirely.
  */
 export function bridgeToUpstream(
