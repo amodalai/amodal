@@ -78,9 +78,15 @@ function resolveAuthTemplate(template: string, connectionConfig: Record<string, 
 
 /**
  * Expand $ENV_VAR references in a string using session-scoped env.
+ * Uses replaceAll loop instead of regex to avoid greedy matching
+ * ($FOO would incorrectly match inside $FOOBAR with regex).
  */
 function expandEnvVars(value: string, sessionEnv: Record<string, string>): string {
-  return value.replace(/\$(\w+)/g, (_match, varName: string) => sessionEnv[varName] ?? '');
+  let result = value;
+  for (const [key, val] of Object.entries(sessionEnv)) {
+    result = result.replaceAll(`$${key}`, val);
+  }
+  return result;
 }
 
 /**
@@ -198,12 +204,7 @@ export function createRequestTool(options: CreateRequestToolOptions): ToolDefini
 
       // Build URL
       const expandedEndpoint = expandEnvVars(endpoint, sessionEnv);
-      // Trim trailing/leading slashes (using loop to avoid polynomial regex on untrusted input)
-      let trimmedBase = baseUrl;
-      while (trimmedBase.endsWith('/')) trimmedBase = trimmedBase.slice(0, -1);
-      let trimmedEndpoint = expandedEndpoint;
-      while (trimmedEndpoint.startsWith('/')) trimmedEndpoint = trimmedEndpoint.slice(1);
-      let url = `${trimmedBase}/${trimmedEndpoint}`;
+      let url = `${baseUrl.replace(/\/+$/, '')}/${expandedEndpoint.replace(/^\/+/, '')}`;
 
       // Append query params
       if (params.params) {
