@@ -52,15 +52,65 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Create shared store backend if stores are defined
   let storeBackend: StoreBackend | undefined;
+  let storeBackendType = 'none';
   if (repo.stores.length > 0) {
-    const dataDir = repo.config.stores?.dataDir
-      ?? `${config.repoPath}/.amodal/store-data`;
-    try {
-      storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
-      process.stderr.write(`[dev] Store backend ready (${String(repo.stores.length)} stores, dir: ${dataDir})\n`);
-    } catch (err) {
-      process.stderr.write(`[dev] Store backend failed to initialize: ${err instanceof Error ? err.message : String(err)}\n`);
-      process.stderr.write(`[dev] Try deleting ${dataDir} and restarting\n`);
+    const storeConfig = repo.config.stores;
+    const backend = storeConfig?.backend ?? 'pglite';
+
+    if (backend === 'postgres' && storeConfig?.postgresUrl) {
+      // Real Postgres backend
+      const connUrl = storeConfig.postgresUrl.startsWith('env:')
+        ? process.env[storeConfig.postgresUrl.slice(4)] ?? ''
+        : storeConfig.postgresUrl;
+      if (!connUrl) {
+        process.stderr.write(`[dev] Postgres URL not set (${storeConfig.postgresUrl})\n`);
+      } else {
+        try {
+          const pgModPath = ['..', 'stores', 'postgres-store-backend.js'].join('/');
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic import for optional postgres backend
+          const mod = await import(pgModPath).catch(() => null) as {createPostgresStoreBackend?: (stores: typeof repo.stores, url: string) => Promise<StoreBackend>} | null;
+          if (mod?.createPostgresStoreBackend) {
+            storeBackend = await mod.createPostgresStoreBackend(repo.stores, connUrl);
+            storeBackendType = 'postgres';
+            process.stderr.write(`[dev] Store backend ready (postgres, ${String(repo.stores.length)} stores)\n`);
+          } else {
+            process.stderr.write(`[dev] Postgres backend not available — install @amodalai/store-postgres\n`);
+          }
+        } catch (err) {
+          process.stderr.write(`[dev] Postgres store backend failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          process.stderr.write(`[dev] Falling back to PGLite\n`);
+        }
+      }
+    }
+
+    // Default: PGLite
+    if (!storeBackend) {
+      const dataDir = storeConfig?.dataDir ?? `${config.repoPath}/.amodal/store-data`;
+
+      // Check for lock file — another instance may be using this data dir
+      const lockPath = `${dataDir}/server.lock`;
+      try {
+        const {readFileSync, writeFileSync, mkdirSync, unlinkSync} = await import('node:fs');
+        mkdirSync(dataDir, {recursive: true});
+        try {
+          const existing = readFileSync(lockPath, 'utf-8').trim();
+          // Check if the PID is still running
+          try { process.kill(Number(existing), 0); process.stderr.write(`[dev] WARNING: Another amodal instance (PID ${existing}) may be using this store directory. PGLite does not support concurrent access.\n`); }
+          catch { /* PID not running, stale lock */ }
+        } catch { /* no lock file */ }
+        writeFileSync(lockPath, String(process.pid));
+        const lockCleanup = lockPath;
+        process.on('exit', () => { try { unlinkSync(lockCleanup); } catch { /* */ } });
+      } catch { /* lock file handling failed, proceed anyway */ }
+
+      try {
+        storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
+        storeBackendType = 'pglite';
+        process.stderr.write(`[dev] Store backend ready (pglite, ${String(repo.stores.length)} stores, dir: ${dataDir})\n`);
+      } catch (err) {
+        process.stderr.write(`[dev] Store backend failed to initialize: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`[dev] Try deleting ${dataDir} and restarting\n`);
+      }
     }
   }
 
@@ -171,7 +221,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       version: cfg?.version ?? '',
       description: cfg?.description ?? '',
       models: cfg?.models ?? {},
-      stores: cfg?.stores ?? null,
+      stores: cfg?.stores ? {...cfg.stores, activeBackend: storeBackendType} : null,
       repoPath: config.repoPath,
       envRefs,
       nodeVersion: process.version,
