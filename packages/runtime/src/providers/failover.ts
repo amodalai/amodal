@@ -148,8 +148,9 @@ export function createFailoverProvider(config: FailoverChainConfig): LLMProvider
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
 
-            // If we already yielded events, we can't retry — propagate
+            // If we already yielded events, we can't retry — log and propagate
             if (yieldedAny) {
+              logFailure(i, errorMsg, failedAttempts);
               rejectUsage(err);
               rejectText(err);
               throw err;
