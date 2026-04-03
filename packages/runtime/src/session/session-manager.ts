@@ -27,6 +27,8 @@ import type { AgentBundle, CustomToolExecutor, CustomShellExecutor, StoreBackend
 import type { AuthContext } from '../middleware/auth.js';
 import { convertSessionMessagesToHistory } from './history-converter.js';
 import { log } from '../logger.js';
+import type { ToolRegistry } from '../tools/types.js';
+import type { CustomToolSessionContext } from '../tools/custom-tool-adapter.js';
 
 export interface PendingAskUser {
   resolve: (answers: Record<string, string>) => void;
@@ -186,6 +188,8 @@ export class SessionManager {
   /** Persistent MCP manager for inspect operations (lazy-initialized) */
   private inspectMcp?: McpManager;
   private inspectMcpInitialized = false;
+  /** New Amodal tool registry (Phase 2). Populated alongside upstream registry during migration. */
+  private amodalToolRegistry?: ToolRegistry;
 
   constructor(options: SessionManagerOptions) {
     this.baseParams = options.baseParams;
@@ -346,6 +350,27 @@ export class SessionManager {
         registry.registerTool(adapter as never);
       }
       log.debug(`Registered ${String(this.bundle.tools.length)} custom tool(s)`, 'session');
+    }
+
+    // Phase 2.4: Also register custom tools on the new Amodal ToolRegistry.
+    // This is a dual-write: upstream registry for GeminiClient compat (until Phase 3),
+    // new registry for the Vercel AI SDK tool execution pipeline.
+    if (this.bundle && this.bundle.tools.length > 0 && this.amodalToolRegistry) {
+      const { createCustomToolDefinition } = await import('../tools/custom-tool-adapter.js');
+      const { LocalToolExecutor } = await import('../agent/tool-executor-local.js');
+      const executor = this.toolExecutor ?? new LocalToolExecutor();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AmodalConfig satisfies the structural interface
+      const sessionCtx: CustomToolSessionContext = {
+        config,
+        storeBackend: undefined,
+        appId: undefined,
+        shellExecutor: this.shellExecutor,
+      } as unknown as CustomToolSessionContext;
+      for (const tool of this.bundle.tools) {
+        if (tool.confirm === 'never') continue;
+        const def = createCustomToolDefinition(tool, executor, sessionCtx);
+        this.amodalToolRegistry.register(tool.name, def);
+      }
     }
 
     // Set model on upstream config so GeminiClient.startChat() can resolve it
