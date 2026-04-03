@@ -335,6 +335,7 @@ export class SessionManager {
     if (this.bundle && this.bundle.tools.length > 0) {
       const { CustomToolAdapter } = await import('./custom-tool-adapter.js');
       const { LocalToolExecutor } = await import('../agent/tool-executor-local.js');
+      const { registerOnUpstream } = await import('../tools/upstream-bridge.js');
       const executor = this.toolExecutor ?? new LocalToolExecutor();
       const registry = config.getUpstreamConfig().getToolRegistry();
       for (const tool of this.bundle.tools) {
@@ -342,8 +343,7 @@ export class SessionManager {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- partial session for tool context
         const placeholder = { config, toolExecutor: executor } as unknown as ManagedSession;
         const adapter = new CustomToolAdapter(tool, placeholder, executor);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- adapter matches upstream tool interface
-        registry.registerTool(adapter as never);
+        registerOnUpstream(registry, adapter);
       }
       log.debug(`Registered ${String(this.bundle.tools.length)} custom tool(s)`, 'session');
     }
@@ -551,30 +551,28 @@ export class SessionManager {
     }
 
     // Register store tools on the upstream tool registry.
-    // This happens after config.initialize() (which ran registerAmodalTools),
-    // so we need to register them separately here.
+    // Uses the new Zod-based ToolDefinition store tools, bridged to the upstream registry.
     if (storeBackend && stores.length > 0) {
       try {
-        const { StoreWriteTool, StoreBatchTool, StoreQueryTool } = await import('@amodalai/core');
+        const { createStoreWriteTool, createStoreBatchTool, createStoreQueryTool, storeToToolName, QUERY_STORE_TOOL_NAME } = await import('../tools/store-tools.js');
+        const { bridgeToUpstream, registerOnUpstream } = await import('../tools/upstream-bridge.js');
         const upstream = config.getUpstreamConfig();
         const toolRegistry = upstream.getToolRegistry();
-        const messageBus = config.getMessageBus();
         const appId = config.getAppId() ?? auth?.applicationId ?? LOCAL_APP_ID;
+        const makeContext = () => ({ request: async () => ({}), store: async () => ({key: ''}), env: () => undefined, log: () => {}, user: {roles: []}, signal: AbortSignal.timeout(60000), sessionId: session.id, tenantId: session.appId ?? 'local' });
 
         for (const store of stores) {
-          toolRegistry.registerTool(
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tool types match upstream interface
-            new StoreWriteTool(store, storeBackend, appId, messageBus) as never,
-          );
-          toolRegistry.registerTool(
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tool types match upstream interface
-            new StoreBatchTool(store, storeBackend, appId, messageBus) as never,
-          );
+          const writeName = storeToToolName(store.name);
+          const writeDef = createStoreWriteTool(store, storeBackend, appId);
+          registerOnUpstream(toolRegistry, bridgeToUpstream(writeName, writeDef, {type: 'object', properties: {}}, makeContext));
+
+          const batchName = `${writeName}_batch`;
+          const batchDef = createStoreBatchTool(store, storeBackend, appId);
+          registerOnUpstream(toolRegistry, bridgeToUpstream(batchName, batchDef, {type: 'object', properties: {}}, makeContext));
         }
-        toolRegistry.registerTool(
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-          new StoreQueryTool(stores, storeBackend, appId, messageBus) as never,
-        );
+        const queryDef = createStoreQueryTool(stores, storeBackend, appId);
+        registerOnUpstream(toolRegistry, bridgeToUpstream(QUERY_STORE_TOOL_NAME, queryDef, {type: 'object', properties: {}}, makeContext));
+
         // Refresh the GeminiClient's tool list so the LLM sees the new tools
         await geminiClient.setTools();
         log.debug(`Registered ${String(stores.length)} store tool(s) + query_store`, 'session');
@@ -621,56 +619,16 @@ export class SessionManager {
 
       // Register MCP tools on the upstream tool registry so the Gemini client can see them
       try {
+          const { createMcpToolDefinition } = await import('../tools/mcp-tool-adapter.js');
+          const { bridgeToUpstream, registerOnUpstream } = await import('../tools/upstream-bridge.js');
           const upstream = config.getUpstreamConfig();
           const toolRegistry = upstream.getToolRegistry();
           const mcpTools = session.mcpManager.getDiscoveredTools();
+          const makeContext = () => ({ request: async () => ({}), store: async () => ({key: ''}), env: () => undefined, log: () => {}, user: {roles: []}, signal: AbortSignal.timeout(60000), sessionId: session.id, tenantId: session.appId ?? 'local' });
+
           for (const mcpTool of mcpTools) {
-            // Adapter matching upstream DeclarativeTool interface (build/silentBuild/schema/getSchema)
-            const mcpSession = session;
-            const adapter = {
-              name: mcpTool.name,
-              displayName: mcpTool.name,
-              description: mcpTool.description,
-              kind: 'declarative' as const,
-              parameterSchema: mcpTool.parameters,
-              get isReadOnly() { return true; },
-              get toolAnnotations() { return undefined; },
-              get schema() { return this.getSchema(); },
-              getSchema() {
-                return {
-                  name: mcpTool.name,
-                  description: mcpTool.description,
-                  parametersJsonSchema: mcpTool.parameters,
-                };
-              },
-              build(params: Record<string, unknown>) {
-                return {
-                  name: mcpTool.name,
-                  params,
-                  execute: async () => adapter.validateBuildAndExecute(params),
-                };
-              },
-              silentBuild(params: Record<string, unknown>) {
-                return this.build(params);
-              },
-              async validateBuildAndExecute(params: Record<string, unknown>) {
-                try {
-                  const result = await mcpSession.mcpManager!.callTool(mcpTool.name, params);
-                  const output = result.content
-                    .map((c: {type: string; text?: string}) => c.type === 'text' && c.text ? c.text : `[${c.type}]`)
-                    .join('\n');
-                  return {
-                    llmContent: result.isError ? `Error: ${output}` : output,
-                    returnDisplay: output.slice(0, 200),
-                    ...(result.isError ? {error: {message: output, type: 'EXECUTION_FAILED'}} : {}),
-                  };
-                } catch (err) {
-                  const msg = err instanceof Error ? err.message : String(err);
-                  return {llmContent: `Error: ${msg}`, returnDisplay: msg, error: {message: msg, type: 'EXECUTION_FAILED'}};
-                }
-              },
-            };
-            toolRegistry.registerTool(adapter as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+            const def = createMcpToolDefinition(mcpTool, session.mcpManager, log);
+            registerOnUpstream(toolRegistry, bridgeToUpstream(mcpTool.name, def, mcpTool.parameters, makeContext));
           }
           await geminiClient.setTools();
           log.debug(`Registered ${String(mcpTools.length)} MCP tools on tool registry`, 'mcp');
@@ -908,19 +866,25 @@ export class SessionManager {
 
     // Register admin file tools (read/write/delete agent files)
     try {
-      const { createReadRepoFileTool, createWriteRepoFileTool, createDeleteRepoFileTool } = await import('./admin-file-tools.js');
+      const { createReadRepoFileTool, createWriteRepoFileTool, createDeleteRepoFileTool, createInternalApiTool, ADMIN_TOOL_SCHEMAS } = await import('./admin-file-tools.js');
+      const { bridgeToUpstream, registerOnUpstream } = await import('../tools/upstream-bridge.js');
       const repoRoot = this.bundle.origin;
       const upstream = session.config.getUpstreamConfig();
       const toolRegistry = upstream.getToolRegistry();
+      const makeContext = () => ({ request: async () => ({}), store: async () => ({key: ''}), env: () => undefined, log: () => {}, user: {roles: []}, signal: AbortSignal.timeout(60000), sessionId: session.id, tenantId: session.appId ?? 'local' });
 
-      toolRegistry.registerTool(createReadRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
-      toolRegistry.registerTool(createWriteRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
-      toolRegistry.registerTool(createDeleteRepoFileTool(repoRoot) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
-
-      // Internal API tool — lets admin query eval results, health, context, etc.
+      const adminTools: Array<{name: string; def: import('../tools/types.js').ToolDefinition}> = [
+        {name: 'read_repo_file', def: createReadRepoFileTool(repoRoot)},
+        {name: 'write_repo_file', def: createWriteRepoFileTool(repoRoot)},
+        {name: 'delete_repo_file', def: createDeleteRepoFileTool(repoRoot)},
+      ];
       if (getPort) {
-        const { createInternalApiTool } = await import('./admin-file-tools.js');
-        toolRegistry.registerTool(createInternalApiTool(getPort) as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+        adminTools.push({name: 'internal_api', def: createInternalApiTool(getPort)});
+      }
+
+      for (const {name, def} of adminTools) {
+        const schema = ADMIN_TOOL_SCHEMAS[name] ?? {type: 'object', properties: {}};
+        registerOnUpstream(toolRegistry, bridgeToUpstream(name, def, schema, makeContext));
       }
 
       await session.geminiClient.setTools();

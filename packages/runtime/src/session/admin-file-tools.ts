@@ -8,11 +8,15 @@
  * Admin-only file tools for reading, writing, and deleting agent config files.
  * These tools are registered on admin sessions only, and only for local repos.
  *
- * Ported from the old agent-runner.ts admin tool implementation.
+ * Returns ToolDefinition objects (Zod schemas, typed execute) that can be
+ * registered on the local ToolRegistry and bridged to the upstream registry.
  */
 
 import {readFile, writeFile, unlink, mkdir} from 'node:fs/promises';
 import * as path from 'node:path';
+import {z} from 'zod';
+import type {ToolDefinition, ToolContext} from '../tools/types.js';
+import {ToolExecutionError} from '../errors.js';
 
 // ---------------------------------------------------------------------------
 // Path validation
@@ -79,193 +83,198 @@ function validatePath(
 }
 
 // ---------------------------------------------------------------------------
-// Tool result type
+// JSON Schema definitions (for upstream bridge)
 // ---------------------------------------------------------------------------
 
-interface ToolResult {
-  llmContent: string;
-  returnDisplay?: string;
-  error?: {message: string; type: string};
+export const ADMIN_TOOL_SCHEMAS: Record<string, Record<string, unknown>> = {
+  read_repo_file: {
+    type: 'object',
+    properties: {
+      path: {type: 'string', description: 'File path relative to repo root (e.g. "knowledge/formatting-rules.md")'},
+    },
+    required: ['path'],
+  },
+  write_repo_file: {
+    type: 'object',
+    properties: {
+      path: {type: 'string', description: 'File path relative to repo root (e.g. "knowledge/formatting-rules.md")'},
+      content: {type: 'string', description: 'Full file content to write'},
+    },
+    required: ['path', 'content'],
+  },
+  delete_repo_file: {
+    type: 'object',
+    properties: {
+      path: {type: 'string', description: 'File path relative to repo root (e.g. "evals/old-test.md")'},
+    },
+    required: ['path'],
+  },
+  internal_api: {
+    type: 'object',
+    properties: {
+      endpoint: {type: 'string', description: 'API path (e.g. "/api/evals/runs", "/inspect/health", "/api/stores")'},
+    },
+    required: ['endpoint'],
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Tool factories (return ToolDefinition)
+// ---------------------------------------------------------------------------
+
+export function createReadRepoFileTool(repoRoot: string): ToolDefinition {
+  return {
+    description: 'Read a file from the agent repo. Path is relative to repo root. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.',
+    parameters: z.object({
+      path: z.string().describe('File path relative to repo root'),
+    }),
+    readOnly: true,
+    metadata: {category: 'admin'},
+
+    async execute(params: {path: string}, _ctx: ToolContext): Promise<unknown> {
+      const validation = validatePath(repoRoot, params.path);
+      if ('error' in validation) {
+        return {error: validation.error};
+      }
+      try {
+        const content = await readFile(validation.resolved, 'utf-8');
+        return {content, path: validation.relative};
+      } catch (err) {
+        const isNotFound = err instanceof Error && 'code' in err && (err as unknown as {code?: string}).code === 'ENOENT'; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- narrowing errno code
+        const msg = isNotFound ? `File not found: ${validation.relative}` : (err instanceof Error ? err.message : String(err));
+        throw new ToolExecutionError(msg, {
+          toolName: 'read_repo_file',
+          callId: '',
+          cause: err,
+          context: {path: validation.relative},
+        });
+      }
+    },
+  };
 }
 
-// ---------------------------------------------------------------------------
-// Base adapter matching upstream DeclarativeTool interface
-// ---------------------------------------------------------------------------
-
-function createToolAdapter(opts: {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  execute: (params: Record<string, unknown>) => Promise<ToolResult>;
-}) {
+export function createWriteRepoFileTool(repoRoot: string): ToolDefinition {
   return {
-    name: opts.name,
-    displayName: opts.name,
-    description: opts.description,
-    kind: 'declarative' as const,
-    parameterSchema: opts.parameters,
-    get isReadOnly() { return opts.name === 'read_repo_file'; },
-    get toolAnnotations() { return undefined; },
-    get schema() { return this.getSchema(); },
-    getSchema() {
-      return {
-        name: opts.name,
-        description: opts.description,
-        parametersJsonSchema: opts.parameters,
-      };
+    description: 'Create or update a file in the agent repo. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.',
+    parameters: z.object({
+      path: z.string().describe('File path relative to repo root'),
+      content: z.string().describe('Full file content to write'),
+    }),
+    readOnly: false,
+    metadata: {category: 'admin'},
+
+    async execute(params: {path: string; content: string}, _ctx: ToolContext): Promise<unknown> {
+      const validation = validatePath(repoRoot, params.path);
+      if ('error' in validation) {
+        return {error: validation.error};
+      }
+      if (isReadOnlyPath(validation.relative)) {
+        return {error: `${validation.relative} is read-only (installed package)`};
+      }
+      if (!params.content) {
+        return {error: 'Content must not be empty'};
+      }
+      try {
+        await mkdir(path.dirname(validation.resolved), {recursive: true});
+        await writeFile(validation.resolved, params.content, 'utf-8');
+        return {written: true, path: validation.relative, bytes: params.content.length};
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new ToolExecutionError(msg, {
+          toolName: 'write_repo_file',
+          callId: '',
+          cause: err,
+          context: {path: validation.relative},
+        });
+      }
     },
-    build(params: Record<string, unknown>) {
-      return {
-        name: opts.name,
-        params,
-        execute: async () => opts.execute(params),
-      };
+  };
+}
+
+export function createDeleteRepoFileTool(repoRoot: string): ToolDefinition {
+  return {
+    description: 'Delete a file from the agent repo. Always confirm with the user before deleting. Same directory restrictions as write_repo_file.',
+    parameters: z.object({
+      path: z.string().describe('File path relative to repo root'),
+    }),
+    readOnly: false,
+    metadata: {category: 'admin'},
+
+    async execute(params: {path: string}, _ctx: ToolContext): Promise<unknown> {
+      const validation = validatePath(repoRoot, params.path);
+      if ('error' in validation) {
+        return {error: validation.error};
+      }
+      if (isReadOnlyPath(validation.relative)) {
+        return {error: `${validation.relative} is read-only (installed package)`};
+      }
+      try {
+        await unlink(validation.resolved);
+        return {deleted: true, path: validation.relative};
+      } catch (err) {
+        const isNotFound = err instanceof Error && 'code' in err && (err as unknown as {code?: string}).code === 'ENOENT'; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- narrowing errno code
+        const msg = isNotFound ? `File not found: ${validation.relative}` : (err instanceof Error ? err.message : String(err));
+        throw new ToolExecutionError(msg, {
+          toolName: 'delete_repo_file',
+          callId: '',
+          cause: err,
+          context: {path: validation.relative},
+        });
+      }
     },
-    silentBuild(params: Record<string, unknown>) {
-      return this.build(params);
-    },
-    async validateBuildAndExecute(params: Record<string, unknown>) {
-      return opts.execute(params);
+  };
+}
+
+export function createInternalApiTool(getPort: () => number | null): ToolDefinition {
+  return {
+    description: `Query the amodal runtime's internal API. Use this to check eval results, connection health, agent context, store data, and automation status. Only GET requests.`,
+    parameters: z.object({
+      endpoint: z.string().describe('API path (e.g. "/api/evals/runs", "/inspect/health", "/api/stores")'),
+    }),
+    readOnly: true,
+    metadata: {category: 'admin'},
+
+    async execute(params: {endpoint: string}, _ctx: ToolContext): Promise<unknown> {
+      const port = getPort();
+      if (!port) {
+        return {error: 'Server not ready'};
+      }
+      try {
+        const resp = await fetch(`http://127.0.0.1:${port}${params.endpoint}`, {
+          signal: AbortSignal.timeout(10_000),
+        });
+        const text = await resp.text();
+        try {
+          return {status: resp.status, data: JSON.parse(text)};
+        } catch {
+          return {status: resp.status, data: text};
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new ToolExecutionError(msg, {
+          toolName: 'internal_api',
+          callId: '',
+          cause: err,
+          context: {endpoint: params.endpoint},
+        });
+      }
     },
   };
 }
 
 // ---------------------------------------------------------------------------
-// Tool factories
+// Register admin tools on a ToolRegistry
 // ---------------------------------------------------------------------------
 
-export function createReadRepoFileTool(repoRoot: string) {
-  return createToolAdapter({
-    name: 'read_repo_file',
-    description: 'Read a file from the agent repo. Path is relative to repo root. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.',
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {type: 'string', description: 'File path relative to repo root (e.g. "knowledge/formatting-rules.md")'},
-      },
-      required: ['path'],
-    },
-    async execute(params) {
-      const rawPath = String(params['path'] ?? '');
-      const validation = validatePath(repoRoot, rawPath);
-      if ('error' in validation) {
-        return {llmContent: `Error: ${validation.error}`, error: {message: validation.error, type: 'VALIDATION_ERROR'}};
-      }
-      try {
-        const content = await readFile(validation.resolved, 'utf-8');
-        return {llmContent: content, returnDisplay: `Read ${validation.relative}`};
-      } catch (err) {
-        const isNotFound = err instanceof Error && 'code' in err && ((err as {code?: string}).code) === 'ENOENT' // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- checking errno;
-        const msg = isNotFound ? `File not found: ${validation.relative}` : (err instanceof Error ? err.message : String(err));
-        return {llmContent: `Error: ${msg}`, error: {message: msg, type: 'EXECUTION_FAILED'}};
-      }
-    },
-  });
-}
-
-export function createWriteRepoFileTool(repoRoot: string) {
-  return createToolAdapter({
-    name: 'write_repo_file',
-    description: 'Create or update a file in the agent repo. Use this to add skills, knowledge, pages, automations, tools, store schemas, evals, connection docs, or agent overrides. Path is relative to repo root. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.',
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {type: 'string', description: 'File path relative to repo root (e.g. "knowledge/formatting-rules.md")'},
-        content: {type: 'string', description: 'Full file content to write'},
-      },
-      required: ['path', 'content'],
-    },
-    async execute(params) {
-      const rawPath = String(params['path'] ?? '');
-      const content = String(params['content'] ?? '');
-      const validation = validatePath(repoRoot, rawPath);
-      if ('error' in validation) {
-        return {llmContent: `Error: ${validation.error}`, error: {message: validation.error, type: 'VALIDATION_ERROR'}};
-      }
-      if (isReadOnlyPath(validation.relative)) {
-        return {llmContent: `Error: ${validation.relative} is read-only (installed package)`, error: {message: 'Cannot write to installed packages', type: 'VALIDATION_ERROR'}};
-      }
-      if (!content) {
-        return {llmContent: 'Error: Content must not be empty', error: {message: 'Content must not be empty', type: 'VALIDATION_ERROR'}};
-      }
-      try {
-        await mkdir(path.dirname(validation.resolved), {recursive: true});
-        await writeFile(validation.resolved, content, 'utf-8');
-        return {llmContent: `Wrote ${validation.relative} (${String(content.length)} bytes)`, returnDisplay: `Wrote ${validation.relative}`};
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {llmContent: `Error: ${msg}`, error: {message: msg, type: 'EXECUTION_FAILED'}};
-      }
-    },
-  });
-}
-
-export function createDeleteRepoFileTool(repoRoot: string) {
-  return createToolAdapter({
-    name: 'delete_repo_file',
-    description: 'Delete a file from the agent repo. Always confirm with the user before deleting. Path is relative to repo root. Same directory restrictions as write_repo_file.',
-    parameters: {
-      type: 'object',
-      properties: {
-        path: {type: 'string', description: 'File path relative to repo root (e.g. "evals/old-test.md")'},
-      },
-      required: ['path'],
-    },
-    async execute(params) {
-      const rawPath = String(params['path'] ?? '');
-      const validation = validatePath(repoRoot, rawPath);
-      if ('error' in validation) {
-        return {llmContent: `Error: ${validation.error}`, error: {message: validation.error, type: 'VALIDATION_ERROR'}};
-      }
-      if (isReadOnlyPath(validation.relative)) {
-        return {llmContent: `Error: ${validation.relative} is read-only (installed package)`, error: {message: 'Cannot delete installed packages', type: 'VALIDATION_ERROR'}};
-      }
-      try {
-        await unlink(validation.resolved);
-        return {llmContent: `Deleted ${validation.relative}`, returnDisplay: `Deleted ${validation.relative}`};
-      } catch (err) {
-        const isNotFound = err instanceof Error && 'code' in err && ((err as {code?: string}).code) === 'ENOENT' // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- checking errno;
-        const msg = isNotFound ? `File not found: ${validation.relative}` : (err instanceof Error ? err.message : String(err));
-        return {llmContent: `Error: ${msg}`, error: {message: msg, type: 'EXECUTION_FAILED'}};
-      }
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Internal API tool — lets admin query the local runtime's own endpoints
-// ---------------------------------------------------------------------------
-
-export function createInternalApiTool(getPort: () => number | null) {
-  return createToolAdapter({
-    name: 'internal_api',
-    description: `Query the amodal runtime's internal API. Use this to check eval results, connection health, agent context, store data, and automation status. The endpoint is relative to the local server (e.g. "/api/evals/runs" or "/inspect/health"). Only GET requests are supported.`,
-    parameters: {
-      type: 'object',
-      properties: {
-        endpoint: {type: 'string', description: 'API path (e.g. "/api/evals/runs", "/inspect/health", "/api/stores")'},
-      },
-      required: ['endpoint'],
-    },
-    async execute(params) {
-      const endpoint = String(params['endpoint'] ?? '');
-      const port = getPort();
-      if (!port) {
-        return {llmContent: 'Error: Server not ready', error: {message: 'Server not ready', type: 'EXECUTION_FAILED'}};
-      }
-      try {
-        const resp = await fetch(`http://127.0.0.1:${port}${endpoint}`);
-        const text = await resp.text();
-        try {
-          const json = JSON.parse(text);
-          return {llmContent: JSON.stringify(json, null, 2), returnDisplay: `GET ${endpoint} → ${resp.status}`};
-        } catch {
-          return {llmContent: text, returnDisplay: `GET ${endpoint} → ${resp.status}`};
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {llmContent: `Error: ${msg}`, error: {message: msg, type: 'EXECUTION_FAILED'}};
-      }
-    },
-  });
+export function registerAdminTools(
+  registry: import('../tools/types.js').ToolRegistry,
+  repoRoot: string,
+  getPort?: () => number | null,
+): void {
+  registry.register('read_repo_file', createReadRepoFileTool(repoRoot));
+  registry.register('write_repo_file', createWriteRepoFileTool(repoRoot));
+  registry.register('delete_repo_file', createDeleteRepoFileTool(repoRoot));
+  if (getPort) {
+    registry.register('internal_api', createInternalApiTool(getPort));
+  }
 }
