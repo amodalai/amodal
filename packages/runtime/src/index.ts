@@ -73,6 +73,8 @@ export type { AgentConfig, ConfigOverrides, LoadConfigOptions, McpServerConfig }
 
 // LLM Provider (Vercel AI SDK abstraction)
 export { createProvider } from './providers/create-provider.js';
+export { createFailoverProvider } from './providers/failover.js';
+export type { FailoverChainConfig } from './providers/failover.js';
 export type {
   LLMProvider,
   ProviderConfig,
