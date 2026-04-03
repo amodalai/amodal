@@ -8,7 +8,7 @@
  * Phase 2.5 — MCP Tool Adapter Tests
  *
  * Tests the conversion of MCP discovered tools to ToolDefinition objects:
- * 1. JSON Schema → Zod conversion (various schema shapes)
+ * 1. Tool creation with JSON Schema passthrough
  * 2. Tool execution via McpManager.callTool()
  * 3. Registration on ToolRegistry
  * 4. Error classification (connection, auth, generic)
@@ -16,7 +16,7 @@
 
 import {describe, it, expect, vi, beforeEach} from 'vitest';
 import type {McpManager, McpDiscoveredTool} from '@amodalai/core';
-import {jsonSchemaToZod, createMcpToolDefinition, registerMcpTools} from './mcp-tool-adapter.js';
+import {createMcpToolDefinition, registerMcpTools} from './mcp-tool-adapter.js';
 import {createToolRegistry} from './registry.js';
 import {ConnectionError} from '../errors.js';
 import type {ToolContext} from './types.js';
@@ -68,134 +68,7 @@ function makeMockMcpManager(overrides?: {
 }
 
 // ---------------------------------------------------------------------------
-// 1. JSON Schema → Zod conversion
-// ---------------------------------------------------------------------------
-
-describe('jsonSchemaToZod', () => {
-  it('converts a flat object schema with required fields', () => {
-    const schema = jsonSchemaToZod({
-      type: 'object',
-      properties: {
-        query: {type: 'string', description: 'Search query'},
-        limit: {type: 'number'},
-      },
-      required: ['query'],
-    });
-
-    // Required string field
-    expect(schema.safeParse({query: 'hello'}).success).toBe(true);
-    expect(schema.safeParse({query: 'hello', limit: 10}).success).toBe(true);
-
-    // Missing required field
-    expect(schema.safeParse({}).success).toBe(false);
-    expect(schema.safeParse({limit: 5}).success).toBe(false);
-
-    // Optional field can be omitted
-    expect(schema.safeParse({query: 'hello'}).success).toBe(true);
-  });
-
-  it('converts string, number, integer, boolean types', () => {
-    expect(jsonSchemaToZod({type: 'string'}).safeParse('hello').success).toBe(true);
-    expect(jsonSchemaToZod({type: 'string'}).safeParse(42).success).toBe(false);
-
-    expect(jsonSchemaToZod({type: 'number'}).safeParse(3.14).success).toBe(true);
-    expect(jsonSchemaToZod({type: 'integer'}).safeParse(42).success).toBe(true);
-    expect(jsonSchemaToZod({type: 'number'}).safeParse('nope').success).toBe(false);
-
-    expect(jsonSchemaToZod({type: 'boolean'}).safeParse(true).success).toBe(true);
-    expect(jsonSchemaToZod({type: 'boolean'}).safeParse('yes').success).toBe(false);
-  });
-
-  it('converts enum values', () => {
-    const schema = jsonSchemaToZod({
-      type: 'string',
-      enum: ['asc', 'desc'],
-    });
-
-    expect(schema.safeParse('asc').success).toBe(true);
-    expect(schema.safeParse('desc').success).toBe(true);
-    expect(schema.safeParse('random').success).toBe(false);
-  });
-
-  it('converts array with typed items', () => {
-    const schema = jsonSchemaToZod({
-      type: 'array',
-      items: {type: 'string'},
-    });
-
-    expect(schema.safeParse(['a', 'b']).success).toBe(true);
-    expect(schema.safeParse([1, 2]).success).toBe(false);
-    expect(schema.safeParse('not-array').success).toBe(false);
-  });
-
-  it('converts nested objects', () => {
-    const schema = jsonSchemaToZod({
-      type: 'object',
-      properties: {
-        filter: {
-          type: 'object',
-          properties: {
-            field: {type: 'string'},
-            value: {type: 'string'},
-          },
-          required: ['field'],
-        },
-      },
-      required: ['filter'],
-    });
-
-    expect(schema.safeParse({filter: {field: 'status', value: 'active'}}).success).toBe(true);
-    expect(schema.safeParse({filter: {field: 'status'}}).success).toBe(true);
-    expect(schema.safeParse({filter: {}}).success).toBe(false);
-  });
-
-  it('converts empty object to z.record(z.unknown())', () => {
-    const schema = jsonSchemaToZod({type: 'object'});
-    expect(schema.safeParse({}).success).toBe(true);
-    expect(schema.safeParse({any: 'thing'}).success).toBe(true);
-  });
-
-  it('handles null type', () => {
-    const schema = jsonSchemaToZod({type: 'null'});
-    expect(schema.safeParse(null).success).toBe(true);
-    expect(schema.safeParse('not null').success).toBe(false);
-  });
-
-  it('falls back to z.unknown() for unrecognized types', () => {
-    const schema = jsonSchemaToZod({type: 'custom-thing'});
-    expect(schema.safeParse('anything').success).toBe(true);
-    expect(schema.safeParse(42).success).toBe(true);
-  });
-
-  it('preserves descriptions', () => {
-    const schema = jsonSchemaToZod({type: 'string', description: 'A search query'});
-    expect(schema.description).toBe('A search query');
-  });
-
-  it('handles typical MCP tool schema from a real server', () => {
-    // This is a realistic MCP tool inputSchema from an MCP server
-    const schema = jsonSchemaToZod({
-      type: 'object',
-      properties: {
-        resource_uri: {type: 'string', description: 'URI of the resource to read'},
-        format: {type: 'string', enum: ['text', 'json', 'binary']},
-        include_metadata: {type: 'boolean'},
-      },
-      required: ['resource_uri'],
-    });
-
-    const valid = {resource_uri: 'file:///tmp/data.json', format: 'json', include_metadata: true};
-    expect(schema.safeParse(valid).success).toBe(true);
-
-    const minimal = {resource_uri: 'file:///tmp/data.json'};
-    expect(schema.safeParse(minimal).success).toBe(true);
-
-    expect(schema.safeParse({}).success).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 2. Tool execution
+// 1. Tool creation with JSON Schema passthrough
 // ---------------------------------------------------------------------------
 
 describe('createMcpToolDefinition', () => {
@@ -224,8 +97,8 @@ describe('createMcpToolDefinition', () => {
       connection: 'github',
       originalName: 'search_repos',
     });
-    // Parameters should be a valid Zod schema
-    expect(def.parameters.safeParse({query: 'amodal'}).success).toBe(true);
+    // Parameters should be defined (jsonSchema passthrough)
+    expect(def.parameters).toBeDefined();
   });
 
   it('execute calls mcpManager.callTool with correct args', async () => {

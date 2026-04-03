@@ -100,7 +100,6 @@ export type {
 export {
   createMcpToolDefinition,
   registerMcpTools,
-  jsonSchemaToZod,
 } from './tools/mcp-tool-adapter.js';
 
 // Store tools (new Zod-based implementations)
