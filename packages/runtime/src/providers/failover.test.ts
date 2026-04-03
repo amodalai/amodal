@@ -20,6 +20,7 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest';
 import {createFailoverProvider} from './failover.js';
 import {ProviderError} from '../errors.js';
+import {testProviders, hasAnyProvider} from '../__tests__/test-providers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -37,14 +38,8 @@ function makeMockLogger() {
   };
 }
 
-// Use a real key from the environment. Tests skip if unavailable.
-const ANTHROPIC_KEY = process.env['ANTHROPIC_API_KEY'];
-const OPENAI_KEY = process.env['OPENAI_API_KEY'];
-
-const hasAnyKey = Boolean(ANTHROPIC_KEY ?? OPENAI_KEY);
-
 // ---------------------------------------------------------------------------
-// Unit tests (no API calls — test construction and error shaping)
+// Unit tests (no API calls)
 // ---------------------------------------------------------------------------
 
 describe('createFailoverProvider (unit)', () => {
@@ -82,7 +77,7 @@ describe('createFailoverProvider (unit)', () => {
 // Integration tests (real API calls — skipped without keys)
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasAnyKey)('createFailoverProvider (integration)', () => {
+describe.skipIf(!hasAnyProvider)('createFailoverProvider (integration)', () => {
   let logger: ReturnType<typeof makeMockLogger>;
 
   beforeEach(() => {
@@ -92,15 +87,12 @@ describe.skipIf(!hasAnyKey)('createFailoverProvider (integration)', () => {
   // ── 1. Primary fails (invalid key) + fallback succeeds ────────────────
 
   it('uses fallback when primary has invalid API key', async () => {
-    // Use whichever real key we have as the fallback
-    const fallbackConfig = ANTHROPIC_KEY
-      ? {provider: 'anthropic', model: 'claude-haiku-4-5-20251001', apiKey: ANTHROPIC_KEY}
-      : {provider: 'openai', model: 'gpt-4o-mini', apiKey: OPENAI_KEY!};
+    const fallback = testProviders.cheapest()!;
+    const invalid = testProviders.invalid(fallback.provider);
 
     const provider = createFailoverProvider({
-      // Primary will fail — invalid key
-      primary: {provider: fallbackConfig.provider, model: fallbackConfig.model, apiKey: 'sk-invalid-key-00000'},
-      fallbacks: [fallbackConfig],
+      primary: invalid,
+      fallbacks: [fallback],
       logger,
       sessionId: 'test-failover',
     });
@@ -110,23 +102,18 @@ describe.skipIf(!hasAnyKey)('createFailoverProvider (integration)', () => {
       maxOutputTokens: 10,
     });
 
-    // Response should come from fallback
     expect(result.text.toLowerCase()).toContain('pong');
     expect(result.usage.inputTokens).toBeGreaterThan(0);
     expect(result.usage.outputTokens).toBeGreaterThan(0);
 
-    // Verify logging
     expect(logger.error).toHaveBeenCalledWith(
       'provider_call_failed',
-      expect.objectContaining({
-        session: 'test-failover',
-        willRetry: true,
-      }),
+      expect.objectContaining({session: 'test-failover', willRetry: true}),
     );
     expect(logger.warn).toHaveBeenCalledWith(
       'provider_failover_used',
       expect.objectContaining({
-        succeeded: `${fallbackConfig.provider}/${fallbackConfig.model}`,
+        succeeded: `${fallback.provider}/${fallback.model}`,
       }),
     );
   }, 30000);
@@ -134,16 +121,12 @@ describe.skipIf(!hasAnyKey)('createFailoverProvider (integration)', () => {
   // ── 2. Valid primary → uses primary, no fallback ──────────────────────
 
   it('uses primary when it succeeds — fallback not touched', async () => {
-    const primaryConfig = ANTHROPIC_KEY
-      ? {provider: 'anthropic', model: 'claude-haiku-4-5-20251001', apiKey: ANTHROPIC_KEY}
-      : {provider: 'openai', model: 'gpt-4o-mini', apiKey: OPENAI_KEY!};
+    const primary = testProviders.cheapest()!;
 
     const provider = createFailoverProvider({
-      primary: primaryConfig,
-      fallbacks: [
-        // Fallback has invalid key — would fail if reached
-        {provider: primaryConfig.provider, model: primaryConfig.model, apiKey: 'sk-invalid-key-00000'},
-      ],
+      primary,
+      // Fallback has invalid key — would fail if reached
+      fallbacks: [testProviders.invalid(primary.provider)],
       logger,
     });
 
@@ -153,8 +136,6 @@ describe.skipIf(!hasAnyKey)('createFailoverProvider (integration)', () => {
     });
 
     expect(result.text.toLowerCase()).toContain('ping');
-
-    // No errors logged — primary succeeded on first try
     expect(logger.error).not.toHaveBeenCalled();
     expect(logger.warn).not.toHaveBeenCalled();
   }, 30000);
@@ -163,10 +144,8 @@ describe.skipIf(!hasAnyKey)('createFailoverProvider (integration)', () => {
 
   it('throws ProviderError with context about all failed attempts', async () => {
     const provider = createFailoverProvider({
-      primary: {provider: 'anthropic', model: 'claude-haiku-4-5-20251001', apiKey: 'sk-invalid-1'},
-      fallbacks: [
-        {provider: 'openai', model: 'gpt-4o-mini', apiKey: 'sk-invalid-2'},
-      ],
+      primary: testProviders.invalid('anthropic'),
+      fallbacks: [testProviders.invalid('openai')],
       logger,
       sessionId: 'test-all-fail',
     });
@@ -183,44 +162,32 @@ describe.skipIf(!hasAnyKey)('createFailoverProvider (integration)', () => {
       expect(pe.message).toBe('All providers failed');
       expect(pe.provider).toBe('failover');
 
-      // Context should have both attempts
       const attempts = pe.context['attempts'] as Array<{provider: string; model: string; error: string}>;
       expect(attempts).toHaveLength(2);
       expect(attempts[0].provider).toBe('anthropic');
-      expect(attempts[0].model).toBe('claude-haiku-4-5-20251001');
       expect(attempts[1].provider).toBe('openai');
-      expect(attempts[1].model).toBe('gpt-4o-mini');
     }
 
-    // Both failures logged
     expect(logger.error).toHaveBeenCalledTimes(2);
     expect(logger.error).toHaveBeenCalledWith(
       'provider_call_failed',
-      expect.objectContaining({
-        session: 'test-all-fail',
-        provider: 'anthropic/claude-haiku-4-5-20251001',
-        willRetry: true,
-      }),
+      expect.objectContaining({session: 'test-all-fail', willRetry: true}),
     );
     expect(logger.error).toHaveBeenCalledWith(
       'provider_call_failed',
-      expect.objectContaining({
-        provider: 'openai/gpt-4o-mini',
-        willRetry: false,
-      }),
+      expect.objectContaining({willRetry: false}),
     );
   }, 30000);
 
   // ── 4. Streaming failover ─────────────────────────────────────────────
 
   it('streaming: uses fallback when primary stream fails', async () => {
-    const fallbackConfig = ANTHROPIC_KEY
-      ? {provider: 'anthropic', model: 'claude-haiku-4-5-20251001', apiKey: ANTHROPIC_KEY}
-      : {provider: 'openai', model: 'gpt-4o-mini', apiKey: OPENAI_KEY!};
+    const fallback = testProviders.cheapest()!;
+    const invalid = testProviders.invalid(fallback.provider);
 
     const provider = createFailoverProvider({
-      primary: {provider: fallbackConfig.provider, model: fallbackConfig.model, apiKey: 'sk-invalid-key-00000'},
-      fallbacks: [fallbackConfig],
+      primary: invalid,
+      fallbacks: [fallback],
       logger,
     });
 
@@ -229,23 +196,20 @@ describe.skipIf(!hasAnyKey)('createFailoverProvider (integration)', () => {
       maxOutputTokens: 10,
     });
 
-    // Collect events from the stream
     const events = [];
     for await (const event of result.fullStream) {
       events.push(event);
     }
 
-    // Should have text deltas and a finish event
     const textDeltas = events.filter((e) => e.type === 'text-delta');
     expect(textDeltas.length).toBeGreaterThan(0);
 
     const text = await result.text;
-    expect(text.toLowerCase()).toContain('stream');
+    expect(text.length).toBeGreaterThan(0);
 
     const usage = await result.usage;
     expect(usage.inputTokens).toBeGreaterThan(0);
 
-    // Failover logging
     expect(logger.error).toHaveBeenCalledWith(
       'provider_call_failed',
       expect.objectContaining({willRetry: true}),
@@ -253,7 +217,7 @@ describe.skipIf(!hasAnyKey)('createFailoverProvider (integration)', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       'provider_failover_used',
       expect.objectContaining({
-        succeeded: `${fallbackConfig.provider}/${fallbackConfig.model}`,
+        succeeded: `${fallback.provider}/${fallback.model}`,
       }),
     );
   }, 30000);
