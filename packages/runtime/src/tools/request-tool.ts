@@ -198,7 +198,12 @@ export function createRequestTool(options: CreateRequestToolOptions): ToolDefini
 
       // Build URL
       const expandedEndpoint = expandEnvVars(endpoint, sessionEnv);
-      let url = `${baseUrl.replace(/\/+$/, '')}/${expandedEndpoint.replace(/^\/+/, '')}`;
+      // Trim trailing/leading slashes (using loop to avoid polynomial regex on untrusted input)
+      let trimmedBase = baseUrl;
+      while (trimmedBase.endsWith('/')) trimmedBase = trimmedBase.slice(0, -1);
+      let trimmedEndpoint = expandedEndpoint;
+      while (trimmedEndpoint.startsWith('/')) trimmedEndpoint = trimmedEndpoint.slice(1);
+      let url = `${trimmedBase}/${trimmedEndpoint}`;
 
       // Append query params
       if (params.params) {
