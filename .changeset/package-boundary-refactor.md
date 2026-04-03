@@ -1,5 +1,5 @@
 ---
-"@amodalai/types": minor
+"@amodalai/types": patch
 "@amodalai/core": patch
 "@amodalai/runtime": patch
 "@amodalai/amodal": patch
