@@ -94,6 +94,16 @@ export type {
   ToolRegistry,
 } from './tools/types.js';
 
+// Store tools (new Zod-based implementations)
+export {
+  createStoreWriteTool,
+  createStoreBatchTool,
+  createStoreQueryTool,
+  registerStoreTools,
+  storeToToolName,
+  QUERY_STORE_TOOL_NAME,
+} from './tools/store-tools.js';
+
 // ---------------------------------------------------------------------------
 // Environment variable parsing
 // ---------------------------------------------------------------------------
