@@ -560,7 +560,7 @@ export class SessionManager {
     if (storeBackend && stores.length > 0) {
       try {
         const { createStoreWriteTool, createStoreBatchTool, createStoreQueryTool, storeToToolName, QUERY_STORE_TOOL_NAME } = await import('../tools/store-tools.js');
-        const { bridgeToUpstream, registerOnUpstream } = await import('../tools/upstream-bridge.js');
+        const { bridgeToUpstream, registerOnUpstream, extractJsonSchema } = await import('../tools/upstream-bridge.js');
         const upstream = config.getUpstreamConfig();
         const toolRegistry = upstream.getToolRegistry();
         const appId = config.getAppId() ?? auth?.applicationId ?? LOCAL_APP_ID;
@@ -569,14 +569,14 @@ export class SessionManager {
         for (const store of stores) {
           const writeName = storeToToolName(store.name);
           const writeDef = createStoreWriteTool(store, storeBackend, appId);
-          registerOnUpstream(toolRegistry, bridgeToUpstream(writeName, writeDef, {type: 'object', properties: {}}, makeContext));
+          registerOnUpstream(toolRegistry, bridgeToUpstream(writeName, writeDef, extractJsonSchema(writeDef), makeContext));
 
           const batchName = `${writeName}_batch`;
           const batchDef = createStoreBatchTool(store, storeBackend, appId);
-          registerOnUpstream(toolRegistry, bridgeToUpstream(batchName, batchDef, {type: 'object', properties: {}}, makeContext));
+          registerOnUpstream(toolRegistry, bridgeToUpstream(batchName, batchDef, extractJsonSchema(batchDef), makeContext));
         }
         const queryDef = createStoreQueryTool(stores, storeBackend, appId);
-        registerOnUpstream(toolRegistry, bridgeToUpstream(QUERY_STORE_TOOL_NAME, queryDef, {type: 'object', properties: {}}, makeContext));
+        registerOnUpstream(toolRegistry, bridgeToUpstream(QUERY_STORE_TOOL_NAME, queryDef, extractJsonSchema(queryDef), makeContext));
 
         // Refresh the GeminiClient's tool list so the LLM sees the new tools
         await geminiClient.setTools();
@@ -872,7 +872,7 @@ export class SessionManager {
     // Register admin file tools (read/write/delete agent files)
     try {
       const { createReadRepoFileTool, createWriteRepoFileTool, createDeleteRepoFileTool, createInternalApiTool } = await import('../tools/admin-file-tools.js');
-      const { bridgeToUpstream, registerOnUpstream } = await import('../tools/upstream-bridge.js');
+      const { bridgeToUpstream, registerOnUpstream, extractJsonSchema } = await import('../tools/upstream-bridge.js');
       const repoRoot = this.bundle.origin;
       const upstream = session.config.getUpstreamConfig();
       const toolRegistry = upstream.getToolRegistry();
@@ -888,7 +888,7 @@ export class SessionManager {
       }
 
       for (const {name, def} of adminTools) {
-        registerOnUpstream(toolRegistry, bridgeToUpstream(name, def, {type: 'object', properties: {}}, makeContext));
+        registerOnUpstream(toolRegistry, bridgeToUpstream(name, def, extractJsonSchema(def), makeContext));
       }
 
       await session.geminiClient.setTools();
