@@ -131,7 +131,7 @@ export function bridgeToUpstream(
     try {
       const ctx = makeContext();
       const result = await def.execute(params, ctx);
-      const output = typeof result === 'string' ? result : JSON.stringify(result);
+      const output = typeof result === 'string' ? result : JSON.stringify(result ?? {ok: true});
       return {llmContent: output, returnDisplay: output.slice(0, 200)};
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
