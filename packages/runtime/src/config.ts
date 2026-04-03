@@ -60,6 +60,12 @@ function parseLogLevelStr(value: string | undefined): LogLevel {
 /**
  * Known provider API key environment variable names.
  */
+/** Default sandbox timeout in ms when not specified in amodal.json. */
+const DEFAULT_SANDBOX_TIMEOUT_MS = 30_000;
+
+/**
+ * Known provider API key environment variable names.
+ */
 const PROVIDER_ENV_KEYS: Record<string, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
@@ -198,12 +204,13 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
   let raw: string;
   try {
     raw = readFileSync(configPath, 'utf-8');
-  } catch {
+  } catch (err) {
     throw new ConfigError(
       `Cannot read config file: ${configPath}`,
       {
         key: 'amodal.json',
         suggestion: 'Check file permissions.',
+        cause: err,
       },
     );
   }
@@ -298,7 +305,7 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
 
     sandbox: {
       shellExec: repoConfig.sandbox?.shellExec ?? false,
-      maxTimeout: repoConfig.sandbox?.maxTimeout ?? 30000,
+      maxTimeout: repoConfig.sandbox?.maxTimeout ?? DEFAULT_SANDBOX_TIMEOUT_MS,
       template: repoConfig.sandbox?.template,
     },
 
