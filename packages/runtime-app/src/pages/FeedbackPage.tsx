@@ -49,7 +49,7 @@ function FeedbackRow({ entry, expanded, onToggleExpand, selected, onToggleSelect
 }) {
   return (
     <div className={cn('border rounded-lg overflow-hidden transition-colors',
-      selected ? 'border-primary/30 bg-primary/5' : 'border-gray-200 dark:border-zinc-800',
+      selected ? 'border-primary/30 bg-primary/5' : 'border-border',
     )}>
       <div className={cn('flex items-center gap-2 px-3 py-2 text-xs')}>
         <button onClick={(e) => { e.stopPropagation(); onToggleSelect(); }} className="shrink-0">
@@ -62,25 +62,25 @@ function FeedbackRow({ entry, expanded, onToggleExpand, selected, onToggleSelect
           ? <ThumbsUp className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
           : <ThumbsDown className="h-3.5 w-3.5 text-red-400 shrink-0" />
         }
-        <button onClick={onToggleExpand} className="text-gray-700 dark:text-zinc-300 truncate flex-1 text-left hover:text-gray-900 dark:hover:text-zinc-100 transition-colors">
+        <button onClick={onToggleExpand} className="text-foreground truncate flex-1 text-left hover:text-gray-900 dark:hover:text-zinc-100 transition-colors">
           &ldquo;{entry.query}&rdquo;
         </button>
         {entry.comment && (
           <span className="text-red-400/70 truncate max-w-[200px] shrink-0">{entry.comment}</span>
         )}
         {entry.model && (
-          <span className="text-gray-400 dark:text-zinc-600 shrink-0">{entry.model.replace(/-\d{8}$/, '')}</span>
+          <span className="text-muted-foreground shrink-0">{entry.model.replace(/-\d{8}$/, '')}</span>
         )}
-        <span className="text-gray-400 dark:text-zinc-600 shrink-0">{formatRelativeTime(entry.timestamp)}</span>
+        <span className="text-muted-foreground shrink-0">{formatRelativeTime(entry.timestamp)}</span>
       </div>
       {expanded && (
-        <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800/50 space-y-2">
+        <div className="px-4 py-3 border-t border-border space-y-2">
           <div>
-            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-0.5">Query</div>
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">Query</div>
             <div className="text-xs text-gray-600 dark:text-zinc-400">{entry.query}</div>
           </div>
           <div>
-            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-0.5">Response</div>
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">Response</div>
             <div className="text-xs text-gray-600 dark:text-zinc-400 whitespace-pre-wrap" style={{overflowWrap: 'anywhere'}}>{entry.response}</div>
           </div>
           {entry.comment && (
@@ -90,7 +90,7 @@ function FeedbackRow({ entry, expanded, onToggleExpand, selected, onToggleSelect
             </div>
           )}
           {entry.toolCalls && entry.toolCalls.length > 0 && (
-            <div className="text-xs text-gray-400 dark:text-zinc-600">Tools: {entry.toolCalls.join(', ')}</div>
+            <div className="text-xs text-muted-foreground">Tools: {entry.toolCalls.join(', ')}</div>
           )}
         </div>
       )}
@@ -190,11 +190,11 @@ Based on these patterns, recommend specific changes. Check existing config files
   const positiveRate = summary && summary.total > 0 ? Math.round((summary.thumbsUp / summary.total) * 100) : 0;
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
-      <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
+    <div className="h-full flex flex-col bg-background">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-5 w-5 text-primary" />
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Feedback</h1>
+          <h1 className="text-lg font-semibold text-foreground">Feedback</h1>
         </div>
       </div>
 
@@ -203,9 +203,9 @@ Based on these patterns, recommend specific changes. Check existing config files
           {/* Stats */}
           {summary && (
             <div className="grid grid-cols-3 gap-4">
-              <div className="border border-gray-200 dark:border-zinc-800 rounded-lg px-4 py-3">
-                <div className="text-2xl font-semibold text-gray-900 dark:text-zinc-200">{summary.total}</div>
-                <div className="text-xs text-gray-400 dark:text-zinc-500">Total ratings</div>
+              <div className="border border-border rounded-lg px-4 py-3">
+                <div className="text-2xl font-semibold text-foreground">{summary.total}</div>
+                <div className="text-xs text-muted-foreground">Total ratings</div>
               </div>
               <div className="border border-emerald-500/20 bg-emerald-500/5 rounded-lg px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -231,7 +231,7 @@ Based on these patterns, recommend specific changes. Check existing config files
             {/* Toolbar */}
             <div className="flex items-center gap-3 mb-2 px-1">
               {/* Select all checkbox */}
-              <button onClick={toggleSelectAll} className="shrink-0 text-gray-400 dark:text-zinc-600 hover:text-primary transition-colors">
+              <button onClick={toggleSelectAll} className="shrink-0 text-muted-foreground hover:text-primary transition-colors">
                 {allNewSelected
                   ? <CheckSquare className="h-4 w-4 text-primary" />
                   : someNewSelected
@@ -250,10 +250,10 @@ Based on these patterns, recommend specific changes. Check existing config files
               {/* Actions */}
               {selected.size > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-400 dark:text-zinc-500">{selected.size} selected</span>
+                  <span className="text-[10px] text-muted-foreground">{selected.size} selected</span>
                   <button
                     onClick={() => markReviewed([...selected])}
-                    className="px-2 py-1 rounded text-[11px] text-gray-500 dark:text-zinc-400 border border-gray-200 dark:border-zinc-700/50 hover:border-gray-300 dark:hover:border-zinc-600 transition-colors flex items-center gap-1"
+                    className="px-2 py-1 rounded text-[11px] text-muted-foreground border border-gray-200 dark:border-zinc-700/50 hover:border-gray-300 dark:hover:border-zinc-600 transition-colors flex items-center gap-1"
                   >
                     <Archive className="h-3 w-3" />
                     Archive
@@ -274,7 +274,7 @@ Based on these patterns, recommend specific changes. Check existing config files
             {/* Entries */}
             <div className="space-y-1">
               {newEntries.length === 0 && (
-                <div className="text-sm text-gray-400 dark:text-zinc-500 text-center py-8">
+                <div className="text-sm text-muted-foreground text-center py-8">
                   No new feedback. Rate responses in the chat to see data here.
                 </div>
               )}
@@ -294,7 +294,7 @@ Based on these patterns, recommend specific changes. Check existing config files
           {/* Reviewed */}
           {reviewedEntries.length > 0 && (
             <div>
-              <h2 className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-2">
+              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
                 Reviewed ({reviewedEntries.length})
               </h2>
               <div className="space-y-1 opacity-40">

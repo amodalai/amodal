@@ -88,22 +88,22 @@ export function AutomationsPage() {
   }, [fetchAutomations]);
 
   return (
-    <div className="h-full bg-white dark:bg-[#0a0a0f]">
-      <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
-        <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Automations</h1>
-        <p className="text-sm text-gray-500 dark:text-zinc-500 mt-0.5">
+    <div className="h-full bg-background">
+      <div className="border-b border-border px-6 py-4">
+        <h1 className="text-lg font-semibold text-foreground">Automations</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
           {automations.length} automation{automations.length !== 1 ? 's' : ''} configured
         </p>
       </div>
 
       <div className="p-6 max-w-3xl">
         {isLoading ? (
-          <div className="text-gray-500 dark:text-zinc-500 text-sm">Loading...</div>
+          <div className="text-muted-foreground text-sm">Loading...</div>
         ) : automations.length === 0 ? (
           <div className="text-center py-12">
             <Zap className="h-8 w-8 text-gray-300 dark:text-zinc-700 mx-auto mb-3" />
-            <p className="text-sm text-gray-500 dark:text-zinc-500">
-              No automations defined. Add <code className="text-xs bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">.json</code> files to <code className="text-xs bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">automations/</code>.
+            <p className="text-sm text-muted-foreground">
+              No automations defined. Add <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.json</code> files to <code className="text-xs bg-muted px-1.5 py-0.5 rounded">automations/</code>.
             </p>
           </div>
         ) : (
@@ -113,13 +113,13 @@ export function AutomationsPage() {
               return (
                 <div
                   key={auto.name}
-                  className="border border-gray-200 dark:border-zinc-800 rounded-xl p-5 bg-gray-50 dark:bg-zinc-900/50"
+                  className="border border-border rounded-xl p-5 bg-card"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <a href={`/automations/${encodeURIComponent(auto.name)}`} className="flex items-center gap-2 mb-1 hover:opacity-80 transition-opacity">
                         <Zap className="h-4 w-4 text-primary shrink-0" />
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-200">{auto.title}</h3>
+                        <h3 className="text-sm font-semibold text-foreground">{auto.title}</h3>
                       </a>
 
                       <div className="flex items-center gap-3 mb-3">
@@ -128,14 +128,14 @@ export function AutomationsPage() {
                         </span>
                         {auto.schedule && (
                           <>
-                            <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Clock className="h-3 w-3" />
                               {cronstrue.toString(auto.schedule, { use24HourTimeFormat: true })}
                             </span>
                             {(() => {
                               const next = estimateNextRun(auto.schedule);
                               return next ? (
-                                <span className="text-xs text-gray-400 dark:text-zinc-600">
+                                <span className="text-xs text-muted-foreground">
                                   Next in {next}
                                 </span>
                               ) : null;
@@ -144,7 +144,7 @@ export function AutomationsPage() {
                         )}
                       </div>
 
-                      <p className="text-xs text-gray-500 dark:text-zinc-500 leading-relaxed line-clamp-2">
+                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
                         {auto.prompt}
                       </p>
 
@@ -155,7 +155,7 @@ export function AutomationsPage() {
                           ) : (
                             <XCircle className="h-3 w-3 text-red-400" />
                           )}
-                          <span className="text-gray-500 dark:text-zinc-500">
+                          <span className="text-muted-foreground">
                             Last run {formatRelative(auto.lastRun)}
                             {auto.lastRunStatus === 'error' && auto.lastRunError && (
                               <span className="text-red-400 ml-1">— {auto.lastRunError}</span>

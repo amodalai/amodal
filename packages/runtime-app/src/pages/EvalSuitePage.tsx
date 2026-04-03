@@ -38,13 +38,13 @@ export function EvalSuitePage() {
   }, [loadSuites]);
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
+    <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <FlaskConical className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Eval Suite</h1>
+            <h1 className="text-lg font-semibold text-foreground">Eval Suite</h1>
           </div>
           {suites.length > 0 && (
             <div className="flex items-center gap-3">
@@ -63,8 +63,8 @@ export function EvalSuitePage() {
             </div>
           )}
         </div>
-        <p className="text-xs text-gray-400 dark:text-zinc-500 max-w-2xl">
-          Run your eval cases against the configured model. Each eval sends a query to the agent and checks assertions with an LLM judge. Green means pass, red means fail. Add evals in the <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-[11px]">evals/</code> directory.
+        <p className="text-xs text-muted-foreground max-w-2xl">
+          Run your eval cases against the configured model. Each eval sends a query to the agent and checks assertions with an LLM judge. Green means pass, red means fail. Add evals in the <code className="px-1 py-0.5 rounded bg-muted text-[11px]">evals/</code> directory.
         </p>
       </div>
 

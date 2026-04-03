@@ -46,7 +46,7 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
       <div className="flex items-center gap-1">
         <button
           onClick={() => rating === 'up' ? clear() : submit('up')}
-          className={`p-1 rounded transition-colors ${rating === 'up' ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-emerald-400 hover:bg-gray-100 dark:hover:bg-zinc-800/50'}`}
+          className={`p-1 rounded transition-colors ${rating === 'up' ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-emerald-400 hover:bg-muted'}`}
           title={rating === 'up' ? 'Undo' : 'Good response'}
         >
           <ThumbsUp className="h-3.5 w-3.5" />
@@ -61,7 +61,7 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
               setShowComment(true);
             }
           }}
-          className={`p-1 rounded transition-colors ${rating === 'down' ? 'text-red-400 bg-red-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-red-400 hover:bg-gray-100 dark:hover:bg-zinc-800/50'}`}
+          className={`p-1 rounded transition-colors ${rating === 'down' ? 'text-red-400 bg-red-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-red-400 hover:bg-muted'}`}
           title={rating === 'down' ? 'Undo' : 'Bad response'}
         >
           <ThumbsDown className="h-3.5 w-3.5" />
@@ -75,7 +75,7 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit('down', comment || undefined); }}
             placeholder="What went wrong? (optional)"
-            className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-800/50 text-gray-700 dark:text-zinc-300 placeholder:text-gray-400 dark:placeholder:text-zinc-600"
+            className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-800/50 text-foreground placeholder:text-gray-400 dark:placeholder:text-zinc-600"
             autoFocus
           />
           <button
@@ -137,21 +137,21 @@ function ToolCallCard({ call }: { call: ToolCallInfo }) {
           ) : (
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
           )}
-          <span className="text-[13px] font-semibold text-gray-800 dark:text-zinc-200">{connection}</span>
+          <span className="text-[13px] font-semibold text-foreground">{connection}</span>
           {method && (
             <span className={`text-[10px] font-mono font-bold ${METHOD_COLORS[method] ?? 'text-gray-500'}`}>
               {method}
             </span>
           )}
           {path && (
-            <span className="text-[12px] font-mono text-gray-500 dark:text-zinc-400 truncate">{path}</span>
+            <span className="text-[12px] font-mono text-muted-foreground truncate">{path}</span>
           )}
           {call.duration_ms != null && (
-            <span className="text-[11px] text-gray-400 dark:text-zinc-500 ml-auto tabular-nums shrink-0">{String(call.duration_ms)}ms</span>
+            <span className="text-[11px] text-muted-foreground ml-auto tabular-nums shrink-0">{String(call.duration_ms)}ms</span>
           )}
         </div>
         {paramLine && (
-          <div className="px-3 pb-2 text-[11px] text-gray-400 dark:text-zinc-500 font-mono truncate">
+          <div className="px-3 pb-2 text-[11px] text-muted-foreground font-mono truncate">
             {paramLine}
           </div>
         )}
@@ -301,7 +301,7 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
 
   if (editing) {
     return (
-      <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100 dark:border-zinc-800/50">
+      <div className="flex items-center gap-2 px-6 py-2 border-b border-border">
         <input
           ref={inputRef}
           value={editValue}
@@ -311,7 +311,7 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
             if (e.key === 'Enter') save();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="flex-1 text-sm font-medium px-2 py-1 rounded border border-primary/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
+          className="flex-1 text-sm font-medium px-2 py-1 rounded border border-primary/50 bg-white dark:bg-zinc-800 text-foreground outline-none"
           autoFocus
         />
         <button onClick={save} className="text-emerald-500 hover:text-emerald-400">
@@ -322,13 +322,13 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
   }
 
   return (
-    <div className="group flex items-center gap-2 px-6 py-2 border-b border-gray-100 dark:border-zinc-800/50">
-      <span className="text-sm font-medium text-gray-700 dark:text-zinc-300 truncate">{title}</span>
+    <div className="group flex items-center gap-2 px-6 py-2 border-b border-border">
+      <span className="text-sm font-medium text-foreground truncate">{title}</span>
       <button
         onClick={() => { setEditValue(title); setEditing(true); }}
         className="opacity-0 group-hover:opacity-40 hover:!opacity-80 transition-opacity"
       >
-        <Pencil className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
+        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
     </div>
   );
@@ -433,7 +433,7 @@ export function ChatPage() {
   const hasMessages = messages.length > 0 || history.length > 0;
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
+    <div className="h-full flex flex-col bg-background">
       <SessionTitle sessionId={activeResumeId ?? sessionId} />
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {!hasMessages ? (
@@ -445,7 +445,7 @@ export function ChatPage() {
               <circle cx="22" cy="11" r="10" fill="#3B82F6" clipPath="url(#empty-sq)" />
             </svg>
             <h2 className="text-lg font-medium text-gray-400 dark:text-zinc-400 mb-1">What can I help with?</h2>
-            <p className="text-sm text-gray-400 dark:text-zinc-600 max-w-sm">Ask me anything. I can search, analyze, and connect to your tools.</p>
+            <p className="text-sm text-muted-foreground max-w-sm">Ask me anything. I can search, analyze, and connect to your tools.</p>
           </div>
         ) : (
           <div className="max-w-3xl mx-auto px-4 py-6">
@@ -475,7 +475,7 @@ export function ChatPage() {
               </div>
             ))}
             {history.length > 0 && messages.length === 0 && (
-              <div className="text-center text-xs text-gray-400 dark:text-zinc-600 mb-4 py-2 border-t border-gray-200 dark:border-zinc-800/50">
+              <div className="text-center text-xs text-muted-foreground mb-4 py-2 border-t border-border">
                 Session resumed
               </div>
             )}
@@ -504,7 +504,7 @@ export function ChatPage() {
                     .flatMap((b) => b.calls.map((c) => c.toolName));
                   return (
                     <div key={msg.id} className="mb-6">
-                      <div className="text-[14px] text-gray-900 dark:text-zinc-200">
+                      <div className="text-[14px] text-foreground">
                         <MessageContent blocks={msg.contentBlocks} respondToConfirmation={respondToConfirmation} />
                       </div>
                       {!isStreaming && (
@@ -540,7 +540,7 @@ export function ChatPage() {
         )}
       </div>
 
-      <div className="border-t border-gray-200 dark:border-zinc-800/80 bg-gray-50 dark:bg-[#0f0f17] px-4 py-4">
+      <div className="border-t border-border/80 bg-card px-4 py-4">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative">
           <textarea
             ref={inputRef}
@@ -555,7 +555,7 @@ export function ChatPage() {
             placeholder="Message..."
             disabled={isStreaming}
             rows={1}
-            className="w-full resize-none rounded-xl bg-white dark:bg-zinc-800/80 border border-gray-300 dark:border-zinc-700/60 px-4 py-3 pr-12 text-[14px] text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 outline-none focus:border-primary/60 focus:ring-1 focus:ring-blue-600/20 transition-colors disabled:opacity-50 overflow-y-auto"
+            className="w-full resize-none rounded-xl bg-white dark:bg-zinc-800/80 border border-border px-4 py-3 pr-12 text-[14px] text-foreground placeholder-gray-400 dark:placeholder-zinc-500 outline-none focus:border-primary/60 focus:ring-1 focus:ring-blue-600/20 transition-colors disabled:opacity-50 overflow-y-auto"
             style={{ minHeight: '48px', maxHeight: '160px' }}
           />
           {isStreaming ? (
@@ -577,7 +577,7 @@ export function ChatPage() {
           )}
         </form>
         {(usage.inputTokens > 0 || usage.outputTokens > 0) && (
-          <div className="max-w-3xl mx-auto mt-1.5 text-[11px] text-gray-400 dark:text-zinc-600 font-mono text-right">
+          <div className="max-w-3xl mx-auto mt-1.5 text-[11px] text-muted-foreground font-mono text-right">
             {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens ({usage.inputTokens.toLocaleString()} in / {usage.outputTokens.toLocaleString()} out)
           </div>
         )}

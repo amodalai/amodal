@@ -73,7 +73,7 @@ export function EntityTable({
 
   if (documents.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-400 dark:text-zinc-600 text-sm">
+      <div className="text-center py-16 text-muted-foreground text-sm">
         No documents yet.
       </div>
     );
@@ -90,11 +90,11 @@ export function EntityTable({
             <div
               key={doc.key}
               onClick={() => { void navigate(`/entities/${storeName}/${doc.key}`); }}
-              className="border border-gray-200 dark:border-zinc-800 rounded-xl p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors"
+              className="border border-border rounded-xl p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-900 dark:text-zinc-200 mb-1">
+                  <div className="text-sm font-medium text-foreground mb-1">
                     {titleValue}
                   </div>
 
@@ -103,7 +103,7 @@ export function EntityTable({
                     if (!val) return null;
                     const str = String(val);
                     return (
-                      <div key={name} className="text-xs text-gray-500 dark:text-zinc-400 mb-1.5 line-clamp-2">
+                      <div key={name} className="text-xs text-muted-foreground mb-1.5 line-clamp-2">
                         {str.length > 150 ? str.slice(0, 150) + '...' : str}
                       </div>
                     );
@@ -121,9 +121,9 @@ export function EntityTable({
                 </div>
 
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="text-[11px] font-mono text-gray-400 dark:text-zinc-600">{doc.key}</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">{doc.key}</span>
                   {display.dateField && payload[display.dateField] && (
-                    <span className="text-[11px] text-gray-400 dark:text-zinc-600">
+                    <span className="text-[11px] text-muted-foreground">
                       {formatDateRelative(payload[display.dateField])}
                     </span>
                   )}
@@ -135,7 +135,7 @@ export function EntityTable({
       </div>
 
       {total > documents.length && (
-        <div className="mt-4 text-center text-xs text-gray-400 dark:text-zinc-600">
+        <div className="mt-4 text-center text-xs text-muted-foreground">
           Showing {documents.length} of {total.toLocaleString()}
         </div>
       )}

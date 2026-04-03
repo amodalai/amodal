@@ -324,10 +324,10 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
   const bestCost = passingCosts.length > 0 ? Math.min(...passingCosts) : -1;
 
   return (
-    <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg overflow-hidden">
       <table className="w-full text-sm table-fixed">
         <thead>
-          <tr className="bg-gray-50 dark:bg-zinc-900/50 text-xs text-gray-500 dark:text-zinc-500">
+          <tr className="bg-card text-xs text-muted-foreground">
             <th className="text-left px-4 py-2 font-medium">Model</th>
             <th className="text-center px-4 py-2 font-medium">Result</th>
             <th className="text-center px-4 py-2 font-medium">Assertions</th>
@@ -348,9 +348,9 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
               <Fragment key={i}>
                 <tr
                   onClick={() => setExpandedRow(isExpanded ? null : i)}
-                  className="border-t border-gray-100 dark:border-zinc-800/50 hover:bg-gray-50/50 dark:hover:bg-zinc-800/20 cursor-pointer"
+                  className="border-t border-border hover:bg-gray-50/50 dark:hover:bg-zinc-800/20 cursor-pointer"
                 >
-                  <td className="px-4 py-2.5 text-gray-800 dark:text-zinc-300 font-medium">
+                  <td className="px-4 py-2.5 text-foreground font-medium">
                     {r.model.label || r.model.model.replace(/-\d{8}$/, '')}
                     {isBest && (
                       <span className="ml-2 px-1.5 py-0.5 text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 rounded">best value</span>
@@ -371,21 +371,21 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
                         <span key={ai} className={cn('inline-block w-1.5 h-1.5 rounded-full', a.passed ? 'bg-emerald-400' : 'bg-red-400')} />
                       ))}
                       {r.assertions.length > 0 && (
-                        <span className="text-[10px] text-gray-400 dark:text-zinc-600 ml-1">
+                        <span className="text-[10px] text-muted-foreground ml-1">
                           {passedCount}/{r.assertions.length}
                         </span>
                       )}
                     </span>
                   </td>
-                  <td className={cn('px-4 py-2.5 text-right font-mono text-xs', r.durationMs > 0 ? gradientColor(r.durationMs, minTime, maxTime) : 'text-gray-400 dark:text-zinc-600')}>
+                  <td className={cn('px-4 py-2.5 text-right font-mono text-xs', r.durationMs > 0 ? gradientColor(r.durationMs, minTime, maxTime) : 'text-muted-foreground')}>
                     {r.durationMs > 0 ? formatDuration(r.durationMs) : '-'}
                   </td>
-                  <td className={cn('px-4 py-2.5 text-right font-mono text-xs', r.queryCostMicros > 0 ? gradientColor(r.queryCostMicros, minCost, maxCost) : 'text-gray-400 dark:text-zinc-600')}>
+                  <td className={cn('px-4 py-2.5 text-right font-mono text-xs', r.queryCostMicros > 0 ? gradientColor(r.queryCostMicros, minCost, maxCost) : 'text-muted-foreground')}>
                     {r.queryCostMicros > 0 ? formatCost(r.queryCostMicros) : '-'}
                   </td>
                 </tr>
                 {isExpanded && (
-                  <tr className="border-t border-gray-100 dark:border-zinc-800/50">
+                  <tr className="border-t border-border">
                     <td colSpan={5} className="px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/20 space-y-3" style={{overflowWrap: 'anywhere', wordBreak: 'break-word'}}>
                       {r.error && (
                         <div className={cn('text-xs border rounded px-3 py-2 font-mono',
@@ -398,21 +398,21 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
                       )}
                       {r.response && (
                         <div>
-                          <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Response</div>
-                          <div className="text-xs text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
+                          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Response</div>
+                          <div className="text-xs text-foreground bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
                             {r.response}
                           </div>
                         </div>
                       )}
                       {r.toolCalls.length > 0 && (
                         <div>
-                          <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Tool Calls</div>
+                          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Tool Calls</div>
                           <div className="space-y-1">
                             {r.toolCalls.map((tc, ti) => (
-                              <div key={ti} className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800/40 font-mono break-words">
+                              <div key={ti} className="text-xs px-2 py-1 rounded bg-muted font-mono break-words">
                                 <span className="text-primary font-semibold">{tc.name}</span>
                                 {r.toolResults[ti] && (
-                                  <div className="mt-1 text-gray-500 dark:text-zinc-500 text-[10px]">
+                                  <div className="mt-1 text-muted-foreground text-[10px]">
                                     <CollapsibleText text={r.toolResults[ti]} />
                                   </div>
                                 )}
@@ -423,7 +423,7 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
                       )}
                       {r.assertions.length > 0 && (
                         <div>
-                          <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Assertions</div>
+                          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Assertions</div>
                           <div className="space-y-1.5">
                             {r.assertions.map((a, ai) => (
                               <div key={ai} className={cn('text-xs rounded px-3 py-2 border', a.passed ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-red-500/20 bg-red-500/5')}>
@@ -436,7 +436,7 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
                                   <span className={a.passed ? 'text-emerald-300' : 'text-red-300'}>{a.negated ? 'NOT ' : ''}{a.text}</span>
                                 </div>
                                 {a.reason && (
-                                  <div className="mt-1 ml-5 text-gray-500 dark:text-zinc-500 italic break-words whitespace-normal">{a.reason}</div>
+                                  <div className="mt-1 ml-5 text-muted-foreground italic break-words whitespace-normal">{a.reason}</div>
                                 )}
                               </div>
                             ))}
@@ -451,8 +451,8 @@ function CompareTable({ results, runningModel, runPhase, runStartTime }: { resul
           })}
           {runningModel && (
             <tr>
-              <td colSpan={6} className="px-3 py-2.5 border-t border-gray-100 dark:border-zinc-800/50">
-                <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-zinc-500">
+              <td colSpan={6} className="px-3 py-2.5 border-t border-border">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
                   <span className="text-gray-600 dark:text-zinc-300">{runningModel.label || runningModel.model.replace(/-\d{8}$/, '')}</span>
                   <span className={runPhase === 'judging' ? 'text-amber-400' : 'text-primary'}>
@@ -570,7 +570,7 @@ export function EvalCard({
 
   const borderColor = hasSuiteResult
     ? allPassed ? 'border-emerald-500/40' : 'border-red-500/40'
-    : 'border-gray-200 dark:border-zinc-800';
+    : 'border-border';
 
   // Icon: spinner when running, green/red beaker in suite mode with results, default otherwise
   let headerIcon = <FlaskConical className="h-4 w-4 text-primary/60 shrink-0" />;
@@ -586,34 +586,34 @@ export function EvalCard({
     <div className={cn('border rounded-lg overflow-hidden transition-colors', borderColor)}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors"
       >
         {headerIcon}
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-gray-900 dark:text-zinc-200">{suite.title || suite.name}</div>
+          <div className="text-sm font-medium text-foreground">{suite.title || suite.name}</div>
           {suite.description && (
-            <div className="text-xs text-gray-400 dark:text-zinc-500 truncate">{suite.description}</div>
+            <div className="text-xs text-muted-foreground truncate">{suite.description}</div>
           )}
         </div>
-        <span className="text-[11px] text-gray-400 dark:text-zinc-500 tabular-nums">
+        <span className="text-[11px] text-muted-foreground tabular-nums">
           {suite.assertionCount} assertion{suite.assertionCount !== 1 ? 's' : ''}
         </span>
-        <ChevronDown className={cn('h-4 w-4 text-gray-400 dark:text-zinc-500 transition-transform', expanded && 'rotate-180')} />
+        <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
       </button>
 
       {expanded && (
-        <div className="border-t border-gray-100 dark:border-zinc-800/50 px-4 py-3 bg-gray-50/50 dark:bg-zinc-900/30 space-y-4">
+        <div className="border-t border-border px-4 py-3 bg-muted space-y-4">
           {/* Query */}
           <div>
-            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Query</div>
-            <div className="text-sm text-gray-700 dark:text-zinc-300 bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 font-mono break-words">
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Query</div>
+            <div className="text-sm text-foreground bg-white dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700/50 rounded px-3 py-2 font-mono break-words">
               {suite.query}
             </div>
           </div>
 
           {/* Assertions */}
           <div>
-            <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Assertions</div>
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Assertions</div>
             <div className="space-y-1">
               {suite.assertions.map((a, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-gray-600 dark:text-zinc-400">
@@ -628,7 +628,7 @@ export function EvalCard({
           {!hideModelSelector && (
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Models</div>
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Models</div>
                 <button onClick={selectAll} className="text-[10px] text-primary hover:text-primary/70">all</button>
                 <button onClick={selectNone} className="text-[10px] text-primary hover:text-primary/70">none</button>
               </div>
@@ -644,7 +644,7 @@ export function EvalCard({
                         'px-2 py-1.5 rounded text-xs font-medium border transition-colors text-center truncate',
                         selected
                           ? 'border-primary/50 bg-primary/10 text-primary'
-                          : 'border-gray-200 dark:border-zinc-700/50 text-gray-400 dark:text-zinc-500 hover:border-gray-300 dark:hover:border-zinc-600',
+                          : 'border-gray-200 dark:border-zinc-700/50 text-muted-foreground hover:border-gray-300 dark:hover:border-zinc-600',
                       )}
                     >
                       {m.label || m.model.replace(/-\d{8}$/, '')}
@@ -658,7 +658,7 @@ export function EvalCard({
           {/* Timeout slider */}
           {!hideModelSelector && (
             <div className="flex items-center gap-3">
-              <div className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Timeout</div>
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Timeout</div>
               <input
                 type="range"
                 min={20}
@@ -667,7 +667,7 @@ export function EvalCard({
                 onChange={(e) => setTimeoutVal(Number(e.target.value))}
                 className="flex-1 h-1 accent-blue-600"
               />
-              <span className="text-xs text-gray-400 dark:text-zinc-500 tabular-nums w-10 text-right">{timeout}s</span>
+              <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{timeout}s</span>
             </div>
           )}
 
@@ -689,16 +689,16 @@ export function EvalCard({
             <div>
               <button
                 onClick={() => setHistoryOpen(!historyOpen)}
-                className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest hover:text-gray-600 dark:hover:text-zinc-400"
+                className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest hover:text-foreground"
               >
                 <ChevronDown className={cn('h-3 w-3 transition-transform', historyOpen && 'rotate-180')} />
                 History ({history.length})
               </button>
               {historyOpen && (
-                <div className="mt-2 border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+                <div className="mt-2 border border-border rounded-lg overflow-hidden">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="bg-gray-50 dark:bg-zinc-900/50 text-gray-500 dark:text-zinc-500">
+                      <tr className="bg-card text-muted-foreground">
                         <th className="text-left px-3 py-1.5 font-medium">Model</th>
                         <th className="text-center px-3 py-1.5 font-medium">Result</th>
                         <th className="text-center px-3 py-1.5 font-medium">Assertions</th>
@@ -709,8 +709,8 @@ export function EvalCard({
                     </thead>
                     <tbody>
                       {history.map((h, i) => (
-                        <tr key={i} className="border-t border-gray-100 dark:border-zinc-800/50">
-                          <td className="px-3 py-1.5 text-gray-700 dark:text-zinc-300">{h.model.replace(/-\d{8}$/, '')}</td>
+                        <tr key={i} className="border-t border-border">
+                          <td className="px-3 py-1.5 text-foreground">{h.model.replace(/-\d{8}$/, '')}</td>
                           <td className="px-3 py-1.5 text-center">
                             <span className={h.passed ? 'text-emerald-400' : 'text-red-400'}>{h.passed ? 'PASS' : 'FAIL'}</span>
                           </td>
@@ -721,9 +721,9 @@ export function EvalCard({
                               ))}
                             </span>
                           </td>
-                          <td className="px-3 py-1.5 text-right text-gray-400 dark:text-zinc-500">{formatDuration(h.durationMs)}</td>
-                          <td className="px-3 py-1.5 text-right text-gray-400 dark:text-zinc-500 font-mono">{formatCost(h.queryCostMicros)}</td>
-                          <td className="px-3 py-1.5 text-right text-gray-400 dark:text-zinc-500">{formatRelativeTime(h.timestamp)}</td>
+                          <td className="px-3 py-1.5 text-right text-muted-foreground">{formatDuration(h.durationMs)}</td>
+                          <td className="px-3 py-1.5 text-right text-muted-foreground font-mono">{formatCost(h.queryCostMicros)}</td>
+                          <td className="px-3 py-1.5 text-right text-muted-foreground">{formatRelativeTime(h.timestamp)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -776,8 +776,8 @@ export function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll 
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <FlaskConical className="h-12 w-12 text-primary/20 mb-4" />
         <h3 className="text-sm font-semibold text-gray-400 dark:text-zinc-400 mb-2">No evals defined</h3>
-        <p className="text-xs text-gray-400 dark:text-zinc-500 max-w-sm">
-          Create eval files in the <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-zinc-800">evals/</code> directory. Each eval is a markdown file with a query and assertions.
+        <p className="text-xs text-muted-foreground max-w-sm">
+          Create eval files in the <code className="px-1 py-0.5 rounded bg-muted">evals/</code> directory. Each eval is a markdown file with a query and assertions.
         </p>
       </div>
     );
@@ -824,13 +824,13 @@ export function ModelArenaPage() {
   }, [loadSuites]);
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
+    <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <FlaskConical className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Model Arena</h1>
+            <h1 className="text-lg font-semibold text-foreground">Model Arena</h1>
           </div>
           {suites.length > 0 && (
             <div className="flex items-center gap-2 text-[11px]">
@@ -840,7 +840,7 @@ export function ModelArenaPage() {
             </div>
           )}
         </div>
-        <p className="text-xs text-gray-400 dark:text-zinc-500 max-w-2xl mb-0">
+        <p className="text-xs text-muted-foreground max-w-2xl mb-0">
           Compare how different models perform on your eval suite. Select models, run them side by side, and compare quality, speed, and cost. Use this to find the best model for your use case or to validate a model swap before deploying.
         </p>
       </div>

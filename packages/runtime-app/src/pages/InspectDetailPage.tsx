@@ -75,7 +75,7 @@ function ConnectionView({ data }: { data: ConnectionDetail }) {
           auth: {data.spec.authType}
         </span>
         {data.spec.baseUrl && (
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-500 dark:text-zinc-500 font-mono">
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.06] text-muted-foreground font-mono">
             {data.spec.baseUrl}
           </span>
         )}
@@ -84,21 +84,21 @@ function ConnectionView({ data }: { data: ConnectionDetail }) {
       {/* API Surface */}
       {data.surface.length > 0 && (
         <section>
-          <h2 className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-3">
+          <h2 className="text-sm font-semibold text-foreground mb-3">
             API Surface ({String(data.surface.length)} endpoints)
           </h2>
-          <div className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
+          <div className="border border-border rounded-lg overflow-hidden">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="bg-gray-50 dark:bg-zinc-900/50">
-                  <th className="text-left px-3 py-2 text-gray-500 dark:text-zinc-500 font-medium w-20">Method</th>
-                  <th className="text-left px-3 py-2 text-gray-500 dark:text-zinc-500 font-medium">Path</th>
-                  <th className="text-left px-3 py-2 text-gray-500 dark:text-zinc-500 font-medium">Description</th>
+                <tr className="bg-card">
+                  <th className="text-left px-3 py-2 text-muted-foreground font-medium w-20">Method</th>
+                  <th className="text-left px-3 py-2 text-muted-foreground font-medium">Path</th>
+                  <th className="text-left px-3 py-2 text-muted-foreground font-medium">Description</th>
                 </tr>
               </thead>
               <tbody>
                 {data.surface.map((endpoint, i) => (
-                  <tr key={`endpoint-${String(i)}`} className="border-t border-gray-100 dark:border-zinc-800/50">
+                  <tr key={`endpoint-${String(i)}`} className="border-t border-border">
                     <td className="px-3 py-2">
                       <span className={`text-[10px] font-mono font-bold uppercase ${
                         endpoint.method === 'GET' ? 'text-blue-500' :
@@ -110,8 +110,8 @@ function ConnectionView({ data }: { data: ConnectionDetail }) {
                         {endpoint.method}
                       </span>
                     </td>
-                    <td className="px-3 py-2 font-mono text-gray-700 dark:text-zinc-300">{endpoint.path}</td>
-                    <td className="px-3 py-2 text-gray-500 dark:text-zinc-500">{endpoint.description}</td>
+                    <td className="px-3 py-2 font-mono text-foreground">{endpoint.path}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{endpoint.description}</td>
                   </tr>
                 ))}
               </tbody>
@@ -123,9 +123,9 @@ function ConnectionView({ data }: { data: ConnectionDetail }) {
       {/* Entities */}
       {data.entities && (
         <section>
-          <h2 className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-3">Entities</h2>
-          <div className="bg-gray-50 dark:bg-zinc-900/30 border border-gray-200 dark:border-zinc-800 rounded-lg p-4">
-            <div className="text-[13px] text-gray-700 dark:text-zinc-300 prose dark:prose-invert prose-sm max-w-none">
+          <h2 className="text-sm font-semibold text-foreground mb-3">Entities</h2>
+          <div className="bg-gray-50 dark:bg-zinc-900/30 border border-border rounded-lg p-4">
+            <div className="text-[13px] text-foreground prose dark:prose-invert prose-sm max-w-none">
               <Markdown>{data.entities}</Markdown>
             </div>
           </div>
@@ -135,9 +135,9 @@ function ConnectionView({ data }: { data: ConnectionDetail }) {
       {/* Rules */}
       {data.rules && (
         <section>
-          <h2 className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-3">Rules</h2>
-          <div className="bg-gray-50 dark:bg-zinc-900/30 border border-gray-200 dark:border-zinc-800 rounded-lg p-4">
-            <div className="text-[13px] text-gray-700 dark:text-zinc-300 prose dark:prose-invert prose-sm max-w-none">
+          <h2 className="text-sm font-semibold text-foreground mb-3">Rules</h2>
+          <div className="bg-gray-50 dark:bg-zinc-900/30 border border-border rounded-lg p-4">
+            <div className="text-[13px] text-foreground prose dark:prose-invert prose-sm max-w-none">
               <Markdown>{data.rules}</Markdown>
             </div>
           </div>
@@ -163,12 +163,12 @@ function McpView({ data }: { data: McpDetail }) {
           {data.status}
         </span>
         {data.command && (
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-500 dark:text-zinc-500 font-mono">
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.06] text-muted-foreground font-mono">
             {data.command}
           </span>
         )}
         {data.url && (
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-500 dark:text-zinc-500 font-mono">
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.06] text-muted-foreground font-mono">
             {data.url}
           </span>
         )}
@@ -184,22 +184,22 @@ function McpView({ data }: { data: McpDetail }) {
       {/* Tools */}
       {data.tools.length > 0 && (
         <section>
-          <h2 className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-3">
+          <h2 className="text-sm font-semibold text-foreground mb-3">
             Tools ({String(data.tools.length)})
           </h2>
           <div className="space-y-3">
             {data.tools.map((tool) => (
-              <div key={tool.name} className="border border-gray-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-                <div className="px-4 py-3 bg-gray-50 dark:bg-zinc-900/50">
+              <div key={tool.name} className="border border-border rounded-lg overflow-hidden">
+                <div className="px-4 py-3 bg-card">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono font-semibold text-gray-800 dark:text-zinc-200">{tool.name}</span>
+                    <span className="text-sm font-mono font-semibold text-foreground">{tool.name}</span>
                   </div>
                   {tool.description && (
-                    <p className="text-xs text-gray-500 dark:text-zinc-500 mt-1">{tool.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{tool.description}</p>
                   )}
                 </div>
                 {tool.parameters && Object.keys(tool.parameters).length > 0 && (
-                  <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800/50">
+                  <div className="px-4 py-3 border-t border-border">
                     <pre className="text-[12px] text-gray-600 dark:text-zinc-400 font-mono whitespace-pre-wrap overflow-auto leading-relaxed">
                       {JSON.stringify(tool.parameters, null, 2)}
                     </pre>
@@ -212,7 +212,7 @@ function McpView({ data }: { data: McpDetail }) {
       )}
 
       {data.tools.length === 0 && data.status === 'connected' && (
-        <div className="text-center py-8 text-gray-400 dark:text-zinc-600 text-sm">
+        <div className="text-center py-8 text-muted-foreground text-sm">
           Connected but no tools discovered.
         </div>
       )}
@@ -233,15 +233,15 @@ function SkillView({ data }: { data: SkillDetail }) {
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium">
               trigger
             </span>
-            <span className="text-xs text-gray-500 dark:text-zinc-500 font-mono">{data.trigger}</span>
+            <span className="text-xs text-muted-foreground font-mono">{data.trigger}</span>
           </div>
         )}
       </div>
 
       {/* Skill body */}
       <section>
-        <h2 className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-3">Skill Definition</h2>
-        <div className="bg-gray-50 dark:bg-zinc-900/30 border border-gray-200 dark:border-zinc-800 rounded-lg p-4 overflow-auto prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-900 dark:prose-headings:text-zinc-200 prose-p:text-gray-900 dark:prose-p:text-zinc-300 prose-strong:text-gray-900 dark:prose-strong:text-zinc-200 prose-code:text-primary dark:prose-code:text-primary prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-li:text-gray-900 dark:prose-li:text-zinc-300">
+        <h2 className="text-sm font-semibold text-foreground mb-3">Skill Definition</h2>
+        <div className="bg-gray-50 dark:bg-zinc-900/30 border border-border rounded-lg p-4 overflow-auto prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-900 dark:prose-headings:text-zinc-200 prose-p:text-gray-900 dark:prose-p:text-zinc-300 prose-strong:text-gray-900 dark:prose-strong:text-zinc-200 prose-code:text-primary dark:prose-code:text-primary prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-li:text-gray-900 dark:prose-li:text-zinc-300">
           <Markdown>{data.body}</Markdown>
         </div>
       </section>
@@ -257,8 +257,8 @@ function KnowledgeView({ data }: { data: KnowledgeDetail }) {
       )}
 
       <section>
-        <div className="bg-gray-50 dark:bg-zinc-900/30 border border-gray-200 dark:border-zinc-800 rounded-lg p-4 overflow-auto">
-          <div className="text-[13px] text-gray-700 dark:text-zinc-300 prose dark:prose-invert prose-sm max-w-none">
+        <div className="bg-gray-50 dark:bg-zinc-900/30 border border-border rounded-lg p-4 overflow-auto">
+          <div className="text-[13px] text-foreground prose dark:prose-invert prose-sm max-w-none">
             <Markdown>{data.body}</Markdown>
           </div>
         </div>
@@ -298,11 +298,11 @@ export function InspectDetailPage() {
   }, [inspectKind, name]);
 
   if (!config) {
-    return <div className="p-6 text-gray-500 dark:text-zinc-500">Unknown inspect type</div>;
+    return <div className="p-6 text-muted-foreground">Unknown inspect type</div>;
   }
 
   if (loading) {
-    return <div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading...</div>;
+    return <div className="p-6 text-muted-foreground text-sm">Loading...</div>;
   }
 
   if (error || !data) {
@@ -313,19 +313,19 @@ export function InspectDetailPage() {
   const displayName = name?.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) ?? '';
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
+    <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex items-center gap-2">
           <Icon className={`h-4 w-4 text-${config.color}-500`} />
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">{displayName}</h1>
+          <h1 className="text-lg font-semibold text-foreground">{displayName}</h1>
         </div>
         <div className="flex items-center gap-3 mt-1">
           <span className={`text-[11px] px-2 py-0.5 rounded-full bg-${config.color}-100 dark:bg-${config.color}-500/10 text-${config.color}-700 dark:text-${config.color}-400 font-medium`}>
             {config.label}
           </span>
           {'location' in data && data.location && (
-            <span className="text-[11px] text-gray-400 dark:text-zinc-600 font-mono">
+            <span className="text-[11px] text-muted-foreground font-mono">
               {data.location}
             </span>
           )}

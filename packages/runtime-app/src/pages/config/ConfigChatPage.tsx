@@ -197,7 +197,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
                 {msg.content}
               </div>
             ) : (
-              <div className={`max-w-[90%] ${compact ? 'text-xs' : 'text-sm'} text-gray-800 dark:text-white/80 prose prose-sm dark:prose-invert prose-code:text-gray-800 dark:prose-code:text-zinc-200 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-100 prose-pre:text-gray-800 dark:prose-pre:bg-zinc-800 dark:prose-pre:text-zinc-200 prose-pre:text-xs max-w-none`}>
+              <div className={`max-w-[90%] ${compact ? 'text-xs' : 'text-sm'} text-foreground prose prose-sm dark:prose-invert prose-code:text-gray-800 dark:prose-code:text-zinc-200 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-100 prose-pre:text-gray-800 dark:prose-pre:bg-zinc-800 dark:prose-pre:text-zinc-200 prose-pre:text-xs max-w-none`}>
                 <Markdown>{msg.content}</Markdown>
               </div>
             )}
@@ -215,7 +215,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
       </div>
 
       {/* Input bar */}
-      <div className={`shrink-0 border-t border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17] ${compact ? 'px-2 py-2' : 'px-4 py-3'}`}>
+      <div className={`shrink-0 border-t border-border bg-card ${compact ? 'px-2 py-2' : 'px-4 py-3'}`}>
         <form onSubmit={(e) => { void handleSubmit(e); }} className="flex items-end gap-2">
           <textarea
             ref={inputRef}
@@ -224,7 +224,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
             onKeyDown={handleKeyDown}
             placeholder={compact ? 'Message admin agent...' : 'Ask me to add a connection, write a skill, or validate your config...'}
             rows={1}
-            className={`flex-1 resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/[0.04] ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm'} text-gray-900 dark:text-white/90 placeholder-gray-400 dark:placeholder-white/25 focus:outline-none focus:border-primary dark:focus:border-primary/50 transition-colors`}
+            className={`flex-1 resize-none rounded-xl border border-border bg-white dark:bg-white/[0.04] ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm'} text-foreground placeholder-gray-400 dark:placeholder-white/25 focus:outline-none focus:border-primary dark:focus:border-primary/50 transition-colors`}
             disabled={isStreaming}
           />
           {isStreaming ? (

@@ -68,7 +68,7 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
           'flex items-center gap-2 w-full px-2 py-[5px] rounded text-[12px] text-left transition-colors',
           isSelected
             ? 'bg-primary/10 text-primary'
-            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
+            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-muted',
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
@@ -88,7 +88,7 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
     <div>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 w-full px-2 py-[5px] rounded text-[12px] text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.03] transition-colors"
+        className="flex items-center gap-1.5 w-full px-2 py-[5px] rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
         <ChevronRight className={cn('h-3 w-3 shrink-0 transition-transform', open && 'rotate-90')} />
@@ -226,14 +226,14 @@ export function ConfigFilesPage() {
   const isPackageFile = fileData?.source === 'package';
 
   if (loading) {
-    return <div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading...</div>;
+    return <div className="p-6 text-muted-foreground text-sm">Loading...</div>;
   }
 
   return (
     <div className="h-full flex">
       {/* File tree */}
-      <div className="w-[240px] border-r border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0c0c14] flex flex-col shrink-0 overflow-hidden">
-        <div className="px-3 py-3 border-b border-gray-200 dark:border-white/[0.06]">
+      <div className="w-[240px] border-r border-border bg-card flex flex-col shrink-0 overflow-hidden">
+        <div className="px-3 py-3 border-b border-border">
           <span className="text-[10px] font-semibold text-gray-400 dark:text-white/45 uppercase tracking-widest">Agent Files</span>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-thin py-1">
@@ -241,7 +241,7 @@ export function ConfigFilesPage() {
             <TreeNode key={entry.path} entry={entry} depth={0} selectedPath={selectedPath} onSelect={selectFile} />
           ))}
           {tree.length === 0 && (
-            <div className="px-3 py-4 text-xs text-gray-400 dark:text-zinc-600">No files found</div>
+            <div className="px-3 py-4 text-xs text-muted-foreground">No files found</div>
           )}
         </div>
       </div>
@@ -251,9 +251,9 @@ export function ConfigFilesPage() {
         {selectedPath && fileData ? (
           <>
             {/* Editor header */}
-            <div className="h-10 border-b border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17] flex items-center justify-between px-4 shrink-0">
+            <div className="h-10 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
               <div className="flex items-center gap-2">
-                <span className="text-[12px] text-gray-500 dark:text-white/60 font-mono">{selectedPath}</span>
+                <span className="text-[12px] text-muted-foreground font-mono">{selectedPath}</span>
                 {fileData?.source === 'package' && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-medium">package</span>
                 )}
@@ -270,7 +270,7 @@ export function ConfigFilesPage() {
                 )}
                 <button
                   onClick={reloadFile}
-                  className="h-7 w-7 rounded flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+                  className="h-7 w-7 rounded flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-muted transition-colors"
                   title="Reload file from disk"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -291,7 +291,7 @@ export function ConfigFilesPage() {
                   </button>
                 )}
                 {isPackageFile && (
-                  <span className="text-[11px] text-gray-400 dark:text-zinc-500">read-only</span>
+                  <span className="text-[11px] text-muted-foreground">read-only</span>
                 )}
               </div>
             </div>
@@ -310,7 +310,7 @@ export function ConfigFilesPage() {
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <Package className="h-8 w-8 text-gray-300 dark:text-white/10 mx-auto mb-3" />
-              <p className="text-sm text-gray-400 dark:text-zinc-600">Select a file to view or edit</p>
+              <p className="text-sm text-muted-foreground">Select a file to view or edit</p>
               <p className="text-xs text-gray-300 dark:text-zinc-700 mt-1">Changes are saved directly to your repo</p>
             </div>
           </div>
