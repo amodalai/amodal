@@ -90,6 +90,17 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
   );
 }
 
+function ElapsedTimer({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!startTime) return;
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+  if (elapsed < 1) return null;
+  return <span className="text-muted-foreground font-mono tabular-nums text-xs">{elapsed}s</span>;
+}
+
 const METHOD_COLORS: Record<string, string> = {
   GET: 'text-blue-500',
   POST: 'text-emerald-500',
@@ -352,6 +363,16 @@ export function ChatPage() {
   });
   const [input, setInput] = useState('');
   const promptSent = useRef(false);
+  const [streamStartTime, setStreamStartTime] = useState(0);
+
+  // Track when streaming starts/stops
+  useEffect(() => {
+    if (isStreaming && streamStartTime === 0) {
+      setStreamStartTime(Date.now());
+    } else if (!isStreaming && streamStartTime > 0) {
+      setStreamStartTime(0);
+    }
+  }, [isStreaming, streamStartTime]);
 
   // Reset chat state when switching sessions or clicking "New chat"
   const prevResumeRef = useRef(activeResumeId);
@@ -529,10 +550,11 @@ export function ChatPage() {
                   return null;
               }
             })}
-            {isStreaming && activeToolCalls.length === 0 && (
-              <div className="flex items-center gap-2 text-zinc-500 text-sm mb-4">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Thinking...</span>
+            {isStreaming && (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm mb-4">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                <span>{activeToolCalls.length > 0 ? 'Working...' : 'Thinking...'}</span>
+                <ElapsedTimer startTime={streamStartTime} />
               </div>
             )}
             <div ref={messagesEndRef} />

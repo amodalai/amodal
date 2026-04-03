@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Send, Square, Bot, AlertCircle } from 'lucide-react';
+import { Send, Square, Bot, AlertCircle, Loader2 } from 'lucide-react';
 import Markdown from 'react-markdown';
 
 interface Message {
@@ -40,12 +40,24 @@ function persistChat(sessionId: string | null, messages: Message[]): void {
   } catch { /* quota exceeded or private browsing */ }
 }
 
+function ElapsedTimer({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!startTime) return;
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+  if (elapsed < 1) return null;
+  return <span className="text-muted-foreground font-mono tabular-nums text-xs">{elapsed}s</span>;
+}
+
 export function AdminChatPanel({ compact }: { compact?: boolean }) {
   const [messages, setMessages] = useState<Message[]>(() => loadPersistedChat().messages);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(() => loadPersistedChat().sessionId);
+  const [streamStartTime, setStreamStartTime] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -64,6 +76,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
     setError(null);
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setIsStreaming(true);
+    setStreamStartTime(Date.now());
 
     // Add empty assistant message that we'll stream into
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
@@ -139,6 +152,7 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
     } finally {
       abortRef.current = null;
       setIsStreaming(false);
+      setStreamStartTime(0);
       inputRef.current?.focus();
     }
   }, [isStreaming, sessionId]);
@@ -203,6 +217,14 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
             )}
           </div>
         ))}
+
+        {isStreaming && (
+          <div className={`flex items-center gap-2 text-muted-foreground ${compact ? 'text-xs' : 'text-sm'} mb-3`}>
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            <span>Thinking...</span>
+            {streamStartTime > 0 && <ElapsedTimer startTime={streamStartTime} />}
+          </div>
+        )}
 
         {error && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400 mb-4">
