@@ -18,9 +18,9 @@ function makeSection(
 }
 
 describe('getModelContextWindow', () => {
-  it('returns 200000 for claude models', () => {
-    expect(getModelContextWindow('claude-3-opus')).toBe(200_000);
-    expect(getModelContextWindow('Claude-Sonnet')).toBe(200_000);
+  it('returns 1000000 for claude models', () => {
+    expect(getModelContextWindow('claude-3-opus')).toBe(1_000_000);
+    expect(getModelContextWindow('Claude-Sonnet')).toBe(1_000_000);
   });
 
   it('returns 128000 for gpt-4o models', () => {
