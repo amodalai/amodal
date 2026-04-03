@@ -114,19 +114,39 @@ export class CustomToolAdapter {
           );
         }
 
-        const baseUrl = typeof connConfig === 'object' && connConfig !== null && 'baseUrl' in connConfig
-          ? String((connConfig as Record<string, unknown>)['baseUrl'] ?? '')
-          : '';
+         
+        const conn = connConfig as Record<string, unknown>;
+        const baseUrl = String(conn['base_url'] ?? '');
 
         if (!baseUrl) {
-          throw new Error(`Connection "${connection}" has no baseUrl`);
+          throw new Error(`Connection "${connection}" has no base_url`);
+        }
+
+        // Build headers — start with defaults, apply auth from _request_config
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- internal config shape
+        const reqConfig = conn['_request_config'] as {
+          auth?: Array<{ header: string; value_template: string }>;
+          default_headers?: Record<string, string>;
+        } | undefined;
+
+        if (reqConfig?.default_headers) {
+          Object.assign(headers, reqConfig.default_headers);
+        }
+
+        if (reqConfig?.auth) {
+          for (const authEntry of reqConfig.auth) {
+            // value_template is pre-resolved by buildConnectionsMap
+            headers[authEntry.header] = authEntry.value_template;
+          }
         }
 
         const url = `${baseUrl}${endpoint}`;
         const fetchOpts: RequestInit = {
           method,
           signal: combinedSignal,
-          headers: { 'Content-Type': 'application/json' },
+          headers,
         };
         if (params?.data) {
           fetchOpts.body = JSON.stringify(params.data);

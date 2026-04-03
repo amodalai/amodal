@@ -97,6 +97,15 @@ class RequestToolInvocation extends BaseToolInvocation<
       );
     }
 
+    // Enforce write intent for mutating HTTP methods
+    const isWriteMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(this.params.method.toUpperCase());
+    if (isWriteMethod && this.params.intent === 'read') {
+      return this.errorResult(
+        ToolErrorType.INVALID_TOOL_PARAMS,
+        `${this.params.method} is a write operation but intent is "read". Use intent: "write" to preview, then "confirmed_write" after user approval. Never use "read" for POST/PUT/PATCH/DELETE.`,
+      );
+    }
+
     // 1. Look up connection
     const connectionConfig = this.connections[this.params.connection];
     if (!connectionConfig) {
