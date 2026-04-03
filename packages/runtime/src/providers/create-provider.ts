@@ -19,6 +19,9 @@ import {createOpenAI} from '@ai-sdk/openai';
 import {createGoogleGenerativeAI} from '@ai-sdk/google';
 
 import {ConfigError} from '../errors.js';
+
+/** Default timeout for LLM calls when no AbortSignal is provided (2 minutes). */
+const DEFAULT_LLM_TIMEOUT_MS = 120_000;
 import type {
   LLMProvider,
   ProviderConfig,
@@ -145,7 +148,7 @@ export function createProvider(config: ProviderConfig): LLMProvider {
         toolChoice: opts.toolChoice,
         maxOutputTokens: opts.maxOutputTokens,
         temperature: opts.temperature,
-        abortSignal: opts.abortSignal,
+        abortSignal: opts.abortSignal ?? AbortSignal.timeout(DEFAULT_LLM_TIMEOUT_MS),
       });
 
       const usagePromise = sdkResult.usage.then((u) => normalizeUsage(u));
@@ -205,7 +208,7 @@ export function createProvider(config: ProviderConfig): LLMProvider {
         toolChoice: opts.toolChoice,
         maxOutputTokens: opts.maxOutputTokens,
         temperature: opts.temperature,
-        abortSignal: opts.abortSignal,
+        abortSignal: opts.abortSignal ?? AbortSignal.timeout(DEFAULT_LLM_TIMEOUT_MS),
       });
 
       return {
