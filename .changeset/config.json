@@ -4,6 +4,7 @@
   "commit": false,
   "fixed": [
     [
+      "@amodalai/types",
       "@amodalai/core",
       "@amodalai/runtime",
       "@amodalai/react",
