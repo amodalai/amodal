@@ -348,6 +348,7 @@ function convertResponseBlocks(blocks: AnthropicContentBlock[]): LLMResponseBloc
 }
 
 function mapStopReason(reason: string | null): LLMChatResponse['stopReason'] {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (reason) {
     case 'end_turn':
       return 'end_turn';

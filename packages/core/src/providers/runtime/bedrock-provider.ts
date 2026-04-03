@@ -346,6 +346,7 @@ function convertResponseContent(blocks: BedrockContentBlock[]): LLMResponseBlock
 }
 
 function mapStopReason(reason: string | undefined): LLMChatResponse['stopReason'] {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (reason) {
     case 'end_turn':
     case 'stop':

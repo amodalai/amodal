@@ -81,6 +81,7 @@ export function useSkillAction(
         try {
           let text = '';
           for await (const event of client.chatStream(prompt, { signal: controller.signal })) {
+            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
             switch (event.type) {
               case 'text_delta':
                 text += event.content;

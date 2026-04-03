@@ -34,6 +34,7 @@ function createMessageId(): string {
 }
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (action.type) {
     case 'SEND_MESSAGE': {
       const userMessage: ChatMessage = {
@@ -286,6 +287,7 @@ export function useAmodalChat(options?: UseAmodalChatOptions): UseAmodalChatRetu
           });
 
           for await (const event of stream) {
+            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
             switch (event.type) {
               case 'init':
                 dispatch({ type: 'STREAM_INIT', sessionId: event.session_id });

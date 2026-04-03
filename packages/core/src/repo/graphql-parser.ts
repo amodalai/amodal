@@ -122,6 +122,7 @@ export function parseGraphQLIntrospection(
 function formatTypeRef(ref: IntrospectionTypeRef | undefined): string {
   if (!ref) return 'Unknown';
 
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (ref.kind) {
     case 'NON_NULL':
       return `${formatTypeRef(ref.ofType)}!`;

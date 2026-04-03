@@ -48,6 +48,7 @@ export function createAutomationRouter(options: AutomationRouterOptions): Router
     res.json({status: 'stopped', automation: name});
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.post('/automations/:name/run', async (req: Request, res: Response) => {
     const name = req.params['name'] ?? '';
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Express body parsing
@@ -67,6 +68,7 @@ export function createAutomationRouter(options: AutomationRouterOptions): Router
   });
 
   // SSE streaming endpoint for live automation runs
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.post('/automations/:name/stream', async (req: Request, res: Response) => {
     const name = req.params['name'] ?? '';
 

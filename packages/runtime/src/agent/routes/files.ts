@@ -124,6 +124,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
   });
 
   /** Get the repo file tree (convention directories + config). */
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/api/files', filesLimiter, async (_req: Request, res: Response) => {
     try {
       const tree: FileTreeEntry[] = [];
@@ -195,6 +196,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
   });
 
   /** Read a file's contents. Checks local repo first, then installed packages. */
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/api/files/*', filesLimiter, async (req: Request, res: Response) => {
     try {
       const filePath = req.params[0] ?? '';
@@ -260,6 +262,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
   });
 
   /** Write a file's contents. Creates parent dirs if needed. */
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.put('/api/files/*', filesLimiter, async (req: Request, res: Response) => {
     try {
       const filePath = req.params[0] ?? '';

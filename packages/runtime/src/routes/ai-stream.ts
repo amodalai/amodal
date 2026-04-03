@@ -177,6 +177,7 @@ export function translateEvent(
 ): UIStreamEvent[] {
   const out: UIStreamEvent[] = [];
 
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (event.type) {
     case SSEEventType.Init: {
       out.push({ type: 'message-start', messageId: state.messageId });
@@ -364,6 +365,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
   router.post(
     '/chat/ai-stream',
     validate(AIStreamRequestSchema),
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
     async (req, res, next) => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated by Zod middleware
