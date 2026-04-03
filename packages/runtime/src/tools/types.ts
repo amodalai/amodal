@@ -52,6 +52,9 @@ export interface ToolContext {
 
   /** Session ID for correlation */
   sessionId: string;
+
+  /** Tenant ID for multi-tenant isolation (store scoping, permission checks) */
+  tenantId: string;
 }
 
 // ---------------------------------------------------------------------------
