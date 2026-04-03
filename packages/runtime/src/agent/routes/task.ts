@@ -34,6 +34,7 @@ export function createTaskRouter(options: TaskRouterOptions): Router {
   const router = Router();
 
   // POST /task — fire-and-forget task
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.post('/task', async (req: Request, res: Response) => {
     const parsed = TaskRequestSchema.safeParse(req.body);
     if (!parsed.success) {

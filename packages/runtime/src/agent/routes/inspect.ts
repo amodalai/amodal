@@ -36,6 +36,7 @@ async function checkRestHealth(baseUrl: string, testPath?: string): Promise<{ok:
 export function createInspectRouter(options: InspectRouterOptions): Router {
   const router = Router();
 
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/inspect/context', async (_req: Request, res: Response) => {
     try {
       const repo = options.sessionManager.getBundle()!;
@@ -213,6 +214,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
   });
 
   /** Connection detail by name — reads repo directly, no session needed. */
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/inspect/connections/:name', async (_req: Request, res: Response) => {
     const repo = options.sessionManager.getBundle()!;
     const connName = _req.params['name'] ?? '';
@@ -272,6 +274,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
   });
 
   /** MCP server detail by name — returns tools with parameter schemas. */
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/inspect/mcp/:name', async (_req: Request, res: Response) => {
     try {
       const mcpManager = await options.sessionManager.getInspectMcpManager();

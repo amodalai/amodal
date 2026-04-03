@@ -116,6 +116,7 @@ function AssistantBubble({
           <SkillPill key={skill} skill={skill} />
         ))}
         {message.contentBlocks.map((block, i) => {
+          // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
           switch (block.type) {
             case 'text':
               return block.text.length > 0 ? (

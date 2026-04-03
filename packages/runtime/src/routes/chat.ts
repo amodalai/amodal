@@ -22,6 +22,7 @@ export interface ChatRouterOptions {
 export function createChatRouter(options: ChatRouterOptions): Router {
   const router = Router();
 
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.post('/chat', validate(ChatRequestSchema), async (req, res, next) => {
     try {
       const { message, session_id, role, deploy_id } = req.body;

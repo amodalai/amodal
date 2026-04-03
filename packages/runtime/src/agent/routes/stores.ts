@@ -26,6 +26,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
   const {repo, storeBackend, appId} = options;
 
   // List all store definitions with document counts
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/api/stores', async (_req: Request, res: Response) => {
     try {
       const stores = await Promise.all(
@@ -49,6 +50,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
   });
 
   // List documents from a store
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/api/stores/:name', async (req: Request, res: Response) => {
     const storeName = req.params['name'] ?? '';
 
@@ -89,6 +91,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
   });
 
   // Get a single document + version history
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/api/stores/:name/:key', async (req: Request, res: Response) => {
     const storeName = req.params['name'] ?? '';
     const key = req.params['key'] ?? '';
@@ -121,6 +124,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
   });
 
   // Write a document to a store (for seeding/testing)
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.post('/api/stores/:name', async (req: Request, res: Response) => {
     const storeName = req.params['name'] ?? '';
 

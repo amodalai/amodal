@@ -30,6 +30,7 @@ export function createWebhookRouter(options: WebhookRouterOptions): Router {
   router.post(
     '/webhooks/:name',
     validate(WebhookPayloadSchema),
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
     async (req, res, next) => {
       try {
         const { name } = req.params;

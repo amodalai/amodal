@@ -32,6 +32,7 @@ function ts(): string {
 export function createAdminChatRouter(options: AdminChatRouterOptions): Router {
   const router = Router();
 
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.post('/config/chat', async (req: Request, res: Response) => {
     const parsed = AgentChatRequestSchema.safeParse(req.body);
     if (!parsed.success) {

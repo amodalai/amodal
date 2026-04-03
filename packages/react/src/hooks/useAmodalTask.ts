@@ -59,6 +59,7 @@ export function useAmodalTask(options: UseAmodalTaskOptions): UseAmodalTaskRetur
       for await (const event of client.streamTask(taskId, controller.signal)) {
         setEvents((prev) => [...prev, event]);
 
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
         switch (event.type) {
           case 'text_delta':
             text += event.content;

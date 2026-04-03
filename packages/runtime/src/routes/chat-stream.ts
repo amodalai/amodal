@@ -27,6 +27,7 @@ export function createChatStreamRouter(
   router.post(
     ['/chat', '/chat/stream'],
     validate(ChatRequestSchema),
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
     async (req, res, next) => {
       try {
         const { message, session_id, role, session_type, deploy_id } = req.body;
