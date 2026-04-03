@@ -12,6 +12,7 @@
  * implementation that supports readOnly flags and metadata.
  */
 
+import {ConfigError} from '../errors.js';
 import type {ToolDefinition, ToolRegistry} from './types.js';
 
 /**
@@ -38,7 +39,10 @@ export function createToolRegistry(): ToolRegistry {
   return {
     register(name: string, def: ToolDefinition): void {
       if (tools.has(name)) {
-        throw new Error(`Tool "${name}" is already registered. Duplicate tool names are not allowed.`);
+        throw new ConfigError(`Tool "${name}" is already registered. Duplicate tool names are not allowed.`, {
+          key: 'tools',
+          context: {toolName: name, existingCategory: tools.get(name)?.metadata?.category},
+        });
       }
       tools.set(name, def);
     },

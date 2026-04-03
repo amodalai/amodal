@@ -7,6 +7,7 @@
 import {describe, it, expect, vi} from 'vitest';
 import {z} from 'zod';
 import {createToolRegistry} from './registry.js';
+import {ConfigError} from '../errors.js';
 import type {ToolDefinition, ToolContext} from './types.js';
 
 function makeToolDef(overrides: Partial<ToolDefinition> = {}): ToolDefinition {
@@ -49,9 +50,7 @@ describe('createToolRegistry', () => {
     const registry = createToolRegistry();
     registry.register('my_tool', makeToolDef());
 
-    expect(() => registry.register('my_tool', makeToolDef())).toThrow(
-      'Tool "my_tool" is already registered',
-    );
+    expect(() => registry.register('my_tool', makeToolDef())).toThrow(ConfigError);
   });
 
   it('lists all tool names', () => {
