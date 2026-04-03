@@ -71,6 +71,19 @@ export type { Logger, LoggerConfig, LogFormat } from './logger.js';
 export { loadConfig } from './config.js';
 export type { AgentConfig, ConfigOverrides, LoadConfigOptions, McpServerConfig } from './config.js';
 
+// LLM Provider (Vercel AI SDK abstraction)
+export { createProvider } from './providers/create-provider.js';
+export type {
+  LLMProvider,
+  ProviderConfig,
+  StreamTextOptions,
+  StreamTextResult,
+  GenerateTextOptions,
+  GenerateTextResult,
+  TokenUsage,
+  StreamEvent,
+} from './providers/types.js';
+
 
 // ---------------------------------------------------------------------------
 // Environment variable parsing

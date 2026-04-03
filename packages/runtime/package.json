@@ -28,16 +28,20 @@
     "dist"
   ],
   "dependencies": {
-    "@amodalai/types": "workspace:*",
+    "@ai-sdk/anthropic": "^3.0.66",
+    "@ai-sdk/google": "^3.0.58",
+    "@ai-sdk/openai": "^3.0.50",
     "@amodalai/core": "workspace:*",
+    "@amodalai/types": "workspace:*",
     "@anthropic-ai/sdk": "^0.39.0",
     "@electric-sql/pglite": "^0.3.15",
+    "ai": "^6.0.145",
     "esbuild": "0.25.5",
     "express": "^4.21.0",
+    "express-rate-limit": "^7.5.0",
     "jose": "^6.0.0",
     "node-cron": "^3.0.3",
-    "zod": "^3.25.0",
-    "express-rate-limit": "^7.5.0"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
