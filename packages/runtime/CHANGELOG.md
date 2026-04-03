@@ -1,5 +1,16 @@
 # @amodalai/runtime
 
+## 0.1.25
+
+### Patch Changes
+
+- [#106](https://github.com/amodalai/amodal/pull/106) [`93f3a8e`](https://github.com/amodalai/amodal/commit/93f3a8ec4e782180ae2fdb8eeb7daf4bdd754f4d) Thanks [@whodatdev](https://github.com/whodatdev)! - Export `runMessage` and `routeOutput` from package entry point for hosted-runtime automation support
+
+- [#100](https://github.com/amodalai/amodal/pull/100) [`d7eeb11`](https://github.com/amodalai/amodal/commit/d7eeb11c32813c45c718cb5a8f2b50bf4ac5abde) Thanks [@gte620v](https://github.com/gte620v)! - Add thinking spinner with elapsed timer to all chats. PGLite lock file warns on concurrent access. Postgres backend config support (graceful fallback to PGLite).
+
+- Updated dependencies []:
+  - @amodalai/core@0.1.25
+
 ## 0.1.24
 
 ### Patch Changes
