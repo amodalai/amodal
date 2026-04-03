@@ -106,6 +106,18 @@ export {
   QUERY_STORE_TOOL_NAME,
 } from './tools/store-tools.js';
 
+// Connection request tool
+export { createRequestTool, REQUEST_TOOL_NAME } from './tools/request-tool.js';
+export type { ConnectionsMap, CreateRequestToolOptions } from './tools/request-tool.js';
+
+// Permission checker
+export { AccessJsonPermissionChecker } from './security/permission-checker.js';
+export type {
+  PermissionChecker,
+  PermissionResult,
+  PermissionCheckRequest,
+} from './security/permission-checker.js';
+
 // ---------------------------------------------------------------------------
 // Environment variable parsing
 // ---------------------------------------------------------------------------
