@@ -9,14 +9,8 @@ import {readFileSync} from 'node:fs';
 import yargs from 'yargs';
 import {hideBin} from 'yargs/helpers';
 
-// Suppress OpenTelemetry DiagAPI logger warnings from @google/gemini-cli-core.
-// gemini-cli-core calls setLogger() which triggers a noisy "Current logger will
-// be overwritten" stack trace on every startup. Not actionable on our side.
-const origError = console.error; // eslint-disable-line no-console
-console.error = (...args: unknown[]) => { // eslint-disable-line no-console
-  if (typeof args[0] === 'string' && args[0].includes('Current logger will')) return;
-  origError.apply(console, args);
-};
+// Console interception is now handled by interceptConsole() in the logger,
+// called from dev/serve commands. The old manual hack is no longer needed.
 
 import {amodalCommands} from './commands/index.js';
 import {loadEnvFile} from './shared/load-env.js';

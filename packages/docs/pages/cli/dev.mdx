@@ -16,6 +16,36 @@ amodal dev
 |------|---------|-------------|
 | `--port` | `3847` | Server port |
 | `--host` | `localhost` | Server host |
+| `--resume` | | Resume a previous session by ID or `latest` |
+| `-v` | | Increase log verbosity (`-v` for debug, `-vv` for trace) |
+| `-q` / `--quiet` | | Only show errors |
+
+## Log Levels
+
+The default log level is `info` — startup messages, connection status, and warnings. Use `-v` or `-vv` to see more, or `-q` to see less.
+
+| Flag | Level | What you see |
+|------|-------|-------------|
+| `-q` | error | Errors and fatal only |
+| *(default)* | info | Startup, connections, warnings |
+| `-v` | debug | Session init, MCP, store ops, config reload |
+| `-vv` | trace | Tool execution, upstream library output |
+
+You can also set the `LOG_LEVEL` environment variable (`trace`, `debug`, `info`, `warn`, `error`, `fatal`, `none`). The env var takes precedence over CLI flags.
+
+```bash
+# Quiet mode
+amodal dev -q
+
+# Debug output
+amodal dev -v
+
+# Full trace (including upstream library noise)
+amodal dev -vv
+
+# Via environment variable
+LOG_LEVEL=debug amodal dev
+```
 
 ## What It Does
 
