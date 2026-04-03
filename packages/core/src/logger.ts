@@ -5,17 +5,23 @@
  */
 
 /**
- * Lightweight structured logger for the Amodal runtime.
+ * Structured logger for Amodal core.
  *
  * Log level is controlled by the `LOG_LEVEL` environment variable.
  * Valid values (case-insensitive): debug, info, warn, error, fatal, none.
  * Default: "info".
  *
+ * Log format is controlled by the `LOG_FORMAT` environment variable.
+ * Valid values: "text" (default), "json" (JSON lines for log aggregation).
+ *
  * Usage:
  *   import { log } from './logger.js';
- *   log.info('Server started', 'server');   // [INFO] [server] Server started
- *   log.debug('Details here', 'session');    // only printed when LOG_LEVEL=debug
- *   log.error('Something broke');            // [ERROR] Something broke
+ *   log.info('build_started', { repo: '/path/to/agent' });
+ *   log.info('Build started', 'build');   // backward-compat: tag as string
+ *
+ * Scoped loggers via child():
+ *   const buildLog = log.child({ repo: repoPath });
+ *   buildLog.info('snapshot_built');  // automatically includes repo
  */
 
 export enum LogLevel {
@@ -36,8 +42,25 @@ const LEVEL_LABELS: Record<LogLevel, string> = {
   [LogLevel.NONE]: '',
 };
 
+export type LogFormat = 'text' | 'json';
+
+export interface LoggerConfig {
+  level: LogLevel;
+  format: LogFormat;
+  sanitize?: (data: Record<string, unknown>) => Record<string, unknown>;
+}
+
+export interface Logger {
+  debug(event: string, data?: Record<string, unknown> | string): void;
+  info(event: string, data?: Record<string, unknown> | string): void;
+  warn(event: string, data?: Record<string, unknown> | string): void;
+  error(event: string, data?: Record<string, unknown> | string): void;
+  fatal(event: string, data?: Record<string, unknown> | string): void;
+  child(bindings: Record<string, unknown>): Logger;
+}
+
 function parseLogLevel(value: string | undefined): LogLevel {
-  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- default handles undefined + unknown strings
   switch (value?.toLowerCase()) {
     case 'debug':
       return LogLevel.DEBUG;
@@ -56,29 +79,114 @@ function parseLogLevel(value: string | undefined): LogLevel {
   }
 }
 
-let currentLevel: LogLevel = parseLogLevel(process.env['LOG_LEVEL']);
+function parseLogFormat(value: string | undefined): LogFormat {
+  if (value?.toLowerCase() === 'json') return 'json';
+  return 'text';
+}
+
+const defaultSanitize = (data: Record<string, unknown>): Record<string, unknown> => data;
+
+let config: LoggerConfig = {
+  level: parseLogLevel(process.env['LOG_LEVEL']),
+  format: parseLogFormat(process.env['LOG_FORMAT']),
+  sanitize: defaultSanitize,
+};
 
 /** Update the runtime log level programmatically. */
 export function setLogLevel(level: LogLevel): void {
-  currentLevel = level;
+  config = { ...config, level };
 }
 
 /** Get the current log level. */
 export function getLogLevel(): LogLevel {
-  return currentLevel;
+  return config.level;
 }
 
-function write(level: LogLevel, message: string, tag?: string): void {
-  if (level < currentLevel) return;
+/** Update the log format programmatically. */
+export function setLogFormat(format: LogFormat): void {
+  config = { ...config, format };
+}
+
+/** Set the sanitize function for PII redaction. */
+export function setSanitize(fn: (data: Record<string, unknown>) => Record<string, unknown>): void {
+  config = { ...config, sanitize: fn };
+}
+
+function normalizeData(data: Record<string, unknown> | string | undefined): Record<string, unknown> {
+  if (data === undefined) return {};
+  if (typeof data === 'string') return { tag: data };
+  return data;
+}
+
+function formatText(
+  level: LogLevel,
+  event: string,
+  merged: Record<string, unknown>,
+): string {
   const label = LEVEL_LABELS[level];
-  const prefix = tag ? `[${label}] [${tag}] ` : `[${label}] `;
-  process.stderr.write(`${prefix}${message}\n`);
+  const tag = merged['tag'];
+  const prefix = tag ? `[${label}] [${String(tag)}] ` : `[${label}] `;
+
+  const extra: Record<string, unknown> = {};
+  let hasExtra = false;
+  for (const [k, v] of Object.entries(merged)) {
+    if (k !== 'tag') {
+      extra[k] = v;
+      hasExtra = true;
+    }
+  }
+
+  if (hasExtra) {
+    return `${prefix}${event} ${JSON.stringify(extra)}\n`;
+  }
+  return `${prefix}${event}\n`;
 }
 
-export const log = {
-  debug: (message: string, tag?: string): void => write(LogLevel.DEBUG, message, tag),
-  info: (message: string, tag?: string): void => write(LogLevel.INFO, message, tag),
-  warn: (message: string, tag?: string): void => write(LogLevel.WARN, message, tag),
-  error: (message: string, tag?: string): void => write(LogLevel.ERROR, message, tag),
-  fatal: (message: string, tag?: string): void => write(LogLevel.FATAL, message, tag),
-};
+function formatJson(
+  level: LogLevel,
+  event: string,
+  merged: Record<string, unknown>,
+): string {
+  const entry: Record<string, unknown> = {
+    level: LEVEL_LABELS[level].toLowerCase(),
+    ts: new Date().toISOString(),
+    event,
+    ...merged,
+  };
+  return JSON.stringify(entry) + '\n';
+}
+
+function createLoggerImpl(bindings: Record<string, unknown>): Logger {
+  function emit(level: LogLevel, event: string, data?: Record<string, unknown> | string): void {
+    if (level < config.level) return;
+
+    const normalized = normalizeData(data);
+    const merged = { ...bindings, ...normalized };
+    const sanitized = (config.sanitize ?? defaultSanitize)(merged);
+
+    const output = config.format === 'json'
+      ? formatJson(level, event, sanitized)
+      : formatText(level, event, sanitized);
+
+    process.stderr.write(output);
+  }
+
+  return {
+    debug: (event, data) => emit(LogLevel.DEBUG, event, data),
+    info: (event, data) => emit(LogLevel.INFO, event, data),
+    warn: (event, data) => emit(LogLevel.WARN, event, data),
+    error: (event, data) => emit(LogLevel.ERROR, event, data),
+    fatal: (event, data) => emit(LogLevel.FATAL, event, data),
+    child(childBindings: Record<string, unknown>): Logger {
+      return createLoggerImpl({ ...bindings, ...childBindings });
+    },
+  };
+}
+
+/** Create a new logger with the given bindings. */
+export function createLogger(bindings?: Record<string, unknown>): Logger {
+  return createLoggerImpl(bindings ?? {});
+}
+
+/** Root logger instance. Backward-compatible with the old `log.*` API. */
+export const log: Logger = createLoggerImpl({});

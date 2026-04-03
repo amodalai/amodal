@@ -231,6 +231,7 @@ function MessageContent({ blocks, respondToConfirmation }: {
   return (
     <>
       {blocks.map((block, i) => {
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
         switch (block.type) {
           case 'text':
             return (
