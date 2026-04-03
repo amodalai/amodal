@@ -79,6 +79,9 @@ importers:
       "@amodalai/runtime-app":
         specifier: workspace:*
         version: link:../runtime-app
+      "@amodalai/types":
+        specifier: workspace:*
+        version: link:../types
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -140,6 +143,9 @@ importers:
 
   packages/core:
     dependencies:
+      "@amodalai/types":
+        specifier: workspace:*
+        version: link:../types
       "@google/gemini-cli-core":
         specifier: ^0.34.0
         version: 0.34.0(express@5.2.1)
@@ -254,6 +260,9 @@ importers:
       "@amodalai/core":
         specifier: workspace:*
         version: link:../core
+      "@amodalai/types":
+        specifier: workspace:*
+        version: link:../types
       "@anthropic-ai/sdk":
         specifier: ^0.39.0
         version: 0.39.0
@@ -427,6 +436,12 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.13)(@types/node@20.19.37)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.12.14(@types/node@20.19.37)(typescript@5.9.3))(yaml@2.8.3)
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
+  packages/types:
     devDependencies:
       typescript:
         specifier: ^5.3.3

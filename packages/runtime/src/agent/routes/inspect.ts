@@ -109,7 +109,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
         systemPrompt = repo.config?.basePrompt ?? buildDefaultPrompt({
           name: repo.config?.name ?? 'Agent',
           description: repo.config?.description,
-          agentContext: String((repo.config as Record<string, unknown> | undefined)?.['userContext'] ?? repo.config?.description ?? ''),
+          agentContext: String(repo.config?.userContext ?? repo.config?.description ?? ''),
           agentOverride: repo.agents?.main,
           connections: connArray,
           skills: skillArray,

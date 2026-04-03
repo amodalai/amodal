@@ -1,0 +1,32 @@
+{
+  "name": "@amodalai/types",
+  "version": "0.1.25",
+  "description": "Shared type definitions for the Amodal agent runtime",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amodalai/amodal.git",
+    "directory": "packages/types"
+  },
+  "homepage": "https://github.com/amodalai/amodal",
+  "bugs": {
+    "url": "https://github.com/amodalai/amodal/issues"
+  },
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "node ../../scripts/build_package.js",
+    "typecheck": "tsc --emitDeclarationOnly"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
