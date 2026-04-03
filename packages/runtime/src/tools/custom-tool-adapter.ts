@@ -16,7 +16,7 @@
  * - Read-only enforcement (confirm: false → GET only)
  */
 
-import {z} from 'zod';
+import {jsonSchema} from 'ai';
 import type {LoadedTool, CustomToolExecutor, CustomToolContext} from '@amodalai/types';
 
 import {ToolExecutionError} from '../errors.js';
@@ -24,25 +24,6 @@ import {log} from '../logger.js';
 import {resolveKey} from '../stores/key-resolver.js';
 import {LOCAL_APP_ID} from '../constants.js';
 import type {ToolDefinition, ToolContext} from './types.js';
-
-// ---------------------------------------------------------------------------
-// JSON Schema → Zod conversion (passthrough for LLM, validation at runtime)
-// ---------------------------------------------------------------------------
-
-/**
- * Create a Zod schema from a JSON Schema object.
- *
- * For custom tools, the JSON Schema comes from tool.json and is passed
- * directly to the LLM for function calling. We use z.record() as a
- * permissive runtime validator — the LLM's arguments are objects with
- * arbitrary string keys. Strict validation happens in the handler itself.
- */
-function jsonSchemaToZod(_jsonSchema: Record<string, unknown>): z.ZodType {
-  // Custom tool params are always objects with arbitrary keys. The actual
-  // JSON Schema is passed to the LLM for function calling; at runtime we
-  // use a permissive validator since strict validation lives in the handler.
-  return z.record(z.string(), z.unknown());
-}
 
 // ---------------------------------------------------------------------------
 // Build CustomToolContext from ToolContext + session state
@@ -133,6 +114,14 @@ function buildCustomToolContext(
 
       const res = await fetch(url, fetchOpts);
       const body = await res.text();
+
+      if (!res.ok) {
+        throw new ToolExecutionError(
+          `${method} ${url} returned ${String(res.status)}: ${body.slice(0, 500)}`,
+          {toolName: tool.name, callId: '', context: {connection, endpoint, status: res.status}},
+        );
+      }
+
       try {
         return JSON.parse(body) as unknown;
       } catch {
@@ -214,11 +203,13 @@ export function createCustomToolDefinition(
   executor: CustomToolExecutor,
   sessionCtx: CustomToolSessionContext,
 ): ToolDefinition {
-  const zodSchema = jsonSchemaToZod(tool.parameters);
+  // Pass the tool's JSON Schema directly to the AI SDK so the LLM sees
+  // the full parameter descriptions, types, and required fields from tool.json.
+  const schema = jsonSchema(tool.parameters);
 
   return {
     description: tool.description,
-    parameters: zodSchema,
+    parameters: schema,
     readOnly: tool.confirm === false,
     metadata: {
       category: 'custom',
