@@ -62,8 +62,8 @@ function ConfigNavItem({ to, children, end }: { to: string; children: React.Reac
         cn(
           'flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
           isActive
-            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400 font-medium'
-            : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
+            ? 'bg-primary/10 text-primary dark:text-primary font-medium'
+            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
         )
       }
     >
@@ -86,8 +86,8 @@ export function ConfigLayout() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-white dark:bg-[#0a0a0f]">
-      <header className="h-14 bg-gray-50 dark:bg-[#0f0f17] border-b border-gray-200 dark:border-white/[0.06] text-gray-900 dark:text-white flex items-center justify-between px-5 shrink-0 z-20">
+    <div className="flex flex-col h-screen overflow-hidden bg-background">
+      <header className="h-14 bg-card border-b border-border text-gray-900 dark:text-white flex items-center justify-between px-5 shrink-0 z-20">
         <div className="flex items-center gap-3">
           <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
             <defs><clipPath id="logo-sq"><rect x="2" y="10" width="17" height="17" rx="3" /></clipPath></defs>
@@ -96,11 +96,11 @@ export function ConfigLayout() {
             <circle cx="22" cy="11" r="10" fill="#3B82F6" clipPath="url(#logo-sq)" />
           </svg>
           <div className="flex items-center gap-2">
-            <span className="font-semibold tracking-tight text-[15px] text-gray-900 dark:text-white/90">amodal</span>
+            <span className="font-semibold tracking-tight text-[15px] text-foreground">amodal</span>
             {name && (
               <>
                 <span className="text-gray-300 dark:text-white/60">/</span>
-                <span className="text-[13px] text-gray-500 dark:text-white/50 font-medium">{name}</span>
+                <span className="text-[13px] text-muted-foreground font-medium">{name}</span>
               </>
             )}
           </div>
@@ -108,14 +108,14 @@ export function ConfigLayout() {
         <div className="flex items-center gap-3">
           <NavLink
             to="/config"
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-blue-600 dark:text-blue-400 bg-blue-600/10 transition-colors"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-primary dark:text-primary bg-primary/10 transition-colors"
             title="Configuration"
           >
             <Settings className="h-4 w-4" />
           </NavLink>
           <button
             onClick={toggle}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-white/50 hover:text-gray-600 dark:hover:text-white/80 hover:bg-muted transition-colors"
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -139,11 +139,11 @@ export function ConfigLayout() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <aside className="w-[260px] border-r border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17] flex flex-col shrink-0 overflow-hidden">
+        <aside className="w-[260px] border-r border-border bg-card flex flex-col shrink-0 overflow-hidden">
           <nav className="flex-1 overflow-y-auto scrollbar-thin px-2 py-2">
             <NavLink
               to="/"
-              className="flex items-center gap-2.5 w-full px-3 py-2 mb-1 rounded-md text-[13px] text-gray-500 dark:text-white/60 hover:text-gray-800 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.04] transition-colors"
+              className="flex items-center gap-2.5 w-full px-3 py-2 mb-1 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               <ArrowLeft className="h-4 w-4 shrink-0" />
               Back to app
@@ -191,7 +191,7 @@ export function ConfigLayout() {
                 System
               </ConfigNavItem>
 
-              <div className="mt-3 mb-1 px-3 pt-3 border-t border-gray-200 dark:border-white/[0.06]">
+              <div className="mt-3 mb-1 px-3 pt-3 border-t border-border">
                 <span className="text-[10px] font-semibold text-gray-400 dark:text-white/45 uppercase tracking-widest">Tools</span>
               </div>
 
@@ -200,8 +200,8 @@ export function ConfigLayout() {
                 className={cn(
                   'flex items-center gap-2.5 w-full px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
                   chatOpen
-                    ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400 font-medium'
-                    : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
+                    ? 'bg-primary/10 text-primary dark:text-primary font-medium'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
                 )}
               >
                 <MessageSquare className="h-4 w-4 shrink-0" />
@@ -215,13 +215,13 @@ export function ConfigLayout() {
           </nav>
         </aside>
 
-        <main className={cn('overflow-auto bg-white dark:bg-[#0a0a0f] scrollbar-thin', chatOpen ? 'w-[60%]' : 'flex-1')}>
+        <main className={cn('overflow-auto bg-background scrollbar-thin', chatOpen ? 'w-[60%]' : 'flex-1')}>
           <Outlet />
         </main>
 
         {chatOpen && (
-          <div className="w-[40%] border-l border-gray-200 dark:border-white/[0.06] flex flex-col">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17]">
+          <div className="w-[40%] border-l border-border flex flex-col">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-card">
               <span className="text-[11px] font-semibold text-gray-400 dark:text-white/45 uppercase tracking-widest">Admin Agent</span>
               <button
                 onClick={() => setChatOpen(false)}

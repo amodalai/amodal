@@ -94,13 +94,13 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
   }
 
   return (
-    <div className="border-b border-gray-200 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/30 px-4 py-2 text-xs">
+    <div className="border-b border-border bg-muted px-4 py-2 text-xs">
       <div className="grid gap-y-1.5 gap-x-4 w-fit" style={{ gridTemplateColumns: 'auto auto auto auto auto' }}>
         {/* Header */}
-        <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Store</span>
-        <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Automation</span>
-        <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Status</span>
-        <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-600 uppercase tracking-widest">Schedule</span>
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Store</span>
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Automation</span>
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Status</span>
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Schedule</span>
         <span />
 
         {rows.map((row, i) => {
@@ -112,7 +112,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
                 {row.store ? (
                   <Link
                     to={`/entities/${row.store}`}
-                    className="flex items-center gap-1 text-blue-500 dark:text-blue-400 hover:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                    className="flex items-center gap-1 text-primary hover:text-primary dark:hover:text-primary/70 transition-colors"
                   >
                     {row.store}
                     <ExternalLink className="h-2.5 w-2.5" />
@@ -127,7 +127,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
                 {row.auto ? (
                   <Link
                     to={`/automations/${row.auto.name}`}
-                    className="text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {row.auto.name}
                   </Link>
@@ -151,7 +151,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
               </div>
 
               {/* Schedule */}
-              <div className="text-gray-400 dark:text-zinc-600">
+              <div className="text-muted-foreground">
                 {row.scheduleLabel || '-'}
               </div>
 
@@ -161,7 +161,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
                   <button
                     onClick={() => handleRun(row.auto!.name)}
                     disabled={isRunning}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 dark:text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-40"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-40"
                   >
                     {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                     {isRunning ? 'Run' : 'Run'}
@@ -237,15 +237,15 @@ export function DevPage() {
   }
 
   if (!PageComponent) {
-    return <div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading page...</div>;
+    return <div className="p-6 text-muted-foreground text-sm">Loading page...</div>;
   }
 
   return (
-    <div className="flex flex-col h-full border-t-2 border-blue-500/40">
+    <div className="flex flex-col h-full border-t-2 border-primary/40">
       {/* Custom page header */}
-      <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/[0.03] border-b border-gray-200 dark:border-zinc-800/50">
-        <LayoutDashboard className="h-3 w-3 text-blue-500/50" />
-        <span className="text-[10px] font-medium text-blue-500/60 uppercase tracking-widest">
+      <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/[0.03] border-b border-border">
+        <LayoutDashboard className="h-3 w-3 text-primary/50" />
+        <span className="text-[10px] font-medium text-primary/60 uppercase tracking-widest">
           {pageInfo?.description ?? pageName}
         </span>
       </div>
@@ -281,10 +281,10 @@ class PageErrorBoundary extends React.Component<
         <div className="p-6 max-w-2xl">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="h-5 w-5 text-amber-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">Page Error</h2>
+            <h2 className="text-lg font-semibold text-foreground">Page Error</h2>
           </div>
-          <p className="text-sm text-gray-500 dark:text-zinc-400 mb-3">
-            The page <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-xs">{this.props.pageName}</code> threw an error during rendering.
+          <p className="text-sm text-muted-foreground mb-3">
+            The page <code className="px-1.5 py-0.5 rounded bg-muted text-xs">{this.props.pageName}</code> threw an error during rendering.
           </p>
           <pre className="text-xs text-red-400 bg-red-500/5 border border-red-500/20 rounded-lg p-3 overflow-auto whitespace-pre-wrap">
             {this.state.error?.message ?? 'Unknown error'}
@@ -292,7 +292,7 @@ class PageErrorBoundary extends React.Component<
           </pre>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="mt-3 px-3 py-1.5 rounded text-xs bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+            className="mt-3 px-3 py-1.5 rounded text-xs bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
           >
             Try again
           </button>
@@ -306,8 +306,8 @@ class PageErrorBoundary extends React.Component<
 function PageNotFound({ name }: { name: string }) {
   return (
     <div className="p-6">
-      <h1 className="text-xl font-bold mb-2 text-gray-900 dark:text-zinc-200">Page Not Found</h1>
-      <p className="text-gray-500 dark:text-zinc-500">
+      <h1 className="text-xl font-bold mb-2 text-foreground">Page Not Found</h1>
+      <p className="text-muted-foreground">
         {name
           ? `No page named "${name}" found in pages/.`
           : 'No page specified.'}

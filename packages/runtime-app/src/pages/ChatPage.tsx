@@ -46,7 +46,7 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
       <div className="flex items-center gap-1">
         <button
           onClick={() => rating === 'up' ? clear() : submit('up')}
-          className={`p-1 rounded transition-colors ${rating === 'up' ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-emerald-400 hover:bg-gray-100 dark:hover:bg-zinc-800/50'}`}
+          className={`p-1 rounded transition-colors ${rating === 'up' ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-emerald-400 hover:bg-muted'}`}
           title={rating === 'up' ? 'Undo' : 'Good response'}
         >
           <ThumbsUp className="h-3.5 w-3.5" />
@@ -61,7 +61,7 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
               setShowComment(true);
             }
           }}
-          className={`p-1 rounded transition-colors ${rating === 'down' ? 'text-red-400 bg-red-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-red-400 hover:bg-gray-100 dark:hover:bg-zinc-800/50'}`}
+          className={`p-1 rounded transition-colors ${rating === 'down' ? 'text-red-400 bg-red-500/10' : 'text-gray-300 dark:text-zinc-600 hover:text-red-400 hover:bg-muted'}`}
           title={rating === 'down' ? 'Undo' : 'Bad response'}
         >
           <ThumbsDown className="h-3.5 w-3.5" />
@@ -75,7 +75,7 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit('down', comment || undefined); }}
             placeholder="What went wrong? (optional)"
-            className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-800/50 text-gray-700 dark:text-zinc-300 placeholder:text-gray-400 dark:placeholder:text-zinc-600"
+            className="flex-1 text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-800/50 text-foreground placeholder:text-gray-400 dark:placeholder:text-zinc-600"
             autoFocus
           />
           <button
@@ -131,27 +131,27 @@ function ToolCallCard({ call }: { call: ToolCallInfo }) {
       <div className="my-1.5 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2">
           {isRunning ? (
-            <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0" />
+            <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
           ) : isError ? (
             <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
           ) : (
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
           )}
-          <span className="text-[13px] font-semibold text-gray-800 dark:text-zinc-200">{connection}</span>
+          <span className="text-[13px] font-semibold text-foreground">{connection}</span>
           {method && (
             <span className={`text-[10px] font-mono font-bold ${METHOD_COLORS[method] ?? 'text-gray-500'}`}>
               {method}
             </span>
           )}
           {path && (
-            <span className="text-[12px] font-mono text-gray-500 dark:text-zinc-400 truncate">{path}</span>
+            <span className="text-[12px] font-mono text-muted-foreground truncate">{path}</span>
           )}
           {call.duration_ms != null && (
-            <span className="text-[11px] text-gray-400 dark:text-zinc-500 ml-auto tabular-nums shrink-0">{String(call.duration_ms)}ms</span>
+            <span className="text-[11px] text-muted-foreground ml-auto tabular-nums shrink-0">{String(call.duration_ms)}ms</span>
           )}
         </div>
         {paramLine && (
-          <div className="px-3 pb-2 text-[11px] text-gray-400 dark:text-zinc-500 font-mono truncate">
+          <div className="px-3 pb-2 text-[11px] text-muted-foreground font-mono truncate">
             {paramLine}
           </div>
         )}
@@ -163,13 +163,13 @@ function ToolCallCard({ call }: { call: ToolCallInfo }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2 my-1.5 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 text-xs font-mono">
       {isRunning ? (
-        <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0" />
+        <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
       ) : isError ? (
         <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
       ) : (
         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
       )}
-      <span className="text-blue-700 dark:text-blue-300 font-semibold">{call.toolName}</span>
+      <span className="text-primary dark:text-primary font-semibold">{call.toolName}</span>
       {call.duration_ms != null && (
         <span className="text-zinc-500 ml-auto">{String(call.duration_ms)}ms</span>
       )}
@@ -187,7 +187,7 @@ function ConfirmationCard({ confirmation, onApprove, onDeny }: {
     <div className="my-2 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
       <div className="flex items-center gap-2 text-sm font-medium text-amber-300 mb-1">
         <Wrench className="h-4 w-4" />
-        <span className="uppercase text-[11px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded">
+        <span className="uppercase text-[11px] font-bold bg-primary-solid text-white px-1.5 py-0.5 rounded">
           {confirmation.method}
         </span>
         <span className="text-zinc-300">{confirmation.endpoint}</span>
@@ -223,7 +223,7 @@ function MessageContent({ blocks, respondToConfirmation }: {
         switch (block.type) {
           case 'text':
             return (
-              <div key={`t-${String(i)}`} className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-900 dark:prose-headings:text-zinc-200 prose-p:text-gray-900 dark:prose-p:text-zinc-300 prose-strong:text-gray-900 dark:prose-strong:text-zinc-200 prose-code:text-blue-800 dark:prose-code:text-blue-300 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-50 prose-pre:text-gray-800 dark:prose-pre:bg-zinc-800/80 dark:prose-pre:text-zinc-200 prose-pre:border prose-pre:border-gray-200 dark:prose-pre:border-zinc-700/50 prose-a:text-blue-800 dark:prose-a:text-blue-400 prose-li:text-gray-900 dark:prose-li:text-zinc-300">
+              <div key={`t-${String(i)}`} className="text-foreground prose dark:prose-invert max-w-none text-[15px] leading-relaxed prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:border-border prose-a:text-primary">
                 <Markdown>{block.text}</Markdown>
               </div>
             );
@@ -301,7 +301,7 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
 
   if (editing) {
     return (
-      <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100 dark:border-zinc-800/50">
+      <div className="flex items-center gap-2 px-6 py-2 border-b border-border">
         <input
           ref={inputRef}
           value={editValue}
@@ -311,7 +311,7 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
             if (e.key === 'Enter') save();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="flex-1 text-sm font-medium px-2 py-1 rounded border border-blue-600/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
+          className="flex-1 text-sm font-medium px-2 py-1 rounded border border-primary/50 bg-white dark:bg-zinc-800 text-foreground outline-none"
           autoFocus
         />
         <button onClick={save} className="text-emerald-500 hover:text-emerald-400">
@@ -322,13 +322,13 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
   }
 
   return (
-    <div className="group flex items-center gap-2 px-6 py-2 border-b border-gray-100 dark:border-zinc-800/50">
-      <span className="text-sm font-medium text-gray-700 dark:text-zinc-300 truncate">{title}</span>
+    <div className="group flex items-center gap-2 px-6 py-2 border-b border-border">
+      <span className="text-sm font-medium text-foreground truncate">{title}</span>
       <button
         onClick={() => { setEditValue(title); setEditing(true); }}
         className="opacity-0 group-hover:opacity-40 hover:!opacity-80 transition-opacity"
       >
-        <Pencil className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
+        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
     </div>
   );
@@ -433,7 +433,7 @@ export function ChatPage() {
   const hasMessages = messages.length > 0 || history.length > 0;
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
+    <div className="h-full flex flex-col bg-background">
       <SessionTitle sessionId={activeResumeId ?? sessionId} />
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {!hasMessages ? (
@@ -445,7 +445,7 @@ export function ChatPage() {
               <circle cx="22" cy="11" r="10" fill="#3B82F6" clipPath="url(#empty-sq)" />
             </svg>
             <h2 className="text-lg font-medium text-gray-400 dark:text-zinc-400 mb-1">What can I help with?</h2>
-            <p className="text-sm text-gray-400 dark:text-zinc-600 max-w-sm">Ask me anything. I can search, analyze, and connect to your tools.</p>
+            <p className="text-sm text-muted-foreground max-w-sm">Ask me anything. I can search, analyze, and connect to your tools.</p>
           </div>
         ) : (
           <div className="max-w-3xl mx-auto px-4 py-6">
@@ -453,7 +453,7 @@ export function ChatPage() {
             {history.map((msg, i) => (
               <div key={`hist-${String(i)}`} className={msg.role === 'user' ? 'mb-6 flex justify-end' : 'mb-6'}>
                 {msg.role === 'user' ? (
-                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-blue-700/60 text-white/80 text-[14px] leading-relaxed">
+                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary-solid/80 text-white text-[14px] leading-relaxed">
                     {msg.text}
                   </div>
                 ) : (
@@ -466,7 +466,7 @@ export function ChatPage() {
                       </div>
                     )}
                     {msg.text && (
-                      <div className="prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-700 dark:prose-headings:text-zinc-300 prose-p:text-gray-600 dark:prose-p:text-zinc-400 prose-code:text-gray-800 dark:prose-code:text-zinc-200 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-blue-700 dark:prose-a:text-blue-400">
+                      <div className="prose dark:prose-invert max-w-none text-[14px] leading-relaxed prose-p:text-muted-foreground prose-headings:text-foreground prose-code:text-foreground prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-primary">
                         <Markdown>{msg.text}</Markdown>
                       </div>
                     )}
@@ -475,7 +475,7 @@ export function ChatPage() {
               </div>
             ))}
             {history.length > 0 && messages.length === 0 && (
-              <div className="text-center text-xs text-gray-400 dark:text-zinc-600 mb-4 py-2 border-t border-gray-200 dark:border-zinc-800/50">
+              <div className="text-center text-xs text-muted-foreground mb-4 py-2 border-t border-border">
                 Session resumed
               </div>
             )}
@@ -485,7 +485,7 @@ export function ChatPage() {
                 case 'user':
                   return (
                     <div key={msg.id} className="mb-6 flex justify-end">
-                      <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-blue-700 text-white text-[14px] leading-relaxed">
+                      <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary-solid text-white text-[14px] leading-relaxed">
                         {msg.text}
                       </div>
                     </div>
@@ -504,7 +504,7 @@ export function ChatPage() {
                     .flatMap((b) => b.calls.map((c) => c.toolName));
                   return (
                     <div key={msg.id} className="mb-6">
-                      <div className="text-[14px] text-gray-900 dark:text-zinc-200">
+                      <div className="text-[14px] text-foreground">
                         <MessageContent blocks={msg.contentBlocks} respondToConfirmation={respondToConfirmation} />
                       </div>
                       {!isStreaming && (
@@ -540,7 +540,7 @@ export function ChatPage() {
         )}
       </div>
 
-      <div className="border-t border-gray-200 dark:border-zinc-800/80 bg-gray-50 dark:bg-[#0f0f17] px-4 py-4">
+      <div className="border-t border-border/80 bg-card px-4 py-4">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative">
           <textarea
             ref={inputRef}
@@ -555,7 +555,7 @@ export function ChatPage() {
             placeholder="Message..."
             disabled={isStreaming}
             rows={1}
-            className="w-full resize-none rounded-xl bg-white dark:bg-zinc-800/80 border border-gray-300 dark:border-zinc-700/60 px-4 py-3 pr-12 text-[14px] text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 outline-none focus:border-blue-600/60 focus:ring-1 focus:ring-blue-600/20 transition-colors disabled:opacity-50 overflow-y-auto"
+            className="w-full resize-none rounded-xl bg-white dark:bg-zinc-800/80 border border-border px-4 py-3 pr-12 text-[14px] text-foreground placeholder-gray-400 dark:placeholder-zinc-500 outline-none focus:border-primary/60 focus:ring-1 focus:ring-blue-600/20 transition-colors disabled:opacity-50 overflow-y-auto"
             style={{ minHeight: '48px', maxHeight: '160px' }}
           />
           {isStreaming ? (
@@ -570,14 +570,14 @@ export function ChatPage() {
             <button
               type="submit"
               disabled={input.trim().length === 0}
-              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-blue-700 text-white flex items-center justify-center hover:bg-blue-600 transition-colors disabled:opacity-20 disabled:hover:bg-blue-700"
+              className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-primary-solid text-white flex items-center justify-center hover:bg-primary-solid/90 transition-colors disabled:opacity-20"
             >
               <Send className="h-4 w-4" />
             </button>
           )}
         </form>
         {(usage.inputTokens > 0 || usage.outputTokens > 0) && (
-          <div className="max-w-3xl mx-auto mt-1.5 text-[11px] text-gray-400 dark:text-zinc-600 font-mono text-right">
+          <div className="max-w-3xl mx-auto mt-1.5 text-[11px] text-muted-foreground font-mono text-right">
             {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens ({usage.inputTokens.toLocaleString()} in / {usage.outputTokens.toLocaleString()} out)
           </div>
         )}

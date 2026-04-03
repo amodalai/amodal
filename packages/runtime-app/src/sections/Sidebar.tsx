@@ -23,12 +23,12 @@ function DeleteConfirmModal({ sessionName, onConfirm, onCancel }: { sessionName:
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
       <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-700 p-5 max-w-sm mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-200 mb-2">Delete session?</h3>
-        <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
+        <h3 className="text-sm font-semibold text-foreground mb-2">Delete session?</h3>
+        <p className="text-xs text-muted-foreground mb-4">
           &ldquo;{sessionName}&rdquo; will be permanently deleted.
         </p>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium rounded-md bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">
+          <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-foreground hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">
             Cancel
           </button>
           <button onClick={onConfirm} className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-500 transition-colors">
@@ -78,7 +78,7 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
             if (e.key === 'Enter') saveTitle();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="w-full text-[12px] px-1.5 py-0.5 rounded border border-blue-600/50 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200 outline-none"
+          className="w-full text-[12px] px-1.5 py-0.5 rounded border border-primary/50 bg-white dark:bg-zinc-800 text-foreground outline-none"
           autoFocus
         />
       </div>
@@ -92,8 +92,8 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
         className={cn(
           'group flex items-center gap-2 w-full px-3 py-[6px] rounded-md text-[12px] text-left transition-colors duration-150 truncate',
           isActive
-            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400'
-            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
+            ? 'bg-primary/10 text-primary dark:text-primary'
+            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-muted',
         )}
       >
         <MessageSquare className="h-3 w-3 shrink-0 opacity-40" />
@@ -127,8 +127,8 @@ function NavItem({ to, children, end }: { to: string; children: React.ReactNode;
         cn(
           'flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
           isActive
-            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400 font-medium'
-            : 'text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04]',
+            ? 'bg-primary/10 text-primary dark:text-primary font-medium'
+            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
         )
       }
     >
@@ -152,7 +152,7 @@ function CollapsibleSection({ label, icon, children, count }: { label: string; i
     <div>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 w-full px-3 py-[7px] rounded-md text-[13px] text-gray-500 dark:text-white/50 hover:text-gray-800 dark:hover:text-white/80 hover:bg-gray-100 dark:hover:bg-white/[0.04] transition-colors"
+        className="flex items-center gap-2 w-full px-3 py-[7px] rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
       >
         <ChevronRight className={cn('h-3 w-3 shrink-0 transition-transform', open && 'rotate-90')} />
         {icon}
@@ -172,8 +172,8 @@ function InfoItem({ icon, label, to, status, badge }: { icon: React.ReactNode; l
         cn(
           'flex items-center gap-2.5 px-3 py-[6px] text-[13px] rounded-md transition-colors duration-150',
           isActive
-            ? 'bg-blue-600/10 text-blue-700 dark:text-blue-400'
-            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.03]',
+            ? 'bg-primary/10 text-primary dark:text-primary'
+            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-muted',
         )
       }
     >
@@ -273,11 +273,11 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-[260px] border-r border-gray-200 dark:border-white/[0.06] bg-gray-50 dark:bg-[#0f0f17] flex flex-col shrink-0 overflow-hidden">
+    <aside className="w-[260px] border-r border-border bg-card flex flex-col shrink-0 overflow-hidden">
       <nav className="flex-1 overflow-y-auto scrollbar-thin px-2 py-2">
         <button
           onClick={() => { void navigate('/', { state: { newChat: Date.now() } }); }}
-          className="flex items-center gap-2.5 w-full px-3 py-2 mb-1 rounded-md text-[13px] text-gray-500 dark:text-white/60 hover:text-gray-800 dark:hover:text-white/90 hover:bg-gray-100 dark:hover:bg-white/[0.04] transition-colors"
+          className="flex items-center gap-2.5 w-full px-3 py-2 mb-1 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <SquarePen className="h-4 w-4 shrink-0" />
           New chat
@@ -338,9 +338,9 @@ export function Sidebar() {
               return (
                 <NavItem key={name} to={`/automations/${encodeURIComponent(name)}`}>
                   {isRunning ? (
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 text-purple-400 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 text-primary animate-spin" />
                   ) : (
-                    <Zap className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-purple-500' : 'text-purple-500/30')} />
+                    <Zap className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-primary' : 'text-primary/30')} />
                   )}
                   <span className={cn('truncate', !isActive && !isRunning && 'opacity-40')}>
                     {name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}

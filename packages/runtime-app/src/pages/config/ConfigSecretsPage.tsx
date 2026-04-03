@@ -35,15 +35,15 @@ export function ConfigSecretsPage() {
 
   return (
     <div className="p-8 max-w-2xl">
-      <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200 mb-2">Secrets</h1>
-      <p className="text-sm text-gray-500 dark:text-zinc-500 mb-6">
-        Environment variables referenced by connection specs. Values are read from <code className="text-xs bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">.env</code>.
+      <h1 className="text-lg font-semibold text-foreground mb-2">Secrets</h1>
+      <p className="text-sm text-muted-foreground mb-6">
+        Environment variables referenced by connection specs. Values are read from <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.env</code>.
       </p>
 
       {loading ? (
-        <div className="text-sm text-gray-400 dark:text-zinc-500">Loading...</div>
+        <div className="text-sm text-muted-foreground">Loading...</div>
       ) : envRefs.length === 0 ? (
-        <div className="text-sm text-gray-400 dark:text-zinc-500">No environment variables referenced by connections.</div>
+        <div className="text-sm text-muted-foreground">No environment variables referenced by connections.</div>
       ) : (
         <>
           <div className="flex items-center gap-4 mb-4 text-xs">
@@ -61,13 +61,13 @@ export function ConfigSecretsPage() {
             {envRefs.map((env) => (
               <div
                 key={`${env.connection}-${env.name}`}
-                className="flex items-center justify-between border border-gray-200 dark:border-zinc-800 rounded-lg px-4 py-3"
+                className="flex items-center justify-between border border-border rounded-lg px-4 py-3"
               >
                 <div className="flex items-center gap-3">
                   <KeyRound className={`h-4 w-4 shrink-0 ${env.set ? 'text-emerald-500' : 'text-red-400'}`} />
                   <div>
-                    <div className="text-sm font-mono text-gray-900 dark:text-zinc-200">{env.name}</div>
-                    <div className="text-xs text-gray-400 dark:text-zinc-500">Used by {env.connection}</div>
+                    <div className="text-sm font-mono text-foreground">{env.name}</div>
+                    <div className="text-xs text-muted-foreground">Used by {env.connection}</div>
                   </div>
                 </div>
                 {env.set ? (

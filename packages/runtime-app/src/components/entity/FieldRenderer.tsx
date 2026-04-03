@@ -26,7 +26,7 @@ export interface FieldRendererProps {
  */
 export function FieldRenderer({ field, value, mode }: FieldRendererProps) {
   if (value === null || value === undefined) {
-    return <span className="text-gray-400 dark:text-zinc-500">—</span>;
+    return <span className="text-muted-foreground">—</span>;
   }
 
   switch (field.type) {
@@ -78,9 +78,9 @@ function NumberField({
     }
     return (
       <div className="flex items-center gap-2">
-        <div className="flex-1 h-2 bg-gray-100 dark:bg-zinc-800 rounded-full max-w-[200px]">
+        <div className="flex-1 h-2 bg-muted rounded-full max-w-[200px]">
           <div
-            className="h-2 bg-blue-700 dark:bg-blue-600 rounded-full"
+            className="h-2 bg-primary dark:bg-primary rounded-full"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -96,7 +96,7 @@ function BooleanField({ value }: { value: unknown }) {
   return value ? (
     <Check className="h-4 w-4 text-green-600" />
   ) : (
-    <X className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
+    <X className="h-4 w-4 text-muted-foreground" />
   );
 }
 
@@ -105,13 +105,13 @@ function DatetimeField({ value, mode }: { value: unknown; mode: 'table' | 'detai
   const relative = formatRelativeTime(date);
 
   if (mode === 'table') {
-    return <span className="text-gray-400 dark:text-zinc-500" title={date.toISOString()}>{relative}</span>;
+    return <span className="text-muted-foreground" title={date.toISOString()}>{relative}</span>;
   }
 
   return (
     <div>
       <div>{date.toLocaleString()}</div>
-      <div className="text-xs text-gray-400 dark:text-zinc-500">{relative}</div>
+      <div className="text-xs text-muted-foreground">{relative}</div>
     </div>
   );
 }
@@ -129,7 +129,7 @@ function ArrayField({
 
   if (mode === 'table') {
     return (
-      <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-xs">
+      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs">
         {value.length} item{value.length !== 1 ? 's' : ''}
       </span>
     );
@@ -137,7 +137,7 @@ function ArrayField({
 
   // Detail mode: render each item
   if (value.length === 0) {
-    return <span className="text-gray-400 dark:text-zinc-500">Empty array</span>;
+    return <span className="text-muted-foreground">Empty array</span>;
   }
 
   return (
@@ -167,7 +167,7 @@ function ObjectField({
   if (typeof value !== 'object' || value === null) return <span>{String(value)}</span>;
 
   if (mode === 'table') {
-    return <span className="text-gray-400 dark:text-zinc-500">{'{...}'}</span>;
+    return <span className="text-muted-foreground">{'{...}'}</span>;
   }
 
   // Detail mode: render sub-fields if schema defines them
@@ -179,7 +179,7 @@ function ObjectField({
       <div className="border rounded-md divide-y">
         {Object.entries(field.fields).map(([subName, subField]) => (
           <div key={subName} className="px-3 py-2 flex">
-            <div className="w-32 text-xs font-medium text-gray-400 dark:text-zinc-500 shrink-0">
+            <div className="w-32 text-xs font-medium text-muted-foreground shrink-0">
               {subName}
             </div>
             <div className="flex-1 min-w-0 text-sm">
@@ -193,7 +193,7 @@ function ObjectField({
 
   // No schema for sub-fields — show JSON
   return (
-    <pre className="text-xs whitespace-pre-wrap bg-gray-100 dark:bg-zinc-800/30 rounded p-2">
+    <pre className="text-xs whitespace-pre-wrap bg-muted/30 rounded p-2">
       {JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -206,7 +206,7 @@ function RefField({ value, field }: { value: unknown; field: StoreFieldDefinitio
   return (
     <Link
       to={`/entities/${targetStore}/${String(value)}`}
-      className="text-blue-700 dark:text-blue-400 hover:underline"
+      className="text-primary dark:text-primary hover:underline"
     >
       {String(value)}
     </Link>

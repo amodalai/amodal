@@ -39,7 +39,7 @@ export function EntityListPage() {
 
   if (!store) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400 dark:text-zinc-500 text-sm">
+      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
         Store &ldquo;{storeName}&rdquo; not found.
       </div>
     );
@@ -48,12 +48,12 @@ export function EntityListPage() {
   return (
     <div className="max-w-[1200px] mx-auto px-6 pt-8 pb-12">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-600/10 flex items-center justify-center">
-          <Database className="h-5 w-5 text-blue-700 dark:text-blue-400" />
+        <div className="h-9 w-9 rounded-lg bg-primary/10 dark:bg-primary/10 flex items-center justify-center">
+          <Database className="h-5 w-5 text-primary dark:text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-zinc-200">{store.entity.name}</h1>
-          <p className="text-sm text-gray-500 dark:text-zinc-500">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">{store.entity.name}</h1>
+          <p className="text-sm text-muted-foreground">
             {total.toLocaleString()} document{total !== 1 ? 's' : ''} in <span className="font-mono text-xs">{store.name}</span>
           </p>
         </div>
@@ -66,7 +66,7 @@ export function EntityListPage() {
       )}
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-gray-400 dark:text-zinc-500 text-sm">Loading...</div>
+        <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">Loading...</div>
       ) : (
         <EntityTable
           storeName={storeName ?? ''}

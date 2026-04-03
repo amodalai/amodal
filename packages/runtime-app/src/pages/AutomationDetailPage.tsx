@@ -173,43 +173,43 @@ export function AutomationDetailPage() {
   }, [sessionMessages, expandedSession]);
 
   if (loading) {
-    return <div className="p-6 text-gray-500 dark:text-zinc-500 text-sm">Loading...</div>;
+    return <div className="p-6 text-muted-foreground text-sm">Loading...</div>;
   }
 
   if (!automation) {
-    return <div className="p-6 text-gray-500 dark:text-zinc-500">Automation not found</div>;
+    return <div className="p-6 text-muted-foreground">Automation not found</div>;
   }
 
   const nextRun = automation.schedule ? getNextRun(automation.schedule) : null;
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-[#0a0a0f]">
+    <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <div className="border-b border-gray-200 dark:border-zinc-800/50 px-6 py-4">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-indigo-500" />
-                <h1 className="text-lg font-semibold text-gray-900 dark:text-zinc-200">{automation.title}</h1>
+                <Zap className="h-4 w-4 text-primary" />
+                <h1 className="text-lg font-semibold text-foreground">{automation.title}</h1>
               </div>
               <div className="flex items-center gap-3 mt-1">
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-medium">
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary font-medium">
                   {automation.trigger}
                 </span>
                 {automation.schedule && (
-                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     {cronstrue.toString(automation.schedule, { use24HourTimeFormat: true })}
                   </span>
                 )}
                 {nextRun && (
-                  <span className="text-xs text-gray-400 dark:text-zinc-600">
+                  <span className="text-xs text-muted-foreground">
                     Next in {nextRun}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500 dark:text-zinc-500 leading-relaxed mt-2 max-w-2xl line-clamp-3">
+              <p className="text-xs text-muted-foreground leading-relaxed mt-2 max-w-2xl line-clamp-3">
                 {automation.prompt}
               </p>
             </div>
@@ -217,7 +217,7 @@ export function AutomationDetailPage() {
           <div className="flex items-center gap-3 shrink-0">
             {automation.schedule && (
               <label className="flex items-center gap-2 cursor-pointer">
-                <span className="text-xs text-gray-500 dark:text-zinc-400">{automation.running ? 'Scheduled' : 'Paused'}</span>
+                <span className="text-xs text-muted-foreground">{automation.running ? 'Scheduled' : 'Paused'}</span>
                 <button
                   onClick={() => {
                     const action = automation.running ? 'stop' : 'start';
@@ -237,7 +237,7 @@ export function AutomationDetailPage() {
             <button
               onClick={() => { void handleRunNow(); }}
               disabled={isRunning}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary-solid text-white hover:bg-primary-solid/90 transition-colors disabled:opacity-50"
             >
               {isRunning ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
@@ -254,8 +254,8 @@ export function AutomationDetailPage() {
         <div className="max-w-3xl mx-auto px-4 py-6">
           {/* Live/latest run output */}
           {(isRunning || liveBlocks.length > 0) && (
-            <div className="mb-6 border border-indigo-500/20 rounded-xl p-4 bg-indigo-500/5">
-              <div className="flex items-center gap-2 mb-3 text-xs text-indigo-400 font-medium">
+            <div className="mb-6 border border-primary/20 rounded-xl p-4 bg-primary/5">
+              <div className="flex items-center gap-2 mb-3 text-xs text-primary font-medium">
                 {isRunning ? (
                   <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running now...</>
                 ) : (
@@ -267,15 +267,15 @@ export function AutomationDetailPage() {
                   {liveBlocks.map((block, i) => {
                     if (block.type === 'text') {
                       return (
-                        <div key={i} className="text-[13px] text-gray-700 dark:text-zinc-300 prose dark:prose-invert prose-sm max-w-none">
+                        <div key={i} className="text-[13px] text-foreground prose dark:prose-invert prose-sm max-w-none">
                           <Markdown>{block.content}</Markdown>
                         </div>
                       );
                     }
                     if (block.type === 'log') {
                       return (
-                        <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-gray-500 dark:text-zinc-500">
-                          <span className="text-[10px] font-semibold text-indigo-400/60 uppercase">{block.toolName}</span>
+                        <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-muted-foreground">
+                          <span className="text-[10px] font-semibold text-primary/60 uppercase">{block.toolName}</span>
                           <span>{block.message}</span>
                         </div>
                       );
@@ -289,18 +289,18 @@ export function AutomationDetailPage() {
                     return (
                       <div key={i} className="flex items-center gap-2 px-3 py-2 my-1 rounded-lg bg-gray-50 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-700/40 text-xs font-mono">
                         {block.status === 'running' ? (
-                          <Loader2 className="h-3.5 w-3.5 text-blue-400 animate-spin shrink-0" />
+                          <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
                         ) : (
                           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                         )}
                         {isRequest && connection ? (
                           <>
-                            <span className="font-semibold text-gray-800 dark:text-zinc-200">{connection}</span>
+                            <span className="font-semibold text-foreground">{connection}</span>
                             {method && <span className={`text-[10px] font-bold ${method === 'GET' ? 'text-blue-500' : method === 'POST' ? 'text-emerald-500' : 'text-amber-500'}`}>{method}</span>}
-                            {endpoint && <span className="text-gray-500 dark:text-zinc-400 truncate">{endpoint}</span>}
+                            {endpoint && <span className="text-muted-foreground truncate">{endpoint}</span>}
                           </>
                         ) : (
-                          <span className="text-blue-700 dark:text-blue-300 font-semibold">{block.name}</span>
+                          <span className="text-primary dark:text-primary font-semibold">{block.name}</span>
                         )}
                         {block.durationMs != null && (
                           <span className="text-zinc-500 ml-auto">{String(block.durationMs)}ms</span>
@@ -310,13 +310,13 @@ export function AutomationDetailPage() {
                   })}
                 </div>
               ) : (
-                <div className="text-xs text-gray-400 dark:text-zinc-600">Waiting for agent response...</div>
+                <div className="text-xs text-muted-foreground">Waiting for agent response...</div>
               )}
             </div>
           )}
 
           {sessions.length === 0 && !isRunning ? (
-            <div className="text-center py-12 text-gray-400 dark:text-zinc-600 text-sm">
+            <div className="text-center py-12 text-muted-foreground text-sm">
               No runs yet. Click Run Now to trigger this automation.
             </div>
           ) : (
@@ -325,26 +325,26 @@ export function AutomationDetailPage() {
                 const isExpanded = expandedSession === session.id;
                 const messages = sessionMessages[session.id];
                 return (
-                  <div key={session.id} className="border border-gray-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+                  <div key={session.id} className="border border-border rounded-xl overflow-hidden">
                     <button
                       onClick={() => { void loadSessionMessages(session.id); }}
                       className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                        <span className="text-sm text-gray-700 dark:text-zinc-300">Run {formatRelative(session.createdAt)}</span>
+                        <span className="text-sm text-foreground">Run {formatRelative(session.createdAt)}</span>
                       </div>
-                      <span className="text-xs text-gray-400 dark:text-zinc-600 font-mono">{session.id.slice(0, 8)}</span>
+                      <span className="text-xs text-muted-foreground font-mono">{session.id.slice(0, 8)}</span>
                     </button>
                     {isExpanded && messages && (
-                      <div className="border-t border-gray-200 dark:border-zinc-800 px-4 py-4 bg-gray-50 dark:bg-zinc-900/30">
+                      <div className="border-t border-border px-4 py-4 bg-gray-50 dark:bg-zinc-900/30">
                         {messages.filter((m) => m.role === 'assistant' && m.text).map((msg, i) => (
-                          <div key={`msg-${String(i)}`} className="text-[13px] text-gray-700 dark:text-zinc-300 prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-800 dark:prose-headings:text-zinc-200 prose-p:text-gray-700 dark:prose-p:text-zinc-300 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
+                          <div key={`msg-${String(i)}`} className="text-[13px] text-foreground prose dark:prose-invert prose-sm max-w-none prose-headings:text-gray-800 dark:prose-headings:text-zinc-200 prose-p:text-gray-700 dark:prose-p:text-zinc-300 prose-code:bg-gray-100 dark:prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded">
                             <Markdown>{msg.text}</Markdown>
                           </div>
                         ))}
                         {messages.filter((m) => m.role === 'assistant' && m.text).length === 0 && (
-                          <div className="text-xs text-gray-400 dark:text-zinc-600">No response text captured</div>
+                          <div className="text-xs text-muted-foreground">No response text captured</div>
                         )}
                       </div>
                     )}
