@@ -73,7 +73,6 @@ export type { AgentConfig, ConfigOverrides, LoadConfigOptions, McpServerConfig }
 
 // LLM Provider (Vercel AI SDK abstraction)
 export { createProvider } from './providers/create-provider.js';
-export { VercelContentGenerator, modelConfigToProviderConfig } from './providers/vercel-content-generator.js';
 export type {
   LLMProvider,
   ProviderConfig,

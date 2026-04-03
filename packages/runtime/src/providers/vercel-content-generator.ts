@@ -41,6 +41,9 @@ import {
   type GGenerateContentParams,
 } from '@amodalai/core';
 
+/** Default timeout for LLM calls when no AbortSignal is provided (2 minutes). */
+const DEFAULT_LLM_TIMEOUT_MS = 120_000;
+
 // ---------------------------------------------------------------------------
 // ModelConfig → ProviderConfig
 // ---------------------------------------------------------------------------
@@ -110,11 +113,31 @@ interface GGenerateContentResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Token estimation (matches gemini-cli-core heuristic)
+// ---------------------------------------------------------------------------
+
+const ASCII_TOKENS_PER_CHAR = 0.25;
+const NON_ASCII_TOKENS_PER_CHAR = 1.3;
+
+function estimateTextTokens(text: string): number {
+  let tokens = 0;
+  for (let i = 0; i < text.length; i++) {
+    tokens += text.charCodeAt(i) <= 127
+      ? ASCII_TOKENS_PER_CHAR
+      : NON_ASCII_TOKENS_PER_CHAR;
+  }
+  return tokens;
+}
+
+// ---------------------------------------------------------------------------
 // LLMMessage → AI SDK ModelMessage conversion
 // ---------------------------------------------------------------------------
 
 function llmMessagesToModelMessages(messages: LLMMessage[]): ModelMessage[] {
   const result: ModelMessage[] = [];
+  // Build toolCallId → toolName lookup from assistant messages so tool_result
+  // messages can include the correct toolName (required by some providers).
+  const toolNameByCallId = new Map<string, string>();
 
   for (const msg of messages) {
     switch (msg.role) {
@@ -128,6 +151,7 @@ function llmMessagesToModelMessages(messages: LLMMessage[]): ModelMessage[] {
           if (block.type === 'text') {
             parts.push({type: 'text', text: block.text});
           } else if (block.type === 'tool_use') {
+            toolNameByCallId.set(block.id, block.name);
             parts.push({
               type: 'tool-call',
               toolCallId: block.id,
@@ -146,7 +170,7 @@ function llmMessagesToModelMessages(messages: LLMMessage[]): ModelMessage[] {
           content: [{
             type: 'tool-result',
             toolCallId: msg.toolCallId,
-            toolName: '', // Not available in LLMToolResultMessage; AI SDK tolerates empty
+            toolName: toolNameByCallId.get(msg.toolCallId) ?? '',
             output: msg.isError
               ? {type: 'text', value: `Error: ${msg.content}`}
               : {type: 'text', value: msg.content},
@@ -289,7 +313,7 @@ export class VercelContentGenerator {
       system: llmRequest.systemPrompt || undefined,
       tools,
       maxOutputTokens: llmRequest.maxTokens,
-      abortSignal: llmRequest.signal,
+      abortSignal: llmRequest.signal ?? AbortSignal.timeout(DEFAULT_LLM_TIMEOUT_MS),
     });
 
     // Build parts from text + tool calls
@@ -340,29 +364,43 @@ export class VercelContentGenerator {
       system: llmRequest.systemPrompt || undefined,
       tools,
       maxOutputTokens: llmRequest.maxTokens,
-      abortSignal: llmRequest.signal,
+      abortSignal: llmRequest.signal ?? AbortSignal.timeout(DEFAULT_LLM_TIMEOUT_MS),
     });
 
     return this.yieldGoogleChunks(streamResult.fullStream);
   }
 
   /**
-   * Estimate token count based on character length.
-   * Same heuristic as MultiProviderContentGenerator (chars / 4).
+   * Estimate token count using the same heuristic as gemini-cli-core:
+   * 0.25 tokens/char for ASCII, 1.3 tokens/char for non-ASCII.
+   * Function responses are serialized to JSON and counted as text.
+   *
+   * This is only called by the upstream for media-heavy requests (images/files).
+   * For text-only requests, the upstream uses its own estimateTokenCountSync.
    */
   async countTokens(
     request: {contents: unknown; model?: string},
   ): Promise<{totalTokens: number}> {
     const contents = normalizeContents(request.contents);
-    let charCount = 0;
+    let tokens = 0;
     for (const content of contents) {
       for (const part of (content.parts ?? [])) {
         if (typeof part.text === 'string') {
-          charCount += part.text.length;
+          tokens += estimateTextTokens(part.text);
+        } else if (part.functionResponse) {
+          // Serialize function response to count its tokens
+          const json = JSON.stringify(part.functionResponse);
+          tokens += estimateTextTokens(json);
+        } else if (part.functionCall) {
+          const json = JSON.stringify(part.functionCall);
+          tokens += estimateTextTokens(json);
+        } else {
+          // Unknown part type — rough estimate from JSON serialization
+          tokens += JSON.stringify(part).length / 4;
         }
       }
     }
-    return {totalTokens: Math.ceil(charCount / 4)};
+    return {totalTokens: Math.ceil(tokens)};
   }
 
   /**
