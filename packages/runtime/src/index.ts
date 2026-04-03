@@ -64,7 +64,8 @@ export {
 export type { Result } from './errors.js';
 
 // Logger
-export { log, setLogLevel, getLogLevel, LogLevel, initLogLevel, interceptConsole, verbosityToLogLevel } from './logger.js';
+export { log, setLogLevel, getLogLevel, setLogFormat, getLogFormat, setSanitize, LogLevel, initLogLevel, interceptConsole, verbosityToLogLevel, createLogger } from './logger.js';
+export type { Logger, LoggerConfig, LogFormat } from './logger.js';
 
 // ---------------------------------------------------------------------------
 // Environment variable parsing

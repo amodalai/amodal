@@ -5,88 +5,37 @@
  */
 
 /**
- * Lightweight structured logger for the runtime.
+ * Runtime logger — wraps the core logger and adds runtime-specific
+ * utilities (CLI flag parsing, console interception).
  *
- * Log level is controlled by the `LOG_LEVEL` environment variable.
- * Valid values (case-insensitive): debug, info, warn, error, fatal, none.
- * Default: "info".
- *
- * Usage:
- *   import { log } from './logger.js';
- *   log.info('Server started', 'server');   // [INFO] [server] Server started
- *   log.debug('Details here', 'session');    // only printed when LOG_LEVEL=debug
- *   log.error('Something broke');            // [ERROR] Something broke
+ * The Logger interface and core implementation live in @amodalai/core.
+ * This module re-exports them and adds runtime-only functions.
  */
 
-export enum LogLevel {
-  TRACE = 0,
-  DEBUG = 1,
-  INFO = 2,
-  WARN = 3,
-  ERROR = 4,
-  FATAL = 5,
-  NONE = 6,
-}
+import {
+  log as coreLog,
+  createLogger as coreCreateLogger,
+  setLogLevel as coreSetLogLevel,
+  getLogLevel as coreGetLogLevel,
+  setLogFormat as coreSetLogFormat,
+  getLogFormat as coreGetLogFormat,
+  setSanitize as coreSetSanitize,
+  LogLevel,
+} from '@amodalai/core';
 
-const LEVEL_LABELS: Record<LogLevel, string> = {
-  [LogLevel.TRACE]: 'TRACE',
-  [LogLevel.DEBUG]: 'DEBUG',
-  [LogLevel.INFO]: 'INFO',
-  [LogLevel.WARN]: 'WARN',
-  [LogLevel.ERROR]: 'ERROR',
-  [LogLevel.FATAL]: 'FATAL',
-  [LogLevel.NONE]: '',
-};
+import type { Logger, LoggerConfig, LogFormat } from '@amodalai/core';
 
-function parseLogLevel(value: string | undefined): LogLevel {
-  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
-  switch (value?.toLowerCase()) {
-    case 'trace':
-      return LogLevel.TRACE;
-    case 'debug':
-      return LogLevel.DEBUG;
-    case 'info':
-      return LogLevel.INFO;
-    case 'warn':
-      return LogLevel.WARN;
-    case 'error':
-      return LogLevel.ERROR;
-    case 'fatal':
-      return LogLevel.FATAL;
-    case 'none':
-      return LogLevel.NONE;
-    default:
-      return LogLevel.INFO;
-  }
-}
+// Re-export core logger API
+export { LogLevel };
+export type { Logger, LoggerConfig, LogFormat };
 
-let currentLevel: LogLevel = parseLogLevel(process.env['LOG_LEVEL']);
-
-/** Update the runtime log level programmatically. */
-export function setLogLevel(level: LogLevel): void {
-  currentLevel = level;
-}
-
-/** Get the current log level. */
-export function getLogLevel(): LogLevel {
-  return currentLevel;
-}
-
-function write(level: LogLevel, message: string, tag?: string): void {
-  if (level < currentLevel) return;
-  const label = LEVEL_LABELS[level];
-  const prefix = tag ? `[${label}] [${tag}] ` : `[${label}] `;
-  process.stderr.write(`${prefix}${message}\n`);
-}
-
-export const log = {
-  trace: (message: string, tag?: string): void => write(LogLevel.TRACE, message, tag),
-  debug: (message: string, tag?: string): void => write(LogLevel.DEBUG, message, tag),
-  info: (message: string, tag?: string): void => write(LogLevel.INFO, message, tag),
-  warn: (message: string, tag?: string): void => write(LogLevel.WARN, message, tag),
-  error: (message: string, tag?: string): void => write(LogLevel.ERROR, message, tag),
-  fatal: (message: string, tag?: string): void => write(LogLevel.FATAL, message, tag),
-};
+export const log: Logger = coreLog;
+export const createLogger = coreCreateLogger;
+export const setLogLevel = coreSetLogLevel;
+export const getLogLevel = coreGetLogLevel;
+export const setLogFormat = coreSetLogFormat;
+export const getLogFormat = coreGetLogFormat;
+export const setSanitize = coreSetSanitize;
 
 /**
  * Convert -v count and --quiet flag to a LogLevel.
@@ -105,7 +54,7 @@ export function verbosityToLogLevel(verbosity: number, quiet: boolean): LogLevel
  */
 export function initLogLevel(opts: {verbosity?: number; quiet?: boolean}): void {
   if (process.env['LOG_LEVEL']) {
-    // Env var already handled by the module-level initializer
+    // Env var already handled by the module-level initializer in core
     return;
   }
   setLogLevel(verbosityToLogLevel(opts.verbosity ?? 0, opts.quiet ?? false));
@@ -123,25 +72,25 @@ export function interceptConsole(): void {
   const origDebug = console.debug;
 
   console.log = (...args: unknown[]) => {
-    if (currentLevel <= LogLevel.TRACE) {
+    if (getLogLevel() <= LogLevel.TRACE) {
       origLog.apply(console, args);
     }
   };
 
   console.debug = (...args: unknown[]) => {
-    if (currentLevel <= LogLevel.TRACE) {
+    if (getLogLevel() <= LogLevel.TRACE) {
       origDebug.apply(console, args);
     }
   };
 
   console.warn = (...args: unknown[]) => {
-    if (currentLevel <= LogLevel.DEBUG) {
+    if (getLogLevel() <= LogLevel.DEBUG) {
       origWarn.apply(console, args);
     }
   };
 
   console.error = (...args: unknown[]) => {
-    if (currentLevel <= LogLevel.WARN) {
+    if (getLogLevel() <= LogLevel.WARN) {
       // Suppress known noisy upstream messages
       if (typeof args[0] === 'string' && args[0].includes('Current logger will')) return;
       origError.apply(console, args);

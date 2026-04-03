@@ -18,68 +18,72 @@ const mockGetMessageBus = vi.fn().mockReturnValue({
 });
 const mockGetModel = vi.fn().mockReturnValue('test-model');
 
-vi.mock('@amodalai/core', () => ({
-  AmodalConfig: vi.fn(function (this: Record<string, unknown>) {
-    this['initialize'] = mockInitialize;
-    this['shutdownAudit'] = mockShutdownAudit;
-    this['getGeminiClient'] = mockGetGeminiClient;
-    this['getMessageBus'] = mockGetMessageBus;
-    this['getModel'] = mockGetModel;
-    this['getConnections'] = vi.fn().mockReturnValue({});
-    this['getUpstreamConfig'] = vi.fn().mockReturnValue({
-      createToolRegistry: vi.fn().mockResolvedValue({
-        registerTool: vi.fn(),
-        unregisterTool: vi.fn(),
-        getFunctionDeclarations: vi.fn().mockReturnValue([]),
-      }),
-      getToolRegistry: vi.fn().mockReturnValue({
-        registerTool: vi.fn(),
-        unregisterTool: vi.fn(),
-        getFunctionDeclarations: vi.fn().mockReturnValue([]),
-      }),
-      getAgentRegistry: vi.fn().mockReturnValue({ getAllDefinitions: () => [] }),
-      registerSubAgentTools: vi.fn(),
-    });
-    this['registerTools'] = vi.fn().mockResolvedValue(undefined);
-    this['getBundleSubagents'] = vi.fn().mockReturnValue([]);
-    this['getDisabledSubagents'] = vi.fn().mockReturnValue([]);
-    this['getAppId'] = vi.fn().mockReturnValue('test-app');
-    this['initializeAuth'] = vi.fn().mockResolvedValue(undefined);
-    this['getModelConfig'] = vi.fn().mockReturnValue(undefined);
-    this['setModelConfig'] = vi.fn();
-    this['getBasePrompt'] = vi.fn().mockReturnValue(undefined);
-    this['getAgentName'] = vi.fn().mockReturnValue('Test Agent');
-    this['getAgentDescription'] = vi.fn().mockReturnValue(undefined);
-    this['getAgentContext'] = vi.fn().mockReturnValue(undefined);
-    this['getStores'] = vi.fn().mockReturnValue([]);
-    this['getStoreBackend'] = vi.fn().mockReturnValue(undefined);
-    this['setStoreBackend'] = vi.fn();
-  }),
-  Scheduler: vi.fn(function (this: Record<string, unknown>) {
-    this['schedule'] = vi.fn().mockResolvedValue([]);
-  }),
-  ROOT_SCHEDULER_ID: 'root',
-  ApprovalMode: { YOLO: 'yolo' },
-  PolicyDecision: { ALLOW: 'allow', ASK_USER: 'ask_user', DENY: 'deny' },
-  GeminiEventType: {
-    Content: 'content',
-    ToolCallRequest: 'tool_call_request',
-    Error: 'error',
-    AgentExecutionStopped: 'agent_execution_stopped',
-  },
-  ToolErrorType: {
-    STOP_EXECUTION: 'stop_execution',
-  },
-  PRESENT_TOOL_NAME: 'present',
-  ACTIVATE_SKILL_TOOL_NAME: 'activate_skill',
-  buildDefaultPrompt: vi.fn().mockReturnValue('Default system prompt'),
-  PlanModeManager: vi.fn(function (this: Record<string, unknown>) {
-    this['isActive'] = vi.fn().mockReturnValue(false);
-  }),
-  McpManager: vi.fn(),
-  ensureAdminAgent: vi.fn(),
-  loadAdminAgent: vi.fn(),
-}));
+vi.mock('@amodalai/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@amodalai/core')>();
+  return {
+    ...actual,
+    AmodalConfig: vi.fn(function (this: Record<string, unknown>) {
+      this['initialize'] = mockInitialize;
+      this['shutdownAudit'] = mockShutdownAudit;
+      this['getGeminiClient'] = mockGetGeminiClient;
+      this['getMessageBus'] = mockGetMessageBus;
+      this['getModel'] = mockGetModel;
+      this['getConnections'] = vi.fn().mockReturnValue({});
+      this['getUpstreamConfig'] = vi.fn().mockReturnValue({
+        createToolRegistry: vi.fn().mockResolvedValue({
+          registerTool: vi.fn(),
+          unregisterTool: vi.fn(),
+          getFunctionDeclarations: vi.fn().mockReturnValue([]),
+        }),
+        getToolRegistry: vi.fn().mockReturnValue({
+          registerTool: vi.fn(),
+          unregisterTool: vi.fn(),
+          getFunctionDeclarations: vi.fn().mockReturnValue([]),
+        }),
+        getAgentRegistry: vi.fn().mockReturnValue({ getAllDefinitions: () => [] }),
+        registerSubAgentTools: vi.fn(),
+      });
+      this['registerTools'] = vi.fn().mockResolvedValue(undefined);
+      this['getBundleSubagents'] = vi.fn().mockReturnValue([]);
+      this['getDisabledSubagents'] = vi.fn().mockReturnValue([]);
+      this['getAppId'] = vi.fn().mockReturnValue('test-app');
+      this['initializeAuth'] = vi.fn().mockResolvedValue(undefined);
+      this['getModelConfig'] = vi.fn().mockReturnValue(undefined);
+      this['setModelConfig'] = vi.fn();
+      this['getBasePrompt'] = vi.fn().mockReturnValue(undefined);
+      this['getAgentName'] = vi.fn().mockReturnValue('Test Agent');
+      this['getAgentDescription'] = vi.fn().mockReturnValue(undefined);
+      this['getAgentContext'] = vi.fn().mockReturnValue(undefined);
+      this['getStores'] = vi.fn().mockReturnValue([]);
+      this['getStoreBackend'] = vi.fn().mockReturnValue(undefined);
+      this['setStoreBackend'] = vi.fn();
+    }),
+    Scheduler: vi.fn(function (this: Record<string, unknown>) {
+      this['schedule'] = vi.fn().mockResolvedValue([]);
+    }),
+    ROOT_SCHEDULER_ID: 'root',
+    ApprovalMode: { YOLO: 'yolo' },
+    PolicyDecision: { ALLOW: 'allow', ASK_USER: 'ask_user', DENY: 'deny' },
+    GeminiEventType: {
+      Content: 'content',
+      ToolCallRequest: 'tool_call_request',
+      Error: 'error',
+      AgentExecutionStopped: 'agent_execution_stopped',
+    },
+    ToolErrorType: {
+      STOP_EXECUTION: 'stop_execution',
+    },
+    PRESENT_TOOL_NAME: 'present',
+    ACTIVATE_SKILL_TOOL_NAME: 'activate_skill',
+    buildDefaultPrompt: vi.fn().mockReturnValue('Default system prompt'),
+    PlanModeManager: vi.fn(function (this: Record<string, unknown>) {
+      this['isActive'] = vi.fn().mockReturnValue(false);
+    }),
+    McpManager: vi.fn(),
+    ensureAdminAgent: vi.fn(),
+    loadAdminAgent: vi.fn(),
+  };
+});
 
 const { createServer } = await import('./server.js');
 

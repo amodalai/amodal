@@ -15,19 +15,23 @@ const {mockLoadRepo, mockSetupSession, mockPrepareExploreConfig, mockPlanModeMan
   mockPlanModeManager: vi.fn(),
 }));
 
-vi.mock('@amodalai/core', () => ({
-  loadRepo: mockLoadRepo,
-  setupSession: mockSetupSession,
-  prepareExploreConfig: mockPrepareExploreConfig,
-  PlanModeManager: mockPlanModeManager,
-  extractRoles: vi.fn(() => []),
-  buildConnectionsMap: vi.fn(() => ({})),
-  buildDefaultPrompt: vi.fn(() => 'You are test agent.'),
-  resolveScopeLabels: vi.fn(() => ({scopeLabels: {}})),
-  generateFieldGuidance: vi.fn(() => ''),
-  generateAlternativeLookupGuidance: vi.fn(() => ''),
-  getModelContextWindow: vi.fn(() => 200_000),
-}));
+vi.mock('@amodalai/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@amodalai/core')>();
+  return {
+    ...actual,
+    loadRepo: mockLoadRepo,
+    setupSession: mockSetupSession,
+    prepareExploreConfig: mockPrepareExploreConfig,
+    PlanModeManager: mockPlanModeManager,
+    extractRoles: vi.fn(() => []),
+    buildConnectionsMap: vi.fn(() => ({})),
+    buildDefaultPrompt: vi.fn(() => 'You are test agent.'),
+    resolveScopeLabels: vi.fn(() => ({scopeLabels: {}})),
+    generateFieldGuidance: vi.fn(() => ''),
+    generateAlternativeLookupGuidance: vi.fn(() => ''),
+    getModelContextWindow: vi.fn(() => 200_000),
+  };
+});
 
 const MOCK_REPO = {
   source: 'local',
