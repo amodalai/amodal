@@ -9,6 +9,7 @@ import type { AutomationResult } from '../types.js';
 import type { SessionManager } from '../session/session-manager.js';
 import { runMessage, type StreamHooks } from '../session/session-runner.js';
 import { routeOutput } from '../output/output-router.js';
+import { log } from '../logger.js';
 
 export type AutomationRunnerFn = (
   automation: AutomationDefinition,
@@ -40,9 +41,7 @@ export function createAutomationRunner(
       session = await options.sessionManager.create();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      process.stderr.write(
-        `[ERROR] Automation "${automation.name}" failed to create session: ${message}\n`,
-      );
+      log.error(`Automation "${automation.name}" failed to create session: ${message}`, 'automation');
       return {
         automation: automation.name,
         response: '',
@@ -90,9 +89,7 @@ export function createAutomationRunner(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      process.stderr.write(
-        `[ERROR] Automation "${automation.name}" failed: ${message}\n`,
-      );
+      log.error(`Automation "${automation.name}" failed: ${message}`, 'automation');
       return {
         automation: automation.name,
         response: '',

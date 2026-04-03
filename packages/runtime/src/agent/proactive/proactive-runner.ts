@@ -9,6 +9,7 @@ import {bridgeAutomations, type RunnableAutomation} from '../automation-bridge.j
 import {deliverResult} from './delivery.js';
 import {streamMessage} from '../../session/session-runner.js';
 import type {ManagedSession} from '../../session/session-manager.js';
+import {log} from '../../logger.js';
 
 export interface ProactiveRunnerConfig {
   webhookSecret?: string;
@@ -91,9 +92,7 @@ export class ProactiveRunner {
       void this.runAutomation(automation);
     }, intervalMs);
     this.cronJobs.set(name, {name, timer});
-    process.stderr.write(
-      `[proactive] Started "${name}" every ${intervalMs}ms\n`,
-    );
+    log.info(`Started "${name}" every ${intervalMs}ms`, 'proactive');
     return {success: true};
   }
 
@@ -108,7 +107,7 @@ export class ProactiveRunner {
 
     clearInterval(job.timer);
     this.cronJobs.delete(name);
-    process.stderr.write(`[proactive] Stopped "${name}"\n`);
+    log.info(`Stopped "${name}"`, 'proactive');
     return {success: true};
   }
 
@@ -208,7 +207,7 @@ export class ProactiveRunner {
     const automation = this.automations.get(name);
     if (!automation) return;
 
-    process.stderr.write(`[proactive] Streaming "${name}"...\n`);
+    log.debug(`Streaming "${name}"...`, 'proactive');
     let session: ManagedSession | undefined;
     try {
       session = await this.config.createSession();
@@ -225,7 +224,7 @@ export class ProactiveRunner {
         this.config.onSessionComplete(session, name);
       }
       this.runHistory.set(name, {timestamp: new Date().toISOString(), status: 'success', sessionId: session.id});
-      process.stderr.write(`[proactive] Stream completed "${name}"\n`);
+      log.debug(`Stream completed "${name}"`, 'proactive');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (session && this.config.onSessionComplete) {
@@ -248,7 +247,7 @@ export class ProactiveRunner {
     automation: RunnableAutomation,
     payload?: Record<string, unknown>,
   ): Promise<void> {
-    process.stderr.write(`[proactive] Running "${automation.name}"...\n`);
+    log.debug(`Running "${automation.name}"...`, 'proactive');
 
     let session: ManagedSession | undefined;
     try {
@@ -288,7 +287,7 @@ export class ProactiveRunner {
         this.config.onSessionComplete(session, automation.name);
       }
       this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'success', sessionId});
-      process.stderr.write(`[proactive] Completed "${automation.name}" (session ${sessionId ?? 'none'})\n`);
+      log.debug(`Completed "${automation.name}" (session ${sessionId ?? 'none'})`, 'proactive');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const sessionId = session?.id;
@@ -296,7 +295,7 @@ export class ProactiveRunner {
         this.config.onSessionComplete(session, automation.name);
       }
       this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'error', error: msg, sessionId});
-      process.stderr.write(`[proactive] Error in "${automation.name}": ${msg}\n`);
+      log.error(`Error in "${automation.name}": ${msg}`, 'proactive');
       throw err;
     } finally {
       if (session) {

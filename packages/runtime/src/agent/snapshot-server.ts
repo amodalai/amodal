@@ -14,6 +14,7 @@ import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createTaskRouter} from './routes/task.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {ServerInstance} from '../server.js';
+import {log} from '../logger.js';
 
 /**
  * Config for creating a server from a local snapshot.
@@ -139,8 +140,8 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
     async start(): Promise<http.Server> {
       return new Promise((resolve) => {
         const httpServer = app.listen(port, host, () => {
-          process.stderr.write(`[INFO] Snapshot server listening on ${host}:${port}\n`);
-          process.stderr.write(`[INFO] Deploy: ${deployId}, Agent: ${bundle.config.name}\n`);
+          log.info(`Snapshot server listening on ${host}:${port}`);
+          log.info(`Deploy: ${deployId}, Agent: ${bundle.config.name}`);
           resolve(httpServer);
         });
         server = httpServer;
@@ -161,7 +162,7 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
 
       await sessionManager.shutdown();
 
-      process.stderr.write('[INFO] Snapshot server stopped\n');
+      log.info('Snapshot server stopped');
     },
   };
 }
