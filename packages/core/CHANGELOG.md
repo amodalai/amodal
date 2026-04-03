@@ -1,5 +1,16 @@
 # @amodalai/core
 
+## 0.1.26
+
+### Patch Changes
+
+- [#111](https://github.com/amodalai/amodal/pull/111) [`5b01f5e`](https://github.com/amodalai/amodal/commit/5b01f5e57792c94e51c286c7772095354684fdc8) Thanks [@gte620v](https://github.com/gte620v)! - Create @amodalai/types package with shared type definitions extracted from @amodalai/core. Zero runtime dependencies. Core re-exports all types for backward compatibility.
+
+- [#114](https://github.com/amodalai/amodal/pull/114) [`51f0c46`](https://github.com/amodalai/amodal/commit/51f0c4635d86b7280a4006f29f9eb82cc68a75b6) Thanks [@gte620v](https://github.com/gte620v)! - Upgrade logger with child() scoped loggers, JSON output mode, and sanitize hook. Backward-compatible with existing log.info(message, tag) call pattern.
+
+- Updated dependencies [[`5b01f5e`](https://github.com/amodalai/amodal/commit/5b01f5e57792c94e51c286c7772095354684fdc8)]:
+  - @amodalai/types@0.1.26
+
 ## 0.1.25
 
 ## 0.1.24

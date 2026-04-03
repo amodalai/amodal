@@ -1,5 +1,25 @@
 # @amodalai/runtime
 
+## 0.1.26
+
+### Patch Changes
+
+- [#111](https://github.com/amodalai/amodal/pull/111) [`5b01f5e`](https://github.com/amodalai/amodal/commit/5b01f5e57792c94e51c286c7772095354684fdc8) Thanks [@gte620v](https://github.com/gte620v)! - Create @amodalai/types package with shared type definitions extracted from @amodalai/core. Zero runtime dependencies. Core re-exports all types for backward compatibility.
+
+- [#118](https://github.com/amodalai/amodal/pull/118) [`73b9cdc`](https://github.com/amodalai/amodal/commit/73b9cdc0cdb781bd61ab65f24e49663af8cabe4d) Thanks [@gte620v](https://github.com/gte620v)! - Add provider round-trip integration tests for Anthropic, OpenAI, Google, DeepSeek, and Groq. Tests verify text responses, tool calls, and streaming for each provider. Skipped automatically when API keys are not set.
+
+- [#116](https://github.com/amodalai/amodal/pull/116) [`5165f4b`](https://github.com/amodalai/amodal/commit/5165f4bf0d4ea7eb88b7803193b01131769bb3c8) Thanks [@gte620v](https://github.com/gte620v)! - Add SSE event contract tests verifying event shapes, ordering, and type safety for the streaming event protocol.
+
+- [#114](https://github.com/amodalai/amodal/pull/114) [`51f0c46`](https://github.com/amodalai/amodal/commit/51f0c4635d86b7280a4006f29f9eb82cc68a75b6) Thanks [@gte620v](https://github.com/gte620v)! - Upgrade logger with child() scoped loggers, JSON output mode, and sanitize hook. Backward-compatible with existing log.info(message, tag) call pattern.
+
+- [#117](https://github.com/amodalai/amodal/pull/117) [`08dbc02`](https://github.com/amodalai/amodal/commit/08dbc02a322feb1673b619126617b094b7397094) Thanks [@gte620v](https://github.com/gte620v)! - Add Phase 0.6 tool execution integration tests (store CRUD, custom tools, connection requests)
+
+- [#113](https://github.com/amodalai/amodal/pull/113) [`3bbf563`](https://github.com/amodalai/amodal/commit/3bbf563bc200cefcd29979c549fd325a98bf9d8d) Thanks [@gte620v](https://github.com/gte620v)! - Add typed error classes (AmodalError base + ProviderError, ToolExecutionError, StoreError, ConnectionError, SessionError, CompactionError, ConfigError) and Result<T, E> type for structured error handling across module boundaries.
+
+- Updated dependencies [[`5b01f5e`](https://github.com/amodalai/amodal/commit/5b01f5e57792c94e51c286c7772095354684fdc8), [`51f0c46`](https://github.com/amodalai/amodal/commit/51f0c4635d86b7280a4006f29f9eb82cc68a75b6)]:
+  - @amodalai/types@0.1.26
+  - @amodalai/core@0.1.26
+
 ## 0.1.25
 
 ### Patch Changes
