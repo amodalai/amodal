@@ -63,30 +63,34 @@ const MockConfig = vi.fn(function (this: Record<string, unknown>) {
   this['getAppId'] = vi.fn().mockReturnValue('test-app');
 });
 
-vi.mock('@amodalai/core', () => ({
-  AmodalConfig: MockConfig,
-  Scheduler: vi.fn(function (this: Record<string, unknown>) {
-    this['schedule'] = vi.fn();
-  }),
-  ROOT_SCHEDULER_ID: 'root',
-  ApprovalMode: { YOLO: 'yolo' },
-  PolicyDecision: { ALLOW: 'allow', ASK_USER: 'ask_user', DENY: 'deny' },
-  buildDefaultPrompt: vi.fn().mockReturnValue('Default system prompt'),
-  PlanModeManager: vi.fn(function (this: Record<string, unknown>) {
-    this['isActive'] = vi.fn().mockReturnValue(false);
-    this['enter'] = vi.fn();
-    this['exit'] = vi.fn();
-  }),
-  McpManager: vi.fn(function (this: Record<string, unknown>) {
-    this['startServers'] = vi.fn().mockResolvedValue(undefined);
-    this['shutdown'] = vi.fn().mockResolvedValue(undefined);
-    this['connectedCount'] = 0;
-    this['getServerInfo'] = vi.fn().mockReturnValue([]);
-    this['getDiscoveredTools'] = vi.fn().mockReturnValue([]);
-  }),
-  ensureAdminAgent: vi.fn().mockResolvedValue('/tmp/admin-agent'),
-  loadAdminAgent: vi.fn().mockResolvedValue({ skills: [], knowledge: [], agentPrompt: 'admin prompt' }),
-}));
+vi.mock('@amodalai/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@amodalai/core')>();
+  return {
+    ...actual,
+    AmodalConfig: MockConfig,
+    Scheduler: vi.fn(function (this: Record<string, unknown>) {
+      this['schedule'] = vi.fn();
+    }),
+    ROOT_SCHEDULER_ID: 'root',
+    ApprovalMode: { YOLO: 'yolo' },
+    PolicyDecision: { ALLOW: 'allow', ASK_USER: 'ask_user', DENY: 'deny' },
+    buildDefaultPrompt: vi.fn().mockReturnValue('Default system prompt'),
+    PlanModeManager: vi.fn(function (this: Record<string, unknown>) {
+      this['isActive'] = vi.fn().mockReturnValue(false);
+      this['enter'] = vi.fn();
+      this['exit'] = vi.fn();
+    }),
+    McpManager: vi.fn(function (this: Record<string, unknown>) {
+      this['startServers'] = vi.fn().mockResolvedValue(undefined);
+      this['shutdown'] = vi.fn().mockResolvedValue(undefined);
+      this['connectedCount'] = 0;
+      this['getServerInfo'] = vi.fn().mockReturnValue([]);
+      this['getDiscoveredTools'] = vi.fn().mockReturnValue([]);
+    }),
+    ensureAdminAgent: vi.fn().mockResolvedValue('/tmp/admin-agent'),
+    loadAdminAgent: vi.fn().mockResolvedValue({ skills: [], knowledge: [], agentPrompt: 'admin prompt' }),
+  };
+});
 
 const { SessionManager } = await import('./session-manager.js');
 

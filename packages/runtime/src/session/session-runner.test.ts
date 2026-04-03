@@ -15,24 +15,28 @@ const AGENT_EXECUTION_STOPPED = 'agent_execution_stopped';
 
 const ASK_USER = 'ask_user';
 
-vi.mock('@amodalai/core', () => ({
-  GeminiEventType: {
-    Content: CONTENT,
-    ToolCallRequest: TOOL_CALL_REQUEST,
-    Error: ERROR,
-    AgentExecutionStopped: AGENT_EXECUTION_STOPPED,
-  },
-  ToolErrorType: {
-    STOP_EXECUTION: 'stop_execution',
-  },
-  MessageBusType: {
-    SUBAGENT_ACTIVITY: 'subagent-activity',
-  },
-  PRESENT_TOOL_NAME: 'present',
-  ACTIVATE_SKILL_TOOL_NAME: 'activate_skill',
-  ASK_USER_TOOL_NAME: ASK_USER,
-  SessionManager: vi.fn(),
-}));
+vi.mock('@amodalai/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@amodalai/core')>();
+  return {
+    ...actual,
+    GeminiEventType: {
+      Content: CONTENT,
+      ToolCallRequest: TOOL_CALL_REQUEST,
+      Error: ERROR,
+      AgentExecutionStopped: AGENT_EXECUTION_STOPPED,
+    },
+    ToolErrorType: {
+      STOP_EXECUTION: 'stop_execution',
+    },
+    MessageBusType: {
+      SUBAGENT_ACTIVITY: 'subagent-activity',
+    },
+    PRESENT_TOOL_NAME: 'present',
+    ACTIVATE_SKILL_TOOL_NAME: 'activate_skill',
+    ASK_USER_TOOL_NAME: ASK_USER,
+    SessionManager: vi.fn(),
+  };
+});
 
 const { runMessage, streamMessage } = await import('./session-runner.js');
 

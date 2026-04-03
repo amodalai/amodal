@@ -15,20 +15,24 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
-vi.mock('@amodalai/core', () => ({
-  loadRepo: vi.fn().mockResolvedValue({
-    source: 'local',
-    origin: '/test',
-    config: {name: 'test', version: '1.0.0', models: {main: {provider: 'anthropic', model: 'test'}}},
-    connections: new Map(),
-    skills: [],
-    agents: {},
-    automations: [],
-    knowledge: [],
-    evals: [],
-    tools: [],
-  }),
-}));
+vi.mock('@amodalai/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@amodalai/core')>();
+  return {
+    ...actual,
+    loadRepo: vi.fn().mockResolvedValue({
+      source: 'local',
+      origin: '/test',
+      config: {name: 'test', version: '1.0.0', models: {main: {provider: 'anthropic', model: 'test'}}},
+      connections: new Map(),
+      skills: [],
+      agents: {},
+      automations: [],
+      knowledge: [],
+      evals: [],
+      tools: [],
+    }),
+  };
+});
 
 describe('ConfigWatcher', () => {
   let onChange: ReturnType<typeof vi.fn>;

@@ -5,10 +5,10 @@
  */
 
 /**
- * Structured logger for Amodal core.
+ * Structured logger for Amodal.
  *
  * Log level is controlled by the `LOG_LEVEL` environment variable.
- * Valid values (case-insensitive): debug, info, warn, error, fatal, none.
+ * Valid values (case-insensitive): trace, debug, info, warn, error, fatal, none.
  * Default: "info".
  *
  * Log format is controlled by the `LOG_FORMAT` environment variable.
@@ -25,15 +25,17 @@
  */
 
 export enum LogLevel {
-  DEBUG = 0,
-  INFO = 1,
-  WARN = 2,
-  ERROR = 3,
-  FATAL = 4,
-  NONE = 5,
+  TRACE = 0,
+  DEBUG = 1,
+  INFO = 2,
+  WARN = 3,
+  ERROR = 4,
+  FATAL = 5,
+  NONE = 6,
 }
 
 const LEVEL_LABELS: Record<LogLevel, string> = {
+  [LogLevel.TRACE]: 'TRACE',
   [LogLevel.DEBUG]: 'DEBUG',
   [LogLevel.INFO]: 'INFO',
   [LogLevel.WARN]: 'WARN',
@@ -51,6 +53,7 @@ export interface LoggerConfig {
 }
 
 export interface Logger {
+  trace(event: string, data?: Record<string, unknown> | string): void;
   debug(event: string, data?: Record<string, unknown> | string): void;
   info(event: string, data?: Record<string, unknown> | string): void;
   warn(event: string, data?: Record<string, unknown> | string): void;
@@ -62,6 +65,8 @@ export interface Logger {
 function parseLogLevel(value: string | undefined): LogLevel {
   // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- default handles undefined + unknown strings
   switch (value?.toLowerCase()) {
+    case 'trace':
+      return LogLevel.TRACE;
     case 'debug':
       return LogLevel.DEBUG;
     case 'info':
@@ -107,6 +112,11 @@ export function setLogFormat(format: LogFormat): void {
   config = { ...config, format };
 }
 
+/** Get the current log format. */
+export function getLogFormat(): LogFormat {
+  return config.format;
+}
+
 /** Set the sanitize function for PII redaction. */
 export function setSanitize(fn: (data: Record<string, unknown>) => Record<string, unknown>): void {
   config = { ...config, sanitize: fn };
@@ -116,6 +126,14 @@ function normalizeData(data: Record<string, unknown> | string | undefined): Reco
   if (data === undefined) return {};
   if (typeof data === 'string') return { tag: data };
   return data;
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '{"_serializeError":"circular or non-serializable data"}';
+  }
 }
 
 function formatText(
@@ -137,7 +155,7 @@ function formatText(
   }
 
   if (hasExtra) {
-    return `${prefix}${event} ${JSON.stringify(extra)}\n`;
+    return `${prefix}${event} ${safeStringify(extra)}\n`;
   }
   return `${prefix}${event}\n`;
 }
@@ -153,7 +171,7 @@ function formatJson(
     event,
     ...merged,
   };
-  return JSON.stringify(entry) + '\n';
+  return safeStringify(entry) + '\n';
 }
 
 function createLoggerImpl(bindings: Record<string, unknown>): Logger {
@@ -172,6 +190,7 @@ function createLoggerImpl(bindings: Record<string, unknown>): Logger {
   }
 
   return {
+    trace: (event, data) => emit(LogLevel.TRACE, event, data),
     debug: (event, data) => emit(LogLevel.DEBUG, event, data),
     info: (event, data) => emit(LogLevel.INFO, event, data),
     warn: (event, data) => emit(LogLevel.WARN, event, data),

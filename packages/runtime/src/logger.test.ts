@@ -205,4 +205,25 @@ describe('Logger', () => {
       expect(output).toContain('"service":"scheduler"');
     });
   });
+
+  describe('circular reference safety', () => {
+    it('does not throw on circular data in text mode', () => {
+      const circular: Record<string, unknown> = { a: 1 };
+      circular['self'] = circular;
+      expect(() => log.info('circular_test', circular)).not.toThrow();
+      expect(stderrWrite).toHaveBeenCalledTimes(1);
+      const output = stderrWrite.mock.calls[0]?.[0] as string;
+      expect(output).toContain('_serializeError');
+    });
+
+    it('does not throw on circular data in JSON mode', () => {
+      setLogFormat('json');
+      const circular: Record<string, unknown> = { b: 2 };
+      circular['self'] = circular;
+      expect(() => log.warn('circular_json', circular)).not.toThrow();
+      expect(stderrWrite).toHaveBeenCalledTimes(1);
+      const output = stderrWrite.mock.calls[0]?.[0] as string;
+      expect(output).toContain('_serializeError');
+    });
+  });
 });
