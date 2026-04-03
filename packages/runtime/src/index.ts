@@ -51,6 +51,13 @@ export { errorHandler } from './middleware/error-handler.js';
 // Logger
 export { log, setLogLevel, getLogLevel, LogLevel, initLogLevel, interceptConsole, verbosityToLogLevel } from './logger.js';
 
+// Config
+export { loadConfig } from './config.js';
+export type { AgentConfig, ConfigOverrides, LoadConfigOptions, McpServerConfig } from './config.js';
+
+// Errors
+export { AmodalError, ConfigError } from './errors.js';
+
 // ---------------------------------------------------------------------------
 // Environment variable parsing
 // ---------------------------------------------------------------------------
