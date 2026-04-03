@@ -59,6 +59,65 @@ The runtime-app uses Tailwind CSS with semantic design tokens defined as CSS cus
 
 To change the brand color app-wide, edit `--primary`, `--primary-solid`, and `--ring` in `index.css`.
 
+## Engineering Standards
+
+These rules apply to ALL code in this repo. They are non-negotiable.
+
+### No Magic Strings
+
+- **CSS**: All colors, spacing, shadows reference design tokens (`--primary`, `--muted-foreground`, etc.), never hex/rgb/hsl literals. See the Styling section above.
+- **Events**: Use `SSEEventType` enum or the `SSEEvent` discriminated union, never raw strings for event types.
+- **Config**: Use typed config objects. Never read `process.env` directly in business logic — go through the config module.
+- **Store/tool names**: Use constants or derive from schemas, not scattered string literals.
+- **Route paths**: Define as constants, not inline strings.
+
+### Logging
+
+- Use the `Logger` interface, never `console.log`, `console.error`, or `process.stderr.write`.
+- Every tool call, state transition, and error must emit a structured log event.
+- Log format: `logger.info('event_name', { key: value })` — snake_case event names, data object.
+- **Always log**: tool name + status + duration on every tool call. Session ID + tenant ID on every operation. Error context (what operation, what inputs, what state) on every error.
+- **Never log**: raw API keys, credentials, tokens, or full PII. Use redacted patterns (`user_***@***.com`).
+
+### Error Handling
+
+- **Never swallow errors silently.** No empty catch blocks. No `catch (e) { return null }`. No `catch (e) { log(e) }` without re-throw. These hide failures and cause cascading bugs that are impossible to diagnose.
+- Functions that can fail return `Result<T, E>` — the caller is forced to handle both cases. Never return `null` to indicate failure (caller can't distinguish "not found" from "broken").
+- **Four valid reasons to catch:**
+  1. Enrich and re-throw (add context: `throw new StoreWriteError(store, id, err)`)
+  2. Module boundary → structured error response (API routes, tool executors)
+  3. Specific expected failure with specific handling (retry, fallback — then re-throw everything else)
+  4. Cleanup — use `finally`, not `catch`
+- Use typed error classes (`ProviderError`, `ToolExecutionError`, `StoreError`, etc.), not bare `new Error('...')`.
+- Errors carry context: what operation failed, what the inputs were, what state the system was in.
+- Error boundaries live at **module edges** (API route, tool executor, session manager), NOT inside store backends, NOT inside utility functions.
+
+### Async Discipline
+
+- **No floating promises.** Every async call is `await`ed or explicitly `void`ed with `.catch()`. Enable ESLint `@typescript-eslint/no-floating-promises`.
+- **Timeouts on all external operations.** Every provider call, MCP call, tool execution, and store operation gets `AbortSignal.timeout()`. No hanging forever on a broken external system.
+- **Exhaustive switch on discriminated unions.** Use the `never` trick in `default:` so adding a new variant causes a compile error, not a silent fallthrough.
+
+### Types
+
+- **No `any`** — use `unknown` and narrow with type guards.
+- **No `as` casts** except at system boundaries (parsing external JSON/API responses where you validate first).
+- Use discriminated unions for state types (`AgentState`, `SSEEvent`, `ToolResult`).
+- Interface segregation: don't make consumers depend on interfaces they don't use.
+
+### Module Boundaries
+
+- No importing from another module's internal files (e.g., don't import `../agent/internal/helper.ts` from the session manager).
+- No accessing private fields via `(obj as any).field` or `obj['_privateField']`.
+- No circular dependencies between modules.
+- Each module wraps errors at its boundary with module-specific error types.
+
+### Testing
+
+- Integration tests over unit tests for tool execution — test the real path, not mocks.
+- Contract tests for SSE events — if an event shape changes, the test fails before the UI breaks.
+- Don't test implementation details — test public behavior. Private functions can be refactored freely.
+
 ## Key architecture notes
 
 - All LLM calls go through the upstream `@google/gemini-cli-core` GeminiClient, even for non-Google providers (Anthropic, OpenAI, etc.) — our `MultiProviderContentGenerator` adapts them
