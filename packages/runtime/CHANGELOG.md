@@ -1,5 +1,14 @@
 # @amodalai/runtime
 
+## 0.1.24
+
+### Patch Changes
+
+- [#102](https://github.com/amodalai/amodal/pull/102) [`c1c4c45`](https://github.com/amodalai/amodal/commit/c1c4c4567f17a18c0d415d3a9dd9421573bdc988) Thanks [@whodatdev](https://github.com/whodatdev)! - Fix buildDefaultPrompt using wrong bundle reference for bundleProvider sessions, causing system prompt to omit connections, skills, knowledge, and field guidance.
+
+- Updated dependencies []:
+  - @amodalai/core@0.1.24
+
 ## 0.1.23
 
 ### Patch Changes
