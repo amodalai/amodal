@@ -38,8 +38,12 @@ export type { TaskRouterOptions } from './agent/routes/task.js';
 export { getAuthContext } from './middleware/auth.js';
 export type { AuthContext } from './middleware/auth.js';
 
-// Stream hooks
+// Stream hooks & session runner
 export type { StreamHooks } from './session/session-runner.js';
+export { runMessage } from './session/session-runner.js';
+
+// Output routing (for automation result delivery)
+export { routeOutput } from './output/output-router.js';
 
 // Error handler
 export { errorHandler } from './middleware/error-handler.js';
