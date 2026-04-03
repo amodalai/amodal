@@ -22,6 +22,7 @@ import type { StreamHooks } from './session/session-runner.js';
 import type { AuthContext } from './middleware/auth.js';
 import type { SessionStore } from './session/session-manager.js';
 import type { ServerConfig } from './types.js';
+import { log } from './logger.js';
 
 export interface ServerInstance {
   app: Express;
@@ -166,9 +167,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
 
       return new Promise((resolve) => {
         const httpServer = app.listen(config.port, config.host, () => {
-          process.stderr.write(
-            `[INFO] Server listening on ${config.host}:${config.port}\n`,
-          );
+          log.info(`Server listening on ${config.host}:${config.port}`);
           resolve(httpServer);
         });
         server = httpServer;
@@ -199,7 +198,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
       // Drain sessions
       await sessionManager.shutdown();
 
-      process.stderr.write('[INFO] Server stopped\n');
+      log.info('Server stopped');
     },
   };
 }

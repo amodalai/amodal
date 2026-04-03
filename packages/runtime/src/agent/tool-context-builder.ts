@@ -11,6 +11,7 @@ import type {AgentSession} from './agent-types.js';
 import {makeApiRequest} from './request-helper.js';
 import {resolveKey} from '../stores/key-resolver.js';
 import {LOCAL_APP_ID} from '../constants.js';
+import {log} from '../logger.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -117,7 +118,7 @@ export function buildToolContext(
     },
 
     log(message) {
-      process.stderr.write(`[tool:${tool.name}] ${message}\n`);
+      log.info(message, `tool:${tool.name}`);
       if (onLog) onLog(tool.name, message);
     },
 

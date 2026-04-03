@@ -8,6 +8,7 @@ import type { LoadedTool, CustomToolExecutor, CustomToolContext } from '@amodala
 import { resolveKey } from '../stores/key-resolver.js';
 import { LOCAL_APP_ID } from '../constants.js';
 import type { ManagedSession } from './session-manager.js';
+import { log } from '../logger.js';
 
 /**
  * Adapts a repo LoadedTool to the upstream tool registry interface.
@@ -203,7 +204,7 @@ export class CustomToolAdapter {
       },
 
       log(message: string) {
-        process.stderr.write(`[TOOL:${tool.name}] ${message}\n`);
+        log.info(message, `tool:${tool.name}`);
       },
 
       user: { roles: [] },

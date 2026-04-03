@@ -29,6 +29,7 @@ import {
   convertStreamEvent,
   type GGenerateContentResponse,
 } from './llm-to-google.js';
+import { log } from '../../logger.js';
 
 /**
  * ContentGenerator that routes LLM calls through our RuntimeProvider system.
@@ -57,9 +58,10 @@ export class MultiProviderContentGenerator {
     _role: unknown,
   ): Promise<GGenerateContentResponse> {
     const llmRequest = convertGenerateContentParams(request);
-    process.stderr.write(`[MPCG] generateContent: ${String(llmRequest.tools.length)} tools, ${String(llmRequest.messages.length)} messages\n`);
+    log.debug(`generateContent: ${String(llmRequest.tools.length)} tools, ${String(llmRequest.messages.length)} messages`, 'llm');
+    log.debug(`Full LLM request:\n${JSON.stringify({model: llmRequest.model, systemPrompt: llmRequest.systemPrompt, messages: llmRequest.messages, tools: llmRequest.tools, maxTokens: llmRequest.maxTokens}, null, 2)}`, 'llm');
     const llmResponse = await this.provider.chat(llmRequest);
-    process.stderr.write(`[MPCG] response stopReason=${llmResponse.stopReason}, blocks=${String(llmResponse.content.length)}, types=${llmResponse.content.map(b => b.type).join(',')}\n`);
+    log.debug(`response stopReason=${llmResponse.stopReason}, blocks=${String(llmResponse.content.length)}, types=${llmResponse.content.map(b => b.type).join(',')}`, 'llm');
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- structural match to GenerateContentResponse class
     return convertLLMResponse(llmResponse) as unknown as GGenerateContentResponse;
   }
@@ -76,34 +78,8 @@ export class MultiProviderContentGenerator {
     _role: unknown,
   ): Promise<AsyncGenerator<GGenerateContentResponse>> {
     const llmRequest = convertGenerateContentParams(request);
-    process.stderr.write(`[MPCG] generateContentStream: ${String(llmRequest.tools.length)} tools, ${String(llmRequest.messages.length)} messages\n`);
-    // Debug: log raw tools from request before conversion
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Gemini SDK request config
-    const rawTools = (request.config as Record<string, unknown> | undefined)?.['tools'] as unknown[] | undefined;
-    if (rawTools) {
-      for (const rt of rawTools) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Gemini SDK tool type
-        const t = rt as Record<string, unknown>;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Gemini SDK tool declarations
-        const fds = t['functionDeclarations'] as Array<Record<string, unknown>> | undefined;
-        if (fds) {
-          for (const fd of fds) {
-            process.stderr.write(`[MPCG]   raw FD keys: ${Object.keys(fd).join(',')}\n`);
-            // Check first tool in detail
-            if (fds.indexOf(fd) === 0) {
-              process.stderr.write(`[MPCG]   raw FD[0] detail: ${JSON.stringify(fd).slice(0, 300)}\n`);
-            }
-          }
-        }
-      }
-    }
-    for (const tool of llmRequest.tools) {
-      const params = tool.parameters;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- debug logging
-      const req = (params['required'] ?? []) as string[];
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- debug logging
-      process.stderr.write(`[MPCG]   converted tool: ${tool.name} | required: [${req.join(',')}] | props: [${Object.keys((params['properties'] ?? {}) as Record<string, unknown>).join(',')}]\n`);
-    }
+    log.debug(`generateContentStream: ${String(llmRequest.tools.length)} tools, ${String(llmRequest.messages.length)} messages`, 'llm');
+    log.debug(`Full LLM request:\n${JSON.stringify({model: llmRequest.model, systemPrompt: llmRequest.systemPrompt, messages: llmRequest.messages, tools: llmRequest.tools, maxTokens: llmRequest.maxTokens}, null, 2)}`, 'llm');
 
     if (this.provider.chatStream) {
       return this.streamFromProvider(llmRequest);
@@ -162,7 +138,7 @@ export class MultiProviderContentGenerator {
     // chatStream is guaranteed non-null by caller check
      
     for await (const event of this.provider.chatStream!(request)) {
-      process.stderr.write(`[MPCG] stream event: ${event.type}${event.type === 'tool_use_start' ? ` name=${event.name}` : ''}${event.type === 'tool_use_end' ? ` id=${event.id}` : ''}\n`);
+      log.debug(`stream event: ${event.type}${event.type === 'tool_use_start' ? ` name=${event.name}` : ''}${event.type === 'tool_use_end' ? ` id=${event.id}` : ''}`, 'llm');
 
       // Track tool names
       if (event.type === 'tool_use_start') {

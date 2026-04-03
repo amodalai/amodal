@@ -7,6 +7,7 @@
 import cron from 'node-cron';
 import type { AutomationDefinition } from '@amodalai/core';
 import type { AutomationRunnerFn } from './heartbeat-runner.js';
+import { log } from '../logger.js';
 
 interface ScheduledJob {
   automation: AutomationDefinition;
@@ -36,18 +37,14 @@ export class AutomationScheduler {
 
       const schedule = a.trigger.schedule;
       if (!cron.validate(schedule)) {
-        process.stderr.write(
-          `[WARN] Invalid cron schedule for automation "${a.name}": ${schedule}\n`,
-        );
+        log.warn(`Invalid cron schedule for automation "${a.name}": ${schedule}`, 'cron');
         continue;
       }
 
       const task = cron.schedule(schedule, () => {
         void runAutomation(a).catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
-          process.stderr.write(
-            `[ERROR] Cron automation "${a.name}" failed: ${message}\n`,
-          );
+          log.error(`Cron automation "${a.name}" failed: ${message}`, 'cron');
         });
       });
 
@@ -55,9 +52,7 @@ export class AutomationScheduler {
     }
 
     if (this.jobs.length > 0) {
-      process.stderr.write(
-        `[INFO] Registered ${this.jobs.length} cron automation(s)\n`,
-      );
+      log.info(`Registered ${this.jobs.length} cron automation(s)`, 'cron');
     }
   }
 
