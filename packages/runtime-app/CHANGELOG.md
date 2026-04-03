@@ -1,5 +1,21 @@
 # @amodalai/runtime-app
 
+## 0.1.24
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @amodalai/react@0.1.24
+
+## 0.1.23
+
+### Patch Changes
+
+- [#97](https://github.com/amodalai/amodal/pull/97) [`3260629`](https://github.com/amodalai/amodal/commit/32606293bec782c824107834259f287f3e7a4b0a) Thanks [@gte620v](https://github.com/gte620v)! - Consolidate brand accent colors into CSS custom property design tokens. Add primary-solid variant for dark surfaces. Fix chat bubble and code block readability in both light and dark mode.
+
+- Updated dependencies []:
+  - @amodalai/react@0.1.23
+
 ## 0.1.22
 
 ### Patch Changes

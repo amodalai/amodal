@@ -9,7 +9,7 @@ import {existsSync, readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createLocalServer} from '@amodalai/runtime';
+import {createLocalServer, initLogLevel, interceptConsole} from '@amodalai/runtime';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 import {runConnectionPreflight, printPreflightTable} from '../shared/connection-preflight.js';
 
@@ -18,6 +18,8 @@ export interface DevOptions {
   port?: number;
   host?: string;
   resume?: string;
+  verbose?: number;
+  quiet?: boolean;
 }
 
 const DEFAULT_PORT = 3847;
@@ -26,6 +28,9 @@ const DEFAULT_PORT = 3847;
  * Starts a local development server for the repo with hot reload enabled.
  */
 export async function runDev(options: DevOptions = {}): Promise<void> {
+  initLogLevel({verbosity: options.verbose ?? 0, quiet: options.quiet ?? false});
+  interceptConsole();
+
   let repoPath: string;
   try {
     repoPath = findRepoRoot(options.cwd);
@@ -136,6 +141,18 @@ export const devCommand: CommandModule = {
       type: 'string',
       describe: 'Resume a previous session by ID or "latest"',
     },
+    verbose: {
+      alias: 'v',
+      type: 'count',
+      describe: 'Increase log verbosity (-v debug, -vv trace)',
+      default: 0,
+    },
+    quiet: {
+      alias: 'q',
+      type: 'boolean',
+      describe: 'Only show errors',
+      default: false,
+    },
   },
   handler: async (argv) => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
@@ -144,6 +161,10 @@ export const devCommand: CommandModule = {
     const host = argv['host'] as string | undefined;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const resume = argv['resume'] as string | undefined;
-    await runDev({port, host, resume});
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const verbose = argv['verbose'] as number;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const quiet = argv['quiet'] as boolean;
+    await runDev({port, host, resume, verbose, quiet});
   },
 };

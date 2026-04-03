@@ -15,6 +15,7 @@ import type {
 } from '@amodalai/core';
 
 import {resolveTtl} from './ttl-resolver.js';
+import {log} from '../logger.js';
 
 /**
  * PGLite-backed store backend.
@@ -115,7 +116,7 @@ export class PGLiteStoreBackend implements StoreBackend {
       if (result.rows.length === 0) return null;
       return this.rowToDocument(result.rows[0]);
     } catch (err) {
-      process.stderr.write(`[store] get error: ${err instanceof Error ? err.message : String(err)}\n`);
+      log.error(`get error: ${err instanceof Error ? err.message : String(err)}`, 'store');
       return null;
     }
   }
@@ -193,7 +194,7 @@ export class PGLiteStoreBackend implements StoreBackend {
 
         return {stored: true, key, version: 1};
       } catch (err) {
-        process.stderr.write(`[store] put error (${store}/${key}): ${err instanceof Error ? err.message : String(err)}\n`);
+        log.error(`put error (${store}/${key}): ${err instanceof Error ? err.message : String(err)}`, 'store');
         return {stored: false, key, version: 0};
       }
     });
@@ -249,7 +250,7 @@ export class PGLiteStoreBackend implements StoreBackend {
 
       return {documents, total, hasMore: offset + documents.length < total};
     } catch (err) {
-      process.stderr.write(`[store] list error (${store}): ${err instanceof Error ? err.message : String(err)}\n`);
+      log.error(`list error (${store}): ${err instanceof Error ? err.message : String(err)}`, 'store');
       return {documents: [], total: 0, hasMore: false};
     }
   }
@@ -270,7 +271,7 @@ export class PGLiteStoreBackend implements StoreBackend {
 
         return (result.affectedRows ?? 0) > 0;
       } catch (err) {
-        process.stderr.write(`[store] delete error (${store}/${key}): ${err instanceof Error ? err.message : String(err)}\n`);
+        log.error(`delete error (${store}/${key}): ${err instanceof Error ? err.message : String(err)}`, 'store');
         return false;
       }
     });
@@ -298,7 +299,7 @@ export class PGLiteStoreBackend implements StoreBackend {
         meta: (typeof row['meta'] === 'string' ? JSON.parse(row['meta']) : row['meta']) as StoreDocumentMeta,
       }));
     } catch (err) {
-      process.stderr.write(`[store] history error (${store}/${key}): ${err instanceof Error ? err.message : String(err)}\n`);
+      log.error(`history error (${store}/${key}): ${err instanceof Error ? err.message : String(err)}`, 'store');
       return [];
     }
   }
@@ -318,7 +319,7 @@ export class PGLiteStoreBackend implements StoreBackend {
         const result = await this.db.query(query, params);
         return result.affectedRows ?? 0;
       } catch (err) {
-        process.stderr.write(`[store] purgeExpired error: ${err instanceof Error ? err.message : String(err)}\n`);
+        log.error(`purgeExpired error: ${err instanceof Error ? err.message : String(err)}`, 'store');
         return 0;
       }
     });

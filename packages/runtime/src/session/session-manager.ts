@@ -26,6 +26,7 @@ import {
 import type { AgentBundle, CustomToolExecutor, CustomShellExecutor, StoreBackend } from '@amodalai/core';
 import type { AuthContext } from '../middleware/auth.js';
 import { convertSessionMessagesToHistory } from './history-converter.js';
+import { log } from '../logger.js';
 
 export interface PendingAskUser {
   resolve: (answers: Record<string, string>) => void;
@@ -136,6 +137,15 @@ function resolveEnvRefs(record: Record<string, string>): Record<string, string> 
   return resolved;
 }
 
+function serializeBundle(bundle: AgentBundle): string {
+  // Convert Map fields to plain objects for JSON serialization
+  const serializable = {
+    ...bundle,
+    connections: Object.fromEntries(bundle.connections),
+  };
+  return JSON.stringify(serializable, null, 2);
+}
+
 const DEFAULT_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const DEFAULT_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const ASK_USER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -167,6 +177,9 @@ export class SessionManager {
     this.baseParams = options.baseParams;
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     this.bundle = options.bundle;
+    if (this.bundle) {
+      log.debug(`Bundle loaded:\n${serializeBundle(this.bundle)}`, 'session');
+    }
     this.toolExecutor = options.toolExecutor;
     this.shellExecutor = options.shellExecutor;
     this.sharedStoreBackend = options.storeBackend;
@@ -217,6 +230,7 @@ export class SessionManager {
 
     // Inject bundle config into session params
     if (bundle) {
+      log.debug(`Session ${sessionId} using bundle:\n${serializeBundle(bundle)}`, 'session');
       sessionParams.coreTools = this.buildCoreToolsList(bundle);
       const { buildConnectionsMap } = await import('@amodalai/core');
       const connectionsMap = buildConnectionsMap(bundle.connections, bundle.resolvedCredentials);
@@ -314,7 +328,7 @@ export class SessionManager {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- adapter matches upstream tool interface
         registry.registerTool(adapter as never);
       }
-      process.stderr.write(`[SESSION] Registered ${String(this.bundle.tools.length)} custom tool(s)\n`);
+      log.debug(`Registered ${String(this.bundle.tools.length)} custom tool(s)`, 'session');
     }
 
     // Set model on upstream config so GeminiClient.startChat() can resolve it
@@ -341,16 +355,16 @@ export class SessionManager {
     // names like API_KEY get stripped by the /KEY/i pattern.
     const connections = config.getConnections();
     const connKeys = Object.keys(connections).filter((k) => k !== '_secrets');
-    process.stderr.write(`[SESSION] connections: ${connKeys.join(', ') || '(none)'}\n`);
+    log.debug(`connections: ${connKeys.join(', ') || '(none)'}`, 'session');
     // App secrets are available to tools via session-scoped getSessionEnv()
     // (through ToolContext). They are NOT injected into process.env to prevent
     // cross-app secret leakage in multi-session runtimes.
     const secrets = connections['_secrets'];
     if (secrets && typeof secrets === 'object') {
       const secretCount = Object.keys(secrets).length;
-      process.stderr.write(`[SESSION] ${secretCount} secrets available via session env\n`);
+      log.debug(`${secretCount} secrets available via session env`, 'session');
     } else {
-      process.stderr.write(`[SESSION] no _secrets found in connections\n`);
+      log.debug(`no _secrets found in connections`, 'session');
     }
 
     // Platform tool disabling is handled via the disabled_platform_tools
@@ -391,9 +405,9 @@ export class SessionManager {
         await backend.initialize(stores);
         config.setStoreBackend(backend);
         storeBackend = backend;
-        process.stderr.write(`[SESSION] Initialized store backend (${String(stores.length)} store(s))\n`);
+        log.info(`Initialized store backend (${String(stores.length)} store(s))`, 'session');
       } catch (err) {
-        process.stderr.write(`[SESSION] Failed to init store backend: ${err instanceof Error ? err.message : String(err)}\n`);
+        log.error(`Failed to init store backend: ${err instanceof Error ? err.message : String(err)}`, 'session');
       }
     }
 
@@ -411,8 +425,8 @@ export class SessionManager {
       name: config.getAgentName() ?? 'Amodal Agent',
       description: config.getAgentDescription(),
       agentContext: config.getAgentContext(),
-      agentOverride: this.bundle?.agents?.main,
-      connections: this.bundle?.connections ? Array.from(this.bundle.connections.values()).map((conn) => ({
+      agentOverride: bundle?.agents?.main,
+      connections: bundle?.connections ? Array.from(bundle.connections.values()).map((conn) => ({
         name: conn.name,
         endpoints: (conn.surface ?? [])
           .filter((ep) => ep.included)
@@ -420,21 +434,21 @@ export class SessionManager {
         entities: conn.entities,
         rules: conn.rules,
       })) : undefined,
-      skills: this.bundle?.skills?.map((s) => ({
+      skills: bundle?.skills?.map((s) => ({
         name: s.name,
         description: s.description ?? '',
         trigger: s.trigger,
         body: s.body,
       })),
-      knowledge: this.bundle?.knowledge?.map((k) => ({
+      knowledge: bundle?.knowledge?.map((k) => ({
         name: k.name,
         title: k.title,
         body: k.body,
       })),
-      ...(this.bundle?.connections ? (() => {
-        const {scopeLabels} = resolveScopeLabels(this.bundle.connections, []);
-        const fieldGuidance = generateFieldGuidance(this.bundle.connections, []);
-        const altLookup = generateAlternativeLookupGuidance(this.bundle.connections);
+      ...(bundle?.connections ? (() => {
+        const {scopeLabels} = resolveScopeLabels(bundle.connections, []);
+        const fieldGuidance = generateFieldGuidance(bundle.connections, []);
+        const altLookup = generateAlternativeLookupGuidance(bundle.connections);
         return {
           fieldGuidance: fieldGuidance || undefined,
           scopeLabels: Object.keys(scopeLabels).length > 0 ? scopeLabels : undefined,
@@ -543,9 +557,9 @@ export class SessionManager {
         );
         // Refresh the GeminiClient's tool list so the LLM sees the new tools
         await geminiClient.setTools();
-        process.stderr.write(`[SESSION] Registered ${String(stores.length)} store tool(s) + query_store\n`);
+        log.debug(`Registered ${String(stores.length)} store tool(s) + query_store`, 'session');
       } catch (err) {
-        process.stderr.write(`[SESSION] Failed to register store tools: ${err instanceof Error ? err.message : String(err)}\n`);
+        log.error(`Failed to register store tools: ${err instanceof Error ? err.message : String(err)}`, 'session');
       }
     }
 
@@ -639,10 +653,10 @@ export class SessionManager {
             toolRegistry.registerTool(adapter as never); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
           }
           await geminiClient.setTools();
-          process.stderr.write(`[MCP] Registered ${String(mcpTools.length)} MCP tools on tool registry\n`);
+          log.debug(`Registered ${String(mcpTools.length)} MCP tools on tool registry`, 'mcp');
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          process.stderr.write(`[MCP] Failed to register MCP tools: ${msg}\n`);
+          log.error(`Failed to register MCP tools: ${msg}`, 'mcp');
         }
     }
 
@@ -727,9 +741,7 @@ export class SessionManager {
         token: auth?.token,
       });
     } catch (err: unknown) {
-      process.stderr.write(
-        `[HYDRATE] Error fetching conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}\n`,
-      );
+      log.error(`Error fetching conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}`, 'hydrate');
       return null;
     }
 
@@ -759,9 +771,7 @@ export class SessionManager {
     // Pre-populate accumulatedMessages so saveSessionHistory() appends correctly
     session.accumulatedMessages = [...record.messages];
 
-    process.stderr.write(
-      `[HYDRATE] Hydrated conversation ${conversationId} with ${record.messages.length} messages (${history.length} history entries)\n`,
-    );
+    log.debug(`Hydrated conversation ${conversationId} with ${record.messages.length} messages (${history.length} history entries)`, 'hydrate');
 
     return session;
   }
@@ -800,10 +810,23 @@ export class SessionManager {
    * Existing sessions keep their old config.
    */
   updateBundle(bundle: AgentBundle): void {
+    // Only reset MCP if the MCP config actually changed
+    const oldMcpConfig = this.bundle ? JSON.stringify(this.buildMcpConfigs(this.bundle)) : '';
+    const newMcpConfig = JSON.stringify(this.buildMcpConfigs(bundle));
+
     this.bundle = bundle;
-    // Reset inspect MCP manager so it picks up new connections
-    this.inspectMcpInitialized = false;
-    this.inspectMcp = undefined;
+    log.debug('Config reloaded', 'session');
+
+    if (oldMcpConfig !== newMcpConfig) {
+      log.debug('MCP config changed, resetting connections', 'session');
+      this.inspectMcpInitialized = false;
+      this.inspectMcp = undefined;
+      // Also reset shared MCP so next session gets fresh connections
+      if (this.sharedMcpManager) {
+        void this.sharedMcpManager.shutdown().catch(() => {});
+        this.sharedMcpManager = undefined;
+      }
+    }
   }
 
   /**
@@ -881,10 +904,10 @@ export class SessionManager {
       }
 
       await session.geminiClient.setTools();
-      process.stderr.write('[ADMIN] Registered admin tools (file tools + internal_api)\n');
+      log.debug('Registered admin tools (file tools + internal_api)', 'admin');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[ADMIN] Failed to register file tools: ${msg}\n`);
+      log.error(`Failed to register file tools: ${msg}`, 'admin');
     }
 
     return session;
@@ -911,7 +934,7 @@ export class SessionManager {
       return manager;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[INSPECT] MCP initialization failed: ${msg}\n`);
+      log.error(`MCP initialization failed: ${msg}`, 'inspect');
       this.inspectMcp = manager;
       return manager;
     }
@@ -936,7 +959,7 @@ export class SessionManager {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[SESSION] MCP initialization failed: ${msg}\n`);
+      log.error(`MCP initialization failed: ${msg}`, 'session');
     }
   }
 

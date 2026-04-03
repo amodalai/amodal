@@ -6,6 +6,7 @@
 
 import type { ConfigParameters } from '@amodalai/core';
 import { createServer, type ServerInstance } from './server.js';
+import { log } from './logger.js';
 
 export const SERVER_VERSION = '0.1.0';
 
@@ -42,6 +43,9 @@ export type { StreamHooks } from './session/session-runner.js';
 
 // Error handler
 export { errorHandler } from './middleware/error-handler.js';
+
+// Logger
+export { log, setLogLevel, getLogLevel, LogLevel, initLogLevel, interceptConsole, verbosityToLogLevel } from './logger.js';
 
 // ---------------------------------------------------------------------------
 // Environment variable parsing
@@ -109,18 +113,18 @@ async function main(): Promise<void> {
     await serverInstance.start();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[FATAL] Failed to start server: ${message}\n`);
+    log.fatal(`Failed to start server: ${message}`);
     process.exit(1);
   }
 
   // Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {
-    process.stderr.write(`[INFO] Received ${signal}, shutting down...\n`);
+    log.info(`Received ${signal}, shutting down...`);
     try {
       await serverInstance.stop();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[ERROR] Shutdown error: ${message}\n`);
+      log.error(`Shutdown error: ${message}`);
     }
     process.exit(0);
   };
@@ -137,7 +141,7 @@ const isMainModule =
 
 if (isMainModule) {
   main().catch((err) => {
-    process.stderr.write(`[FATAL] ${err}\n`);
+    log.fatal(String(err));
     process.exit(1);
   });
 }

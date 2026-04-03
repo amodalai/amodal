@@ -8,6 +8,7 @@ import {watch, type FSWatcher} from 'node:fs';
 import {join} from 'node:path';
 import {loadRepo} from '@amodalai/core';
 import type {AgentBundle} from '@amodalai/core';
+import {log} from '../logger.js';
 
 const DEBOUNCE_MS = 300;
 
@@ -81,10 +82,10 @@ export class ConfigWatcher {
     try {
       const repo = await loadRepo({localPath: this.repoPath});
       this.onChange(repo);
-      process.stderr.write('[ConfigWatcher] Config reloaded\n');
+      log.debug('Config reloaded', 'config-watcher');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[ConfigWatcher] Reload failed: ${msg}\n`);
+      log.error(`Reload failed: ${msg}`, 'config-watcher');
     }
   }
 }

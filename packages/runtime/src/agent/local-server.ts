@@ -34,6 +34,7 @@ import {EvalStore} from './eval-store.js';
 import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
 import {LOCAL_APP_ID} from '../constants.js';
+import {log} from '../logger.js';
 
 interface ProviderStatus {
   provider: string;
@@ -119,12 +120,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     const backend = storeConfig?.backend ?? 'pglite';
 
     if (backend === 'postgres' && storeConfig?.postgresUrl) {
-      // Real Postgres backend
       const connUrl = storeConfig.postgresUrl.startsWith('env:')
         ? process.env[storeConfig.postgresUrl.slice(4)] ?? ''
         : storeConfig.postgresUrl;
       if (!connUrl) {
-        process.stderr.write(`[dev] Postgres URL not set (${storeConfig.postgresUrl})\n`);
+        log.error(`Postgres URL not set (${storeConfig.postgresUrl})`, 'dev');
       } else {
         try {
           const pgModPath = ['..', 'stores', 'postgres-store-backend.js'].join('/');
@@ -133,13 +133,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           if (mod?.createPostgresStoreBackend) {
             storeBackend = await mod.createPostgresStoreBackend(repo.stores, connUrl);
             storeBackendType = 'postgres';
-            process.stderr.write(`[dev] Store backend ready (postgres, ${String(repo.stores.length)} stores)\n`);
+            log.info(`Store backend ready (postgres, ${String(repo.stores.length)} stores)`, 'dev');
           } else {
-            process.stderr.write(`[dev] Postgres backend not available — install @amodalai/store-postgres\n`);
+            log.error('Postgres backend not available — install @amodalai/store-postgres', 'dev');
           }
         } catch (err) {
-          process.stderr.write(`[dev] Postgres store backend failed: ${err instanceof Error ? err.message : String(err)}\n`);
-          process.stderr.write(`[dev] Falling back to PGLite\n`);
+          log.error(`Postgres store backend failed: ${err instanceof Error ? err.message : String(err)}`, 'dev');
+          log.info('Falling back to PGLite', 'dev');
         }
       }
     }
@@ -155,8 +155,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         mkdirSync(dataDir, {recursive: true});
         try {
           const existing = readFileSync(lockPath, 'utf-8').trim();
-          // Check if the PID is still running
-          try { process.kill(Number(existing), 0); process.stderr.write(`[dev] WARNING: Another amodal instance (PID ${existing}) may be using this store directory. PGLite does not support concurrent access.\n`); }
+          try { process.kill(Number(existing), 0); log.warn(`Another amodal instance (PID ${existing}) may be using this store directory. PGLite does not support concurrent access.`, 'dev'); }
           catch { /* PID not running, stale lock */ }
         } catch { /* no lock file */ }
         writeFileSync(lockPath, String(process.pid));
@@ -167,10 +166,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       try {
         storeBackend = await createPGLiteStoreBackend(repo.stores, dataDir);
         storeBackendType = 'pglite';
-        process.stderr.write(`[dev] Store backend ready (pglite, ${String(repo.stores.length)} stores, dir: ${dataDir})\n`);
+        log.info(`Store backend ready (pglite, ${String(repo.stores.length)} stores, dir: ${dataDir})`, 'dev');
       } catch (err) {
-        process.stderr.write(`[dev] Store backend failed to initialize: ${err instanceof Error ? err.message : String(err)}\n`);
-        process.stderr.write(`[dev] Try deleting ${dataDir} and restarting\n`);
+        log.error(`Store backend failed to initialize: ${err instanceof Error ? err.message : String(err)}`, 'dev');
+        log.error(`Try deleting ${dataDir} and restarting`, 'dev');
       }
     }
   }
@@ -299,7 +298,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     resumeSessionId = sessionStore.latest() ?? undefined;
   }
   if (resumeSessionId) {
-    process.stderr.write(`[dev] Resume session: ${resumeSessionId}\n`);
+    log.debug(`Resume session: ${resumeSessionId}`, 'dev');
   }
 
   // Client config — tells the web UI which session to resume
@@ -426,13 +425,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     const result = await buildPages(config.repoPath);
     builtPages = result.pages;
     if (builtPages.length > 0) {
-      process.stderr.write(`[dev] Built ${String(builtPages.length)} page(s)\n`);
+      log.info(`Built ${String(builtPages.length)} page(s)`, 'dev');
       // Serve compiled page bundles
       app.use('/pages-bundle', express.static(result.outDir));
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[dev] Page build failed: ${msg}\n`);
+    log.error(`Page build failed: ${msg}`, 'dev');
   }
 
   // Pages list endpoint
@@ -485,10 +484,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
       return new Promise((resolve) => {
         const httpServer = app.listen(port, host, () => {
-          process.stderr.write(`[INFO] Repo server listening on ${host}:${port}\n`);
-          process.stderr.write(`[INFO] Repo: ${config.repoPath}\n`);
+          log.info(`Repo server listening on ${host}:${port}`);
+          log.info(`Repo: ${config.repoPath}`);
           if (config.hotReload) {
-            process.stderr.write('[INFO] Hot reload enabled\n');
+            log.info('Hot reload enabled');
           }
           resolve(httpServer);
         });
@@ -521,7 +520,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         await storeBackend.close();
       }
 
-      process.stderr.write('[INFO] Repo server stopped\n');
+      log.info('Repo server stopped');
     },
   };
 }

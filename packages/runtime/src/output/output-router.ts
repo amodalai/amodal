@@ -9,6 +9,7 @@ import type { AutomationResult } from '../types.js';
 import { sendSlackOutput } from './slack-output.js';
 import { sendWebhookOutput } from './webhook-output.js';
 import { sendEmailOutput } from './email-output.js';
+import { log } from '../logger.js';
 
 /**
  * Route automation output to the configured channel.
@@ -30,16 +31,12 @@ export async function routeOutput(
         await sendEmailOutput(output.target, result);
         return true;
       default:
-        process.stderr.write(
-          `[WARN] Unknown output channel: ${output.channel as string}\n`,
-        );
+        log.warn(`Unknown output channel: ${output.channel as string}`, 'output');
         return false;
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(
-      `[ERROR] Output routing failed for ${output.channel}:${output.target}: ${message}\n`,
-    );
+    log.error(`Output routing failed for ${output.channel}:${output.target}: ${message}`, 'output');
     return false;
   }
 }

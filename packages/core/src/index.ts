@@ -107,6 +107,9 @@ export { registerFunctionTools } from './tools/function-tool-registry.js';
 // Request tool
 export { RequestTool } from './tools/request-tool.js';
 
+// Logger
+export { log, setLogLevel, getLogLevel, LogLevel } from './logger.js';
+
 // MCP client manager
 export * from './mcp/index.js';
 

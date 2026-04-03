@@ -7,7 +7,7 @@
 import type {CommandModule} from 'yargs';
 import {loadSnapshotFromFile, snapshotToBundle} from '@amodalai/core';
 import type {AgentBundle} from '@amodalai/core';
-import {createLocalServer} from '@amodalai/runtime';
+import {createLocalServer, initLogLevel, interceptConsole} from '@amodalai/runtime';
 import {PlatformClient} from '../shared/platform-client.js';
 
 export interface ServeOptions {
@@ -17,6 +17,8 @@ export interface ServeOptions {
   env?: string;
   port?: number;
   host?: string;
+  verbose?: number;
+  quiet?: boolean;
 }
 
 const DEFAULT_PORT = 3847;
@@ -73,6 +75,9 @@ async function loadFromSource(options: ServeOptions): Promise<AgentBundle | null
  * Returns the loaded repo, or exits with error.
  */
 export async function runServe(options: ServeOptions): Promise<AgentBundle | null> {
+  initLogLevel({verbosity: options.verbose ?? 0, quiet: options.quiet ?? false});
+  interceptConsole();
+
   const repo = await loadFromSource(options);
   if (!repo) return null;
 
@@ -142,6 +147,18 @@ export const serveCommand: CommandModule = {
       .option('host', {
         type: 'string',
         describe: 'Host to bind to (default: 0.0.0.0)',
+      })
+      .option('verbose', {
+        alias: 'v',
+        type: 'count',
+        describe: 'Increase log verbosity (-v debug, -vv trace)',
+        default: 0,
+      })
+      .option('quiet', {
+        alias: 'q',
+        type: 'boolean',
+        describe: 'Only show errors',
+        default: false,
       }),
   handler: async (argv) => {
     const repo = await runServe({
@@ -157,6 +174,10 @@ export const serveCommand: CommandModule = {
       port: argv['port'] as number | undefined,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       host: argv['host'] as string | undefined,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      verbose: argv['verbose'] as number,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      quiet: argv['quiet'] as boolean,
     });
     if (!repo) {
       process.exit(1);
