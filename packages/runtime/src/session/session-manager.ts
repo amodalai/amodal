@@ -425,8 +425,8 @@ export class SessionManager {
       name: config.getAgentName() ?? 'Amodal Agent',
       description: config.getAgentDescription(),
       agentContext: config.getAgentContext(),
-      agentOverride: this.bundle?.agents?.main,
-      connections: this.bundle?.connections ? Array.from(this.bundle.connections.values()).map((conn) => ({
+      agentOverride: bundle?.agents?.main,
+      connections: bundle?.connections ? Array.from(bundle.connections.values()).map((conn) => ({
         name: conn.name,
         endpoints: (conn.surface ?? [])
           .filter((ep) => ep.included)
@@ -434,21 +434,21 @@ export class SessionManager {
         entities: conn.entities,
         rules: conn.rules,
       })) : undefined,
-      skills: this.bundle?.skills?.map((s) => ({
+      skills: bundle?.skills?.map((s) => ({
         name: s.name,
         description: s.description ?? '',
         trigger: s.trigger,
         body: s.body,
       })),
-      knowledge: this.bundle?.knowledge?.map((k) => ({
+      knowledge: bundle?.knowledge?.map((k) => ({
         name: k.name,
         title: k.title,
         body: k.body,
       })),
-      ...(this.bundle?.connections ? (() => {
-        const {scopeLabels} = resolveScopeLabels(this.bundle.connections, []);
-        const fieldGuidance = generateFieldGuidance(this.bundle.connections, []);
-        const altLookup = generateAlternativeLookupGuidance(this.bundle.connections);
+      ...(bundle?.connections ? (() => {
+        const {scopeLabels} = resolveScopeLabels(bundle.connections, []);
+        const fieldGuidance = generateFieldGuidance(bundle.connections, []);
+        const altLookup = generateAlternativeLookupGuidance(bundle.connections);
         return {
           fieldGuidance: fieldGuidance || undefined,
           scopeLabels: Object.keys(scopeLabels).length > 0 ? scopeLabels : undefined,
