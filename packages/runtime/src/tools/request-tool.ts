@@ -204,7 +204,12 @@ export function createRequestTool(options: CreateRequestToolOptions): ToolDefini
 
       // Build URL
       const expandedEndpoint = expandEnvVars(endpoint, sessionEnv);
-      let url = `${baseUrl.replace(/\/+$/, '')}/${expandedEndpoint.replace(/^\/+/, '')}`;
+      // Strip trailing/leading slashes without regex (CodeQL flags /\/+$/ on library input)
+      let cleanBase = baseUrl;
+      while (cleanBase.endsWith('/')) cleanBase = cleanBase.slice(0, -1);
+      let cleanEndpoint = expandedEndpoint;
+      while (cleanEndpoint.startsWith('/')) cleanEndpoint = cleanEndpoint.slice(1);
+      let url = `${cleanBase}/${cleanEndpoint}`;
 
       // Append query params
       if (params.params) {
