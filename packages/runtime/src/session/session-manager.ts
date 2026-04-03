@@ -866,7 +866,7 @@ export class SessionManager {
 
     // Register admin file tools (read/write/delete agent files)
     try {
-      const { createReadRepoFileTool, createWriteRepoFileTool, createDeleteRepoFileTool, createInternalApiTool, ADMIN_TOOL_SCHEMAS } = await import('./admin-file-tools.js');
+      const { createReadRepoFileTool, createWriteRepoFileTool, createDeleteRepoFileTool, createInternalApiTool } = await import('../tools/admin-file-tools.js');
       const { bridgeToUpstream, registerOnUpstream } = await import('../tools/upstream-bridge.js');
       const repoRoot = this.bundle.origin;
       const upstream = session.config.getUpstreamConfig();
@@ -883,8 +883,7 @@ export class SessionManager {
       }
 
       for (const {name, def} of adminTools) {
-        const schema = ADMIN_TOOL_SCHEMAS[name] ?? {type: 'object', properties: {}};
-        registerOnUpstream(toolRegistry, bridgeToUpstream(name, def, schema, makeContext));
+        registerOnUpstream(toolRegistry, bridgeToUpstream(name, def, {type: 'object', properties: {}}, makeContext));
       }
 
       await session.geminiClient.setTools();
