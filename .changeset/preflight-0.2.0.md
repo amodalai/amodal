@@ -6,7 +6,9 @@ Pre-release fixes for 0.2.0:
 
 - Fix chat sessions not appearing in `/sessions` endpoint. The `onSessionPersist`
   stream hook now mirrors the session to the legacy file-based `SessionStore`
-  (read by the UI history panel) alongside the PGLite write.
+  (read by the UI history panel) alongside the PGLite write. Mirror write is
+  wrapped in try/catch with `log.warn` — PGLite remains the source of truth,
+  so a mirror failure doesn't break the route after the response has drained.
 - Fix `buildPages()` crashing on relative `repoPath`. The generated wrapper
   `.tsx` lives in `.amodal/pages-build/` and imports the page entry by path;
   esbuild can't resolve that import if the path is relative. Now resolves
