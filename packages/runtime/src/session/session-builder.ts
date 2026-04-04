@@ -450,6 +450,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     sessionId,
     tenantId,
     user: {roles: userRoles},
+    fieldScrubber,
   };
 
   const toolContextFactory = createToolContextFactory(factoryOpts);
