@@ -147,7 +147,11 @@ export {
   registerAdminFileTools,
 } from './tools/admin-file-tools.js';
 
-// Tool context factory
+// Session builder (Phase 3.5b)
+export { buildSessionComponents, PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME } from './session/session-builder.js';
+export type { SessionComponents, BuildSessionComponentsOptions, SessionType } from './session/session-builder.js';
+
+// Tool context factory (Phase 3.5a)
 export { createToolContextFactory } from './session/tool-context-factory.js';
 export type { ToolContextFactoryOptions } from './session/tool-context-factory.js';
 
