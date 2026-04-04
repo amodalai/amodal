@@ -212,6 +212,7 @@ export class StandaloneSessionManager {
       maxTurns: session.maxTurns,
       maxContextTokens: session.maxContextTokens,
       config: {...DEFAULT_LOOP_CONFIG, ...opts?.loopConfig},
+      compactionFailures: 0,
       preExecutionCache: new Map(),
       waitForConfirmation: opts?.waitForConfirmation ?? (() => Promise.resolve(true)),
       buildToolContext: opts?.buildToolContext ?? makeNoOpToolContext(session),
