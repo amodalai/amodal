@@ -16,7 +16,12 @@ import {drizzle} from 'drizzle-orm/node-postgres';
 import type {LoadedStore} from '@amodalai/core';
 
 import {DrizzleStoreBackend} from './drizzle-store-backend.js';
+import {ConfigError} from '../errors.js';
 import {log} from '../logger.js';
+
+// Postgres schema identifier: letters, digits, underscore; must start with
+// a letter or underscore. Matches the same shape as filter/sort fields.
+const SCHEMA_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 const CREATE_TABLES_DDL = `
   CREATE TABLE IF NOT EXISTS store_documents (
@@ -86,8 +91,14 @@ export async function createPostgresStoreBackend(
   });
 
   if (opts.schema) {
-    await pool.query(`CREATE SCHEMA IF NOT EXISTS "${opts.schema.replace(/"/g, '')}"`);
-    await pool.query(`SET search_path TO "${opts.schema.replace(/"/g, '')}"`);
+    if (!SCHEMA_NAME_RE.test(opts.schema)) {
+      throw new ConfigError(`Invalid Postgres schema name: ${opts.schema}`, {
+        key: 'schema',
+        suggestion: 'Schema names must match /^[a-zA-Z_][a-zA-Z0-9_]*$/',
+      });
+    }
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS "${opts.schema}"`);
+    await pool.query(`SET search_path TO "${opts.schema}"`);
   }
   await pool.query(CREATE_TABLES_DDL);
 

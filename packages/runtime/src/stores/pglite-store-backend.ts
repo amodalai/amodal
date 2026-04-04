@@ -27,6 +27,7 @@ import type {
 } from '@amodalai/types';
 
 import {DrizzleStoreBackend} from './drizzle-store-backend.js';
+import {StoreError} from '../errors.js';
 import {log} from '../logger.js';
 
 const CREATE_TABLES_DDL = `
@@ -106,7 +107,10 @@ export class PGLiteStoreBackend implements StoreBackend {
 
   private ensure(): DrizzleStoreBackend {
     if (!this.inner) {
-      throw new Error('PGLite store backend is not initialized or was closed');
+      throw new StoreError('PGLite store backend is not initialized or was closed', {
+        store: '(uninitialized)',
+        operation: 'ensure',
+      });
     }
     return this.inner;
   }
