@@ -1,20 +1,29 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
+ */
+
+/**
+ * Task route (Phase 3.5e).
+ *
+ * Fire-and-forget task execution via the new StandaloneSessionManager.
  */
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
-import type {SessionManager} from '../../session/session-manager.js';
-import {streamMessage} from '../../session/session-runner.js';
+import type {StandaloneSessionManager} from '../../session/manager.js';
+import type {Session} from '../../session/types.js';
+import type {ToolContext} from '../../tools/types.js';
 import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 
 export interface TaskRouterOptions {
-  sessionManager: SessionManager;
+  sessionManager: StandaloneSessionManager;
+  /** Factory to create a session with components for task execution */
+  createTaskSession?: () => {session: Session; toolContextFactory: (callId: string) => ToolContext};
 }
 
 const TaskRequestSchema = z.object({
@@ -59,10 +68,20 @@ export function createTaskRouter(options: TaskRouterOptions): Router {
     // Run in background
     void (async () => {
       try {
-        const session = await options.sessionManager.create();
+        if (!options.createTaskSession) {
+          record.status = 'error';
+          record.events.push({type: SSEEventType.Error, message: 'Task execution not configured', timestamp: new Date().toISOString()});
+          return;
+        }
+
+        const {session, toolContextFactory} = options.createTaskSession();
         const controller = new AbortController();
 
-        for await (const event of streamMessage(session, prompt, controller.signal)) {
+        for await (const event of options.sessionManager.runMessage(
+          session.id,
+          prompt,
+          {signal: controller.signal, buildToolContext: toolContextFactory},
+        )) {
           record.events.push(event);
         }
 

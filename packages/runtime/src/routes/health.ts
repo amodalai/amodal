@@ -5,10 +5,8 @@
  */
 
 import { Router } from 'express';
-import type { SessionManager } from '../session/session-manager.js';
-
 export interface HealthRouterOptions {
-  sessionManager: SessionManager;
+  sessionManager: {size: number};
   version?: string;
   startedAt: number;
 }

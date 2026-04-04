@@ -8,62 +8,39 @@ import {describe, it, expect, vi, beforeEach} from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import {createInspectRouter} from './inspect.js';
-import type {SessionManager} from '../../session/session-manager.js';
+import type {InspectRouterOptions} from './inspect.js';
 
-function makeSessionManager(): SessionManager {
+const mockBundle = {
+  connections: new Map([['crm', {name: 'crm', spec: {baseUrl: 'https://api.example.com', testPath: undefined}, surface: [], entities: null, rules: null, location: 'connections/crm'}]]),
+  config: {name: 'test-agent', models: {main: {model: 'test-model', provider: 'test'}}},
+  skills: [{name: 'triage'}, {name: 'investigate'}],
+  automations: [{name: 'daily-scan'}],
+  knowledge: [{name: 'api-docs'}],
+};
+
+function makeOpts(): InspectRouterOptions {
   return {
-    size: 0,
-    create: vi.fn(async () => ({
-      id: 'inspect-session',
-      appId: '__inspect__',
-      runtime: {
-        compiledContext: {
-          systemPrompt: 'You are a test agent.',
-          tokenUsage: {total: 100000, used: 500, remaining: 99500, sectionBreakdown: {core: 200, skills: 300}},
-          sections: [
-            {name: 'core', content: 'Core instructions', tokens: 200, priority: 10, trimmed: false},
-            {name: 'skills', content: 'Skill definitions', tokens: 300, priority: 5, trimmed: false},
-          ],
-        },
-        repo: {
-          connections: new Map([['crm', {name: 'crm', spec: {baseUrl: 'https://api.example.com', testPath: undefined}, surface: [], entities: null, rules: null, location: 'connections/crm'}]]),
-          skills: [{name: 'triage'}, {name: 'investigate'}],
-          automations: [{name: 'daily-scan'}],
-          knowledge: [{name: 'api-docs'}],
-        },
-      },
-    })),
-    destroy: vi.fn(),
-    get: vi.fn(),
-    cleanup: vi.fn(),
-    updateBundle: vi.fn(),
-    shutdown: vi.fn(),
-    getBundle: vi.fn(() => ({
-      connections: new Map([['crm', {name: 'crm', spec: {baseUrl: 'https://api.example.com', testPath: undefined}, surface: [], entities: null, rules: null, location: 'connections/crm'}]]),
-      config: {name: 'test-agent', models: {main: {model: 'test-model', provider: 'test'}}},
-      skills: [{name: 'triage'}, {name: 'investigate'}],
-      automations: [{name: 'daily-scan'}],
-      knowledge: [{name: 'api-docs'}],
-    })),
-    getInspectMcpManager: vi.fn(async () => undefined),
-  } as unknown as SessionManager;
+    getBundle: vi.fn(() => mockBundle) as unknown as InspectRouterOptions['getBundle'],
+    getMcpManager: vi.fn(async () => undefined),
+    repoPath: '/test/repo',
+  };
 }
 
-function createTestApp(sessionManager: SessionManager): express.Express {
+function createTestApp(opts: InspectRouterOptions): express.Express {
   const app = express();
-  app.use(createInspectRouter({sessionManager, repoPath: '/test/repo'}));
+  app.use(createInspectRouter(opts));
   return app;
 }
 
 describe('repo-inspect route', () => {
-  let sessionManager: SessionManager;
+  let opts: InspectRouterOptions;
 
   beforeEach(() => {
-    sessionManager = makeSessionManager();
+    opts = makeOpts();
   });
 
   it('should return repo context info', async () => {
-    const app = createTestApp(sessionManager);
+    const app = createTestApp(opts);
     const res = await request(app).get('/inspect/context');
 
     expect(res.status).toBe(200);
@@ -76,9 +53,9 @@ describe('repo-inspect route', () => {
   });
 
   it('should handle missing repo', async () => {
-    (sessionManager.getBundle as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+    (opts.getBundle as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
 
-    const app = createTestApp(sessionManager);
+    const app = createTestApp(opts);
     const res = await request(app).get('/inspect/context');
 
     expect(res.status).toBe(500);

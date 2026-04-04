@@ -6,13 +6,14 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
-import type {SessionManager} from '../../session/session-manager.js';
+import type {AgentBundle} from '@amodalai/types';
 import type {EvalStore} from '../eval-store.js';
 import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost, createRuntimeProvider} from '@amodalai/core';
 import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo, ModelConfig} from '@amodalai/core';
 
 export interface EvalRouterOptions {
-  sessionManager: SessionManager;
+  /** Returns the current agent bundle (replaces sessionManager.getBundle()) */
+  getBundle: () => AgentBundle | undefined;
   evalStore: EvalStore;
   repoPath: string;
   /** Port the server is listening on — used by eval query provider to call /chat */
@@ -160,7 +161,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
   /** List eval definitions from the repo */
   router.get('/api/evals/suites', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getBundle()!;
+    const repo = options.getBundle()!;
     const suites = repo.evals.map((e) => ({
       name: e.name,
       title: e.title,
@@ -209,7 +210,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     }
 
     const baseUrl = `http://127.0.0.1:${port}`;
-    const repo = options.sessionManager.getBundle()!;
+    const repo = options.getBundle()!;
 
     // Read optional eval names and model override from POST body
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
@@ -415,7 +416,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
   /** Get arena model config */
   router.get('/api/evals/arena/models', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getBundle()!;
+    const repo = options.getBundle()!;
     const config = repo.config;
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- config shape

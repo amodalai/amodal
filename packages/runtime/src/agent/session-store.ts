@@ -6,7 +6,16 @@
 
 import {existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync} from 'node:fs';
 import {join, resolve} from 'node:path';
-import type {ManagedSession} from '../session/session-manager.js';
+/** Minimal session shape needed for persistence. */
+interface SessionLike {
+  id: string;
+  appId?: string;
+  title?: string;
+  conversationHistory?: unknown[];
+  messages?: unknown[];
+  createdAt: number;
+  lastAccessedAt: number;
+}
 
 interface PersistedSession {
   id: string;
@@ -52,7 +61,7 @@ export class SessionStore {
   /**
    * Save a session's conversation history to disk.
    */
-  save(session: ManagedSession, automationName?: string): void {
+  save(session: SessionLike, automationName?: string): void {
     const file = this.resolvePath(session.id);
     if (!file) return;
     this.ensureDir();
@@ -60,7 +69,7 @@ export class SessionStore {
       id: session.id,
       appId: session.appId ?? 'local',
       title: session.title,
-      conversationHistory: session.accumulatedMessages,
+      conversationHistory: session.conversationHistory ?? session.messages ?? [],
       createdAt: session.createdAt,
       lastAccessedAt: session.lastAccessedAt,
       automationName,

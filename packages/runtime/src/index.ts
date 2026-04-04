@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type { ConfigParameters } from '@amodalai/core';
 import { createServer, type ServerInstance } from './server.js';
 import { log } from './logger.js';
 
@@ -18,9 +17,7 @@ export { createAIStreamRouter, type AIStreamRouterOptions } from './routes/ai-st
 
 // Local mode
 export { createLocalServer } from './agent/local-server.js';
-export type { LocalServerConfig, AgentChatRequest, AgentSession } from './agent/agent-types.js';
-export { SessionManager } from './session/session-manager.js';
-export type { ManagedSession, SessionManagerOptions, SessionStore, StoredSessionRecord } from './session/session-manager.js';
+export type { LocalServerConfig, AgentChatRequest } from './agent/agent-types.js';
 export { ProactiveRunner } from './agent/proactive/proactive-runner.js';
 export type { AutomationInfo, ProactiveRunnerConfig } from './agent/proactive/proactive-runner.js';
 
@@ -40,9 +37,8 @@ export type { TaskRouterOptions } from './agent/routes/task.js';
 export { getAuthContext } from './middleware/auth.js';
 export type { AuthContext } from './middleware/auth.js';
 
-// Stream hooks & session runner
-export type { StreamHooks } from './session/session-runner.js';
-export { runMessage } from './session/session-runner.js';
+// Stream hooks
+export type { StreamHooks, TokenCounts } from './session/stream-hooks.js';
 
 // Output routing (for automation result delivery)
 export { routeOutput } from './output/output-router.js';
@@ -217,34 +213,12 @@ async function main(): Promise<void> {
   const host = getEnvOrDefault('HOST', '0.0.0.0');
   const sessionTtlMs = getEnvInt('SESSION_TTL_MS', 30 * 60 * 1000);
 
-  // LLM config comes from env. Default matches the platform API default.
-  const model = getEnvOrDefault('MODEL', 'claude-sonnet-4-20250514');
-
-  // WORKSPACE_DIR scopes file tools and shell_exec. In Docker, set to
-  // /workspace so the agent cannot read server source code. When unset,
-  // falls back to process.cwd() for local dev.
-  const workspaceDir = process.env['WORKSPACE_DIR'] || process.cwd();
-
-  // Base config params — minimal, org-agnostic defaults.
-  // Org-specific config (tools, skills, knowledge, base_prompt, agent_context)
-  // loaded per session using the API key from each request.
-  const baseParams: Partial<ConfigParameters> = {
-    sessionId: 'server-init',
-    model,
-    cwd: workspaceDir,
-    targetDir: workspaceDir,
-    debugMode: process.env['DEBUG'] === 'true',
-    interactive: false,
-    noBrowser: true,
-  };
-
   // Create and start server
   let serverInstance: ServerInstance;
   try {
     const corsOrigin = process.env['CORS_ORIGIN'] || undefined;
 
     serverInstance = createServer({
-      baseParams,
       config: {
         port,
         host,
