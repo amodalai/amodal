@@ -203,6 +203,7 @@ function bundleConnectionToCompilerConnection(
 
 function buildCustomToolSessionContext(
   bundle: AgentBundle,
+  connectionsMap: import('../tools/request-tool.js').ConnectionsMap,
   storeBackend: StoreBackend | null,
   appId: string,
 ): CustomToolSessionContext {
@@ -218,11 +219,9 @@ function buildCustomToolSessionContext(
   return {
     config: {
       getConnections(): Record<string, unknown> {
-        const result: Record<string, unknown> = {};
-        for (const [name, conn] of bundle.connections) {
-          result[name] = conn;
-        }
-        return result;
+        // Return processed connections map (with base_url, _request_config)
+        // not raw LoadedConnection objects
+        return connectionsMap;
       },
       getStores(): Array<{name: string; entity: {key: string; schema: Record<string, unknown>}}> {
         return bundle.stores.map((s) => ({
@@ -335,7 +334,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // -------------------------------------------------------------------------
 
   if (toolExecutor) {
-    const customToolSessionCtx = buildCustomToolSessionContext(bundle, storeBackend, appId);
+    const customToolSessionCtx = buildCustomToolSessionContext(bundle, connectionsMap, storeBackend, appId);
     for (const tool of bundle.tools) {
       // Skip tools with confirm: 'never' — they exist but are not callable
       if (tool.confirm === 'never') continue;
