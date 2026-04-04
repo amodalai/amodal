@@ -19,6 +19,7 @@ import type {StandaloneSessionManager} from '../../session/manager.js';
 import type {Session} from '../../session/types.js';
 import type {ToolContext} from '../../tools/types.js';
 import {SSEEventType} from '../../types.js';
+import {ToolExecutionError} from '../../errors.js';
 import type {Logger} from '../../logger.js';
 
 export interface ProactiveRunnerConfig {
@@ -294,7 +295,10 @@ export class ProactiveRunner {
         {buildToolContext: created.toolContextFactory},
       )) {
         if (event.type === SSEEventType.Error && 'message' in event) {
-          throw new Error(String(event.message));
+          throw new ToolExecutionError(
+            `Automation "${automation.name}" agent error: ${String(event.message)}`,
+            {toolName: automation.name, callId: session.id},
+          );
         }
         if (event.type === SSEEventType.TextDelta && 'content' in event) {
           responseText += String(event.content);

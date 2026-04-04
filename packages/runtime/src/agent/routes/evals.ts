@@ -161,7 +161,8 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
   /** List eval definitions from the repo */
   router.get('/api/evals/suites', (_req: Request, res: Response) => {
-    const repo = options.getBundle()!;
+    const repo = options.getBundle();
+    if (!repo) { res.status(500).json({error: 'No bundle available'}); return; }
     const suites = repo.evals.map((e) => ({
       name: e.name,
       title: e.title,
@@ -210,7 +211,8 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     }
 
     const baseUrl = `http://127.0.0.1:${port}`;
-    const repo = options.getBundle()!;
+    const repo = options.getBundle();
+    if (!repo) { res.status(500).json({error: 'No bundle available'}); return; }
 
     // Read optional eval names and model override from POST body
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
@@ -416,7 +418,8 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
   /** Get arena model config */
   router.get('/api/evals/arena/models', (_req: Request, res: Response) => {
-    const repo = options.getBundle()!;
+    const repo = options.getBundle();
+    if (!repo) { res.status(500).json({error: 'No bundle available'}); return; }
     const config = repo.config;
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- config shape

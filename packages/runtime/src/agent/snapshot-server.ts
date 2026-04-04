@@ -22,6 +22,7 @@ import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createTaskRouter} from './routes/task.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {ServerInstance} from '../server.js';
+import {ConfigError} from '../errors.js';
 import {log, createLogger} from '../logger.js';
 
 export interface SnapshotServerConfig {
@@ -50,7 +51,7 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
     bundle = snapshotToBundle(snapshot, config.snapshotPath);
     deployId = snapshot.deployId;
   } else {
-    throw new Error('One of snapshotPath, snapshot, or bundle must be provided');
+    throw new ConfigError('One of snapshotPath, snapshot, or bundle must be provided', {key: 'snapshotSource'});
   }
 
   let toolExecutor: CustomToolExecutor | undefined = config.toolExecutor;
