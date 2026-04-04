@@ -21,15 +21,20 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            const { execSync } = require('child_process');
             const fs = require('fs');
             const path = require('path');
 
-            const changesetDir = '.changeset';
-            const files = fs.readdirSync(changesetDir)
-              .filter(f => f.endsWith('.md') && f !== 'README.md');
+            // Only report changeset files added by THIS PR, not accumulated ones.
+            const base = context.payload.pull_request.base.sha;
+            const diff = execSync(`git diff --name-only --diff-filter=A ${base}...HEAD -- .changeset/`).toString().trim();
+            const files = diff
+              .split('\n')
+              .filter(f => f.endsWith('.md') && !f.endsWith('README.md'))
+              .map(f => path.basename(f));
 
             if (files.length === 0) {
-              const body = '📦 **No changeset found.** If this PR changes published packages, run `pnpm changeset` to add one.';
+              const body = '📦 **No changeset found.** If this PR changes published packages, add a `.changeset/*.md` file.';
               const { data: comments } = await github.rest.issues.listComments({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -54,6 +59,7 @@ jobs:
               return;
             }
 
+            const changesetDir = '.changeset';
             const bumps = [];
             for (const file of files) {
               const content = fs.readFileSync(path.join(changesetDir, file), 'utf8');
@@ -70,18 +76,16 @@ jobs:
             const bumpEmoji = { patch: '🩹', minor: '✨', major: '💥' };
             const bumpLabel = { patch: 'Patch', minor: 'Minor', major: 'Major' };
 
-            // Determine the highest bump level
             const levels = bumps.map(b => b.bump);
             const highest = levels.includes('major') ? 'major' : levels.includes('minor') ? 'minor' : 'patch';
 
             let body = `📦 **${bumpLabel[highest]} version bump** ${bumpEmoji[highest]}\n\n`;
-            body += `This PR includes ${files.length} changeset${files.length > 1 ? 's' : ''}:\n\n`;
+            body += `This PR adds ${files.length} changeset${files.length > 1 ? 's' : ''}:\n\n`;
 
             for (const b of bumps) {
               body += `- ${bumpEmoji[b.bump]} \`${b.pkg}\`: **${b.bump}**\n`;
             }
 
-            // Get the description from the changeset
             for (const file of files) {
               const content = fs.readFileSync(path.join(changesetDir, file), 'utf8');
               const parts = content.split('---');
