@@ -129,6 +129,7 @@ function makeMockContext(overrides?: Partial<AgentContext>): AgentContext {
     maxTurns: 10,
     maxContextTokens: 200_000,
     config: {...DEFAULT_LOOP_CONFIG},
+    compactionFailures: 0,
     preExecutionCache: new Map(),
     waitForConfirmation: vi.fn().mockResolvedValue(true),
     buildToolContext: vi.fn().mockReturnValue({
@@ -230,6 +231,30 @@ describe('handleThinking (via transition)', () => {
     }
     const errorEvents = result.effects.filter((e) => e.type === SSEEventType.Error);
     expect(errorEvents.length).toBe(1);
+  });
+
+  it('detects loops with similar (not identical) parameters', async () => {
+    // Build messages where the same tool is called with slightly different params
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 8; i++) {
+      messages.push({
+        role: 'assistant',
+        content: [{type: 'tool-call', toolCallId: `c${i}`, toolName: 'search_api', input: {query: 'test', page: i}}],
+      } as ModelMessage);
+      messages.push({
+        role: 'tool',
+        content: [{type: 'tool-result' as const, toolCallId: `c${i}`, toolName: 'search_api', output: {type: 'text' as const, value: 'no results'}}],
+      } as ModelMessage);
+    }
+
+    const ctx = makeMockContext();
+    const result = await transition({type: 'thinking', messages}, ctx);
+
+    // Same tool, same keys, >50% identical values → detected as loop
+    expect(result.next.type).toBe('done');
+    if (result.next.type === 'done') {
+      expect(result.next.reason).toBe('loop_detected');
+    }
   });
 
   it('injects warning when tool called 3+ times', async () => {
@@ -454,6 +479,9 @@ describe('handleExecuting (via transition)', () => {
     const result = await transition(state, ctx);
 
     expect(result.next.type).toBe('compacting');
+    if (result.next.type === 'compacting') {
+      expect(result.next.estimatedTokens).toBeGreaterThan(0);
+    }
     expect(ctx.logger.info).toHaveBeenCalledWith('context_compaction_triggered', expect.objectContaining({
       session: 'test-session',
     }));
@@ -579,6 +607,41 @@ describe('handleExecuting (via transition)', () => {
     }
   });
 
+  it('snips oversized tool results keeping head and tail', async () => {
+    const largeOutput = 'A'.repeat(25_000); // Exceeds 20K default maxResultSize
+    const tool = makeMockToolDef({
+      execute: vi.fn().mockResolvedValue(largeOutput),
+    });
+    const registry = makeMockRegistry({big_api: tool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {toolCallId: 'call-1', toolName: 'big_api', args: {}},
+      results: [],
+    };
+
+    await transition(state, ctx);
+
+    // The message appended should contain the snipped content
+    const lastMsg = ctx.messages[ctx.messages.length - 1];
+    expect(lastMsg.role).toBe('tool');
+    if (Array.isArray(lastMsg.content) && 'output' in lastMsg.content[0]) {
+      const output = lastMsg.content[0].output;
+      const value = typeof output === 'object' && output !== null && 'value' in output
+        ? String((output as {value: unknown}).value)
+        : '';
+      expect(value).toContain('snipped');
+      expect(value.length).toBeLessThan(largeOutput.length);
+    }
+
+    expect(ctx.logger.info).toHaveBeenCalledWith('tool_result_snipped', expect.objectContaining({
+      tool: 'big_api',
+      originalSize: 25_000,
+    }));
+  });
+
   it('uses pre-execution cache for read-only tools', async () => {
     const readTool = makeMockToolDef({readOnly: true});
     const registry = makeMockRegistry({read_data: readTool});
@@ -641,20 +704,146 @@ describe('handleConfirming (via transition)', () => {
 });
 
 describe('handleCompacting (via transition)', () => {
-  it('stub passes through to thinking with unchanged messages', async () => {
-    const ctx = makeMockContext();
-    const messages = [{role: 'user', content: 'Hello'}] as ModelMessage[];
+  it('summarizes old messages and keeps recent turns', async () => {
+    // Build a conversation with enough turns to compact
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 10; i++) {
+      messages.push({role: 'user', content: `Question ${i}`} as ModelMessage);
+      messages.push({role: 'assistant', content: `Answer ${i}`} as ModelMessage);
+    }
 
-    const result = await transition({type: 'compacting', messages}, ctx);
+    const ctx = makeMockContext({
+      provider: {
+        model: 'test-model',
+        provider: 'test',
+        languageModel: {} as AgentContext['provider']['languageModel'],
+        streamText: vi.fn(),
+        generateText: vi.fn().mockResolvedValue({
+          text: '## Summary\nThis is a compacted summary.',
+          toolCalls: [],
+          usage: makeUsage({inputTokens: 200, outputTokens: 100, totalTokens: 300}),
+          finishReason: 'stop',
+        }),
+      },
+    });
+
+    const result = await transition({type: 'compacting', messages, estimatedTokens: 5000}, ctx);
 
     expect(result.next.type).toBe('thinking');
     if (result.next.type === 'thinking') {
+      // Should have fewer messages (summary + recent turns)
+      expect(result.next.messages.length).toBeLessThan(messages.length);
+      // First message should be the system summary
+      const firstMsg = result.next.messages[0];
+      expect(firstMsg.role).toBe('system');
+      const firstContent = firstMsg.content;
+      expect(typeof firstContent === 'string' && firstContent.includes('Conversation Summary')).toBe(true);
+    }
+
+    // Should emit compaction_start and compaction_end SSE events
+    const startEvents = result.effects.filter((e) => e.type === SSEEventType.CompactionStart);
+    const endEvents = result.effects.filter((e) => e.type === SSEEventType.CompactionEnd);
+    expect(startEvents.length).toBe(1);
+    expect(endEvents.length).toBe(1);
+
+    // Token usage should be tracked
+    expect(ctx.usage.inputTokens).toBe(200);
+    expect(ctx.usage.outputTokens).toBe(100);
+  });
+
+  it('skips compaction when too few messages to split', async () => {
+    const messages: ModelMessage[] = [
+      {role: 'user', content: 'Hello'} as ModelMessage,
+      {role: 'assistant', content: 'Hi!'} as ModelMessage,
+    ];
+
+    const ctx = makeMockContext();
+
+    const result = await transition({type: 'compacting', messages, estimatedTokens: 1000}, ctx);
+
+    expect(result.next.type).toBe('thinking');
+    if (result.next.type === 'thinking') {
+      // Messages unchanged — not enough to compact
       expect(result.next.messages).toBe(messages);
     }
-    expect(result.effects).toEqual([]);
-    expect(ctx.logger.debug).toHaveBeenCalledWith('compacting_skipped', expect.objectContaining({
-      reason: 'stub_implementation',
+  });
+
+  it('circuit breaker skips compaction after repeated failures', async () => {
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 10; i++) {
+      messages.push({role: 'user', content: `Q${i}`} as ModelMessage);
+      messages.push({role: 'assistant', content: `A${i}`} as ModelMessage);
+    }
+
+    const ctx = makeMockContext({compactionFailures: 3}); // Already at threshold
+
+    const result = await transition({type: 'compacting', messages, estimatedTokens: 5000}, ctx);
+
+    expect(result.next.type).toBe('thinking');
+    if (result.next.type === 'thinking') {
+      expect(result.next.messages).toBe(messages); // Unchanged
+    }
+    expect(ctx.logger.warn).toHaveBeenCalledWith('compaction_circuit_breaker', expect.objectContaining({
+      failures: 3,
     }));
+  });
+
+  it('increments failure counter on generateText error and continues', async () => {
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 10; i++) {
+      messages.push({role: 'user', content: `Q${i}`} as ModelMessage);
+      messages.push({role: 'assistant', content: `A${i}`} as ModelMessage);
+    }
+
+    const ctx = makeMockContext({
+      provider: {
+        model: 'test-model',
+        provider: 'test',
+        languageModel: {} as AgentContext['provider']['languageModel'],
+        streamText: vi.fn(),
+        generateText: vi.fn().mockRejectedValue(new Error('Provider rate limited')),
+      },
+    });
+
+    const result = await transition({type: 'compacting', messages, estimatedTokens: 5000}, ctx);
+
+    // Should continue without compaction
+    expect(result.next.type).toBe('thinking');
+    if (result.next.type === 'thinking') {
+      expect(result.next.messages).toBe(messages); // Unchanged
+    }
+    expect(ctx.compactionFailures).toBe(1);
+    expect(ctx.logger.error).toHaveBeenCalledWith('compaction_failed', expect.objectContaining({
+      error: 'Summarization failed: Provider rate limited',
+    }));
+  });
+
+  it('resets failure counter on successful compaction', async () => {
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 10; i++) {
+      messages.push({role: 'user', content: `Q${i}`} as ModelMessage);
+      messages.push({role: 'assistant', content: `A${i}`} as ModelMessage);
+    }
+
+    const ctx = makeMockContext({
+      compactionFailures: 2,
+      provider: {
+        model: 'test-model',
+        provider: 'test',
+        languageModel: {} as AgentContext['provider']['languageModel'],
+        streamText: vi.fn(),
+        generateText: vi.fn().mockResolvedValue({
+          text: 'Summary of conversation.',
+          toolCalls: [],
+          usage: makeUsage({inputTokens: 100, outputTokens: 50, totalTokens: 150}),
+          finishReason: 'stop',
+        }),
+      },
+    });
+
+    await transition({type: 'compacting', messages, estimatedTokens: 5000}, ctx);
+
+    expect(ctx.compactionFailures).toBe(0);
   });
 });
 

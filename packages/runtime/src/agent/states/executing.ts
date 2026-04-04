@@ -18,6 +18,7 @@
  * observation for the model, not a crash.
  */
 
+import type {ModelMessage} from 'ai';
 import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 import type {ToolDefinition} from '../../tools/types.js';
@@ -28,6 +29,7 @@ import type {
   ToolCall,
   ToolResult,
 } from '../loop-types.js';
+import {estimateTokenCount} from '../token-estimate.js';
 
 /**
  * Handle the EXECUTING state — execute a single tool call.
@@ -224,28 +226,25 @@ function nextAfterToolResult(
   effects: SSEEvent[],
   ctx: AgentContext,
 ): TransitionResult {
-  // Hard-truncate oversized tool results as a stopgap until Phase 3.3 snipping.
-  // Without this, a single large MCP response can blow the context budget.
-  if (result.content.length > ctx.config.hardResultTruncation) {
+  // Smart snipping: if a tool result exceeds maxResultSize, keep the first
+  // and last 2K chars with a [snipped] marker in between. This preserves
+  // the beginning (usually headers/structure) and end (usually the answer)
+  // while cutting the middle bulk.
+  if (result.content.length > ctx.config.maxResultSize) {
     const originalSize = result.content.length;
+    const keepChars = 2_000;
+    const head = result.content.slice(0, keepChars);
+    const tail = result.content.slice(-keepChars);
     result = {
       ...result,
-      content: result.content.slice(0, ctx.config.hardResultTruncation)
-        + `\n\n[TRUNCATED: output was ${originalSize} chars, limit is ${ctx.config.hardResultTruncation}]`,
+      content: `${head}\n\n[... snipped ${originalSize - keepChars * 2} chars — full output was ${originalSize} chars ...]\n\n${tail}`,
     };
-    ctx.logger.warn('tool_result_truncated', {
+    ctx.logger.info('tool_result_snipped', {
       callId: result.callId,
       tool: result.toolName,
       originalSize,
-      truncatedTo: ctx.config.hardResultTruncation,
+      snippedTo: keepChars * 2,
       session: ctx.sessionId,
-    });
-  } else if (result.content.length > ctx.config.maxResultSize) {
-    ctx.logger.debug('tool_result_oversized', {
-      callId: result.callId,
-      tool: result.toolName,
-      originalSize: result.content.length,
-      maxSize: ctx.config.maxResultSize,
     });
   }
 
@@ -279,7 +278,7 @@ function nextAfterToolResult(
       threshold: ctx.config.compactThreshold,
     });
     return {
-      next: {type: 'compacting', messages: ctx.messages},
+      next: {type: 'compacting', messages: ctx.messages, estimatedTokens},
       effects,
     };
   }
@@ -294,7 +293,7 @@ function nextAfterToolResult(
 /**
  * Build a tool result message in AI SDK format.
  */
-function buildToolResultMessage(result: ToolResult): import('ai').ModelMessage {
+function buildToolResultMessage(result: ToolResult): ModelMessage {
   return {
     role: 'tool',
     content: [{
@@ -321,13 +320,3 @@ function sanitizeParams(params: Record<string, unknown>): Record<string, unknown
   return sanitized;
 }
 
-/**
- * Rough token estimate from message array. ~4 chars per token.
- * Phase 3.3 replaces this with actual tokenizer counting.
- */
-function estimateTokenCount(messages: Array<import('ai').ModelMessage>): number {
-  // Rough estimate: serialize to JSON and count chars / 4
-  // Phase 3.3 replaces with actual tokenizer
-  const serialized = JSON.stringify(messages);
-  return Math.ceil(serialized.length / 4);
-}
