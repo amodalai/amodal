@@ -84,14 +84,14 @@ export class DrizzleStoreBackend implements StoreBackend {
     return task;
   }
 
-  private ensureOpen(): void {
+  private ensureOpen(store: string, operation: string): void {
     if (this.closed) {
-      throw new StoreError('Store backend is closed', {store: '(any)', operation: 'ensureOpen'});
+      throw new StoreError('Store backend is closed', {store, operation});
     }
   }
 
   async get(appId: string, store: string, key: string): Promise<StoreDocument | null> {
-    this.ensureOpen();
+    this.ensureOpen(store, 'get');
     try {
       const rows = await this.db
         .select()
@@ -119,7 +119,7 @@ export class DrizzleStoreBackend implements StoreBackend {
     payload: Record<string, unknown>,
     meta: Partial<StoreDocumentMeta>,
   ): Promise<StorePutResult> {
-    this.ensureOpen();
+    this.ensureOpen(store, 'put');
     return this.enqueue(async () => {
       const storeConfig = this.storeConfigs.get(store);
       const ttlSeconds = resolveTtl(storeConfig?.ttl, payload);
@@ -223,7 +223,7 @@ export class DrizzleStoreBackend implements StoreBackend {
     store: string,
     options: StoreListOptions = {},
   ): Promise<StoreListResult> {
-    this.ensureOpen();
+    this.ensureOpen(store, 'list');
     const {filter, sort, limit = 100, offset = 0, includeStale = false} = options;
 
     try {
@@ -295,7 +295,7 @@ export class DrizzleStoreBackend implements StoreBackend {
   }
 
   async delete(appId: string, store: string, key: string): Promise<boolean> {
-    this.ensureOpen();
+    this.ensureOpen(store, 'delete');
     return this.enqueue(async () => {
       try {
         await this.db
@@ -327,7 +327,7 @@ export class DrizzleStoreBackend implements StoreBackend {
   }
 
   async history(appId: string, store: string, key: string): Promise<StoreDocument[]> {
-    this.ensureOpen();
+    this.ensureOpen(store, 'history');
     try {
       const rows = await this.db
         .select()
@@ -355,7 +355,7 @@ export class DrizzleStoreBackend implements StoreBackend {
   }
 
   async purgeExpired(appId: string, store?: string): Promise<number> {
-    this.ensureOpen();
+    this.ensureOpen(store ?? '(all)', 'purgeExpired');
     return this.enqueue(async () => {
       try {
         const conds = [

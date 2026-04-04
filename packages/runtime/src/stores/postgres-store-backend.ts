@@ -10,18 +10,25 @@
  * Thin factory over DrizzleStoreBackend using drizzle-orm/node-postgres.
  * Shares all query logic and DDL with the PGLite backend via the
  * `stores/schema.ts` Drizzle schema.
+ *
+ * Tables are created in the connection's default schema (typically
+ * `public`). Callers who need isolation should use a dedicated database
+ * per tenant/environment rather than schema namespacing — that avoids
+ * the search_path / connection-pool interaction hazards that
+ * schema-scoping introduces.
  */
 
 import {drizzle} from 'drizzle-orm/node-postgres';
 import type {LoadedStore} from '@amodalai/core';
 
 import {DrizzleStoreBackend} from './drizzle-store-backend.js';
-import {ConfigError} from '../errors.js';
-import {log} from '../logger.js';
+import {log as defaultLogger} from '../logger.js';
+import type {Logger} from '../logger.js';
 
-// Postgres schema identifier: letters, digits, underscore; must start with
-// a letter or underscore. Matches the same shape as filter/sort fields.
-const SCHEMA_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+// Default per-statement timeout. Protects against hung queries blocking
+// the write queue — satisfies the CLAUDE.md "External calls (fetch,
+// database, MCP) without AbortSignal.timeout()" rule at the pool level.
+const DEFAULT_STATEMENT_TIMEOUT_MS = 30_000;
 
 const CREATE_TABLES_DDL = `
   CREATE TABLE IF NOT EXISTS store_documents (
@@ -62,52 +69,59 @@ const CREATE_TABLES_DDL = `
 export interface PostgresStoreBackendOptions {
   /** Postgres connection string, e.g. `postgres://user:pass@host:5432/db`. */
   connectionString: string;
-  /** Optional schema name. If set, tables are created under this schema. */
-  schema?: string;
   /** Pool size (default 10). */
   max?: number;
+  /** Per-statement timeout in ms (default 30_000). */
+  statementTimeoutMs?: number;
+  /** Logger. Defaults to the runtime's global logger. */
+  logger?: Logger;
 }
 
 /**
  * Create a Postgres store backend.
  *
- * Opens a connection pool, runs DDL (idempotent), and returns a
+ * Opens a connection pool with `statement_timeout` set so hung queries
+ * can't block the write queue, runs idempotent DDL, and returns a
  * DrizzleStoreBackend wired to the pool. The returned backend's
  * `close()` will drain and end the pool.
+ *
+ * Accepts either a connection string (shorthand) or a full options
+ * object — matches `createPGLiteStoreBackend`'s call-site ergonomics.
  */
 export async function createPostgresStoreBackend(
   stores: LoadedStore[],
-  opts: PostgresStoreBackendOptions,
+  optsOrUrl: PostgresStoreBackendOptions | string,
 ): Promise<DrizzleStoreBackend> {
+  const opts: PostgresStoreBackendOptions =
+    typeof optsOrUrl === 'string' ? {connectionString: optsOrUrl} : optsOrUrl;
+
+  const logger = opts.logger ?? defaultLogger;
+
   // Dynamic import so `pg` stays an optional peer at the package level —
   // PGLite users don't need it installed.
   const pg = await import('pg');
-  // node-postgres ships as both CJS and ESM; the default export holds Pool.
   const {Pool} = pg.default ?? pg;
 
   const pool = new Pool({
     connectionString: opts.connectionString,
     max: opts.max ?? 10,
+    statement_timeout: opts.statementTimeoutMs ?? DEFAULT_STATEMENT_TIMEOUT_MS,
   });
 
-  if (opts.schema) {
-    if (!SCHEMA_NAME_RE.test(opts.schema)) {
-      throw new ConfigError(`Invalid Postgres schema name: ${opts.schema}`, {
-        key: 'schema',
-        suggestion: 'Schema names must match /^[a-zA-Z_][a-zA-Z0-9_]*$/',
-      });
-    }
-    await pool.query(`CREATE SCHEMA IF NOT EXISTS "${opts.schema}"`);
-    await pool.query(`SET search_path TO "${opts.schema}"`);
-  }
   await pool.query(CREATE_TABLES_DDL);
 
   const db = drizzle(pool);
 
+  logger.info('postgres_store_backend_ready', {
+    max: opts.max ?? 10,
+    statementTimeoutMs: opts.statementTimeoutMs ?? DEFAULT_STATEMENT_TIMEOUT_MS,
+    storeCount: stores.length,
+  });
+
   return new DrizzleStoreBackend({
     db,
     stores,
-    logger: log,
+    logger,
     onClose: async () => {
       await pool.end();
     },

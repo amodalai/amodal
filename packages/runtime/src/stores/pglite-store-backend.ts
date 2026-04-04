@@ -28,7 +28,8 @@ import type {
 
 import {DrizzleStoreBackend} from './drizzle-store-backend.js';
 import {StoreError} from '../errors.js';
-import {log} from '../logger.js';
+import {log as defaultLogger} from '../logger.js';
+import type {Logger} from '../logger.js';
 
 const CREATE_TABLES_DDL = `
   CREATE TABLE IF NOT EXISTS store_documents (
@@ -74,12 +75,23 @@ const CREATE_TABLES_DDL = `
  * compatibility with existing callers (and test suites that `new` then
  * call `initialize()`).
  */
+export interface PGLiteStoreBackendOptions {
+  dataDir?: string;
+  logger?: Logger;
+}
+
 export class PGLiteStoreBackend implements StoreBackend {
   private readonly dataDir: string | undefined;
+  private readonly logger: Logger;
   private inner: DrizzleStoreBackend | null = null;
 
-  constructor(dataDir?: string) {
-    this.dataDir = dataDir;
+  constructor(dataDirOrOpts?: string | PGLiteStoreBackendOptions) {
+    const opts: PGLiteStoreBackendOptions =
+      typeof dataDirOrOpts === 'string' || dataDirOrOpts === undefined
+        ? {dataDir: dataDirOrOpts}
+        : dataDirOrOpts;
+    this.dataDir = opts.dataDir;
+    this.logger = opts.logger ?? defaultLogger;
   }
 
   async initialize(stores: LoadedStore[]): Promise<void> {
@@ -98,7 +110,7 @@ export class PGLiteStoreBackend implements StoreBackend {
     this.inner = new DrizzleStoreBackend({
       db,
       stores,
-      logger: log,
+      logger: this.logger,
       onClose: async () => {
         await pglite.close();
       },
@@ -161,9 +173,9 @@ export class PGLiteStoreBackend implements StoreBackend {
  */
 export async function createPGLiteStoreBackend(
   stores: LoadedStore[],
-  dataDir?: string,
+  dataDirOrOpts?: string | PGLiteStoreBackendOptions,
 ): Promise<PGLiteStoreBackend> {
-  const backend = new PGLiteStoreBackend(dataDir);
+  const backend = new PGLiteStoreBackend(dataDirOrOpts);
   await backend.initialize(stores);
   return backend;
 }

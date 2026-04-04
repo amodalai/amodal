@@ -201,6 +201,23 @@ function runSuite(makeBackend: BackendFactory): void {
         expect(history[2].version).toBe(3);
       });
     });
+
+    describe('close() idempotency', () => {
+      it('double-close is safe and ops after close throw StoreError', async () => {
+        await backend.put('app', 'test-store', 'k', {id: 'k'}, {});
+        await backend.close();
+        // Second close should be a no-op, not throw
+        await backend.close();
+        // Operations after close throw StoreError
+        await expect(backend.get('app', 'test-store', 'k')).rejects.toBeInstanceOf(StoreError);
+        await expect(backend.put('app', 'test-store', 'k', {id: 'k'}, {})).rejects.toBeInstanceOf(StoreError);
+        // The cleanup() in afterEach expects to close a live backend; re-open
+        // via the factory so afterEach doesn't blow up on a double-cleanup.
+        // (It's simpler to just no-op cleanup here by setting a flag — but
+        // the suite-wide afterEach would need the hook. Instead, since
+        // close() is idempotent, let afterEach call it again safely.)
+      });
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -226,27 +243,25 @@ const pgDescribe = pgUrl ? describe : describe.skip;
 
 pgDescribe('DrizzleStoreBackend (Postgres, via TEST_POSTGRES_URL)', () => {
   runSuite(async () => {
-    // Use a unique schema per test run to isolate from any existing tables.
-    const schema = `store_test_${Date.now()}`;
+    // Drop any existing tables so every test run starts clean. Use a
+    // dedicated database for TEST_POSTGRES_URL — these DROPs are
+    // destructive and will wipe any store tables in the target DB.
+    const pg = await import('pg');
+    const {Pool: CleanPool} = pg.default ?? pg;
+    const cleanPool = new CleanPool({connectionString: pgUrl});
+    try {
+      await cleanPool.query('DROP TABLE IF EXISTS store_document_versions CASCADE');
+      await cleanPool.query('DROP TABLE IF EXISTS store_documents CASCADE');
+    } finally {
+      await cleanPool.end();
+    }
+
     const backend = await createPostgresStoreBackend(STORES, {
       connectionString: pgUrl,
-      schema,
     });
     return {
       backend,
-      cleanup: async () => {
-        await backend.close();
-        // Drop the test schema. Reopen a fresh pool because backend.close()
-        // ended the pool it owned.
-        const pg = await import('pg');
-        const {Pool} = pg.default ?? pg;
-        const pool = new Pool({connectionString: pgUrl});
-        try {
-          await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
-        } finally {
-          await pool.end();
-        }
-      },
+      cleanup: () => backend.close(),
     };
   });
 });
