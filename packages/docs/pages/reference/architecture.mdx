@@ -1,46 +1,43 @@
 ---
-description: System architecture overview — how the CLI, SDK, and Runtime fit together.
+description: System architecture overview — how the CLI, Runtime, and embeddable API fit together.
 ---
 
 # Architecture Overview
 
-Amodal is a layered system. The SDK provides the core reasoning engine, the Runtime serves it over HTTP, and the CLI provides the developer interface. Each layer has a clear boundary and a clear job. The SDK never knows about HTTP. The Runtime never knows about the CLI. The same reasoning engine adapts to different deployment contexts without code changes.
+Amodal is a layered system. The Runtime is the agent engine (state machine, providers, tools, stores, session manager). The CLI provides the developer interface. The React SDK and chat widget embed the runtime's streaming output in web apps. Each layer has a clear boundary and a clear job.
 
-This separation is deliberate. The SDK can run embedded in a CLI, behind an HTTP server, inside a cloud function, or in a test harness. The same reasoning engine adapts to different deployment contexts without code changes.
+The runtime is transport-agnostic. The same engine runs behind an HTTP server (`amodal dev`), embedded in your own Node.js application via `createAgent()`, inside an automation runner, or in a test harness — without code changes.
 
 ## System Diagram
 
-```
-Chat Interfaces
-  ├── CLI (amodal chat)
-  ├── React SDK (@amodalai/react)
-  └── Chat Widget (@amodalai/react/widget)
-        │
-        ▼
-Runtime (@amodalai/runtime)
-  │ HTTP server, SSE streaming,
-  │ session management, automations
-  ▼
-SDK (@amodalai/core)
-  │ ReAct loop, tools, skills,
-  │ knowledge, roles, audit
-  ▼
-LLM Providers
-  ├── Anthropic
-  ├── OpenAI
-  ├── Google Gemini
-  ├── AWS Bedrock
-  └── Azure OpenAI
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#DBEAFE','primaryBorderColor':'#1E40AF','primaryTextColor':'#1E293B','lineColor':'#475569','fontFamily':'Inter, system-ui, sans-serif','clusterBkg':'#F8FAFC','clusterBorder':'#CBD5E1'}}}%%
+flowchart TD
+    subgraph clients[Chat Interfaces]
+        CLI[CLI<br/>amodal chat]
+        React[React SDK<br/>@amodalai/react]
+        Widget[Chat Widget]
+    end
+    Runtime[Runtime<br/>@amodalai/runtime<br/><i>HTTP server, SSE streaming, sessions,<br/>state machine loop, tools, stores</i>]
+    subgraph providers[Providers via Vercel AI SDK]
+        Anthropic
+        OpenAI
+        Google[Google Gemini]
+    end
+    clients --> Runtime
+    Runtime --> providers
 ```
 
-## Components
+## Packages
 
-| Component | Package | Role |
-|-----------|---------|------|
-| **SDK** | `@amodalai/core` | Reasoning engine. ReAct loop, tool orchestration, knowledge loading, context management, security, audit, multi-provider LLM support. |
-| **Runtime** | `@amodalai/runtime` | HTTP server. SSE streaming, session management, automation scheduling. Reads config from your local git repo. |
-| **CLI** | `@amodalai/amodal` | Terminal interface. 30+ commands for project management, chat, eval, and package management. Built with Ink (React terminal renderer). |
-| **React SDK** | `@amodalai/react` | React components, SSE chat client, and embeddable chat widget for web apps. |
+| Package | Role |
+|---------|------|
+| **`@amodalai/runtime`** | Agent engine. State machine, provider layer, tool system, stores, session manager, HTTP server, automation runner. `createAgent()` is the public entry point. |
+| **`@amodalai/core`** | Build utilities. `loadRepo`, `buildSnapshot`, NPM package management, knowledge base formatting, MCP manager. No agent runtime code. |
+| **`@amodalai/types`** | Zero-dep shared types. `AgentBundle`, `SSEEvent`, `ToolDefinition`, `StoreBackend`, `CustomToolContext`, branded ID types. Safe to import from any context. |
+| **`@amodalai/amodal`** (CLI) | Terminal interface. Commands for project management, chat, eval, and package install. Built with Ink. |
+| **`@amodalai/react`** | React components + SSE chat client for embedding Amodal in web apps. |
+| **`@amodalai/react/widget`** | Standalone embeddable chat widget (no React required on the host page). |
 
 ## Data Flow: What Happens When a User Sends a Message
 
@@ -52,43 +49,45 @@ The chat client (CLI, web app, or widget) sends a POST to `/chat/stream` with th
 
 ### 2. Session Manager
 
-The runtime's session manager either creates a new session or loads an existing one. For a new session, it generates a unique ID and initializes an empty message history. For an existing session, it loads the conversation history from the store (PGLite or Postgres). The session manager also checks that the session has not expired.
+The `StandaloneSessionManager` either creates a new session or loads an existing one. For a new session, it builds the session components (provider, tool registry, permission checker, logger, compiled system prompt). For an existing session, it loads the conversation history from the session store (PGLite locally, Postgres in production). It also checks that the session has not expired.
 
-### 3. Context Compiler
+### 3. Context Compilation
 
-Before the message reaches the LLM, the context compiler assembles the full prompt. This is where the layered config becomes a single, coherent prompt:
+Before the message reaches the LLM, the context compiler assembles the system prompt. This is where the layered config becomes a single, coherent prompt:
 
-- **System prompt**: Built from the agent's role definition, `userContext` from `amodal.json`, and active skill instructions
-- **Knowledge index**: A compact listing of all available KB documents (titles, tags, categories) so the agent knows what it can load on demand
-- **Tool definitions**: The complete tool list — built-in tools, custom tools, MCP tools — filtered by the caller's role
-- **Conversation history**: Previous messages in this session, potentially compacted if the context window is getting full
-- **Current message**: The user's new message
+- **Agent instructions**: the agent's role definition and `userContext` from `amodal.json`
+- **Skills**: full body of every skill that passes requirement checks
+- **Knowledge index**: a compact listing of available KB documents (titles, tags, categories) so the agent can load them on demand
+- **Connection surfaces**: endpoints + field guidance + scope labels for every configured connection
+- **Store schemas**: auto-generated from each store's entity definition
+- **Tool definitions**: store tools, connection tools, custom tools, MCP tools, admin tools — all Vercel AI `tool()` definitions with Zod or JSON Schema
 
-The assembled prompt is validated against the model's context window. If it exceeds the limit, the context compiler triggers compaction — summarizing older conversation turns while preserving recent context and any active tool call chains.
+The compiled system prompt is cached and reused for every turn in the session (and prompt-cached with Anthropic providers to reduce cost).
 
-### 4. SDK: The ReAct Loop
+### 4. The State Machine
 
-The SDK sends the assembled prompt to the configured LLM provider and enters the ReAct (Reason + Act) loop:
+The agent loop is an explicit state machine — `thinking` → `streaming` → `executing` (if tools were called) → back to `thinking`, until done. Each state is a discriminated-union variant with its own handler. Compaction, loop detection, sub-agent dispatch, and user confirmation are all explicit states, not if-branches in a while loop.
 
-1. **Reason**: The LLM generates a response. This might be a direct text answer, or it might include one or more tool calls.
-2. **Act**: If tool calls are present, the SDK executes them — making API requests, loading knowledge documents, dispatching task agents, rendering widgets. Each tool result is appended to the context.
-3. **Loop**: The updated context (with tool results) goes back to the LLM. The model reasons about the results and decides whether to make more tool calls or produce a final response.
-
-This loop continues until the model produces a response with no tool calls (it is done), or until a safety limit is hit (max tool calls per session, timeout).
+See [State Machine](/learn/architecture/state-machine) for the full architecture: all six states, the transition rules, exhaustiveness checking, and how SSE events are returned as side effects of transitions.
 
 ### 5. Tool Execution
 
-Tool calls execute through the SDK's tool executor. Each tool type has its own execution path:
+When the model emits tool calls, the state machine enters `executing`. Each tool call runs through the `ToolRegistry` via the Vercel AI `tool()` interface:
 
-- **request**: The SDK resolves the target connection's auth config, injects credentials, makes the HTTP call, and returns the response. Write intents trigger a confirmation event back to the client.
-- **dispatch**: A new task agent is created with its own fresh context and the explore model. It runs its own mini ReAct loop, then returns a compressed summary to the primary agent.
-- **load_knowledge**: The SDK loads the requested KB document from the config snapshot and injects it into the current context.
-- **shell_exec**: Runs the command locally (if enabled in the sandbox config).
-- **present**: The SDK emits a widget event over SSE with the structured data for the client to render.
+- **request**: Calls a connection endpoint. The `PermissionChecker` resolves the connection's `access.json` — check ACL rules, strip hidden fields, apply rate limits, require confirmation for destructive writes.
+- **store_write / store_batch / query_store**: CRUD against the configured store backend (PGLite or Postgres via Drizzle).
+- **dispatch_task**: Spawns a sub-agent with its own isolated state machine, sharing the parent's tools and stores. Returns a compressed summary to the parent's context.
+- **load_knowledge / propose_knowledge**: Reads a KB document on demand, or proposes an addition for human review.
+- **present**: Emits a widget SSE event with structured data for the client to render inline.
+- **Custom tools**: Compiled from each tool's `handler.ts` via esbuild, then executed with a scoped `ctx` containing `request`, `store`, `log`, and `env`.
+- **MCP tools**: Proxied to the MCP server they were discovered from.
+- **Admin file tools** (in admin sessions): `read_repo_file`, `write_repo_file`, `delete_repo_file` with path validation.
+
+Tool errors are observations the model reasons about — not exceptions that crash the loop. This is the "continue site" pattern: a tool failure becomes a `tool_call_result` with `status: 'error'`, and the model decides what to do next.
 
 ### 6. Response Streaming
 
-Throughout this entire process, the runtime streams events to the client over SSE. The client receives `text_delta` events as the LLM generates text, `tool_call_start` and `tool_call_result` events as tools execute, `subagent_event` events when task agents are working, and a final `done` event when the response is complete.
+Throughout this entire process, the runtime streams events to the client over SSE. The client receives `text_delta` events as the LLM generates text, `tool_call_start` and `tool_call_result` events as tools execute, `subagent_event` events when sub-agents are working, and a final `done` event with token usage when the response is complete.
 
 The client renders these events in real time. The user sees the agent thinking, calling tools, and composing its answer — not a loading spinner followed by a wall of text.
 
@@ -114,15 +113,28 @@ amodal ops docker build      # build a Docker image
 
 The git repo is the source of truth. Everything about your agent — connections, skills, knowledge, automations, and config — lives in version-controlled files.
 
+### Embedded (ISV)
+
+For ISVs embedding Amodal in their own SaaS product, `createAgent()` gives you the engine as a library:
+
+```typescript
+import { createAgent } from '@amodalai/runtime'
+
+const agent = await createAgent({
+  repoPath: './my-agent',
+  provider: 'anthropic',
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  storeBackend: myPostgresPool,    // bring your own
+})
+```
+
+See the [SDK overview](/sdk) for the embedded pattern.
+
 ## Security Boundaries
 
 ### What Runs Where, What Has Access to What
 
-The security model is built around isolation at every layer:
-
-**The SDK** runs inside the runtime process. It has access to the resolved config (including decrypted secrets in memory), the LLM provider APIs, and the connected system APIs. Secrets are decrypted from environment variables at parse time and held only in memory — they are never written to disk, logged, or included in LLM prompts.
-
-**The Runtime** manages sessions and tool execution. The runtime itself does not store secrets — it receives them from the environment and passes them to the SDK.
+The runtime process holds the resolved config (including decrypted secrets in memory), the LLM provider API clients, and the connected system API clients. Secrets are resolved from environment variables at startup and held only in memory — they are never written to disk, logged, or included in LLM prompts.
 
 ### How Secrets Flow
 
@@ -131,31 +143,32 @@ Secrets never appear in deployment snapshots, API responses, LLM prompts, or log
 1. You set secrets as environment variables in your hosting environment (Kubernetes secrets, Fly.io secrets, etc.)
 2. `amodal.json` references them with `env:VARIABLE_NAME`
 3. The runtime resolves `env:` references at startup, holding the values in memory
-4. The SDK uses them for API authentication — injecting headers, signing requests — but never includes them in the context sent to the LLM
-5. The scrubbing layer in the SDK scans all outbound context for patterns that look like secrets (API keys, tokens, connection strings) and redacts them. This is a defense-in-depth measure — secrets should not be in the context at all, but if they leak through a tool result, the scrubber catches them.
+4. The connection tool uses them for API authentication — injecting headers, signing requests — but never includes them in the context sent to the LLM
+5. The field scrubber scans all tool outputs against the connection's `access.json` hidden-field rules and strips them before the result reaches the model
 
 ### Role-Based Tool Filtering
 
-Not every caller should see every tool. The SDK filters the tool list based on the caller's role before the LLM sees it:
+Not every caller should see every tool. The runtime filters the tool list based on the caller's role before the LLM sees it:
 
 - **User role**: Sees all non-admin tools.
-- **Admin role**: Sees everything including KB management, connection configuration, and automation control.
+- **Admin role**: Sees everything including file tools, connection configuration, and automation control.
 - **Automation role**: Sees read-only tools by default. Write tools are only available if `writeEnabled` is true for the specific automation.
 
-This filtering happens at the SDK layer, before the prompt is assembled. The LLM never knows about tools it cannot use — they are simply absent from its tool list.
+This filtering happens at the session layer, before the prompt is compiled. The LLM never knows about tools it cannot use — they are simply absent from its tool list.
 
 ## Key Protocols
 
 | Protocol | Where | Purpose |
 |----------|-------|---------|
 | **SSE** (Server-Sent Events) | Runtime to Client | Streaming chat responses, tool calls, widget events |
-| **REST** | Runtime API | Session management, automation control |
-| **WebSocket** | N/A | Not used — SSE handles all streaming |
+| **REST** | Runtime API | Session management, automation control, store/file endpoints |
+| **MCP** (Model Context Protocol) | Runtime to MCP servers | Tool discovery and execution over stdio or SSE transport |
 
-SSE was chosen over WebSockets for streaming because it is simpler (unidirectional), works through more proxies and CDNs, and automatically reconnects on connection drops. The client only needs to send messages (POST requests) and receive events (SSE stream) — there is no bidirectional protocol to manage.
+SSE was chosen over WebSockets for client streaming because it is simpler (unidirectional), works through more proxies and CDNs, and automatically reconnects on connection drops.
 
 ## Deep Dives
 
 - [The Core Loop](/learn/architecture/core-loop) — explore-plan-execute reasoning cycle
-- [Agent Architecture](/learn/architecture/agents) — primary agent, task agents, context isolation
+- [State Machine](/learn/architecture/state-machine) — the agent loop implementation
+- [Agent Architecture](/learn/architecture/agents) — primary agent, sub-agents, context isolation
 - [Context Management](/learn/architecture/context) — compaction, tool output masking, loop detection

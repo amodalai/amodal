@@ -5,7 +5,7 @@
  */
 
 /**
- * Context Compiler (Phase 3.2).
+ * Context Compiler.
  *
  * Standalone module that compiles an agent's configuration into a system
  * prompt string. This is the SINGLE place where prompt compilation happens.

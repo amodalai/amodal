@@ -5,7 +5,7 @@
  */
 
 /**
- * Session Resolver (Phase 3.5c).
+ * Session Resolver.
  *
  * Shared session resolution logic for all chat routes. Extracts bundle
  * resolution, session lookup/resume/create into a single function so

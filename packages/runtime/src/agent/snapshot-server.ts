@@ -5,7 +5,7 @@
  */
 
 /**
- * Snapshot server (Phase 3.5e).
+ * Snapshot server.
  *
  * Creates an Express server from an immutable deploy snapshot. Used for
  * local testing before deploying to the platform.

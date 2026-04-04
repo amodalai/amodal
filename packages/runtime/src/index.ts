@@ -10,7 +10,7 @@ import { log } from './logger.js';
 export const SERVER_VERSION = '0.1.0';
 
 // ---------------------------------------------------------------------------
-// Public API (Phase 4.2)
+// Public API
 // ---------------------------------------------------------------------------
 
 export { createAgent } from './api/create-agent.js';
@@ -154,7 +154,7 @@ export {
   registerAdminFileTools,
 } from './tools/admin-file-tools.js';
 
-// Standalone session manager (Phase 3.4)
+// Standalone session manager
 export { StandaloneSessionManager } from './session/manager.js';
 export type {
   Session,
@@ -165,15 +165,15 @@ export type {
   PersistedSession,
 } from './session/types.js';
 
-// Session builder (Phase 3.5b)
+// Session builder
 export { buildSessionComponents, PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME } from './session/session-builder.js';
 export type { SessionComponents, BuildSessionComponentsOptions, SessionType } from './session/session-builder.js';
 
-// Tool context factory (Phase 3.5a)
+// Tool context factory
 export { createToolContextFactory } from './session/tool-context-factory.js';
 export type { ToolContextFactoryOptions } from './session/tool-context-factory.js';
 
-// Session resolver (Phase 3.5c)
+// Session resolver
 export { resolveSession, resolveBundle } from './routes/session-resolver.js';
 export type { BundleResolver, SharedResources, ResolvedSession, ResolveSessionOptions } from './routes/session-resolver.js';
 

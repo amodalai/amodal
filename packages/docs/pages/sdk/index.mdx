@@ -1,15 +1,16 @@
 ---
-description: React SDK for embedding Amodal agents — @amodalai/react components and chat widget.
+description: SDK overview — React components, chat widget, and the embeddable runtime for server-side use.
 ---
 
-# React SDK
+# SDK Overview
 
-Embed Amodal agents in your product with `@amodalai/react`:
+Two ways to embed Amodal in your product:
 
-- **[@amodalai/react](/sdk/react)** — High-level components: `AmodalProvider`, `AmodalChat`, `AmodalAction`, and hooks for common agent interactions.
-- **[@amodalai/react/widget](/sdk/chat-widget)** — Embeddable chat widget with SSE streaming, theming, and callbacks.
+- **[@amodalai/react](/sdk/react)** — Drop-in React components: `AmodalProvider`, `AmodalChat`, `AmodalAction`, and hooks. Talks to a running runtime server over HTTP/SSE.
+- **[@amodalai/react/widget](/sdk/chat-widget)** — Standalone chat widget with SSE streaming, theming, and callbacks. No React required on the host page.
+- **[@amodalai/runtime](#server-side-runtime)** — The server-side engine. Use `createAgent()` to embed the agent runtime directly in your Node.js application.
 
-## Quick Start
+## React (client-side)
 
 ```bash
 npm install @amodalai/react
@@ -27,32 +28,53 @@ function App() {
 }
 ```
 
-## Core SDK
+Your React app calls a running runtime server. See the [React SDK reference](/sdk/react) for the full component API.
 
-For server-side or non-React usage, the `@amodalai/core` package provides the full runtime:
+## Server-side runtime
 
-```typescript
-import { AgentSDK } from '@amodalai/core'
+For server-side embedding — your own Express/Fastify/Hono/Next.js route handlers running the agent in-process — use `createAgent()` from `@amodalai/runtime`:
 
-const sdk = new AgentSDK({
-  repoPath: './my-agent',
-})
-
-await sdk.initialize()
-const config = sdk.getConfig()
+```bash
+npm install @amodalai/runtime
 ```
 
-### Runtime Capabilities
+```typescript
+import { createAgent } from '@amodalai/runtime'
 
-The SDK provides out of the box:
+const agent = await createAgent({
+  repoPath: './my-agent',
+  provider: 'anthropic',
+  apiKey: process.env.ANTHROPIC_API_KEY,
+})
 
-- **ReAct loop** with configurable max turns and timeout
-- **Smart compaction** — structured state snapshots across context compression
-- **Loop detection** — pattern matching + LLM-based detection
-- **Tool output masking** — backward-scan FIFO that prunes bulky outputs
-- **Task dispatch** — parallel sub-agent execution with depth limiting
-- **Knowledge loading** — on-demand KB documents
-- **Role-based filtering** — tools and skills scoped by role
-- **Audit logging** — every tool call and session logged
-- **SSE streaming** — real-time events for web clients
-- **MCP support** — Model Context Protocol client
+// In your Express route:
+app.post('/api/chat', async (req, res) => {
+  const session = await agent.createSession({ userId: req.user.id })
+  for await (const event of session.stream(req.body.message)) {
+    res.write(`data: ${JSON.stringify(event)}\n\n`)
+  }
+  res.end()
+})
+```
+
+The agent you create owns its own tool registry, provider, and store backend — you bring your own database (Postgres pool or PGLite for dev), your own auth, your own framework. Amodal stays invisible to your end users.
+
+### What you get
+
+- **State-machine agent loop** — see [State Machine](/learn/architecture/state-machine) for the full architecture.
+- **Multi-provider support** — Anthropic, OpenAI, Google, DeepSeek, Groq, Mistral, xAI via the Vercel AI SDK. Provider failover chains built in.
+- **Tool system** — store tools, connection tools with ACL enforcement, custom tools (handler.ts files), MCP tools, and admin file tools.
+- **Sub-agent dispatch** — `dispatch_task` spawns a write-enabled sub-agent with its own context.
+- **Context compaction + loop detection** — long agent runs stay coherent without blowing the budget.
+- **Store backends** — PGLite for dev, Postgres for production, both via Drizzle ORM. Bring your own via the `storeBackend` injection.
+- **SSE streaming** — every `session.stream()` call yields typed SSE events (init, text_delta, tool_call_start, tool_call_result, done).
+- **MCP support** — discover tools from connected MCP servers.
+
+### When to use which
+
+| Scenario | Use |
+|---|---|
+| You want to talk to your agent from your own web app | React SDK |
+| You want a chat widget on a marketing page or third-party site | Chat widget |
+| You're building a vertical SaaS and want the agent as the core of your product | `createAgent()` runtime |
+| You want to run `amodal dev` locally and iterate on agent config | CLI (no SDK code needed) |

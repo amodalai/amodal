@@ -5,7 +5,7 @@
  */
 
 /**
- * Tests for the new non-streaming chat route (Phase 3.5c).
+ * Tests for the new non-streaming chat route.
  */
 
 import {describe, it, expect, vi, beforeEach} from 'vitest';

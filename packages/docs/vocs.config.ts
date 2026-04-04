@@ -167,6 +167,10 @@ export default defineConfig({
           text: 'Security & Guardrails',
           link: '/guide/security',
         },
+        {
+          text: 'Engineering Standards',
+          link: '/guide/engineering-standards',
+        },
       ],
     },
     {
@@ -191,11 +195,28 @@ export default defineConfig({
       ],
     },
     {
+      text: 'Learn',
+      items: [
+        {
+          text: 'What is an agent?',
+          link: '/learn/what-is-an-agent',
+        },
+        {
+          text: 'FAQ',
+          link: '/learn/faq',
+        },
+      ],
+    },
+    {
       text: 'Architecture',
       items: [
         {
           text: 'The Core Loop',
           link: '/learn/architecture/core-loop',
+        },
+        {
+          text: 'State Machine',
+          link: '/learn/architecture/state-machine',
         },
         {
           text: 'Agent Architecture',
@@ -204,6 +225,10 @@ export default defineConfig({
         {
           text: 'Context Management',
           link: '/learn/architecture/context',
+        },
+        {
+          text: 'Architecture Decisions',
+          link: '/learn/architecture/decisions',
         },
       ],
     },

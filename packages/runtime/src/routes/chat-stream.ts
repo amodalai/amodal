@@ -5,7 +5,7 @@
  */
 
 /**
- * Streaming chat route (Phase 3.5c).
+ * Streaming chat route.
  *
  * Accepts POST to /chat and /chat/stream, resolves a session via the
  * standalone session manager, runs the message through the agent loop,

@@ -5,7 +5,7 @@
  */
 
 /**
- * Admin chat route (Phase 3.5d).
+ * Admin chat route.
  *
  * Creates admin sessions with admin agent skills/knowledge, isolated from
  * the primary agent. Uses StandaloneSessionManager + buildSessionComponents

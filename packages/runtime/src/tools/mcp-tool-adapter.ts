@@ -5,7 +5,7 @@
  */
 
 /**
- * MCP tool adapter (Phase 2.5).
+ * MCP tool adapter.
  *
  * Converts MCP discovered tools into ToolDefinition objects that can be
  * registered on our ToolRegistry. Each tool's execute function delegates

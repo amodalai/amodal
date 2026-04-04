@@ -5,7 +5,7 @@
  */
 
 /**
- * Proactive Runner (Phase 3.5d).
+ * Proactive Runner.
  *
  * Manages scheduled and webhook-triggered automation execution using
  * StandaloneSessionManager. Creates ephemeral sessions for each run,

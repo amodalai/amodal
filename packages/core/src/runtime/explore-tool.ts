@@ -6,7 +6,7 @@
 
 /**
  * Configuration for an explore sub-agent invocation.
- * The actual agent execution is handled by the runtime server (Phase 4).
+ * The actual agent execution is handled by the runtime server.
  * This module prepares the context, model selection, and constraints.
  */
 

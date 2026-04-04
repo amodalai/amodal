@@ -1,0 +1,151 @@
+---
+description: Common practical questions about running and extending Amodal.
+---
+
+# FAQ
+
+For architectural positioning vs. Vercel AI SDK, LangChain, Mastra, and raw provider SDKs, see [What is an agent?](/learn/what-is-an-agent).
+
+## Does Amodal lock me into a specific LLM provider?
+
+No. Provider choice is a one-line config change. Amodal supports Anthropic, OpenAI, and Google Gemini today, with automatic failover between providers. Adding a new provider is wiring in the corresponding `@ai-sdk/*` package — the runtime's provider interface is thin.
+
+## Can I self-host Amodal?
+
+Yes. The entire runtime is MIT-licensed and runs as a single Node.js process. Deploy it anywhere that runs Node (AWS, GCP, Fly, Railway, your own metal). Bring your own Postgres for production, or use the embedded PGLite for dev.
+
+The hosted cloud platform (`amodalai.com`) is a separate product. The OSS runtime is fully functional without it.
+
+## Where's the intelligence configured?
+
+`amodal.json` at the root of your agent repo:
+
+```json
+{
+  "name": "My Agent",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-20250514"
+}
+```
+
+Swap the provider and model to change the intelligence. See [Providers](/guide/providers) for the full list.
+
+## Where does the agent's "personality" and behavior come from?
+
+Three places, in order of weight:
+
+1. **Skills** (`skills/*.md`) — expert reasoning methodologies that activate based on the question
+2. **Knowledge** (`knowledge/*.md`) — persistent domain context the agent loads on demand
+3. **`userContext` in `amodal.json`** — standing instructions that apply to every turn
+
+All three get compiled into the system prompt before every LLM call.
+
+## Is Amodal a framework or a runtime?
+
+Both. `@amodalai/runtime` is the engine — a state machine agent loop with provider/tool/store/session systems. It's a library you can embed in your app with `createAgent()`.
+
+The CLI (`amodal dev`) wraps the runtime in an HTTP server with an admin UI. That's the "framework" layer — optional, but what most people use locally.
+
+## Can I extend the runtime?
+
+Yes, several ways:
+
+- **Custom tools**: Drop a `handler.ts` in `tools/<name>/` and it's available to the agent. See [Tools](/guide/tools).
+- **MCP servers**: Connect any MCP server and its tools are discovered automatically. See [MCP Servers](/guide/mcp).
+- **Custom connections**: Define an OpenAPI-style spec in `connections/<name>/` to expose a new HTTP API to the agent. See [Connections](/guide/connections).
+- **Embedded runtime**: Use `createAgent()` to embed the agent in your own Node.js application. See [SDK Overview](/sdk).
+- **Fork it**: MIT license. Add new states to the state machine, new providers, new store backends.
+
+## Is there a package ecosystem?
+
+Yes. Install pre-built connections, skills, and tools from the registry:
+
+```bash
+amodal pkg install @amodalai/slack       # Slack connection
+amodal pkg install @amodalai/stripe      # Stripe connection
+amodal pkg install @amodalai/ops-pack    # Bundle of on-call skills
+```
+
+Packaged connections and skills drop into your `connections/` and `skills/` directories. Install once, use everywhere. Publish your own to the marketplace.
+
+## How does the runtime compare to Claude Code, Cursor, Aider?
+
+Those are **coding agents** — the domain is "your codebase" and the tools are file editing, shell commands, and git. They're opinionated products.
+
+Amodal is a **runtime for building domain-specific agents**. You specify the domain (via connections, skills, knowledge). The domain isn't code — it's whatever you want: SOC compliance, payment investigation, customer support, HR recruiting, ops incident response.
+
+If you want a coding agent, use Claude Code or Cursor. If you want to build an agent that lives inside your SaaS product, your ops pipeline, or your vertical domain, use Amodal.
+
+## Can I use my own database?
+
+Yes. Inject a store backend at runtime creation time:
+
+```typescript
+import { createAgent } from '@amodalai/runtime'
+import { Pool } from 'pg'
+
+const agent = await createAgent({
+  repoPath: './my-agent',
+  storeBackend: createPostgresStoreBackend(new Pool({ connectionString: process.env.DATABASE_URL })),
+})
+```
+
+For `amodal dev`, set the backend in `amodal.json`:
+
+```json
+{
+  "stores": {
+    "backend": "postgres",
+    "postgresUrl": "env:DATABASE_URL"
+  }
+}
+```
+
+PGLite is the default for local dev (zero config). Postgres is the production path. Custom `StoreBackend` implementations can target any store that satisfies the interface.
+
+## Are sessions persistent across server restarts?
+
+Yes. Sessions are stored in the configured store backend (PGLite locally, Postgres in production). When you restart the runtime, sessions resume with their full conversation history.
+
+## How do I handle secrets?
+
+Environment variables referenced from `amodal.json` with the `env:` prefix:
+
+```json
+{
+  "connections": {
+    "stripe": { "auth": { "api_key": "env:STRIPE_API_KEY" } }
+  }
+}
+```
+
+Secrets are resolved at startup and held only in memory. They never appear in logs, the LLM prompt, or deployment snapshots. See [Security & Guardrails](/guide/security).
+
+## How do I prevent the agent from making destructive API calls?
+
+Connection ACLs via `connections/<name>/access.json`:
+
+- Mark endpoints `allow`, `confirm`, or `deny`
+- Mark fields `hidden` to strip them from responses
+- Require `intent: "write"` or `"confirmed_write"` on mutating HTTP methods
+- Rate limits per connection
+
+The runtime enforces these rules before tool calls execute. See [Security & Guardrails](/guide/security) and [Connections](/guide/connections).
+
+## How do I test an agent?
+
+Evals. Define test cases in `evals/*.yaml` with LLM-judged assertions, run them with `amodal eval`, compare scores across models. See [Evals](/guide/evals).
+
+## Can automations run without the UI open?
+
+Yes. Automations are cron/webhook-triggered and run in the runtime process. They execute independently of any connected chat client and can post results to external systems (Slack, webhooks). See [Automations](/guide/automations).
+
+## How do I debug when something's wrong?
+
+- **Logs**: Run with `-v` or `-vv` for structured log output. Every tool call, state transition, and error is logged with context.
+- **Inspect endpoints**: `GET /inspect/context` shows the compiled system prompt, active skills, and loaded knowledge. `/inspect/connections/:name` shows a connection's resolved spec.
+- **UI Activity panel**: The runtime admin UI (`amodal dev`) shows every SSE event in real time — text deltas, tool calls, errors, compaction, sub-agent dispatches.
+
+## Is there a chat widget I can drop into my own web app?
+
+Yes. `@amodalai/react/widget` is a standalone embeddable chat widget with SSE streaming, theming, and callbacks. No React required on the host page. See [Chat Widget](/sdk/chat-widget).

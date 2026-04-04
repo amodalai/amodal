@@ -5,13 +5,13 @@
  */
 
 /**
- * Phase 1.4 — Provider Failover Tests
+ * Provider Failover Tests
  *
  * Integration tests against real providers (skipped when API keys are
  * not available). No mocks — calls the real AI SDK through the real
  * createProvider → createFailoverProvider chain.
  *
- * Scenarios from the SDK swap plan:
+ * Scenarios:
  * 1. Primary with invalid key + fallback with valid key → response from fallback
  * 2. Valid primary → uses primary, no fallback
  * 3. All providers fail → throws ProviderError with context about all attempts

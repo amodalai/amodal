@@ -5,7 +5,7 @@
  */
 
 /**
- * Phase 3.1 — Agent Loop (State Machine Core)
+ * Agent Loop (State Machine Core)
  *
  * The outer `runAgent()` async generator drives state transitions and
  * yields SSE events. Each state handler returns the next state plus

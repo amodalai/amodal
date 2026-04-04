@@ -40,7 +40,7 @@ export OPENAI_API_KEY=sk-...
 export GOOGLE_API_KEY=...
 ```
 
-The auto-detection order is: **Anthropic → OpenAI → Google → Bedrock → Azure**. The runtime checks for each provider's environment variable in sequence and uses the first one it finds. If no key is set, `amodal dev` will start but the agent cannot respond — you will see a clear error message telling you which environment variables to set.
+The auto-detection order is: **Anthropic → OpenAI → Google**. The runtime checks for each provider's environment variable in sequence and uses the first one it finds. If no key is set, `amodal dev` will start but the agent cannot respond — you will see a clear error message telling you which environment variables to set.
 
 You can also pin a specific provider and model in `amodal.json` to override auto-detection:
 

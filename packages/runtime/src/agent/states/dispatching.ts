@@ -5,7 +5,7 @@
  */
 
 /**
- * DISPATCHING state handler (Phase 3.6).
+ * DISPATCHING state handler.
  *
  * Spawns a child agent with a subset of tools and a specific prompt.
  * The child runs its own runAgent() loop; each child event is wrapped

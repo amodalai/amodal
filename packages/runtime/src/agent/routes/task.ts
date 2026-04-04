@@ -5,7 +5,7 @@
  */
 
 /**
- * Task route (Phase 3.5e).
+ * Task route.
  *
  * Fire-and-forget task execution via the new StandaloneSessionManager.
  */

@@ -5,7 +5,7 @@
  */
 
 /**
- * Shared helpers for chat route handlers (Phase 3.5c).
+ * Shared helpers for chat route handlers.
  *
  * Deduplicates post-drain hook logic and session persistence across
  * chat-stream, ai-stream, and chat routes.

@@ -5,7 +5,7 @@
  */
 
 /**
- * Phase 3.1 — State Machine Types
+ * State Machine Types
  *
  * Defines the discriminated union for agent states, the context
  * passed through the loop, and the transition result shape.

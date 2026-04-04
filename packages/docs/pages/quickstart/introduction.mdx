@@ -24,7 +24,7 @@ Runtime Server (localhost:3847)
   ├── Context Compiler     ← builds optimized prompts
   ├── Token Allocator      ← manages context window budget
   ├── Security Layer       ← field scrubbing, output guards, action gates
-  ├── Provider Adapter     ← Anthropic / OpenAI / Gemini / Bedrock / Azure
+  ├── Provider Adapter     ← Anthropic / OpenAI / Google Gemini
   └── Session Manager      ← TTL-based sessions with hot reload
 ```
 
@@ -44,7 +44,7 @@ Simple questions skip planning. Complex questions get the full loop with multi-a
 
 | Capability | What It Does |
 |-----------|-------------|
-| **Multi-provider** | Anthropic Claude, OpenAI, Google Gemini, AWS Bedrock, Azure OpenAI — with failover |
+| **Multi-provider** | Anthropic Claude, OpenAI, Google Gemini — with failover |
 | **Git-native config** | Everything is a file. Version, diff, review, and deploy your agent like code |
 | **20+ connection plugins** | Slack, GitHub, Stripe, Datadog, Jira, PagerDuty, Salesforce, and more |
 | **Security infrastructure** | Field scrubbing, output guards, action gates, scope checking, leak detection |

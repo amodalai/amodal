@@ -5,7 +5,7 @@
  */
 
 /**
- * Local server for repo-based agent mode (Phase 3.5e).
+ * Local server for repo-based agent mode.
  *
  * Loads the `.amodal/` config from `config.repoPath`, creates a
  * StandaloneSessionManager, mounts all routes, and optionally watches

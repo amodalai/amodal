@@ -5,7 +5,7 @@
  */
 
 /**
- * Hosted server (Phase 3.5e).
+ * Hosted server.
  *
  * Creates the Express server for hosted mode with all routes, session
  * management, and graceful shutdown. Uses StandaloneSessionManager

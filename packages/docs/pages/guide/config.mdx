@@ -166,9 +166,8 @@ The `stores` block configures where session data and agent state persist. PGLite
 
 ```typescript
 {
-  "provider": "anthropic" | "openai" | "google" | "bedrock" | "azure",
+  "provider": "anthropic" | "openai" | "google",
   "model": "claude-sonnet-4-20250514",
-  "region": "us-east-1",           // optional, for Bedrock/Azure
   "baseUrl": "https://...",        // optional, custom endpoint
   "credentials": {                 // optional, explicit keys
     "api_key": "env:ANTHROPIC_API_KEY"
@@ -192,7 +191,6 @@ Typical pairings:
 | Cost-optimized | Claude Sonnet | Claude Haiku |
 | Quality-first | Claude Opus | Claude Sonnet |
 | Multi-provider | Claude Sonnet | Gemini Flash |
-| AWS-only | Bedrock Claude Sonnet | Bedrock Claude Haiku |
 
 If you omit `models.explore`, the runtime falls back to `models.main` for everything. This works fine — it just costs more and runs slower on complex questions.
 
@@ -209,12 +207,11 @@ The fallback is itself a full `ModelConfig`, which means it can have its own fal
       "provider": "anthropic",
       "model": "claude-sonnet-4-20250514",
       "fallback": {
-        "provider": "bedrock",
-        "model": "anthropic.claude-sonnet-4-20250514-v1:0",
-        "region": "us-east-1",
+        "provider": "openai",
+        "model": "gpt-4o",
         "fallback": {
-          "provider": "openai",
-          "model": "gpt-4o"
+          "provider": "google",
+          "model": "gemini-2.5-pro"
         }
       }
     }
@@ -222,7 +219,7 @@ The fallback is itself a full `ModelConfig`, which means it can have its own fal
 }
 ```
 
-In this example: the runtime tries Anthropic's API first. If that is down (outage, rate limit), it falls back to the same model on AWS Bedrock. If Bedrock also fails, it falls back to OpenAI. The user never sees the failover — the runtime handles it transparently and logs the switch.
+In this example: the runtime tries Anthropic first. If that is down (outage, rate limit), it falls back to OpenAI GPT-4o. If OpenAI also fails, it falls back to Gemini. The user never sees the failover — the runtime handles it transparently and logs the switch.
 
 Fallback is per-request. If Anthropic recovers, the next request goes back to the primary. There is no sticky routing.
 

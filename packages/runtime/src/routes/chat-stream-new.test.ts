@@ -5,7 +5,7 @@
  */
 
 /**
- * Tests for the new chat-stream route (Phase 3.5c).
+ * Tests for the new chat-stream route.
  *
  * Mocks resolveSession and StandaloneSessionManager.runMessage to verify
  * the route wiring: SSE format, hooks adaptation, error handling.

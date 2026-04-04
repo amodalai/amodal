@@ -5,7 +5,7 @@
  */
 
 /**
- * Types for the context compiler (Phase 3.2).
+ * Types for the context compiler.
  *
  * These describe the raw inputs the compiler accepts — closely mirroring
  * the AgentBundle shape but only the fields relevant to prompt building.

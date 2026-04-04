@@ -5,7 +5,7 @@
  */
 
 /**
- * Non-streaming chat route (Phase 3.5c).
+ * Non-streaming chat route.
  *
  * Accepts POST to /chat/sync, resolves a session, runs the message through
  * the agent loop, collects all events, and returns a JSON ChatResponse.

@@ -5,7 +5,7 @@
  */
 
 /**
- * Phase 3.1 — Agent Loop Tests
+ * Agent Loop Tests
  *
  * Tests the state machine core:
  * 1. Unit: each state handler produces expected transitions

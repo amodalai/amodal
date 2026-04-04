@@ -19,7 +19,7 @@ An Amodal project is a folder of plain files that describe what your agent knows
 - **Knowledge** is persistent domain context: environment details, team structures, historical patterns, baseline metrics. The agent loads it on demand and proposes updates as it learns.
 - **Tools** are custom actions beyond the built-in set — HTTP calls, multi-system chains, or arbitrary function handlers with confirmation rules and rate limits.
 
-When you run `amodal dev`, the runtime compiles all of these into an optimized context window and starts a ReAct loop against any supported LLM (Anthropic, OpenAI, Google, Bedrock). The agent reasons about user questions, dispatches task agents for data gathering (keeping its own context clean), and returns structured answers. Every interaction can feed knowledge back into the system, so the agent gets smarter over time.
+When you run `amodal dev`, the runtime compiles all of these into a system prompt and drives a state-machine agent loop against any supported LLM (Anthropic, OpenAI, Google, DeepSeek, Groq, Mistral, xAI). The agent reasons about user questions, dispatches sub-agents for data gathering (keeping its own context clean), and returns structured answers. Every interaction can feed knowledge back into the system, so the agent gets smarter over time.
 
 ```bash
 npx amodal init                          # scaffold a project
@@ -40,6 +40,6 @@ amodal chat                              # talk to your agent
 
 ### Run & Embed
 
-- **[Providers](/guide/providers)** — Anthropic, OpenAI, Google Gemini, AWS Bedrock, Azure OpenAI with automatic failover.
+- **[Providers](/guide/providers)** — Anthropic, OpenAI, Google Gemini with automatic failover.
 - **[React SDK](/sdk)** — Embed agents in your product with `@amodalai/react`.
 - **[Architecture](/learn/architecture/core-loop)** — The explore-plan-execute loop, context isolation, and multi-agent dispatch.

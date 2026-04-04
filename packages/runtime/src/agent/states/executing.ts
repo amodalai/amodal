@@ -85,8 +85,8 @@ export async function handleExecuting(
   //    Currently scoped to connection tools only — they have access.json ACLs
   //    with endpoint-level allow/deny/confirm rules. Store tools and admin tools
   //    have their own guards (read-only paths, blocked filenames, schema validation).
-  //    A general confirmation gate for all non-readOnly tools is planned for Phase 3.4
-  //    when the session manager wires up the full confirmation flow.
+  //    TODO: generalize to any tool via a requiresConfirmation metadata flag on
+  //    ToolDefinition so store/custom/admin tools can opt into the same gate.
   if (toolDef.metadata?.category === 'connection' && toolDef.metadata.connection) {
     const method = typeof current.args['method'] === 'string' ? current.args['method'] : 'GET';
     const endpoint = typeof current.args['endpoint'] === 'string' ? current.args['endpoint'] : '/';

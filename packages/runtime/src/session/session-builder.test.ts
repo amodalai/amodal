@@ -5,7 +5,7 @@
  */
 
 /**
- * Tests for Session Builder (Phase 3.5b).
+ * Tests for Session Builder.
  *
  * Covers:
  * 1. Build from fixture bundle → all tool types registered

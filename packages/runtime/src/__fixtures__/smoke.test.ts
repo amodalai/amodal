@@ -632,7 +632,7 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
   }, TIMEOUT);
 
   // -------------------------------------------------------------------------
-  // 21. Sub-agent dispatch (Phase 3.6)
+  // 21. Sub-agent dispatch
   // -------------------------------------------------------------------------
 
   it('dispatch_task spawns child agent and returns result', async () => {

@@ -5,7 +5,7 @@
  */
 
 /**
- * Connection request tool rewritten for the new ToolRegistry (Phase 2.3).
+ * Connection request tool rewritten for the new ToolRegistry.
  *
  * Makes HTTP requests through configured connections with:
  * - Permission checking via PermissionChecker interface

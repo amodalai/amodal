@@ -7,9 +7,8 @@
 /**
  * Shared Drizzle schema for PGLite / Postgres tables.
  *
- * Phase 3.4 defined `agentSessions` here. Phase 4.3b added the store
- * document tables so both PGLite (local dev) and Postgres (hosted runtime)
- * share one schema and migrate together.
+ * `agentSessions` and the store document tables share one schema so both
+ * PGLite (local dev) and Postgres (hosted runtime) migrate together.
  */
 
 import {pgTable, text, integer, jsonb, timestamp, serial, primaryKey, index} from 'drizzle-orm/pg-core';

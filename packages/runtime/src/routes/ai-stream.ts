@@ -5,7 +5,7 @@
  */
 
 /**
- * Vercel AI SDK UI Message Stream Protocol adapter (Phase 3.5c).
+ * Vercel AI SDK UI Message Stream Protocol adapter.
  *
  * Accepts requests in the Vercel AI SDK format, feeds the user message into
  * the standalone session manager's `runMessage()` generator, and translates
@@ -281,8 +281,6 @@ export function translateEvent(
       });
       break;
     }
-
-    // AskUser removed — ask_user tool was dropped in Phase 3.5a½
 
     case SSEEventType.CredentialSaved: {
       out.push({
