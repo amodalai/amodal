@@ -26,26 +26,18 @@ export class LocalToolExecutor implements CustomToolExecutor {
     params: Record<string, unknown>,
     ctx: CustomToolContext,
   ): Promise<unknown> {
-    try {
-      const handler = await this.loadHandler(tool);
-      const fn = resolveHandlerFn(handler, tool.name);
-      const result = await fn(params, ctx);
+    const handler = await this.loadHandler(tool);
+    const fn = resolveHandlerFn(handler, tool.name);
+    const result = await fn(params, ctx);
 
-      // Wrap non-object results
-      if (result === null || result === undefined) {
-        return {result: null};
-      }
-      if (typeof result !== 'object' || Array.isArray(result)) {
-        return {result};
-      }
-      return result;
-    } catch (err) {
-      if (ctx.signal.aborted) {
-        return {error: 'Tool execution aborted'};
-      }
-      const message = err instanceof Error ? err.message : String(err);
-      return {error: message};
+    // Wrap non-object results
+    if (result === null || result === undefined) {
+      return {result: null};
     }
+    if (typeof result !== 'object' || Array.isArray(result)) {
+      return {result};
+    }
+    return result;
   }
 
   dispose(): void {
