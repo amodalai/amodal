@@ -147,6 +147,18 @@ export {
   registerAdminFileTools,
 } from './tools/admin-file-tools.js';
 
+// Context compiler
+export { compileContext } from './context/compiler.js';
+export type {
+  CompilerInput,
+  CompilerOutput,
+  CompilerContribution,
+  CompilerConnection,
+  CompilerSkill,
+  CompilerKnowledge,
+  CompilerStore,
+} from './context/types.js';
+
 // Permission checker
 export { AccessJsonPermissionChecker } from './security/permission-checker.js';
 export type {
