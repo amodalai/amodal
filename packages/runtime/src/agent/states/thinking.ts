@@ -24,6 +24,11 @@ import type {
   TransitionResult,
 } from '../loop-types.js';
 
+/** Sentinel values for cleared tool results. */
+const CLEARED_TOOL_CALL_ID = 'cleared';
+const CLEARED_TOOL_NAME = 'cleared';
+const CLEARED_TOOL_RESULT_TEXT = '[Tool result cleared to save context space]';
+
 /**
  * Handle the THINKING state.
  *
@@ -65,10 +70,11 @@ export function handleThinking(
       tool: loop.toolName,
       count: loop.count,
     });
-    messages = [...messages, {
+    const warningMessage: ModelMessage = {
       role: 'system',
       content: `[Warning] You have called ${loop.toolName} ${loop.count} times with similar parameters. Try a different approach.`,
-    } as ModelMessage];
+    };
+    messages = [...messages, warningMessage];
   }
 
   // 3. Clear old tool result bodies — keep last N full, replace older with summaries
@@ -81,10 +87,11 @@ export function handleThinking(
   const allTools = ctx.toolRegistry.getTools();
   const tools: Record<string, Tool> = {};
   for (const [name, def] of Object.entries(allTools)) {
+    // ToolDefinition.parameters is either a Zod schema or FlexibleSchema —
+    // both are accepted by AI SDK as inputSchema.
+     
     tools[name] = {
       description: def.description,
-      // ToolDefinition.parameters is either a Zod schema or FlexibleSchema —
-      // both are accepted by AI SDK as inputSchema
       inputSchema: def.parameters,
     } as Tool;
   }
@@ -124,12 +131,15 @@ interface LoopInfo {
  * Detect repeated tool calls in recent message history.
  *
  * Scans the last 16 messages for assistant tool-call content parts.
- * If the same tool name appears 3+ times, returns the tool and count.
- * Phase 3.3 upgrades this with parameter similarity checking.
+ * Groups calls by tool name and checks for parameter similarity.
+ * A tool is considered looping when it has 3+ calls with similar
+ * parameters (same keys, same or similar values).
  */
 function detectLoop(messages: ModelMessage[]): LoopInfo | null {
   const recentMessages = messages.slice(-16);
-  const toolCallCounts = new Map<string, number>();
+
+  // Collect tool calls with their serialized args for similarity checking
+  const callsByTool = new Map<string, string[]>();
 
   for (const msg of recentMessages) {
     if (msg.role !== 'assistant' || typeof msg.content === 'string') continue;
@@ -138,18 +148,26 @@ function detectLoop(messages: ModelMessage[]): LoopInfo | null {
     for (const part of msg.content) {
       if ('type' in part && part.type === 'tool-call' && 'toolName' in part) {
         const name = part.toolName;
-        toolCallCounts.set(name, (toolCallCounts.get(name) ?? 0) + 1);
+        const args = 'input' in part ? JSON.stringify(part.input) : '{}';
+        const existing = callsByTool.get(name) ?? [];
+        existing.push(args);
+        callsByTool.set(name, existing);
       }
     }
   }
 
-  // Find the most repeated tool
+  // Find the most repeated tool with similar parameters
   let maxTool: string | null = null;
   let maxCount = 0;
-  for (const [name, count] of toolCallCounts) {
-    if (count > maxCount) {
+
+  for (const [name, argsList] of callsByTool) {
+    // Count how many calls share similar parameters.
+    // Group by serialized args — exact duplicates are obvious loops.
+    // Also count near-duplicates where only values differ slightly.
+    const similarCount = countSimilarCalls(argsList);
+    if (similarCount > maxCount) {
       maxTool = name;
-      maxCount = count;
+      maxCount = similarCount;
     }
   }
 
@@ -157,6 +175,70 @@ function detectLoop(messages: ModelMessage[]): LoopInfo | null {
     return {toolName: maxTool, count: maxCount};
   }
   return null;
+}
+
+/**
+ * Count the size of the largest group of similar argument sets.
+ *
+ * Two arg sets are "similar" if they share the same keys and at least
+ * half their values are identical. This catches loops where the agent
+ * retries with slightly different parameters (e.g., changing a page number
+ * but keeping everything else the same).
+ */
+function countSimilarCalls(argsList: string[]): number {
+  if (argsList.length <= 2) return argsList.length;
+
+  // Fast path: if most are exact duplicates, just count those
+  const counts = new Map<string, number>();
+  for (const args of argsList) {
+    counts.set(args, (counts.get(args) ?? 0) + 1);
+  }
+  const maxExact = Math.max(...counts.values());
+  if (maxExact >= 3) return maxExact;
+
+  // Slow path: parse and compare keys/values for similarity
+  const parsed: Array<Record<string, unknown>> = [];
+  for (const args of argsList) {
+    try {
+      const obj: unknown = JSON.parse(args);
+      if (typeof obj === 'object' && obj !== null && !Array.isArray(obj)) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse returns unknown; narrowed to non-null non-array object above
+        parsed.push(obj as Record<string, unknown>);
+      }
+    } catch {
+      // Unparseable — treat each as unique
+    }
+  }
+
+  if (parsed.length <= 2) return argsList.length;
+
+  // Group by key set, then check value similarity within groups
+  const byKeys = new Map<string, Array<Record<string, unknown>>>();
+  for (const obj of parsed) {
+    const keyStr = Object.keys(obj).sort().join(',');
+    const group = byKeys.get(keyStr) ?? [];
+    group.push(obj);
+    byKeys.set(keyStr, group);
+  }
+
+  let largestSimilarGroup = 0;
+  for (const group of byKeys.values()) {
+    if (group.length < 3) continue;
+    // Within a key group, count pairs with >50% identical values
+    // Use first element as reference and count how many are similar to it
+    const ref = group[0];
+    const keys = Object.keys(ref);
+    let similarToRef = 1;
+    for (let i = 1; i < group.length; i++) {
+      const matching = keys.filter((k) => JSON.stringify(ref[k]) === JSON.stringify(group[i][k]));
+      if (matching.length >= keys.length / 2) {
+        similarToRef++;
+      }
+    }
+    largestSimilarGroup = Math.max(largestSimilarGroup, similarToRef);
+  }
+
+  return Math.max(maxExact, largestSimilarGroup);
 }
 
 // ---------------------------------------------------------------------------
@@ -193,15 +275,16 @@ function clearOldToolResults(
   const result = [...messages];
 
   for (const idx of indicesToClear) {
-    result[idx] = {
+    const cleared: ModelMessage = {
       role: 'tool',
       content: [{
         type: 'tool-result' as const,
-        toolCallId: 'cleared',
-        toolName: 'cleared',
-        output: {type: 'text' as const, value: '[Tool result cleared to save context space]'},
+        toolCallId: CLEARED_TOOL_CALL_ID,
+        toolName: CLEARED_TOOL_NAME,
+        output: {type: 'text' as const, value: CLEARED_TOOL_RESULT_TEXT},
       }],
-    } as ModelMessage;
+    };
+    result[idx] = cleared;
   }
 
   return result;

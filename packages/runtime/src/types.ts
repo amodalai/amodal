@@ -86,6 +86,8 @@ export enum SSEEventType {
   PlanMode = 'plan_mode',
   FieldScrub = 'field_scrub',
   ConfirmationRequired = 'confirmation_required',
+  CompactionStart = 'compaction_start',
+  CompactionEnd = 'compaction_end',
   ToolLog = 'tool_log',
   Error = 'error',
   Done = 'done',
@@ -233,6 +235,21 @@ export interface SSEConfirmationRequiredEvent {
   timestamp: string;
 }
 
+export interface SSECompactionStartEvent {
+  type: SSEEventType.CompactionStart;
+  estimated_tokens: number;
+  threshold: number;
+  timestamp: string;
+}
+
+export interface SSECompactionEndEvent {
+  type: SSEEventType.CompactionEnd;
+  tokens_before: number;
+  tokens_after: number;
+  compaction_tokens: number;
+  timestamp: string;
+}
+
 export type SSEEvent =
   | SSEInitEvent
   | SSETextDeltaEvent
@@ -250,6 +267,8 @@ export type SSEEvent =
   | SSEPlanModeEvent
   | SSEFieldScrubEvent
   | SSEConfirmationRequiredEvent
+  | SSECompactionStartEvent
+  | SSECompactionEndEvent
   | SSEToolLogEvent
   | SSEErrorEvent
   | SSEDoneEvent;
