@@ -130,6 +130,9 @@ function buildComponents(
  * 2. Create new session from resolved bundle
  * 3. Throws SessionError if no bundle is available
  *
+ * Bundle is resolved once and reused across resume and create paths to
+ * avoid redundant bundleProvider calls in hosted mode.
+ *
  * For in-memory sessions, the cached `toolContextFactory` from session
  * creation is reused — no redundant buildSessionComponents call.
  */
@@ -148,38 +151,37 @@ export async function resolveSession(
     if (existing && existing.toolContextFactory) {
       return {session: existing, toolContextFactory: existing.toolContextFactory};
     }
+  }
 
-    // 2. Resume from store (with dedup handled by StandaloneSessionManager)
-    const bundle = await resolveBundle(bundleResolver, opts.deployId, auth?.token);
-    if (bundle) {
-      const components = buildComponents(bundle, shared, {
-        sessionType: opts.sessionType,
-        userRoles,
-        sessionId,
-        tenantId,
-      });
+  // Resolve bundle once — shared between resume and create paths
+  const bundle = await resolveBundle(bundleResolver, opts.deployId, auth?.token);
 
-      const resumed = await sessionManager.resume(sessionId, {
-        tenantId,
-        userId,
-        provider: components.provider,
-        toolRegistry: components.toolRegistry,
-        permissionChecker: components.permissionChecker,
-        systemPrompt: components.systemPrompt,
-        userRoles: components.userRoles,
-        toolContextFactory: components.toolContextFactory,
-      });
+  // 2. Resume from store (with dedup handled by StandaloneSessionManager)
+  if (sessionId && bundle) {
+    const components = buildComponents(bundle, shared, {
+      sessionType: opts.sessionType,
+      userRoles,
+      sessionId,
+      tenantId,
+    });
 
-      if (resumed) {
-        return {session: resumed, toolContextFactory: components.toolContextFactory};
-      }
+    const resumed = await sessionManager.resume(sessionId, {
+      tenantId,
+      userId,
+      provider: components.provider,
+      toolRegistry: components.toolRegistry,
+      permissionChecker: components.permissionChecker,
+      systemPrompt: components.systemPrompt,
+      userRoles: components.userRoles,
+      toolContextFactory: components.toolContextFactory,
+    });
+
+    if (resumed) {
+      return {session: resumed, toolContextFactory: components.toolContextFactory};
     }
-
-    // Fall through to create — session_id was provided but not found
   }
 
   // 3. Create new session
-  const bundle = await resolveBundle(bundleResolver, opts.deployId, auth?.token);
   if (!bundle) {
     throw new SessionError('No bundle available — provide a deploy_id or configure a static bundle', {
       sessionId: sessionId ?? 'new',

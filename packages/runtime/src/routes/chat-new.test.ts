@@ -41,7 +41,7 @@ async function* makeEvents(events: SSEEvent[]): AsyncGenerator<SSEEvent> {
 
 function createApp() {
   const mockRunMessage = vi.fn();
-  const sessionManager = {runMessage: mockRunMessage};
+  const sessionManager = {runMessage: mockRunMessage, persist: vi.fn().mockResolvedValue(undefined)};
 
   const app = express();
   app.use(express.json());

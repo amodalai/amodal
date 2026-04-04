@@ -279,7 +279,13 @@ export class StandaloneSessionManager {
     opts: CreateSessionOptions,
   ): Promise<Session | null> {
     const pending = this.pendingResumes.get(sessionId);
-    if (pending) return pending;
+    if (pending) {
+      this.logger.debug('session_resume_dedup', {
+        session: sessionId,
+        message: 'Concurrent resume request deduplicated — second caller receives first caller\'s session. CreateSessionOptions from second call are ignored.',
+      });
+      return pending;
+    }
 
     const promise = this.doResume(sessionId, opts);
     this.pendingResumes.set(sessionId, promise);

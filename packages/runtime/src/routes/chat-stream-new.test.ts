@@ -48,7 +48,7 @@ async function* makeEvents(events: SSEEvent[]): AsyncGenerator<SSEEvent> {
 
 function createApp(overrides: Record<string, unknown> = {}) {
   const mockRunMessage = vi.fn();
-  const sessionManager = {runMessage: mockRunMessage, ...overrides};
+  const sessionManager = {runMessage: mockRunMessage, persist: vi.fn().mockResolvedValue(undefined), ...overrides};
 
   const app = express();
   app.use(express.json());
@@ -130,7 +130,7 @@ describe('POST /chat/stream (new route)', () => {
     const app = express();
     app.use(express.json());
     app.use(createChatStreamRouter({
-      sessionManager: {runMessage: mockRunMessage} as never,
+      sessionManager: {runMessage: mockRunMessage, persist: vi.fn().mockResolvedValue(undefined)} as never,
       bundleResolver: {},
       shared: {storeBackend: null, mcpManager: null, logger: {} as never},
       createStreamHooks: () => ({onAuditLog}),
@@ -159,7 +159,7 @@ describe('POST /chat/stream (new route)', () => {
     const app = express();
     app.use(express.json());
     app.use(createChatStreamRouter({
-      sessionManager: {runMessage: mockRunMessage} as never,
+      sessionManager: {runMessage: mockRunMessage, persist: vi.fn().mockResolvedValue(undefined)} as never,
       bundleResolver: {},
       shared: {storeBackend: null, mcpManager: null, logger: {} as never},
     }));

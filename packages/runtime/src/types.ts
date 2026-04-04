@@ -19,7 +19,7 @@ export const ChatRequestSchema = z.object({
   /** Optional role override for this session */
   role: z.string().optional(),
   /** Optional session type — controls which skills, tools, KB docs load */
-  session_type: z.string().optional(),
+  session_type: z.enum(['chat', 'admin', 'automation']).optional(),
   /** Optional deployment ID — load a specific snapshot instead of the active one */
   deploy_id: z.string().optional(),
 });

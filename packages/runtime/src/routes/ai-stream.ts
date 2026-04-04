@@ -24,10 +24,10 @@ import {getAuthContext} from '../middleware/auth.js';
 import type {AuthContext} from '../middleware/auth.js';
 import type {StandaloneSessionManager} from '../session/manager.js';
 import type {StreamHooks} from '../session/session-runner.js';
-import type {TurnUsage} from '../session/types.js';
 import {SSEEventType, type SSEEvent} from '../types.js';
 import {resolveSession} from './session-resolver.js';
 import type {BundleResolver, SharedResources} from './session-resolver.js';
+import {adaptOnUsage, fireDrainHooks} from './route-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Request schema (Vercel AI SDK message format)
@@ -408,26 +408,11 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
         // Build per-request hooks with auth context
         const hooks = options.createStreamHooks?.(auth);
 
-        // Adapt onUsageReport hook to TurnUsage callback
-        const onUsage = hooks?.onUsageReport
-          ? (usage: TurnUsage) => {
-              hooks.onUsageReport?.({
-                model: session.model,
-                taskAgentRuns: 0,
-                tokens: {
-                  inputTokens: usage.inputTokens,
-                  outputTokens: usage.outputTokens,
-                  cachedTokens: usage.cachedInputTokens,
-                },
-              });
-            }
-          : undefined;
-
         // Run message through the agent loop
         const stream = options.sessionManager.runMessage(session.id, message, {
           signal: controller.signal,
           buildToolContext: toolContextFactory,
-          onUsage,
+          onUsage: adaptOnUsage(hooks, session),
         });
 
         const state = createAdapterState();
@@ -441,20 +426,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
           }
         }
 
-        // Fire post-drain hooks
-        if (hooks?.onAuditLog) {
-          hooks.onAuditLog({
-            event: 'session_completed',
-            resource_name: session.id,
-          });
-        }
-
-        if (hooks?.onSessionPersist) {
-          hooks.onSessionPersist(session.id, [], 'completed', {
-            model: session.model,
-            provider: session.providerName,
-          });
-        }
+        await fireDrainHooks(options.sessionManager, hooks, {session, toolCalls: []});
 
         // Terminal sentinel
         res.write('data: [DONE]\n\n');

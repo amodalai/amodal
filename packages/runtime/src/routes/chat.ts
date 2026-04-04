@@ -19,10 +19,9 @@ import {getAuthContext} from '../middleware/auth.js';
 import type {AuthContext} from '../middleware/auth.js';
 import type {StandaloneSessionManager} from '../session/manager.js';
 import type {StreamHooks} from '../session/session-runner.js';
-import type {TurnUsage} from '../session/types.js';
 import {resolveSession} from './session-resolver.js';
 import type {BundleResolver, SharedResources} from './session-resolver.js';
-import type {SessionType} from '../session/session-builder.js';
+import {adaptOnUsage, fireDrainHooks, UNKNOWN_TOOL_NAME} from './route-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Route options
@@ -50,48 +49,28 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       const body = req.body as ChatRequest;
       const auth = getAuthContext(res);
 
-      // Resolve session (lookup in memory, resume from store, or create new)
       const {session, toolContextFactory} = await resolveSession(body.session_id, {
         sessionManager: options.sessionManager,
         bundleResolver: options.bundleResolver,
         shared: options.shared,
         role: body.role,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- string → SessionType at system boundary
-        sessionType: body.session_type as SessionType | undefined,
+        sessionType: body.session_type,
         deployId: body.deploy_id,
         auth,
       });
 
       const controller = new AbortController();
-
-      // Abort on client disconnect
       res.on('close', () => controller.abort());
 
       const hooks = options.createStreamHooks?.(auth);
 
-      // Adapt onUsageReport hook to TurnUsage callback
-      const onUsage = hooks?.onUsageReport
-        ? (usage: TurnUsage) => {
-            hooks.onUsageReport?.({
-              model: session.model,
-              taskAgentRuns: 0,
-              tokens: {
-                inputTokens: usage.inputTokens,
-                outputTokens: usage.outputTokens,
-                cachedTokens: usage.cachedInputTokens,
-              },
-            });
-          }
-        : undefined;
-
-      // Run message and collect events
       const stream = options.sessionManager.runMessage(
         session.id,
         body.message,
         {
           signal: controller.signal,
           buildToolContext: toolContextFactory,
-          onUsage,
+          onUsage: adaptOnUsage(hooks, session),
         },
       );
 
@@ -108,7 +87,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
           toolNames.set(event.tool_id, event.tool_name);
         } else if (event.type === SSEEventType.ToolCallResult) {
           toolCalls.push({
-            tool_name: toolNames.get(event.tool_id) ?? 'unknown',
+            tool_name: toolNames.get(event.tool_id) ?? UNKNOWN_TOOL_NAME,
             tool_id: event.tool_id,
             status: event.status,
             error: event.error,
@@ -116,26 +95,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         }
       }
 
-      // Fire post-drain hooks
-      if (hooks?.onAuditLog) {
-        hooks.onAuditLog({
-          event: 'session_completed',
-          resource_name: session.id,
-          details: {
-            session_id: session.id,
-            tool_calls: toolCalls,
-            model: session.model,
-            provider: session.providerName,
-          },
-        });
-      }
-
-      if (hooks?.onSessionPersist) {
-        hooks.onSessionPersist(session.id, [], 'completed', {
-          model: session.model,
-          provider: session.providerName,
-        });
-      }
+      await fireDrainHooks(options.sessionManager, hooks, {session, toolCalls});
 
       const result: ChatResponse = {
         session_id: session.id,
