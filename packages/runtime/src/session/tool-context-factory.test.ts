@@ -19,10 +19,11 @@
  * 9. Factory returns fresh context per callId
  */
 
-import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
+import {describe, it, expect, vi, afterEach} from 'vitest';
 import {createToolContextFactory, type ToolContextFactoryOptions} from './tool-context-factory.js';
 import type {LoadedStore, StoreBackend} from '@amodalai/types';
 import type {ConnectionsMap} from '../tools/request-tool.js';
+import {StoreError} from '../errors.js';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -98,7 +99,7 @@ function makeFactoryOpts(overrides?: Partial<ToolContextFactoryOptions>): ToolCo
     storeBackend: makeMockStoreBackend(),
     storeDefinitions: [makeStoreDefinition()],
     appId: 'test-app',
-    envAllowlist: ['ALLOWED_VAR'],
+    envAllowlist: {ALLOWED_VAR: 'allowed-value'},
     logger: makeMockLogger(),
     user: {roles: ['analyst']},
     sessionId: 'sess-123',
@@ -112,14 +113,7 @@ function makeFactoryOpts(overrides?: Partial<ToolContextFactoryOptions>): ToolCo
 // ---------------------------------------------------------------------------
 
 describe('createToolContextFactory', () => {
-  beforeEach(() => {
-    process.env['ALLOWED_VAR'] = 'allowed-value';
-    process.env['BLOCKED_VAR'] = 'blocked-value';
-  });
-
   afterEach(() => {
-    delete process.env['ALLOWED_VAR'];
-    delete process.env['BLOCKED_VAR'];
     vi.restoreAllMocks();
   });
 
@@ -205,9 +199,10 @@ describe('createToolContextFactory', () => {
     );
   });
 
-  it('store() throws when store not found', async () => {
+  it('store() throws StoreError when store not found', async () => {
     const ctx = createToolContextFactory(makeFactoryOpts({storeDefinitions: []}))('call-1');
 
+    await expect(ctx.store('nonexistent', {})).rejects.toThrow(StoreError);
     await expect(ctx.store('nonexistent', {})).rejects.toThrow(/Store "nonexistent" not found/);
   });
 

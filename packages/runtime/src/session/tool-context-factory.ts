@@ -21,7 +21,7 @@ import type {FieldScrubber} from '@amodalai/core';
 import type {ConnectionsMap} from '../tools/request-tool.js';
 import type {ToolContext} from '../tools/types.js';
 import type {Logger} from '../logger.js';
-import {ConnectionError} from '../errors.js';
+import {ConnectionError, StoreError} from '../errors.js';
 import {resolveKey} from '../stores/key-resolver.js';
 
 // ---------------------------------------------------------------------------
@@ -38,8 +38,8 @@ export interface ToolContextFactoryOptions {
   storeDefinitions: LoadedStore[];
   /** App ID for store isolation */
   appId: string;
-  /** Allowlisted env var names for ctx.env() */
-  envAllowlist: string[];
+  /** Allowlisted env vars: name → value. Only these are exposed via ctx.env(). */
+  envAllowlist: Record<string, string | undefined>;
   /** Session-scoped logger */
   logger: Logger;
   /** Field scrubber for response sanitization (optional) */
@@ -130,16 +130,20 @@ async function makeRequest(
   const response = await fetch(url, fetchOpts);
   const text = await response.text();
 
-  // Field scrubbing
+  // Field scrubbing — only attempt on valid JSON; scrubber errors propagate
   let output = text;
   if (opts.fieldScrubber) {
+    let parsed: unknown;
     try {
-      const parsed: unknown = JSON.parse(text);
+      parsed = JSON.parse(text);
+    } catch {
+      // Not JSON — skip scrubbing, return text as-is
+      parsed = undefined;
+    }
+    if (parsed !== undefined) {
        
       const scrubResult = opts.fieldScrubber.scrub(parsed, connection, endpoint) as {data: unknown};
       output = JSON.stringify(scrubResult.data);
-    } catch {
-      // Not JSON — return as-is
     }
   }
 
@@ -197,7 +201,11 @@ export function createToolContextFactory(
       const storeDef = opts.storeDefinitions.find((s) => s.name === storeName);
       if (!storeDef) {
         const available = opts.storeDefinitions.map((s) => s.name).join(', ');
-        throw new Error(`Store "${storeName}" not found. Available: ${available || '(none)'}`);
+        throw new StoreError(`Store "${storeName}" not found. Available: ${available || '(none)'}`, {
+          store: storeName,
+          operation: 'put',
+          context: {available, session: opts.sessionId},
+        });
       }
       const key = resolveKey(storeDef.entity.key, payload);
       await opts.storeBackend.put(opts.appId, storeName, key, payload, {});
@@ -211,10 +219,10 @@ export function createToolContextFactory(
     },
 
     env(name) {
-      if (!opts.envAllowlist.includes(name)) {
+      if (!(name in opts.envAllowlist)) {
         return undefined;
       }
-      return process.env[name];
+      return opts.envAllowlist[name];
     },
 
     log(message) {
