@@ -1,5 +1,14 @@
 # @amodalai/core
 
+## 0.2.0
+
+### Patch Changes
+
+- [#144](https://github.com/amodalai/amodal/pull/144) [`42d1947`](https://github.com/amodalai/amodal/commit/42d194773515d196992cf9586819333b64d6187e) Thanks [@gte620v](https://github.com/gte620v)! - Remove gemini-cli-core dependency and add public createAgent() API (Phase 4.1 + 4.2)
+
+- Updated dependencies []:
+  - @amodalai/types@0.2.0
+
 ## 0.1.26
 
 ### Patch Changes

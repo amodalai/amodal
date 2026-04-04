@@ -1,5 +1,117 @@
 # @amodalai/runtime
 
+## 0.2.0
+
+### Minor Changes
+
+- [#123](https://github.com/amodalai/amodal/pull/123) [`95492b6`](https://github.com/amodalai/amodal/commit/95492b611e5626a22d0dd782ca91e18750ac0f0e) Thanks [@gte620v](https://github.com/gte620v)! - Add provider failover chain for the LLMProvider interface (Phase 1.4)
+
+### Patch Changes
+
+- [#128](https://github.com/amodalai/amodal/pull/128) [`dcb5094`](https://github.com/amodalai/amodal/commit/dcb5094fa382ef47b33fbe1bc8a36c31084ef654) Thanks [@gte620v](https://github.com/gte620v)! - Rewrite admin file tools (read/write/delete repo file, internal API) with Zod schemas for the new ToolRegistry. Preserves path validation and directory restrictions.
+
+- [#139](https://github.com/amodalai/amodal/pull/139) [`4c3d572`](https://github.com/amodalai/amodal/commit/4c3d5722e263bf6dda2dba93f29427d06615fbd3) Thanks [@gte620v](https://github.com/gte620v)! - Rewrite chat routes to use StandaloneSessionManager (Phase 3.5c)
+  - New `chat-stream.ts`, `ai-stream.ts`, `chat.ts` routes use `StandaloneSessionManager` + `buildSessionComponents()` instead of the legacy `SessionManager`
+  - New `session-resolver.ts` extracts shared session resolution logic (bundle resolution, session lookup/resume/create)
+  - Add hydration deduplication to `StandaloneSessionManager.resume()` via `pendingResumes` map
+  - Legacy route files preserved as `*-legacy.ts` for `server.ts`/`local-server.ts`/`snapshot-server.ts` until Phase 3.5e rewrites the server lifecycle
+  - Export `StandaloneSessionManager`, `resolveSession`, `resolveBundle`, `BundleResolver`, `SharedResources` from runtime package
+
+- [#134](https://github.com/amodalai/amodal/pull/134) [`8ebccd3`](https://github.com/amodalai/amodal/commit/8ebccd30eacf3d97ea28c4c5199a862361918cd2) Thanks [@gte620v](https://github.com/gte620v)! - Implement Phase 3.3: context compaction, smart snipping, and loop detection upgrade.
+
+  **Compaction**: COMPACTING state now summarizes older conversation turns via
+  generateText with a structured handoff prompt (current state, original task,
+  key data, actions taken, errors, next steps). Keeps last 6 turns verbatim.
+  Circuit breaker trips after 3 consecutive failures — continues without
+  compaction rather than crashing.
+
+  **Smart snipping**: Tool results exceeding 20K chars are snipped to keep the
+  first and last 2K chars with a [snipped] marker. Replaces the blunt 40K hard
+  truncation from Phase 3.1.
+
+  **Loop detection upgrade**: Now checks parameter similarity, not just tool name
+  frequency. Calls with the same keys and >50% identical values are grouped as
+  similar, catching retry loops where only one parameter changes.
+
+  **SSE events**: Adds `compaction_start` and `compaction_end` events so the UI
+  can show compaction status and token savings.
+
+- [#125](https://github.com/amodalai/amodal/pull/125) [`cf08296`](https://github.com/amodalai/amodal/commit/cf08296efbe1655125dc8b4059bdf426ef324ee1) Thanks [@gte620v](https://github.com/gte620v)! - Extract PermissionChecker interface and rewrite request tool with Zod schemas for the new ToolRegistry. Includes AccessJsonPermissionChecker wrapping ActionGate with intent/method validation, delegation, and threshold escalation.
+
+- [#133](https://github.com/amodalai/amodal/pull/133) [`baa667d`](https://github.com/amodalai/amodal/commit/baa667d4dd783a105516d0c82b68c7c660dd2611) Thanks [@gte620v](https://github.com/gte620v)! - Add standalone context compiler (Phase 3.2)
+
+  Extracts system prompt compilation into `packages/runtime/src/context/compiler.ts` — a single module that takes raw agent config (connections, skills, knowledge, stores) and produces the complete system prompt. Handles field guidance generation, scope label resolution, alternative lookup guidance, and store schema rendering internally. Replaces the scattered `buildDefaultPrompt()` assembly logic in session-manager and inspect routes.
+
+- [#126](https://github.com/amodalai/amodal/pull/126) [`60076b0`](https://github.com/amodalai/amodal/commit/60076b056cba9cf967d99b49d767391561e06573) Thanks [@gte620v](https://github.com/gte620v)! - Add custom tool adapter for new ToolRegistry (Phase 2.4). Converts LoadedTool instances to ToolDefinition objects using AI SDK jsonSchema() for proper LLM parameter schemas, typed errors, and full CustomToolContext (request, store, exec, env, log).
+
+- [#127](https://github.com/amodalai/amodal/pull/127) [`ea3bd16`](https://github.com/amodalai/amodal/commit/ea3bd166b79f900a4f5e941cf77fe8dcaf1ae638) Thanks [@gte620v](https://github.com/gte620v)! - Add MCP tool adapter to convert discovered tools to Zod-based ToolDefinitions (Phase 2.5)
+
+- [#141](https://github.com/amodalai/amodal/pull/141) [`db615b2`](https://github.com/amodalai/amodal/commit/db615b2f30ee91381c9b538b2c6c71606964b8b5) Thanks [@gte620v](https://github.com/gte620v)! - Complete SDK swap: admin/automation/eval swap, server lifecycle rewrite, delete old code (Phase 3.5d+e+f)
+
+- [#144](https://github.com/amodalai/amodal/pull/144) [`42d1947`](https://github.com/amodalai/amodal/commit/42d194773515d196992cf9586819333b64d6187e) Thanks [@gte620v](https://github.com/gte620v)! - Remove gemini-cli-core dependency and add public createAgent() API (Phase 4.1 + 4.2)
+
+- [#146](https://github.com/amodalai/amodal/pull/146) [`21fa374`](https://github.com/amodalai/amodal/commit/21fa374bc69e3219123735a990545cb1399165c4) Thanks [@gte620v](https://github.com/gte620v)! - Migrate PGLite store backend to Drizzle ORM and add Postgres backend (Phase 4.3b)
+
+  The PGLite store backend is now implemented on top of Drizzle ORM instead of raw SQL. A new Postgres backend (`createPostgresStoreBackend`) shares the same query layer and schema, enabling hosted runtimes to swap backends without changing behaviour. Both backends share `storeDocuments` and `storeDocumentVersions` tables defined in the shared Drizzle schema. Store-backend errors now throw typed `StoreError` instances instead of being swallowed and returned as `null`/empty results.
+
+- [#147](https://github.com/amodalai/amodal/pull/147) [`4678842`](https://github.com/amodalai/amodal/commit/4678842c361e87baaef0eefe2745a9348ad34377) Thanks [@gte620v](https://github.com/gte620v)! - Pre-release fixes for 0.2.0:
+  - Fix chat sessions not appearing in `/sessions` endpoint. The `onSessionPersist`
+    stream hook now mirrors the session to the legacy file-based `SessionStore`
+    (read by the UI history panel) alongside the PGLite write. Mirror write is
+    wrapped in try/catch with `log.warn` — PGLite remains the source of truth,
+    so a mirror failure doesn't break the route after the response has drained.
+  - Fix `buildPages()` crashing on relative `repoPath`. The generated wrapper
+    `.tsx` lives in `.amodal/pages-build/` and imports the page entry by path;
+    esbuild can't resolve that import if the path is relative. Now resolves
+    to absolute at the top of the function.
+  - Forward `ConfirmationRequired`, `CompactionStart`/`End`, and `ToolLog` SSE
+    events to the AI SDK UI stream as `data-*` events. Previously dropped.
+    Remaining event types (explore, plan mode, field scrub) are explicitly
+    dropped; the switch is now exhaustive.
+  - Wrap all 20 async Express route handlers with `asyncHandler()` so rejected
+    promises propagate to the error middleware instead of hanging the request.
+    New `asyncHandler` helper in `routes/route-helpers.ts`.
+
+- [#119](https://github.com/amodalai/amodal/pull/119) [`756c452`](https://github.com/amodalai/amodal/commit/756c452c8da34647c02ab66dd5816207003c97e3) Thanks [@gte620v](https://github.com/gte620v)! - Add Vercel AI SDK v6 dependencies (ai, @ai-sdk/anthropic, @ai-sdk/openai, @ai-sdk/google) and LLMProvider abstraction with createProvider() factory. Includes content generator bridge specification for Phase 1.3.
+
+- [#130](https://github.com/amodalai/amodal/pull/130) [`fa5136e`](https://github.com/amodalai/amodal/commit/fa5136e5f18e9579be7ed6e34d6b296ee2fbd5a2) Thanks [@gte620v](https://github.com/gte620v)! - Remove all `as never` casts from tool registration in session-manager (Phase 2.7)
+
+- [#137](https://github.com/amodalai/amodal/pull/137) [`0667c26`](https://github.com/amodalai/amodal/commit/0667c265b113e9f4b59ae214a84dfe492370edf3) Thanks [@gte620v](https://github.com/gte620v)! - Add tool context factory and session builder (Phase 3.5a + 3.5b)
+
+- [#135](https://github.com/amodalai/amodal/pull/135) [`4e8dde3`](https://github.com/amodalai/amodal/commit/4e8dde3678457974e08f3bf21405525f6fa322c1) Thanks [@gte620v](https://github.com/gte620v)! - Add standalone session manager with Drizzle-backed PGLite persistence, versioned sessions, and onUsage hook on AgentContext
+
+- [#145](https://github.com/amodalai/amodal/pull/145) [`1b8c30a`](https://github.com/amodalai/amodal/commit/1b8c30a687b245e15dbb01bdced605e43e454e1a) Thanks [@gte620v](https://github.com/gte620v)! - Fix tool discoverability and PGLite startup crash
+  - **System prompt tool name mismatch:** `compiler.ts` told the LLM to use `write_<store>`, `batch_<store>`, `query_stores` but the actual registered tool names are `store_<store>`, `store_<store>_batch`, `query_store`. Fixed the prompt to match the registered names.
+  - **Improved store tool descriptions:** more actionable text, plus `.describe()` on `query_store` Zod params so the LLM sees field-level guidance.
+  - **PGLite lock file clash:** `local-server.ts` wrote `server.lock` INSIDE the data dir, which PostgreSQL treats as a corrupted `postmaster.pid` and crashes with `exit(1)`. Moved to `${dataDir}.lock` (sibling path).
+  - **Smoke test coverage:** added 16 tests for pages, sessions, files, webhooks, stores REST, and feedback endpoints.
+
+- [#142](https://github.com/amodalai/amodal/pull/142) [`c2d02c5`](https://github.com/amodalai/amodal/commit/c2d02c5447a203652fd1cb338f58c28e643654e2) Thanks [@gte620v](https://github.com/gte620v)! - Add end-to-end smoke tests with self-contained test agent and mock servers
+
+- [#132](https://github.com/amodalai/amodal/pull/132) [`360f9cd`](https://github.com/amodalai/amodal/commit/360f9cd70e004ca7a6bd0db70b31ba60715bb66e) Thanks [@gte620v](https://github.com/gte620v)! - Add agent loop state machine (Phase 3.1). Implements `runAgent()` async generator with discriminated union states (thinking, streaming, executing, confirming, compacting, dispatching, done) and exhaustive transition dispatch. Includes tool pre-execution for read-only tools, parameter sanitization, abort handling, turn budget enforcement, and SSE event emission. Compacting and dispatching states are stubs for Phase 3.3+.
+
+- [#124](https://github.com/amodalai/amodal/pull/124) [`77b41db`](https://github.com/amodalai/amodal/commit/77b41db64dc4b030ee774eaaf80d02fc222de5b0) Thanks [@gte620v](https://github.com/gte620v)! - Rewrite store tools (write, batch, query) with Zod schemas for the new ToolRegistry. Includes registerStoreTools() helper and 15 unit tests.
+
+- [#143](https://github.com/amodalai/amodal/pull/143) [`4a7b781`](https://github.com/amodalai/amodal/commit/4a7b781279f0a15a222c9d40079e18965b437072) Thanks [@gte620v](https://github.com/gte620v)! - Implement sub-agent dispatch (Phase 3.6)
+  - New `dispatch_task` tool: Zod-validated schema for delegating sub-tasks to child agents with a subset of tools
+  - DISPATCHING state handler: runs child `runAgent()` loop, wraps child events as `SSESubagentEvent` effects, merges child usage into parent
+  - EXECUTING state handler intercepts `dispatch_task` by name and transitions to DISPATCHING (avoids circular dependency)
+  - Child tools automatically exclude `dispatch_task` to prevent infinite recursion
+  - Child maxTurns defaults to 10 (budget-capped)
+  - Registered as system tool in session-builder alongside present and stop_execution
+
+- [#136](https://github.com/amodalai/amodal/pull/136) [`2fa8f2a`](https://github.com/amodalai/amodal/commit/2fa8f2a859fc7bb1dd632a26d933b4d4c1136185) Thanks [@gte620v](https://github.com/gte620v)! - Add tool context factory (Phase 3.5a)
+
+  Creates `createToolContextFactory()` in `packages/runtime/src/session/tool-context-factory.ts` — the bridge between the Phase 3 agent loop and Phase 2 tool implementations. Wires `ctx.request()` to connection HTTP calls with auth headers, `ctx.store()` to store backend with key resolution, `ctx.env()` with allowlist, and `ctx.log()` to structured logger. Replaces the legacy `buildToolContext()` that depended on `AgentSession`.
+
+- [#121](https://github.com/amodalai/amodal/pull/121) [`eb24402`](https://github.com/amodalai/amodal/commit/eb24402b712f637f791035aa18113c096c99a452) Thanks [@gte620v](https://github.com/gte620v)! - Add new ToolRegistry with Zod-based ToolDefinition, readOnly flag, and category metadata for the tool system rewrite.
+
+- [#122](https://github.com/amodalai/amodal/pull/122) [`f8a8781`](https://github.com/amodalai/amodal/commit/f8a8781cb61afa20c3d57efff4df8c06f18e1111) Thanks [@gte620v](https://github.com/gte620v)! - Replace MultiProviderContentGenerator with VercelContentGenerator bridge. LLM calls now route through the Vercel AI SDK instead of our custom RuntimeProvider implementations. All 5 provider round-trip tests pass (Anthropic, OpenAI, Google, DeepSeek, Groq).
+
+- Updated dependencies [[`42d1947`](https://github.com/amodalai/amodal/commit/42d194773515d196992cf9586819333b64d6187e)]:
+  - @amodalai/core@0.2.0
+  - @amodalai/types@0.2.0
+
 ## 0.1.26
 
 ### Patch Changes
