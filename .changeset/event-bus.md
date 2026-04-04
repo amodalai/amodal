@@ -1,6 +1,6 @@
 ---
-"@amodalai/runtime": minor
-"@amodalai/types": minor
+"@amodalai/runtime": patch
+"@amodalai/types": patch
 ---
 
 Add runtime event bus for push-based UI updates.
