@@ -1,0 +1,17 @@
+{
+  "name": "echo_tool",
+  "description": "Echo a message, fetch from mock API, and write to store. Used for smoke testing custom tool wiring.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "message": {
+        "type": "string",
+        "description": "Message to echo back"
+      }
+    },
+    "required": ["message"]
+  },
+  "confirm": true,
+  "timeout": 10000,
+  "env": []
+}

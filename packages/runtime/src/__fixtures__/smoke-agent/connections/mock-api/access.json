@@ -1,0 +1,11 @@
+{
+  "endpoints": {
+    "GET /items": {
+      "returns": ["id", "name", "status"]
+    },
+    "POST /items": {
+      "returns": ["id"],
+      "confirm": true
+    }
+  }
+}

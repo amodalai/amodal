@@ -1,0 +1,11 @@
+{
+  "entity": {
+    "name": "TestItem",
+    "key": "{item_id}",
+    "schema": {
+      "item_id": { "type": "string" },
+      "name": { "type": "string" },
+      "status": { "type": "enum", "values": ["active", "archived"] }
+    }
+  }
+}
