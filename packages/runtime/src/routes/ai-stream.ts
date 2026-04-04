@@ -283,14 +283,7 @@ export function translateEvent(
       break;
     }
 
-    case SSEEventType.AskUser: {
-      const askData: Record<string, unknown> = {
-        ask_id: event.ask_id,
-        questions: event.questions,
-      };
-      out.push({type: 'data-ask-user', data: askData});
-      break;
-    }
+    // AskUser removed — ask_user tool was dropped in Phase 3.5a½
 
     case SSEEventType.CredentialSaved: {
       out.push({

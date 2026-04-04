@@ -8,5 +8,3 @@ export * from './kb-types.js';
 export * from './kb-formatter.js';
 export * from './kb-index.js';
 export * from './knowledge-store.js';
-export * from './load-knowledge.js';
-export * from './propose-knowledge.js';

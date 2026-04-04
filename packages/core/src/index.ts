@@ -4,20 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-// Re-export ALL upstream symbols so consumers only need @amodalai/core
-export * from '@google/gemini-cli-core';
-
-// Our config wrapper
-export {
-  AmodalConfig,
-  type AmodalConfigParameters,
-  type AmodalConfigExtensions,
-} from './amodal-config.js';
-export type { ToolContext } from './tool-context.js';
-
-// Tool registration
-export { registerAmodalTools } from './tool-registration.js';
-
 // Amodal tool names
 export {
   PROPOSE_KNOWLEDGE_TOOL_NAME,
@@ -82,30 +68,8 @@ export * from './eval/index.js';
 // Runtime provider abstraction
 export * from './providers/runtime/index.js';
 
-// Multi-provider content generator (bridges upstream ContentGenerator to RuntimeProvider)
-export * from './providers/content-generator/index.js';
-
 // Default system prompt
 export { buildDefaultPrompt } from './runtime/default-prompt.js';
-
-// Store tools
-export { StoreWriteTool } from './tools/store-write-tool.js';
-export { StoreBatchTool } from './tools/store-batch-tool.js';
-export { StoreQueryTool, QUERY_STORE_TOOL_NAME } from './tools/store-query-tool.js';
-
-// Custom tool types
-export * from './tools/http-tool-types.js';
-export * from './tools/chain-tool-types.js';
-export * from './tools/function-tool-types.js';
-export * from './tools/request-tool-types.js';
-
-// Custom tool registrars
-export { registerHttpTools } from './tools/http-tool-registry.js';
-export { registerChainTools } from './tools/chain-tool-registry.js';
-export { registerFunctionTools } from './tools/function-tool-registry.js';
-
-// Request tool
-export { RequestTool } from './tools/request-tool.js';
 
 // Logger
 export { log, setLogLevel, getLogLevel, setLogFormat, getLogFormat, setSanitize, LogLevel, createLogger } from './logger.js';

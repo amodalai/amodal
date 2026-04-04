@@ -35,10 +35,6 @@ export type {
   ExploreRequest,
   ExploreResult,
 } from './explore-tool.js';
-export {
-  createSecuredReadOnlyRequestTool,
-  createSecuredRequestTool,
-} from './request-integration.js';
 export {PlanModeManager} from './plan-mode.js';
 export {OutputPipeline, StreamGuardProcessor} from './output-pipeline.js';
 export type {OutputPipelineConfig, PipelineResult} from './output-pipeline.js';
