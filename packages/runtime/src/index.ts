@@ -147,6 +147,10 @@ export {
   registerAdminFileTools,
 } from './tools/admin-file-tools.js';
 
+// Tool context factory
+export { createToolContextFactory } from './session/tool-context-factory.js';
+export type { ToolContextFactoryOptions } from './session/tool-context-factory.js';
+
 // Context compiler
 export { compileContext } from './context/compiler.js';
 export type {

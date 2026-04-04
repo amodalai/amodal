@@ -1,0 +1,234 @@
+/**
+ * @license
+ * Copyright 2026 Amodal Labs, Inc.
+ * SPDX-License-Identifier: MIT
+ */
+
+/**
+ * Tool Context Factory (Phase 3.5a).
+ *
+ * Builds a ToolContext from session-level dependencies. This is the bridge
+ * between the Phase 3 agent loop and Phase 2 tool implementations.
+ *
+ * Replaces the old `buildToolContext()` in agent/tool-context-builder.ts
+ * which depended on the legacy AgentSession type. This factory takes
+ * explicit dependencies and returns a factory function matching the
+ * `AgentContext.buildToolContext` signature: `(callId: string) => ToolContext`.
+ */
+
+import type {LoadedStore, StoreBackend} from '@amodalai/types';
+import type {FieldScrubber} from '@amodalai/core';
+import type {ConnectionsMap} from '../tools/request-tool.js';
+import type {ToolContext} from '../tools/types.js';
+import type {Logger} from '../logger.js';
+import {ConnectionError} from '../errors.js';
+import {resolveKey} from '../stores/key-resolver.js';
+
+// ---------------------------------------------------------------------------
+// Factory options
+// ---------------------------------------------------------------------------
+
+/** Dependencies for creating tool contexts. */
+export interface ToolContextFactoryOptions {
+  /** Connection configs (base_url, auth headers, etc.) */
+  connectionsMap: ConnectionsMap;
+  /** Shared store backend for ctx.store() */
+  storeBackend: StoreBackend;
+  /** Store definitions for key resolution */
+  storeDefinitions: LoadedStore[];
+  /** App ID for store isolation */
+  appId: string;
+  /** Allowlisted env var names for ctx.env() */
+  envAllowlist: string[];
+  /** Session-scoped logger */
+  logger: Logger;
+  /** Field scrubber for response sanitization (optional) */
+  fieldScrubber?: FieldScrubber | null;
+  /** User info */
+  user: {roles: string[]; [key: string]: unknown};
+  /** Session ID for correlation */
+  sessionId: string;
+  /** Tenant ID for multi-tenant isolation */
+  tenantId: string;
+}
+
+// ---------------------------------------------------------------------------
+// Request implementation (internalized from request-helper.ts)
+// ---------------------------------------------------------------------------
+
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * Resolve auth template variables: "Bearer {{API_KEY}}" → "Bearer token123"
+ */
+function resolveAuthTemplate(template: string, connectionConfig: Record<string, unknown>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, varName: string) => {
+    const value = connectionConfig[varName];
+    return value !== undefined ? String(value) : '';
+  });
+}
+
+async function makeRequest(
+  opts: ToolContextFactoryOptions,
+  connection: string,
+  endpoint: string,
+  params?: {method?: string; data?: unknown; params?: Record<string, string>},
+  signal?: AbortSignal,
+): Promise<unknown> {
+  const method = params?.method ?? 'GET';
+
+  const connConfig = opts.connectionsMap[connection];
+  if (!connConfig) {
+    const available = Object.keys(opts.connectionsMap);
+    const suggestion = available.find((n) => n.toLowerCase() === connection.toLowerCase())
+      ?? available.find((n) => connection.toLowerCase().includes(n.toLowerCase()) || n.toLowerCase().includes(connection.toLowerCase()));
+    throw new ConnectionError(
+      `Connection "${connection}" not found. Available: ${available.join(', ') || '(none)'}${suggestion ? `. Did you mean "${suggestion}"?` : ''}`,
+      {connection, action: `${method} ${endpoint}`},
+    );
+  }
+
+  const baseUrl = connConfig.base_url;
+  if (!baseUrl) {
+    throw new ConnectionError(`Connection "${connection}" has no base_url`, {connection, action: `${method} ${endpoint}`});
+  }
+  let url = `${baseUrl.replace(/\/$/, '')}/${endpoint.replace(/^\//, '')}`;
+
+  // Add query params
+  if (params?.params) {
+    const searchParams = new URLSearchParams();
+    for (const [k, v] of Object.entries(params.params)) {
+      searchParams.set(k, v);
+    }
+    const qs = searchParams.toString();
+    if (qs) {
+      url += `?${qs}`;
+    }
+  }
+
+  // Build headers
+  const headers: Record<string, string> = {'Content-Type': 'application/json'};
+  const reqConfig = connConfig._request_config;
+  if (reqConfig?.auth) {
+    for (const entry of reqConfig.auth) {
+      headers[entry.header] = resolveAuthTemplate(entry.value_template, connConfig);
+    }
+  }
+  if (reqConfig?.default_headers) {
+    for (const [k, v] of Object.entries(reqConfig.default_headers)) {
+      headers[k] = v;
+    }
+  }
+
+  const requestSignal = signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+
+  const fetchOpts: RequestInit = {method, headers, signal: requestSignal};
+  if (params?.data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+    fetchOpts.body = JSON.stringify(params.data);
+  }
+
+  const response = await fetch(url, fetchOpts);
+  const text = await response.text();
+
+  // Field scrubbing
+  let output = text;
+  if (opts.fieldScrubber) {
+    try {
+      const parsed: unknown = JSON.parse(text);
+       
+      const scrubResult = opts.fieldScrubber.scrub(parsed, connection, endpoint) as {data: unknown};
+      output = JSON.stringify(scrubResult.data);
+    } catch {
+      // Not JSON — return as-is
+    }
+  }
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ConnectionError(
+        `Authentication failed (${String(response.status)}) for connection "${connection}". Check credentials.`,
+        {connection, action: `${method} ${endpoint}`},
+      );
+    }
+    throw new ConnectionError(
+      `HTTP ${String(response.status)} from "${connection}" ${method} ${endpoint}: ${output.substring(0, 500)}`,
+      {connection, action: `${method} ${endpoint}`},
+    );
+  }
+
+  // Parse JSON response if possible
+  try {
+    return JSON.parse(output) as unknown;
+  } catch {
+    return output;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a factory function that builds ToolContext instances for tool execution.
+ *
+ * The returned factory is passed as `AgentContext.buildToolContext`. The EXECUTING
+ * state handler calls it once per tool execution with the tool call ID.
+ *
+ * The EXECUTING handler composes its own AbortSignal (session + per-tool timeout)
+ * and overrides `ctx.signal` before passing to the tool — so the signal here is
+ * a reasonable default, not the final timeout.
+ */
+export function createToolContextFactory(
+  opts: ToolContextFactoryOptions,
+): (callId: string) => ToolContext {
+  return (callId: string): ToolContext => ({
+    async request(connection, endpoint, params) {
+      opts.logger.debug('tool_context_request', {
+        callId,
+        connection,
+        endpoint,
+        method: params?.method ?? 'GET',
+        session: opts.sessionId,
+      });
+      return makeRequest(opts, connection, endpoint, params);
+    },
+
+    async store(storeName, payload) {
+      const storeDef = opts.storeDefinitions.find((s) => s.name === storeName);
+      if (!storeDef) {
+        const available = opts.storeDefinitions.map((s) => s.name).join(', ');
+        throw new Error(`Store "${storeName}" not found. Available: ${available || '(none)'}`);
+      }
+      const key = resolveKey(storeDef.entity.key, payload);
+      await opts.storeBackend.put(opts.appId, storeName, key, payload, {});
+      opts.logger.debug('tool_context_store_write', {
+        callId,
+        store: storeName,
+        key,
+        session: opts.sessionId,
+      });
+      return {key};
+    },
+
+    env(name) {
+      if (!opts.envAllowlist.includes(name)) {
+        return undefined;
+      }
+      return process.env[name];
+    },
+
+    log(message) {
+      opts.logger.info('tool_log', {
+        callId,
+        message,
+        session: opts.sessionId,
+        tenant: opts.tenantId,
+      });
+    },
+
+    user: opts.user,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    sessionId: opts.sessionId,
+    tenantId: opts.tenantId,
+  });
+}
