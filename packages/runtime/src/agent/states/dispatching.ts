@@ -100,6 +100,7 @@ export async function handleDispatching(
 
   // Run child agent loop and translate events to SubagentEvents
   let childResponse = '';
+  let childFailed = false;
 
   try {
     for await (const childEvent of runAgent({messages: [{role: 'user', content: task.prompt}], context: childCtx})) {
@@ -188,6 +189,7 @@ export async function handleDispatching(
     });
 
     childResponse = `Sub-agent "${task.agentName}" failed: ${errorMessage}`;
+    childFailed = true;
   }
 
   // Merge child usage into parent
@@ -214,11 +216,10 @@ export async function handleDispatching(
   });
 
   // Build tool result from child response
-  const hasError = childResponse.startsWith('Sub-agent') && childResponse.includes('failed:');
   const result: ToolResult = {
     callId: toolCallId,
     toolName: DISPATCH_TOOL_NAME,
-    status: hasError ? 'error' : 'success',
+    status: childFailed ? 'error' : 'success',
     content: childResponse || '(no response from sub-agent)',
   };
 

@@ -911,6 +911,48 @@ describe('handleDispatching (via transition)', () => {
     // Should transition to executing the next tool in queue
     expect(result.next.type).toBe('executing');
   });
+
+  it('handles child agent error gracefully', async () => {
+    // Provider that throws on streamText
+    const failingProvider = {
+      model: 'test-model',
+      provider: 'test',
+      languageModel: {} as AgentContext['provider']['languageModel'],
+      streamText: vi.fn(() => { throw new Error('Provider crashed'); }),
+      generateText: vi.fn(),
+    };
+    const ctx = makeMockContext({provider: failingProvider});
+
+    const result = await transition({
+      type: 'dispatching',
+      task: {agentName: 'broken-agent', toolSubset: [], prompt: 'Do something'},
+      parentMessages: [],
+      toolCallId: 'tc-fail',
+      queue: [],
+      results: [],
+    }, ctx);
+
+    // Should NOT crash — transitions to thinking so parent can recover
+    expect(result.next.type).toBe('thinking');
+
+    // Should emit SubagentEvent with error
+    const errorEvents = result.effects.filter(
+      (e) => e.type === SSEEventType.SubagentEvent && 'event_type' in e && e.event_type === 'error',
+    );
+    expect(errorEvents.length).toBeGreaterThanOrEqual(1);
+
+    // Should emit ToolCallResult with error status
+    const toolResult = result.effects.find((e) => e.type === SSEEventType.ToolCallResult);
+    expect(toolResult).toBeDefined();
+    if (toolResult && toolResult.type === SSEEventType.ToolCallResult) {
+      expect(toolResult.status).toBe('error');
+    }
+
+    // Should log the error
+    expect(ctx.logger.error).toHaveBeenCalledWith('dispatch_child_error', expect.objectContaining({
+      agent: 'broken-agent',
+    }));
+  });
 });
 
 // ---------------------------------------------------------------------------
