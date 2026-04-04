@@ -21,59 +21,21 @@
  * ```
  */
 
-import type {AgentBundle, StoreBackend} from '@amodalai/types';
+import type {StoreBackend} from '@amodalai/types';
 import {loadRepo, McpManager} from '@amodalai/core';
 import {StandaloneSessionManager} from '../session/manager.js';
 import {buildSessionComponents} from '../session/session-builder.js';
 import type {SessionComponents} from '../session/session-builder.js';
 import {LocalToolExecutor} from '../agent/tool-executor-local.js';
+import {buildMcpConfigs} from '../agent/mcp-config.js';
 import {createPGLiteStoreBackend} from '../stores/pglite-store-backend.js';
 import {createLogger} from '../logger.js';
+import {SessionError} from '../errors.js';
 import {LOCAL_APP_ID} from '../constants.js';
 import type {Agent, AgentConfig, AgentSession} from './types.js';
 import type {SSEEvent} from '../types.js';
 
-// ---------------------------------------------------------------------------
-// MCP initialization (copied from local-server.ts — shared logic)
-// ---------------------------------------------------------------------------
-
-function buildMcpConfigs(
-  bundle: AgentBundle,
-): Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean}> {
-  const configs: Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean}> = {};
-
-  for (const [name, conn] of bundle.connections) {
-    if (conn.spec.protocol === 'mcp') {
-      const resolveEnv = (obj: Record<string, string>): Record<string, string> => {
-        const result: Record<string, string> = {};
-        for (const [key, value] of Object.entries(obj)) {
-          result[key] = value.startsWith('env:') ? (process.env[value.slice(4)] ?? '') : value;
-        }
-        return result;
-      };
-
-      configs[name] = {
-        transport: conn.spec.transport ?? 'stdio',
-        command: conn.spec.command,
-        args: conn.spec.args,
-        env: conn.spec.env ? resolveEnv(conn.spec.env) : undefined,
-        url: conn.spec.url,
-        headers: conn.spec.headers ? resolveEnv(conn.spec.headers) : undefined,
-        trust: conn.spec.trust,
-      };
-    }
-  }
-
-  if (bundle.mcpServers) {
-    for (const [name, config] of Object.entries(bundle.mcpServers)) {
-      if (!configs[name]) {
-        configs[name] = config;
-      }
-    }
-  }
-
-  return configs;
-}
+const MCP_STARTUP_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // createAgent
@@ -103,15 +65,26 @@ export async function createAgent(config: AgentConfig): Promise<Agent> {
   // Tool executor
   const toolExecutor = bundle.tools.length > 0 ? new LocalToolExecutor() : undefined;
 
-  // MCP
+  // MCP — with timeout to prevent hanging on broken MCP servers
   let mcpManager: McpManager | null = config.mcpManager ?? null;
   if (!mcpManager) {
     const mcpConfigs = buildMcpConfigs(bundle);
     if (Object.keys(mcpConfigs).length > 0) {
       const manager = new McpManager();
-      await manager.startServers(mcpConfigs);
-      if (manager.connectedCount > 0) {
-        mcpManager = manager;
+      try {
+        await Promise.race([
+          manager.startServers(mcpConfigs),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('MCP startup timed out')), MCP_STARTUP_TIMEOUT_MS);
+          }),
+        ]);
+        if (manager.connectedCount > 0) {
+          mcpManager = manager;
+          logger.info('mcp_initialized', {servers: manager.connectedCount});
+        }
+      } catch (err) {
+        logger.warn('mcp_startup_failed', {error: err instanceof Error ? err.message : String(err)});
+        // Continue without MCP — agent still works for non-MCP tools
       }
     }
   }
@@ -187,7 +160,10 @@ function createAgentSession(
 ): AgentSession {
   const session = sessionManager.get(sessionId);
   if (!session) {
-    throw new Error(`Session "${sessionId}" not found`);
+    throw new SessionError(`Session "${sessionId}" not found`, {
+      sessionId,
+      context: {operation: 'createAgentSession'},
+    });
   }
 
   return {

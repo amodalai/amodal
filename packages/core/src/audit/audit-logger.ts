@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-/** Tool call kind (replaces upstream Kind enum). */
-type Kind = string;
+/** Tool call kind — HTTP method or tool action type. */
+type Kind = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'LIST' | 'READ' | 'WRITE' | (string & Record<never, never>);
 /** HTTP methods that mutate state. */
-const MUTATOR_KINDS: string[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
+const MUTATOR_KINDS: readonly string[] = ['POST', 'PUT', 'PATCH', 'DELETE'] as const;
 import type {
   AuditConfig,
   AuditContext,

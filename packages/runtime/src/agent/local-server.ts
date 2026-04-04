@@ -26,6 +26,7 @@ import {PGLiteSessionStore} from '../session/store.js';
 import {buildSessionComponents} from '../session/session-builder.js';
 import type {SharedResources} from '../routes/session-resolver.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
+import {buildMcpConfigs} from './mcp-config.js';
 import {ConfigWatcher} from './config-watcher.js';
 import {ProactiveRunner} from './proactive/proactive-runner.js';
 import {createChatStreamRouter} from '../routes/chat-stream.js';
@@ -612,48 +613,3 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   };
 }
 
-// ---------------------------------------------------------------------------
-// MCP config builder
-// ---------------------------------------------------------------------------
-
-function resolveEnvRefs(obj: Record<string, string>): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value.startsWith('env:')) {
-      result[key] = process.env[value.slice(4)] ?? '';
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-}
-
-function buildMcpConfigs(
-  bundle: AgentBundle,
-): Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean}> {
-  const configs: Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean}> = {};
-
-  for (const [name, conn] of bundle.connections) {
-    if (conn.spec.protocol === 'mcp') {
-      configs[name] = {
-        transport: conn.spec.transport ?? 'stdio',
-        command: conn.spec.command,
-        args: conn.spec.args,
-        env: conn.spec.env ? resolveEnvRefs(conn.spec.env) : undefined,
-        url: conn.spec.url,
-        headers: conn.spec.headers ? resolveEnvRefs(conn.spec.headers) : undefined,
-        trust: conn.spec.trust,
-      };
-    }
-  }
-
-  if (bundle.mcpServers) {
-    for (const [name, config] of Object.entries(bundle.mcpServers)) {
-      if (!configs[name]) {
-        configs[name] = config;
-      }
-    }
-  }
-
-  return configs;
-}
