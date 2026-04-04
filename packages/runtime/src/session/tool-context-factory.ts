@@ -217,8 +217,29 @@ export function createToolContextFactory(
           });
         }
         const key = resolveKey(storeDef.entity.key, payload);
-        await opts.storeBackend.put(opts.appId, storeName, key, payload, {});
+
         opts.logger.debug('tool_context_store_write', {
+          callId,
+          store: storeName,
+          key,
+          session: opts.sessionId,
+        });
+
+        // Race against abort signal so a hung PGLite doesn't block forever
+        await Promise.race([
+          opts.storeBackend.put(opts.appId, storeName, key, payload, {}),
+          new Promise<never>((_resolve, reject) => {
+            if (ctx.signal.aborted) {
+              reject(new StoreError('Store write timed out', {store: storeName, operation: 'put', context: {callId, key}}));
+              return;
+            }
+            ctx.signal.addEventListener('abort', () => {
+              reject(new StoreError('Store write timed out', {store: storeName, operation: 'put', context: {callId, key}}));
+            }, {once: true});
+          }),
+        ]);
+
+        opts.logger.debug('tool_context_store_complete', {
           callId,
           store: storeName,
           key,
