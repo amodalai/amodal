@@ -206,6 +206,59 @@ describe('handleThinking (via transition)', () => {
     expect(tools['search']).toHaveProperty('inputSchema');
     expect(tools['search']).not.toHaveProperty('execute');
   });
+
+  it('detects tool call loops and forces done(loop_detected)', async () => {
+    // Build messages with 8 repeated tool calls for the same tool
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 8; i++) {
+      messages.push({
+        role: 'assistant',
+        content: [{type: 'tool-call', toolCallId: `c${i}`, toolName: 'stuck_tool', input: {q: 'same'}}],
+      } as ModelMessage);
+      messages.push({
+        role: 'tool',
+        content: [{type: 'tool-result' as const, toolCallId: `c${i}`, toolName: 'stuck_tool', output: {type: 'text' as const, value: 'error'}}],
+      } as ModelMessage);
+    }
+
+    const ctx = makeMockContext();
+    const result = await transition({type: 'thinking', messages}, ctx);
+
+    expect(result.next.type).toBe('done');
+    if (result.next.type === 'done') {
+      expect(result.next.reason).toBe('loop_detected');
+    }
+    const errorEvents = result.effects.filter((e) => e.type === SSEEventType.Error);
+    expect(errorEvents.length).toBe(1);
+  });
+
+  it('injects warning when tool called 3+ times', async () => {
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 3; i++) {
+      messages.push({
+        role: 'assistant',
+        content: [{type: 'tool-call', toolCallId: `c${i}`, toolName: 'flaky_api', input: {}}],
+      } as ModelMessage);
+      messages.push({
+        role: 'tool',
+        content: [{type: 'tool-result' as const, toolCallId: `c${i}`, toolName: 'flaky_api', output: {type: 'text' as const, value: 'fail'}}],
+      } as ModelMessage);
+    }
+
+    const ctx = makeMockContext();
+    const result = await transition({type: 'thinking', messages}, ctx);
+
+    // Should still stream (not stop), but the messages passed to streamText
+    // should include a warning
+    expect(result.next.type).toBe('streaming');
+    const streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[0][0];
+    const lastMsg = streamTextCall.messages[streamTextCall.messages.length - 1];
+    expect(lastMsg.role).toBe('system');
+    if (typeof lastMsg.content === 'string') {
+      expect(lastMsg.content).toContain('flaky_api');
+      expect(lastMsg.content).toContain('3 times');
+    }
+  });
 });
 
 describe('handleStreaming (via transition)', () => {
@@ -371,6 +424,39 @@ describe('handleExecuting (via transition)', () => {
     const resultEvents = result.effects.filter((e) => e.type === SSEEventType.ToolCallResult);
     expect(startEvents.length).toBe(1);
     expect(resultEvents.length).toBe(1);
+  });
+
+  it('transitions to compacting when context exceeds threshold', async () => {
+    const tool = makeMockToolDef({
+      // Return a large result to inflate context
+      execute: vi.fn().mockResolvedValue('x'.repeat(10_000)),
+    });
+    const registry = makeMockRegistry({big_tool: tool});
+    const ctx = makeMockContext({
+      toolRegistry: registry,
+      maxContextTokens: 1000, // Very small budget
+      config: {...DEFAULT_LOOP_CONFIG, compactThreshold: 0.7},
+    });
+
+    // Pre-populate messages to be near the threshold
+    ctx.messages = Array.from({length: 20}, () => ({
+      role: 'user' as const,
+      content: 'x'.repeat(200),
+    })) as ModelMessage[];
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {toolCallId: 'call-1', toolName: 'big_tool', args: {}},
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    expect(result.next.type).toBe('compacting');
+    expect(ctx.logger.info).toHaveBeenCalledWith('context_compaction_triggered', expect.objectContaining({
+      session: 'test-session',
+    }));
   });
 
   it('continues to next tool when queue has more items', async () => {

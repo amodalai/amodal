@@ -126,36 +126,39 @@ export interface TransitionResult {
 
 /** Configuration knobs for the agent loop. */
 export interface AgentLoopConfig {
-  /** Max tool result size before snipping (chars). Default 50_000. */
+  /** Max tool result size before smart snipping (chars). Default 20_000. */
   maxResultSize: number;
-  /** Token ratio threshold for compaction. Default 0.8. */
+  /** Token ratio threshold for compaction (0-1). Default 0.7. */
   compactThreshold: number;
   /** Number of recent tool results to keep full. Default 5. */
   keepRecentResults: number;
-  /** Number of old results before clearing. Default 15. */
+  /** Number of tool results before clearing old ones. Default 15. */
   clearThreshold: number;
-  /** Max loop iterations before stopping. Default 8. */
+  /** Max repeated tool calls before forcing loop_detected. Default 8. */
   maxLoopIterations: number;
+  /** Repeated tool call count that triggers a warning injection. Default 3. */
+  loopWarningThreshold: number;
   /** Max output tokens per LLM call. */
   maxOutputTokens: number;
   /** Timeout for individual tool execution in milliseconds. Default 30_000. */
   toolTimeoutMs: number;
   /** Timeout for user confirmation in milliseconds. Default 300_000 (5 minutes). */
   confirmationTimeoutMs: number;
-  /** Hard truncation limit for tool results (chars) before Phase 3.3 snipping. Default 100_000. */
+  /** Hard truncation limit for tool results (chars). Default 40_000. */
   hardResultTruncation: number;
 }
 
 export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
-  maxResultSize: 50_000,
-  compactThreshold: 0.8,
+  maxResultSize: 20_000,
+  compactThreshold: 0.7,
   keepRecentResults: 5,
   clearThreshold: 15,
   maxLoopIterations: 8,
+  loopWarningThreshold: 3,
   maxOutputTokens: 16_384,
   toolTimeoutMs: 30_000,
   confirmationTimeoutMs: 300_000,
-  hardResultTruncation: 100_000,
+  hardResultTruncation: 40_000,
 };
 
 export interface AgentContext {

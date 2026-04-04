@@ -269,7 +269,22 @@ function nextAfterToolResult(
     };
   }
 
-  // All tool calls done — back to THINKING for the next LLM turn
+  // All tool calls done — check if context is heavy enough to compact
+  const estimatedTokens = estimateTokenCount(ctx.messages);
+  if (estimatedTokens > ctx.maxContextTokens * ctx.config.compactThreshold) {
+    ctx.logger.info('context_compaction_triggered', {
+      session: ctx.sessionId,
+      estimatedTokens,
+      maxContextTokens: ctx.maxContextTokens,
+      threshold: ctx.config.compactThreshold,
+    });
+    return {
+      next: {type: 'compacting', messages: ctx.messages},
+      effects,
+    };
+  }
+
+  // Context OK — back to THINKING for the next LLM turn
   return {
     next: {type: 'thinking', messages: ctx.messages},
     effects,
@@ -304,4 +319,15 @@ function sanitizeParams(params: Record<string, unknown>): Record<string, unknown
     }
   }
   return sanitized;
+}
+
+/**
+ * Rough token estimate from message array. ~4 chars per token.
+ * Phase 3.3 replaces this with actual tokenizer counting.
+ */
+function estimateTokenCount(messages: Array<import('ai').ModelMessage>): number {
+  // Rough estimate: serialize to JSON and count chars / 4
+  // Phase 3.3 replaces with actual tokenizer
+  const serialized = JSON.stringify(messages);
+  return Math.ceil(serialized.length / 4);
 }
