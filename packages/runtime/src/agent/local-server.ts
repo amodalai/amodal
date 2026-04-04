@@ -113,7 +113,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   let providerStatuses: ProviderStatus[] = PROVIDER_CHECKS.map((c) => ({
     provider: c.provider, envVar: c.envVar, keySet: !!process.env[c.envVar], verified: false,
   }));
-  checkProviders().then((results) => {
+  void checkProviders().then((results) => {
     providerStatuses = results;
     const verified = results.filter((r) => r.verified).map((r) => r.provider);
     if (verified.length > 0) {
