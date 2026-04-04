@@ -1,1 +1,3 @@
 .amodal/
+.amodal.lock
+tools/*/.build/
