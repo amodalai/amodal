@@ -149,6 +149,24 @@ describe('compileContext', () => {
     expect(result.systemPrompt.length).toBeGreaterThan(2000);
   });
 
+  it('G9: section order matches design doc priority (skills before connections)', () => {
+    const input = makeFullInput();
+    const result = compileContext(input);
+    const prompt = result.systemPrompt;
+
+    const skillsIndex = prompt.indexOf('## Skills');
+    const connectionsIndex = prompt.indexOf('## Connected systems');
+    const knowledgeIndex = prompt.indexOf('## Knowledge Base');
+    const storesIndex = prompt.indexOf('## Data Stores');
+
+    // Skills before connections (skills trimmed first when budget is added)
+    expect(skillsIndex).toBeLessThan(connectionsIndex);
+    // Knowledge before connections
+    expect(knowledgeIndex).toBeLessThan(connectionsIndex);
+    // Stores after connections
+    expect(storesIndex).toBeGreaterThan(connectionsIndex);
+  });
+
   // -------------------------------------------------------------------------
   // 3. Gotcha G10 — userContext vs description
   // -------------------------------------------------------------------------
@@ -551,5 +569,72 @@ describe('compileContext', () => {
     expect(result.systemPrompt).toContain('You are Minimal Agent.');
     expect(result.systemPrompt).not.toContain('undefined');
     expect(result.systemPrompt).not.toContain('null');
+  });
+
+  // -------------------------------------------------------------------------
+  // 16. Automation context
+  // -------------------------------------------------------------------------
+
+  it('includes automation context when provided', () => {
+    const result = compileContext({
+      name: 'Agent',
+      automationContext: 'This is a scheduled daily sync. Write results to the deals store.',
+    });
+
+    expect(result.systemPrompt).toContain('## Automation Context');
+    expect(result.systemPrompt).toContain('scheduled daily sync');
+  });
+
+  it('omits automation context section when not provided', () => {
+    const result = compileContext({name: 'Agent'});
+
+    expect(result.systemPrompt).not.toContain('## Automation Context');
+  });
+
+  // -------------------------------------------------------------------------
+  // 17. Token budget warning
+  // -------------------------------------------------------------------------
+
+  it('emits warning when prompt exceeds maxSystemTokens', () => {
+    const result = compileContext({
+      name: 'Agent',
+      maxSystemTokens: 10, // absurdly low
+    });
+
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('exceeds token budget');
+  });
+
+  it('no warning when prompt fits within maxSystemTokens', () => {
+    const result = compileContext({
+      name: 'Agent',
+      maxSystemTokens: 100_000,
+    });
+
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it('no warnings when maxSystemTokens is not set', () => {
+    const result = compileContext(makeFullInput());
+
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // 18. Store contributions use accurate per-store estimates
+  // -------------------------------------------------------------------------
+
+  it('store contributions do not include section header overhead', () => {
+    const result = compileContext({
+      name: 'Agent',
+      stores: [makeStore()],
+    });
+
+    const storeContribution = result.contributions.find((c) => c.name === 'deals');
+    expect(storeContribution).toBeDefined();
+    // The contribution should not include "## Data Stores" header
+    // A single store with 5 fields should be ~200-400 chars (~50-100 tokens)
+    expect(storeContribution!.tokens).toBeLessThan(150);
+    expect(storeContribution!.tokens).toBeGreaterThan(20);
   });
 });

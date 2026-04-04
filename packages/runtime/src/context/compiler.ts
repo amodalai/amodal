@@ -160,24 +160,33 @@ function renderFieldType(field: StoreFieldDefinition): string {
   }
 }
 
+function renderSingleStore(
+  store: {name: string; entity: {name: string; key: string; schema: Record<string, StoreFieldDefinition>}},
+): string {
+  const parts: string[] = [];
+  parts.push(`### ${store.name}`);
+  parts.push(`Entity: ${store.entity.name} (key: \`${store.entity.key}\`)`);
+  parts.push('');
+  parts.push('| Field | Type |');
+  parts.push('| ----- | ---- |');
+  for (const [name, field] of Object.entries(store.entity.schema)) {
+    parts.push(`| ${name} | ${renderFieldType(field)} |`);
+  }
+  return parts.join('\n');
+}
+
 function renderStoreSection(
   stores: Array<{name: string; entity: {name: string; key: string; schema: Record<string, StoreFieldDefinition>}}>,
 ): string {
   const parts: string[] = ['## Data Stores', ''];
 
   for (const store of stores) {
-    parts.push(`### ${store.name}`);
-    parts.push(`Entity: ${store.entity.name} (key: \`${store.entity.key}\`)`);
-    parts.push('');
-    parts.push('| Field | Type |');
-    parts.push('| ----- | ---- |');
-    for (const [name, field] of Object.entries(store.entity.schema)) {
-      parts.push(`| ${name} | ${renderFieldType(field)} |`);
-    }
-    parts.push('');
-    parts.push('Use the store tools (`write_<store>`, `batch_<store>`, `query_stores`) to read and write data.');
+    parts.push(renderSingleStore(store));
     parts.push('');
   }
+
+  parts.push('Use the store tools (`write_<store>`, `batch_<store>`, `query_stores`) to read and write data.');
+  parts.push('');
 
   return parts.join('\n');
 }
@@ -199,11 +208,13 @@ export function compileContext(input: CompilerInput): CompilerOutput {
       systemPrompt: input.basePrompt,
       source: 'base_prompt_override',
       contributions: [{name: 'Base prompt override', category: 'system', tokens: estimateTokens(input.basePrompt)}],
+      warnings: [],
     };
   }
 
   const parts: string[] = [];
   const contributions: CompilerContribution[] = [];
+  const warnings: string[] = [];
 
   // -------------------------------------------------------------------------
   // Identity
@@ -260,46 +271,7 @@ export function compileContext(input: CompilerInput): CompilerOutput {
   contributions.push({name: 'Base prompt', category: 'system', tokens: baseTokens});
 
   // -------------------------------------------------------------------------
-  // Connections
-  // -------------------------------------------------------------------------
-  if (input.connections && input.connections.length > 0) {
-    parts.push('## Connected systems');
-    parts.push('');
-
-    for (const conn of input.connections) {
-      const connParts: string[] = [];
-      connParts.push(`### Connection: ${conn.name}`);
-      if (conn.description) {
-        connParts.push(conn.description);
-      }
-      if (conn.endpoints.length > 0) {
-        connParts.push('');
-        connParts.push('**Available Endpoints:**');
-        for (const ep of conn.endpoints) {
-          connParts.push(`- ${ep.method} ${ep.path} — ${ep.description}`);
-        }
-      }
-      if (conn.entities) {
-        connParts.push('');
-        connParts.push(conn.entities);
-      }
-      if (conn.rules) {
-        connParts.push('');
-        connParts.push(conn.rules);
-      }
-      connParts.push('');
-
-      const connText = connParts.join('\n');
-      parts.push(connText);
-      contributions.push({name: conn.name, category: 'connection', tokens: estimateTokens(connText)});
-    }
-
-    parts.push('Use `request` with the connection name, method, endpoint, and intent to interact with these systems.');
-    parts.push('');
-  }
-
-  // -------------------------------------------------------------------------
-  // Skills
+  // Skills (before connections — skills are trimmed first when budget is added)
   // -------------------------------------------------------------------------
   if (input.skills && input.skills.length > 0) {
     parts.push('## Skills');
@@ -346,6 +318,46 @@ export function compileContext(input: CompilerInput): CompilerOutput {
   }
 
   // -------------------------------------------------------------------------
+  // Connections (after skills/knowledge — connection guidance is security-
+  // relevant and should be preserved when budget trimming is added)
+  // -------------------------------------------------------------------------
+  if (input.connections && input.connections.length > 0) {
+    parts.push('## Connected systems');
+    parts.push('');
+
+    for (const conn of input.connections) {
+      const connParts: string[] = [];
+      connParts.push(`### Connection: ${conn.name}`);
+      if (conn.description) {
+        connParts.push(conn.description);
+      }
+      if (conn.endpoints.length > 0) {
+        connParts.push('');
+        connParts.push('**Available Endpoints:**');
+        for (const ep of conn.endpoints) {
+          connParts.push(`- ${ep.method} ${ep.path} — ${ep.description}`);
+        }
+      }
+      if (conn.entities) {
+        connParts.push('');
+        connParts.push(conn.entities);
+      }
+      if (conn.rules) {
+        connParts.push('');
+        connParts.push(conn.rules);
+      }
+      connParts.push('');
+
+      const connText = connParts.join('\n');
+      parts.push(connText);
+      contributions.push({name: conn.name, category: 'connection', tokens: estimateTokens(connText)});
+    }
+
+    parts.push('Use `request` with the connection name, method, endpoint, and intent to interact with these systems.');
+    parts.push('');
+  }
+
+  // -------------------------------------------------------------------------
   // Stores
   // -------------------------------------------------------------------------
   if (input.stores && input.stores.length > 0) {
@@ -354,9 +366,18 @@ export function compileContext(input: CompilerInput): CompilerOutput {
     parts.push('');
 
     for (const store of input.stores) {
-      const singleStoreText = renderStoreSection([store]);
-      contributions.push({name: store.name, category: 'store', tokens: estimateTokens(singleStoreText)});
+      contributions.push({name: store.name, category: 'store', tokens: estimateTokens(renderSingleStore(store))});
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Automation context
+  // -------------------------------------------------------------------------
+  if (input.automationContext) {
+    parts.push('## Automation Context');
+    parts.push(input.automationContext);
+    parts.push('');
+    contributions.push({name: 'Automation context', category: 'system', tokens: estimateTokens(input.automationContext)});
   }
 
   // -------------------------------------------------------------------------
@@ -408,9 +429,23 @@ export function compileContext(input: CompilerInput): CompilerOutput {
 
   const systemPrompt = parts.join('\n').trim();
 
+  // -------------------------------------------------------------------------
+  // Token budget warning
+  // -------------------------------------------------------------------------
+  if (input.maxSystemTokens) {
+    const totalTokens = estimateTokens(systemPrompt);
+    if (totalTokens > input.maxSystemTokens) {
+      warnings.push(
+        `System prompt exceeds token budget: ~${String(totalTokens)} tokens estimated vs ${String(input.maxSystemTokens)} budget. ` +
+        'Token trimming is not yet implemented — all sections included unconditionally.',
+      );
+    }
+  }
+
   return {
     systemPrompt,
     source: 'compiled',
     contributions,
+    warnings,
   };
 }

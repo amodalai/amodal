@@ -90,10 +90,16 @@ export interface CompilerInput {
   /** User's roles for field guidance and scope resolution. */
   userRoles?: string[];
 
+  /** Automation context — prompt and constraints when running as an automation. */
+  automationContext?: string;
+
   /** Whether plan mode is active. */
   planMode?: boolean;
   /** Pre-approved plan for execution. */
   approvedPlan?: string;
+
+  /** Token budget for the system prompt. If exceeded, a warning is emitted. */
+  maxSystemTokens?: number;
 }
 
 /** Output from the context compiler. */
@@ -104,6 +110,8 @@ export interface CompilerOutput {
   source: 'compiled' | 'base_prompt_override';
   /** Per-section token estimates (chars / 4) for the context inspector. */
   contributions: CompilerContribution[];
+  /** Warnings emitted during compilation (e.g. token budget exceeded). */
+  warnings: string[];
 }
 
 export interface CompilerContribution {
