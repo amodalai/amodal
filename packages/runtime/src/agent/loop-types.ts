@@ -94,7 +94,6 @@ export interface CompactingState {
 export interface DispatchingState {
   type: 'dispatching';
   task: DispatchConfig;
-  parentMessages: ModelMessage[];
   /** Tool call ID of the dispatch_task call — needed for the tool result message */
   toolCallId: string;
   /** Remaining tool calls in the parent's execution queue */
@@ -121,6 +120,8 @@ export interface DispatchConfig {
   maxTurns?: number;
   /** Max context tokens for child agent */
   maxContextTokens?: number;
+  /** Timeout in ms for the child agent (default: 60s) */
+  timeoutMs?: number;
 }
 
 // ---------------------------------------------------------------------------

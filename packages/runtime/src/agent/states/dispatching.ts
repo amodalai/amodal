@@ -36,6 +36,7 @@ import {DEFAULT_CHILD_MAX_TURNS, DISPATCH_TOOL_NAME} from '../../tools/dispatch-
 // ---------------------------------------------------------------------------
 
 const DEFAULT_CHILD_MAX_CONTEXT_TOKENS = 100_000;
+const DEFAULT_CHILD_TIMEOUT_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // Handler
@@ -75,17 +76,28 @@ export async function handleDispatching(
     childRegistry.register(name, def);
   }
 
+  // Child-specific timeout — prevents a slow child from starving the parent.
+  // Combined with parent's signal so parent abort also stops child.
+  const childTimeoutMs = task.timeoutMs ?? DEFAULT_CHILD_TIMEOUT_MS;
+  const childSignal = AbortSignal.any([ctx.signal, AbortSignal.timeout(childTimeoutMs)]);
+
+  // Minimal system prompt for the child — the full parent prompt (skills,
+  // knowledge, connection docs) is unnecessary for a focused sub-task and
+  // wastes tokens. The child gets a task-scoped prompt with available tools.
+  const childToolNames = childRegistry.names();
+  const childSystemPrompt = buildChildSystemPrompt(task.agentName, task.prompt, childToolNames);
+
   // Build child context
   const childCtx: AgentContext = {
     provider: ctx.provider,
     toolRegistry: childRegistry,
     permissionChecker: ctx.permissionChecker,
     logger: ctx.logger,
-    signal: ctx.signal,
+    signal: childSignal,
     sessionId: ctx.sessionId,
     tenantId: ctx.tenantId,
     user: ctx.user,
-    systemPrompt: ctx.systemPrompt,
+    systemPrompt: childSystemPrompt,
     messages: [],
     usage: {inputTokens: 0, outputTokens: 0, totalTokens: 0},
     turnCount: 0,
@@ -243,4 +255,25 @@ export async function handleDispatching(
   };
 
   return nextAfterToolResult(executingState, result, effects, ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Child system prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a minimal system prompt for the child agent.
+ *
+ * The full parent prompt (30K+ chars of skills, knowledge, connection docs)
+ * is wasteful for a focused sub-task. The child gets a concise, task-scoped
+ * prompt listing only its available tools.
+ */
+function buildChildSystemPrompt(agentName: string, taskPrompt: string, toolNames: string[]): string {
+  const toolList = toolNames.length > 0
+    ? `\n\nAvailable tools: ${toolNames.join(', ')}`
+    : '';
+
+  return `You are "${agentName}", a sub-agent executing a delegated task. Complete the task and return a concise summary of your findings or actions.
+
+Do not ask clarifying questions — work with what you have. If you cannot complete the task, explain what went wrong.${toolList}`;
 }

@@ -157,7 +157,6 @@ export async function handleExecuting(
           prompt: String(args['prompt'] ?? ''),
           maxTurns: typeof args['max_turns'] === 'number' ? args['max_turns'] : undefined,
         },
-        parentMessages: ctx.messages,
         toolCallId: current.toolCallId,
         queue,
         results: state.results,

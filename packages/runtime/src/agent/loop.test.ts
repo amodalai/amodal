@@ -854,7 +854,7 @@ describe('handleDispatching (via transition)', () => {
     const result = await transition({
       type: 'dispatching',
       task: {agentName: 'research-agent', toolSubset: [], prompt: 'Find info'},
-      parentMessages: [],
+
       toolCallId: 'tc-dispatch-1',
       queue: [],
       results: [],
@@ -881,7 +881,7 @@ describe('handleDispatching (via transition)', () => {
     const result = await transition({
       type: 'dispatching',
       task: {agentName: 'profiler', toolSubset: [], prompt: 'Profile entity'},
-      parentMessages: [],
+
       toolCallId: 'tc-abc',
       queue: [],
       results: [],
@@ -902,7 +902,7 @@ describe('handleDispatching (via transition)', () => {
     const result = await transition({
       type: 'dispatching',
       task: {agentName: 'fetcher', toolSubset: [], prompt: 'Fetch data'},
-      parentMessages: [],
+
       toolCallId: 'tc-dispatch',
       queue: [{toolCallId: 'tc-next', toolName: 'request', args: {}}],
       results: [],
@@ -926,7 +926,7 @@ describe('handleDispatching (via transition)', () => {
     const result = await transition({
       type: 'dispatching',
       task: {agentName: 'broken-agent', toolSubset: [], prompt: 'Do something'},
-      parentMessages: [],
+
       toolCallId: 'tc-fail',
       queue: [],
       results: [],
