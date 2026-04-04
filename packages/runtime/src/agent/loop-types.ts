@@ -17,6 +17,7 @@ import type {ToolRegistry, ToolContext} from '../tools/types.js';
 import type {PermissionChecker} from '../security/permission-checker.js';
 import type {SSEEvent} from '../types.js';
 import type {Logger} from '../logger.js';
+import type {TurnUsage} from '../session/types.js';
 
 // ---------------------------------------------------------------------------
 // Tool call / result (internal to the loop)
@@ -227,14 +228,7 @@ export interface AgentContext {
    * Optional callback fired after each turn with token usage.
    * Default is no-op. Roadmap 6.3 (Stripe billing) plugs into this.
    */
-  onUsage?: (usage: {
-    inputTokens: number;
-    outputTokens: number;
-    cachedInputTokens: number;
-    cacheCreationInputTokens: number;
-    totalTokens: number;
-    turnNumber: number;
-  }) => void;
+  onUsage?: (usage: TurnUsage) => void;
 }
 
 // ---------------------------------------------------------------------------

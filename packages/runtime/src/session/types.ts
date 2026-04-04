@@ -160,6 +160,9 @@ export interface Session {
   /** Provider name (pinned at creation, survives resume) */
   providerName: string;
 
+  /** User roles for permission checks and field guidance */
+  userRoles: string[];
+
   /** App ID for multi-app isolation */
   appId: string;
 
@@ -210,6 +213,8 @@ export interface CreateSessionOptions {
   messages?: ModelMessage[];
   /** Optional: seed token usage for resuming */
   usage?: TokenUsage;
+  /** User roles for permission checks and field guidance */
+  userRoles?: string[];
   /** Optional: onUsage callback fired after each turn */
   onUsage?: (usage: TurnUsage) => void;
 }

@@ -19,6 +19,7 @@ import type {PersistedSession, SessionMetadata} from './types.js';
 import type {TokenUsage} from '../providers/types.js';
 import type {ModelMessage} from 'ai';
 import type {Logger} from '../logger.js';
+import {ConfigError} from '../errors.js';
 
 // ---------------------------------------------------------------------------
 // SessionStore interface
@@ -202,7 +203,10 @@ export class PGLiteSessionStore implements SessionStore {
 
   private ensureDb(): void {
     if (!this.db) {
-      throw new Error('PGLiteSessionStore not initialized — call initialize() first');
+      throw new ConfigError('PGLiteSessionStore not initialized — call initialize() first', {
+        key: 'sessionStore',
+        suggestion: 'Call initialize() before using the session store',
+      });
     }
   }
 }
