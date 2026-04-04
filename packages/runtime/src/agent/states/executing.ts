@@ -208,13 +208,14 @@ export async function executeTool(
 ): Promise<unknown> {
   const toolCtx = ctx.buildToolContext(call.toolCallId);
 
-  // Combine session abort signal with a per-tool timeout
+  // Combine session abort signal with a per-tool timeout.
+  // Mutate instead of spread — toolCtx.request() reads ctx.signal at call
+  // time, so the combined signal propagates to HTTP requests and other
+  // async operations inside the tool.
   const timeoutSignal = AbortSignal.timeout(ctx.config.toolTimeoutMs);
-  const combinedSignal = AbortSignal.any([ctx.signal, timeoutSignal]);
+  toolCtx.signal = AbortSignal.any([ctx.signal, timeoutSignal]);
 
-  // Override the tool context signal with the combined one
-  const timedCtx = {...toolCtx, signal: combinedSignal};
-  return toolDef.execute(call.args, timedCtx);
+  return toolDef.execute(call.args, toolCtx);
 }
 
 /**
