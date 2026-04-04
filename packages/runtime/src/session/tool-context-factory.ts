@@ -179,64 +179,75 @@ async function makeRequest(
  * state handler calls it once per tool execution with the tool call ID.
  *
  * The EXECUTING handler composes its own AbortSignal (session + per-tool timeout)
- * and overrides `ctx.signal` before passing to the tool — so the signal here is
- * a reasonable default, not the final timeout.
+ * and overrides `ctx.signal` via object spread before passing to the tool's
+ * execute function. Methods on this context read `ctx.signal` at call time
+ * (not at creation time) so that the overridden signal propagates to HTTP
+ * requests and other async operations.
  */
 export function createToolContextFactory(
   opts: ToolContextFactoryOptions,
 ): (callId: string) => ToolContext {
-  return (callId: string): ToolContext => ({
-    async request(connection, endpoint, params) {
-      opts.logger.debug('tool_context_request', {
-        callId,
-        connection,
-        endpoint,
-        method: params?.method ?? 'GET',
-        session: opts.sessionId,
-      });
-      return makeRequest(opts, connection, endpoint, params);
-    },
-
-    async store(storeName, payload) {
-      const storeDef = opts.storeDefinitions.find((s) => s.name === storeName);
-      if (!storeDef) {
-        const available = opts.storeDefinitions.map((s) => s.name).join(', ');
-        throw new StoreError(`Store "${storeName}" not found. Available: ${available || '(none)'}`, {
-          store: storeName,
-          operation: 'put',
-          context: {available, session: opts.sessionId},
+  return (callId: string): ToolContext => {
+    // Build ctx as a named object so methods can reference ctx.signal at
+    // call time. When EXECUTING does `{...toolCtx, signal: combined}`, the
+    // spread creates a new object — but the closures still capture `ctx`.
+    // To fix this, EXECUTING must mutate `toolCtx.signal` directly instead
+    // of spreading. The default signal here is a safety net in case
+    // the caller doesn't override.
+    const ctx: ToolContext = {
+      async request(connection, endpoint, params) {
+        opts.logger.debug('tool_context_request', {
+          callId,
+          connection,
+          endpoint,
+          method: params?.method ?? 'GET',
+          session: opts.sessionId,
         });
-      }
-      const key = resolveKey(storeDef.entity.key, payload);
-      await opts.storeBackend.put(opts.appId, storeName, key, payload, {});
-      opts.logger.debug('tool_context_store_write', {
-        callId,
-        store: storeName,
-        key,
-        session: opts.sessionId,
-      });
-      return {key};
-    },
+        return makeRequest(opts, connection, endpoint, params, ctx.signal);
+      },
 
-    env(name) {
-      if (!(name in opts.envAllowlist)) {
-        return undefined;
-      }
-      return opts.envAllowlist[name];
-    },
+      async store(storeName, payload) {
+        const storeDef = opts.storeDefinitions.find((s) => s.name === storeName);
+        if (!storeDef) {
+          const available = opts.storeDefinitions.map((s) => s.name).join(', ');
+          throw new StoreError(`Store "${storeName}" not found. Available: ${available || '(none)'}`, {
+            store: storeName,
+            operation: 'put',
+            context: {available, session: opts.sessionId},
+          });
+        }
+        const key = resolveKey(storeDef.entity.key, payload);
+        await opts.storeBackend.put(opts.appId, storeName, key, payload, {});
+        opts.logger.debug('tool_context_store_write', {
+          callId,
+          store: storeName,
+          key,
+          session: opts.sessionId,
+        });
+        return {key};
+      },
 
-    log(message) {
-      opts.logger.info('tool_log', {
-        callId,
-        message,
-        session: opts.sessionId,
-        tenant: opts.tenantId,
-      });
-    },
+      env(name) {
+        if (!(name in opts.envAllowlist)) {
+          return undefined;
+        }
+        return opts.envAllowlist[name];
+      },
 
-    user: opts.user,
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    sessionId: opts.sessionId,
-    tenantId: opts.tenantId,
-  });
+      log(message) {
+        opts.logger.info('tool_log', {
+          callId,
+          message,
+          session: opts.sessionId,
+          tenant: opts.tenantId,
+        });
+      },
+
+      user: opts.user,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      sessionId: opts.sessionId,
+      tenantId: opts.tenantId,
+    };
+    return ctx;
+  };
 }

@@ -343,4 +343,34 @@ describe('createToolContextFactory', () => {
       method: 'GET',
     }));
   });
+
+  it('request() uses ctx.signal for abort — propagates when mutated', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', {status: 200}));
+
+    const ctx = createToolContextFactory(makeFactoryOpts())('call-1');
+
+    // Simulate what EXECUTING handler does: mutate signal with combined timeout
+    const controller = new AbortController();
+    ctx.signal = controller.signal;
+
+    await ctx.request('stripe', '/v1/customers');
+
+    // The fetch call should have received the mutated signal, not the default timeout
+    const fetchOpts = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect(fetchOpts.signal).toBe(controller.signal);
+  });
+
+  it('request() aborts when ctx.signal is aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
+      throw new DOMException('The operation was aborted', 'AbortError');
+    });
+
+    const ctx = createToolContextFactory(makeFactoryOpts())('call-1');
+    ctx.signal = controller.signal;
+
+    await expect(ctx.request('stripe', '/v1/customers')).rejects.toThrow('aborted');
+  });
 });
