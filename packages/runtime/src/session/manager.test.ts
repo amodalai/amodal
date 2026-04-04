@@ -16,7 +16,9 @@ import {describe, it, expect, beforeAll, afterAll} from 'vitest';
 import {StandaloneSessionManager} from './manager.js';
 import {PGLiteSessionStore} from './store.js';
 import type {CreateSessionOptions, TurnUsage} from './types.js';
-import type {LLMProvider} from '../providers/types.js';
+import type {LLMProvider, StreamTextResult, StreamEvent, TokenUsage} from '../providers/types.js';
+import {SSEEventType} from '../types.js';
+import type {SSEEvent} from '../types.js';
 import type {PermissionChecker} from '../security/permission-checker.js';
 import {createLogger} from '../logger.js';
 import {createToolRegistry} from '../tools/registry.js';
@@ -40,9 +42,43 @@ function stubProvider(model = 'test-model', provider = 'test-provider'): LLMProv
   };
 }
 
+/**
+ * Create a provider that streams a single text response and finishes.
+ */
+function streamingProvider(responseText: string): LLMProvider {
+  return {
+    model: 'test-model',
+    provider: 'test-provider',
+     
+    languageModel: {} as LLMProvider['languageModel'],
+    streamText(): StreamTextResult {
+      const usage: TokenUsage = {inputTokens: 10, outputTokens: 5, totalTokens: 15};
+      const events: StreamEvent[] = [
+        {type: 'text-delta', textDelta: responseText},
+        {type: 'finish', usage},
+      ];
+
+      async function* makeFullStream() {
+        for (const e of events) yield e;
+      }
+      async function* makeTextStream() {
+        yield responseText;
+      }
+
+      return {
+        fullStream: makeFullStream(),
+        textStream: makeTextStream(),
+        usage: Promise.resolve(usage),
+        text: Promise.resolve(responseText),
+      };
+    },
+    generateText: () => Promise.reject(new Error('not implemented')),
+  };
+}
+
 function stubPermissionChecker(): PermissionChecker {
   return {
-    check: () => Promise.resolve({allowed: true as const}),
+    check: () => ({allowed: true as const}),
   };
 }
 
@@ -248,18 +284,75 @@ describe('StandaloneSessionManager', () => {
     });
   });
 
-  describe('onUsage hook on AgentContext', () => {
-    it('onUsage is available on AgentContext interface', () => {
-      // Type-level test: verify the hook exists on AgentContext
-      // (actual firing is tested in streaming.test.ts)
+  describe('runMessage', () => {
+    it('executes a message through the agent loop and yields SSE events', async () => {
       const mgr = new StandaloneSessionManager({logger, store});
-      const session = mgr.create(makeCreateOpts());
-      expect(session).toBeDefined();
+      const session = mgr.create(makeCreateOpts({
+        provider: streamingProvider('Hello from the agent!'),
+      }));
 
-      // Verify the onUsage option is accepted
+      const events: SSEEvent[] = [];
+      for await (const event of mgr.runMessage(session.id, 'Hi there')) {
+        events.push(event);
+      }
+
+      // Should have init, text delta, and done events
+      const types = events.map((e) => e.type);
+      expect(types).toContain(SSEEventType.Init);
+      expect(types).toContain(SSEEventType.TextDelta);
+      expect(types).toContain(SSEEventType.Done);
+    });
+
+    it('persists session after execution', async () => {
+      const mgr = new StandaloneSessionManager({logger, store});
+      const session = mgr.create(makeCreateOpts({
+        provider: streamingProvider('Persisted response'),
+      }));
+
+      // Drain the generator
+      for await (const _event of mgr.runMessage(session.id, 'Save me')) {
+        // consume
+      }
+
+      // Session should be persisted
+      const persisted = await store.load(session.id);
+      expect(persisted).not.toBeNull();
+      expect(persisted!.messages.length).toBeGreaterThan(0);
+    });
+
+    it('fires onUsage callback with token counts', async () => {
       const usageEvents: TurnUsage[] = [];
-      const onUsage = (usage: TurnUsage) => usageEvents.push(usage);
-      expect(typeof onUsage).toBe('function');
+      const mgr = new StandaloneSessionManager({logger, store});
+      const session = mgr.create(makeCreateOpts({
+        provider: streamingProvider('Usage test'),
+      }));
+
+      for await (const _event of mgr.runMessage(session.id, 'Count tokens', {
+        onUsage: (usage) => usageEvents.push(usage),
+      })) {
+        // consume
+      }
+
+      expect(usageEvents.length).toBe(1);
+      expect(usageEvents[0].inputTokens).toBe(10);
+      expect(usageEvents[0].outputTokens).toBe(5);
+      expect(usageEvents[0].turnNumber).toBe(1);
+    });
+
+    it('syncs messages back to session after execution', async () => {
+      const mgr = new StandaloneSessionManager({logger, store});
+      const session = mgr.create(makeCreateOpts({
+        provider: streamingProvider('Response text'),
+      }));
+
+      expect(session.messages).toHaveLength(0);
+
+      for await (const _event of mgr.runMessage(session.id, 'Hello')) {
+        // consume
+      }
+
+      // Should have user + assistant messages
+      expect(session.messages.length).toBeGreaterThanOrEqual(2);
     });
   });
 });

@@ -32,6 +32,7 @@ import type {
   CreateSessionOptions,
   PersistedSession,
   TurnUsage,
+  AutomationResult,
 } from './types.js';
 import {SessionError} from '../errors.js';
 import type {Logger} from '../logger.js';
@@ -182,6 +183,7 @@ export class StandaloneSessionManager {
       signal?: AbortSignal;
       loopConfig?: Partial<AgentLoopConfig>;
       onUsage?: (usage: TurnUsage) => void;
+      onAutomationResult?: (result: AutomationResult) => void;
       waitForConfirmation?: (callId: string) => Promise<boolean>;
       buildToolContext?: (callId: string) => ToolContext;
     },
@@ -212,11 +214,14 @@ export class StandaloneSessionManager {
       config: {...DEFAULT_LOOP_CONFIG, ...opts?.loopConfig},
       preExecutionCache: new Map(),
       waitForConfirmation: opts?.waitForConfirmation ?? (() => Promise.resolve(true)),
-      buildToolContext: opts?.buildToolContext ?? buildNoOpToolContext,
+      buildToolContext: opts?.buildToolContext ?? makeNoOpToolContext(session),
       onUsage: opts?.onUsage,
     };
 
-    // Run the agent loop
+    // Run the agent loop.
+    // RunAgentOptions.messages seeds the initial ThinkingState. ctx.messages is the
+    // same reference and gets mutated by the loop (appending assistant/tool messages).
+    // After the loop, we sync ctx.messages back to session.messages.
     for await (const event of runAgent({messages: session.messages, context: ctx})) {
       yield event;
     }
@@ -399,15 +404,15 @@ export class StandaloneSessionManager {
 // No-op ToolContext builder (replaced by real wiring at call sites)
 // ---------------------------------------------------------------------------
 
-function buildNoOpToolContext(_callId: string): ToolContext {
-  return {
+function makeNoOpToolContext(session: Session): (callId: string) => ToolContext {
+  return (_callId: string): ToolContext => ({
     request: () => Promise.reject(new Error('request() not wired — provide buildToolContext')),
     store: () => Promise.reject(new Error('store() not wired — provide buildToolContext')),
     env: () => undefined,
-    log: () => {},
-    user: {roles: []},
+    log: (message: string) => { session.logger.debug('tool_log', {session: session.id, message}); },
+    user: {roles: session.userRoles},
     signal: AbortSignal.timeout(30_000),
-    sessionId: '',
-    tenantId: '',
-  };
+    sessionId: session.id,
+    tenantId: session.tenantId,
+  });
 }
