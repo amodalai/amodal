@@ -5,6 +5,7 @@
  */
 
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import type { AutomationDefinition } from '@amodalai/core';
 import { WebhookPayloadSchema } from '../types.js';
 import { validate } from '../middleware/request-validation.js';
@@ -30,8 +31,18 @@ export function createWebhookRouter(options: WebhookRouterOptions): Router {
     }
   }
 
+  // Rate-limit inbound webhooks per IP so validation and automation
+  // dispatch can't be triggered unboundedly by an attacker.
+  const webhookLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   router.post(
     '/webhooks/:name',
+    webhookLimiter,
     validate(WebhookPayloadSchema),
     asyncHandler(async (req, res, next) => {
       try {

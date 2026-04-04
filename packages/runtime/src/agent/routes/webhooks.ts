@@ -6,6 +6,7 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
+import rateLimit from 'express-rate-limit';
 import {verifyHmacSignature} from '../proactive/delivery.js';
 import type {ProactiveRunner} from '../proactive/proactive-runner.js';
 import {asyncHandler} from '../../routes/route-helpers.js';
@@ -23,7 +24,16 @@ export interface WebhookRouterOptions {
 export function createWebhookRouter(options: WebhookRouterOptions): Router {
   const router = Router();
 
-  router.post('/webhooks/:name', asyncHandler(async (req: Request, res: Response) => {
+  // Rate-limit inbound webhooks per IP so HMAC verification and
+  // automation dispatch can't be triggered unboundedly by an attacker.
+  const webhookLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  router.post('/webhooks/:name', webhookLimiter, asyncHandler(async (req: Request, res: Response) => {
     const automationName = req.params['name'] ?? '';
 
     // HMAC verification
