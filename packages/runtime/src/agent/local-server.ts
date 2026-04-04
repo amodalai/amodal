@@ -13,7 +13,7 @@ import {SessionManager} from '../session/session-manager.js';
 import {LocalShellExecutor} from './shell-executor-local.js';
 import {ConfigWatcher} from './config-watcher.js';
 import {ProactiveRunner} from './proactive/proactive-runner.js';
-import {createChatStreamRouter} from '../routes/chat-stream.js';
+import {createChatStreamRouter} from '../routes/chat-stream-legacy.js';
 import {createAdminChatRouter} from './routes/admin-chat.js';
 import {createTaskRouter} from './routes/task.js';
 import {createInspectRouter} from './routes/inspect.js';

@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { createChatRouter } from './chat.js';
+import { createChatRouter } from './chat-legacy.js';
 import { errorHandler } from '../middleware/error-handler.js';
 
 // Mock session runner

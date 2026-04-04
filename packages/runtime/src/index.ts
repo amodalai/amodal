@@ -31,6 +31,8 @@ export type { SnapshotServerConfig } from './agent/snapshot-server.js';
 // Route creators (used by hosted-runtime to build its own server)
 export { createChatStreamRouter } from './routes/chat-stream.js';
 export type { ChatStreamRouterOptions } from './routes/chat-stream.js';
+export { createChatRouter } from './routes/chat.js';
+export type { ChatRouterOptions } from './routes/chat.js';
 export { createTaskRouter } from './agent/routes/task.js';
 export type { TaskRouterOptions } from './agent/routes/task.js';
 
@@ -147,6 +149,17 @@ export {
   registerAdminFileTools,
 } from './tools/admin-file-tools.js';
 
+// Standalone session manager (Phase 3.4)
+export { StandaloneSessionManager } from './session/manager.js';
+export type {
+  Session,
+  CreateSessionOptions,
+  SessionManagerOptions as StandaloneSessionManagerOptions,
+  TurnUsage,
+  AutomationResult,
+  PersistedSession,
+} from './session/types.js';
+
 // Session builder (Phase 3.5b)
 export { buildSessionComponents, PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME } from './session/session-builder.js';
 export type { SessionComponents, BuildSessionComponentsOptions, SessionType } from './session/session-builder.js';
@@ -154,6 +167,10 @@ export type { SessionComponents, BuildSessionComponentsOptions, SessionType } fr
 // Tool context factory (Phase 3.5a)
 export { createToolContextFactory } from './session/tool-context-factory.js';
 export type { ToolContextFactoryOptions } from './session/tool-context-factory.js';
+
+// Session resolver (Phase 3.5c)
+export { resolveSession, resolveBundle } from './routes/session-resolver.js';
+export type { BundleResolver, SharedResources, ResolvedSession } from './routes/session-resolver.js';
 
 // Context compiler
 export { compileContext } from './context/compiler.js';

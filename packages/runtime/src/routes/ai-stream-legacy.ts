@@ -1,15 +1,15 @@
 /**
  * @license
- * Copyright 2026 Amodal Labs, Inc.
+ * Copyright 2025 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
 /**
- * Vercel AI SDK UI Message Stream Protocol adapter (Phase 3.5c).
+ * Vercel AI SDK UI Message Stream Protocol adapter.
  *
  * Accepts requests in the Vercel AI SDK format, feeds the user message into
- * the standalone session manager's `runMessage()` generator, and translates
- * every `SSEEvent` into the UI Message Stream Protocol that `@ai-sdk/react`'s
+ * the existing `streamMessage()` async generator, and translates every
+ * `SSEEvent` into the UI Message Stream Protocol that `@ai-sdk/react`'s
  * `useChat` hook expects.
  *
  * Protocol spec: events are newline-delimited JSON objects prefixed with
@@ -17,17 +17,14 @@
  * `x-vercel-ai-ui-message-stream: v1` header.
  */
 
-import {Router} from 'express';
-import {z} from 'zod';
-import {validate} from '../middleware/request-validation.js';
-import {getAuthContext} from '../middleware/auth.js';
-import type {AuthContext} from '../middleware/auth.js';
-import type {StandaloneSessionManager} from '../session/manager.js';
-import type {StreamHooks} from '../session/session-runner.js';
-import type {TurnUsage} from '../session/types.js';
-import {SSEEventType, type SSEEvent} from '../types.js';
-import {resolveSession} from './session-resolver.js';
-import type {BundleResolver, SharedResources} from './session-resolver.js';
+import { Router } from 'express';
+import { z } from 'zod';
+import { validate } from '../middleware/request-validation.js';
+import { getAuthContext } from '../middleware/auth.js';
+import type { AuthContext } from '../middleware/auth.js';
+import type { SessionManager } from '../session/session-manager.js';
+import { streamMessage, type StreamHooks } from '../session/session-runner.js';
+import { SSEEventType, type SSEEvent } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Request schema (Vercel AI SDK message format)
@@ -165,7 +162,7 @@ function createAdapterState(): AdapterState {
 function closeTextBlock(state: AdapterState): UITextEnd | null {
   if (!state.textBlockOpen) return null;
   state.textBlockOpen = false;
-  return {type: 'text-end', id: state.textBlockId};
+  return { type: 'text-end', id: state.textBlockId };
 }
 
 /**
@@ -183,8 +180,8 @@ export function translateEvent(
   // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (event.type) {
     case SSEEventType.Init: {
-      out.push({type: 'message-start', messageId: state.messageId});
-      out.push({type: 'start-step'});
+      out.push({ type: 'message-start', messageId: state.messageId });
+      out.push({ type: 'start-step' });
       break;
     }
 
@@ -193,7 +190,7 @@ export function translateEvent(
         state.textBlockCounter++;
         state.textBlockId = `text-${state.textBlockCounter}`;
         state.textBlockOpen = true;
-        out.push({type: 'text-start', id: state.textBlockId});
+        out.push({ type: 'text-start', id: state.textBlockId });
       }
       out.push({
         type: 'text-delta',
@@ -231,7 +228,7 @@ export function translateEvent(
         out.push({
           type: 'tool-output-available',
           toolCallId: event.tool_id,
-          output: {result: event.result ?? ''},
+          output: { result: event.result ?? '' },
         });
       }
       break;
@@ -256,7 +253,7 @@ export function translateEvent(
     case SSEEventType.SkillActivated: {
       out.push({
         type: 'data-skill-activated',
-        data: {skill_name: event.skill_name},
+        data: { skill_name: event.skill_name },
       });
       break;
     }
@@ -264,7 +261,7 @@ export function translateEvent(
     case SSEEventType.Widget: {
       out.push({
         type: 'data-widget',
-        data: {widget_type: event.widget_type, data: event.data},
+        data: { widget_type: event.widget_type, data: event.data },
       });
       break;
     }
@@ -284,18 +281,19 @@ export function translateEvent(
     }
 
     case SSEEventType.AskUser: {
+      // Question[] needs to go into a generic Record<string, unknown> data part
       const askData: Record<string, unknown> = {
         ask_id: event.ask_id,
         questions: event.questions,
       };
-      out.push({type: 'data-ask-user', data: askData});
+      out.push({ type: 'data-ask-user', data: askData });
       break;
     }
 
     case SSEEventType.CredentialSaved: {
       out.push({
         type: 'data-credential-saved',
-        data: {connection_name: event.connection_name},
+        data: { connection_name: event.connection_name },
       });
       break;
     }
@@ -312,15 +310,15 @@ export function translateEvent(
     }
 
     case SSEEventType.Error: {
-      out.push({type: 'error', errorText: event.message});
+      out.push({ type: 'error', errorText: event.message });
       break;
     }
 
     case SSEEventType.Done: {
       const closed = closeTextBlock(state);
       if (closed) out.push(closed);
-      out.push({type: 'finish-step'});
-      out.push({type: 'finish', finishReason: 'stop'});
+      out.push({ type: 'finish-step' });
+      out.push({ type: 'finish', finishReason: 'stop' });
       break;
     }
 
@@ -356,9 +354,7 @@ export function extractUserMessage(messages: AIStreamRequest['messages']): strin
 // ---------------------------------------------------------------------------
 
 export interface AIStreamRouterOptions {
-  sessionManager: StandaloneSessionManager;
-  bundleResolver: BundleResolver;
-  shared: SharedResources;
+  sessionManager: SessionManager;
   /** Factory that builds per-request stream hooks from the auth context */
   createStreamHooks?: (auth?: AuthContext) => StreamHooks;
 }
@@ -378,22 +374,31 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
 
         if (!message) {
           res.status(400).json({
-            error: {code: 'INVALID_REQUEST', message: 'No user message found in messages array'},
+            error: { code: 'INVALID_REQUEST', message: 'No user message found in messages array' },
           });
           return;
         }
 
-        const auth = getAuthContext(res);
+        const sessionId = body.session_id;
+        const role = body.role;
+        const deployId = body.deploy_id;
 
-        // Resolve session (lookup in memory, resume from store, or create new)
-        const {session, components} = await resolveSession(body.session_id, {
-          sessionManager: options.sessionManager,
-          bundleResolver: options.bundleResolver,
-          shared: options.shared,
-          role: body.role,
-          deployId: body.deploy_id,
-          auth,
-        });
+        // Session lookup/creation — same logic as chat-stream.ts
+        let session;
+        if (sessionId) {
+          session = options.sessionManager.get(sessionId);
+          if (!session) {
+            const auth = getAuthContext(res);
+            session = await options.sessionManager.hydrate(sessionId, role, auth);
+          }
+          if (!session) {
+            const auth = getAuthContext(res);
+            session = await options.sessionManager.create(role, auth, undefined, undefined, deployId);
+          }
+        } else {
+          const auth = getAuthContext(res);
+          session = await options.sessionManager.create(role, auth, undefined, undefined, deployId);
+        }
 
         // Set up SSE headers with Vercel AI SDK protocol marker
         res.setHeader('Content-Type', 'text/event-stream');
@@ -406,29 +411,15 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
         res.on('close', () => controller.abort());
 
         // Build per-request hooks with auth context
-        const hooks = options.createStreamHooks?.(auth);
+        const hooks = options.createStreamHooks?.(getAuthContext(res));
 
-        // Adapt onUsageReport hook to TurnUsage callback
-        const onUsage = hooks?.onUsageReport
-          ? (usage: TurnUsage) => {
-              hooks.onUsageReport?.({
-                model: session.model,
-                taskAgentRuns: 0,
-                tokens: {
-                  inputTokens: usage.inputTokens,
-                  outputTokens: usage.outputTokens,
-                  cachedTokens: usage.cachedInputTokens,
-                },
-              });
-            }
-          : undefined;
-
-        // Run message through the agent loop
-        const stream = options.sessionManager.runMessage(session.id, message, {
-          signal: controller.signal,
-          buildToolContext: components.toolContextFactory,
-          onUsage,
-        });
+        const stream = streamMessage(
+          session,
+          message,
+          controller.signal,
+          hooks,
+          options.sessionManager,
+        );
 
         const state = createAdapterState();
 
@@ -439,21 +430,6 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
           for (const uiEvent of uiEvents) {
             res.write(`data: ${JSON.stringify(uiEvent)}\n\n`);
           }
-        }
-
-        // Fire post-drain hooks
-        if (hooks?.onAuditLog) {
-          hooks.onAuditLog({
-            event: 'session_completed',
-            resource_name: session.id,
-          });
-        }
-
-        if (hooks?.onSessionPersist) {
-          hooks.onSessionPersist(session.id, [], 'completed', {
-            model: session.model,
-            provider: session.providerName,
-          });
         }
 
         // Terminal sentinel

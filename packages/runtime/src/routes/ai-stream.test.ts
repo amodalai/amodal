@@ -7,7 +7,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { createAIStreamRouter, translateEvent, extractUserMessage } from './ai-stream.js';
+import { createAIStreamRouter } from './ai-stream-legacy.js';
+import { translateEvent, extractUserMessage } from './ai-stream.js';
 import { errorHandler } from '../middleware/error-handler.js';
 import { SSEEventType } from '../types.js';
 import type { SSEEvent } from '../types.js';
