@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /**
  * Mock REST server for smoke tests.
  * Returns canned data for the smoke-agent's mock-api connection.

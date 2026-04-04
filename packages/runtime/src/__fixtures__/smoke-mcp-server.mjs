@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /**
  * Mock MCP server for smoke tests (stdio transport).
  *
@@ -10,7 +11,6 @@
  * being available at the fixture path.
  */
 
-import {createInterface} from 'node:readline';
 
 const TOOLS = [
   {
@@ -94,8 +94,7 @@ function handleRequest(method, params) {
   }
 }
 
-// JSON-RPC over stdio
-const rl = createInterface({input: process.stdin});
+// JSON-RPC over stdio (newline-delimited)
 let buffer = '';
 
 process.stdin.on('data', (chunk) => {
