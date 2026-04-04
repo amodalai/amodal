@@ -132,6 +132,7 @@ function makeMockContext(overrides?: Partial<AgentContext>): AgentContext {
     config: {...DEFAULT_LOOP_CONFIG},
     compactionFailures: 0,
     preExecutionCache: new Map(),
+    confirmedCallIds: new Set(),
     waitForConfirmation: vi.fn().mockResolvedValue(true),
     buildToolContext: vi.fn().mockReturnValue({
       request: vi.fn(),
@@ -255,6 +256,151 @@ describe('handleThinking (via transition)', () => {
     expect(result.next.type).toBe('done');
     if (result.next.type === 'done') {
       expect(result.next.reason).toBe('loop_detected');
+    }
+  });
+
+  it('replaces old tool results with summarizer output when hook is set', async () => {
+    // Build 20 tool-result messages so clearing triggers (threshold=15 by default)
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 20; i++) {
+      messages.push({
+        role: 'tool',
+        content: [{
+          type: 'tool-result' as const,
+          toolCallId: `c${i}`,
+          toolName: 'search_api',
+          output: {type: 'text' as const, value: `result body ${i} with lots of content`},
+        }],
+      } as ModelMessage);
+    }
+
+    const summarizer = vi.fn().mockResolvedValue('found 3 matching records');
+    const ctx = makeMockContext({summarizeToolResult: summarizer});
+    await transition({type: 'thinking', messages}, ctx);
+
+    // Summarizer should have been called for the cleared (non-kept) messages.
+    // threshold=15, keepRecent=5 → 15 cleared (all but the last 5).
+    expect(summarizer).toHaveBeenCalled();
+    expect(summarizer.mock.calls.length).toBe(15);
+
+    // Verify the summary is wired through — the messages passed to streamText
+    // should include the summary text in a cleared marker.
+    const streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[0][0];
+    const passedMessages = streamTextCall.messages;
+    const clearedMsg = passedMessages[0];
+    if (clearedMsg.role === 'tool' && Array.isArray(clearedMsg.content)) {
+      const part = clearedMsg.content[0];
+      if ('output' in part && part.output && typeof part.output === 'object' && 'value' in part.output) {
+        expect(String(part.output.value)).toContain('found 3 matching records');
+        expect(String(part.output.value)).toContain('search_api');
+      }
+    }
+  });
+
+  it('falls back to static marker when summarizer throws', async () => {
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 20; i++) {
+      messages.push({
+        role: 'tool',
+        content: [{
+          type: 'tool-result' as const,
+          toolCallId: `c${i}`,
+          toolName: 'flaky_tool',
+          output: {type: 'text' as const, value: `body ${i}`},
+        }],
+      } as ModelMessage);
+    }
+
+    const summarizer = vi.fn().mockRejectedValue(new Error('haiku unavailable'));
+    const ctx = makeMockContext({summarizeToolResult: summarizer});
+    await transition({type: 'thinking', messages}, ctx);
+
+    // Summarizer was called but threw; we should still proceed with static marker
+    expect(summarizer).toHaveBeenCalled();
+    const streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[0][0];
+    const clearedMsg = streamTextCall.messages[0];
+    if (clearedMsg.role === 'tool' && Array.isArray(clearedMsg.content)) {
+      const part = clearedMsg.content[0];
+      if ('output' in part && part.output && typeof part.output === 'object' && 'value' in part.output) {
+        expect(String(part.output.value)).toContain('Tool result cleared');
+      }
+    }
+    // The failure should have been logged
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      'tool_result_summarization_failed',
+      expect.objectContaining({tool: 'flaky_tool'}),
+    );
+  });
+
+  it('skips already-cleared messages (idempotent)', async () => {
+    // Messages that were cleared in a prior turn have toolCallId === 'cleared'
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 20; i++) {
+      messages.push({
+        role: 'tool',
+        content: [{
+          type: 'tool-result' as const,
+          // First 15 are already-cleared; last 5 are fresh
+          toolCallId: i < 15 ? 'cleared' : `c${i}`,
+          toolName: i < 15 ? 'cleared' : 'search_api',
+          output: {type: 'text' as const, value: i < 15 ? '[prior marker]' : `body ${i}`},
+        }],
+      } as ModelMessage);
+    }
+
+    const summarizer = vi.fn().mockResolvedValue('summary');
+    const ctx = makeMockContext({summarizeToolResult: summarizer});
+    await transition({type: 'thinking', messages}, ctx);
+
+    // Clearing kicks in (20 > 15), but all 15 candidates are already cleared.
+    // Summarizer should NOT be called for already-cleared messages.
+    expect(summarizer).not.toHaveBeenCalled();
+  });
+
+  it('escalates at loopEscalationThreshold: stronger warn + removes looping tool', async () => {
+    // Build messages with 5 tool calls so count hits escalation (default=5)
+    // but not hard-stop (default=8).
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 5; i++) {
+      messages.push({
+        role: 'assistant',
+        content: [{type: 'tool-call', toolCallId: `c${i}`, toolName: 'stuck_api', input: {q: 'same'}}],
+      } as ModelMessage);
+      messages.push({
+        role: 'tool',
+        content: [{type: 'tool-result' as const, toolCallId: `c${i}`, toolName: 'stuck_api', output: {type: 'text' as const, value: 'no progress'}}],
+      } as ModelMessage);
+    }
+
+    // Registry has both the looping tool and another tool
+    const stuckTool = makeMockToolDef({description: 'Stuck tool'});
+    const otherTool = makeMockToolDef({description: 'Other tool'});
+    const registry = makeMockRegistry({stuck_api: stuckTool, other_tool: otherTool});
+
+    const ctx = makeMockContext({toolRegistry: registry});
+    const result = await transition({type: 'thinking', messages}, ctx);
+
+    // Should still stream (not hard-stop)
+    expect(result.next.type).toBe('streaming');
+
+    // The escalation-level warn should have been logged
+    expect(ctx.logger.warn).toHaveBeenCalledWith(
+      'agent_loop_escalation',
+      expect.objectContaining({tool: 'stuck_api', count: 5}),
+    );
+
+    // The looping tool should be EXCLUDED from this turn's tool set
+    const streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[0][0];
+    const passedTools = streamTextCall.tools as Record<string, unknown>;
+    expect(passedTools['stuck_api']).toBeUndefined();
+    expect(passedTools['other_tool']).toBeDefined();
+
+    // Escalation message should be appended
+    const lastMsg = streamTextCall.messages[streamTextCall.messages.length - 1];
+    expect(lastMsg.role).toBe('system');
+    if (typeof lastMsg.content === 'string') {
+      expect(lastMsg.content).toContain('temporarily disabled');
+      expect(lastMsg.content).toContain('stuck_api');
     }
   });
 
@@ -450,6 +596,99 @@ describe('handleExecuting (via transition)', () => {
     const resultEvents = result.effects.filter((e) => e.type === SSEEventType.ToolCallResult);
     expect(startEvents.length).toBe(1);
     expect(resultEvents.length).toBe(1);
+  });
+
+  it('routes requiresConfirmation tools through CONFIRMING on first pass', async () => {
+    const destructiveTool = makeMockToolDef({
+      execute: vi.fn().mockResolvedValue({deleted: true}),
+      requiresConfirmation: true,
+    });
+    const registry = makeMockRegistry({delete_repo: destructiveTool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {toolCallId: 'call-danger', toolName: 'delete_repo', args: {name: 'foo'}},
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    expect(result.next.type).toBe('confirming');
+    expect(destructiveTool.execute).not.toHaveBeenCalled();
+    // ConfirmationRequired SSE event should be emitted
+    const confirmEvents = result.effects.filter((e) => e.type === SSEEventType.ConfirmationRequired);
+    expect(confirmEvents.length).toBe(1);
+  });
+
+  it('executes requiresConfirmation tools after approval (no re-confirm loop)', async () => {
+    const destructiveTool = makeMockToolDef({
+      execute: vi.fn().mockResolvedValue({deleted: true}),
+      requiresConfirmation: true,
+    });
+    const registry = makeMockRegistry({delete_repo: destructiveTool});
+    // Pre-populate confirmedCallIds as if CONFIRMING already approved this call
+    const ctx = makeMockContext({toolRegistry: registry});
+    ctx.confirmedCallIds.add('call-approved');
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {toolCallId: 'call-approved', toolName: 'delete_repo', args: {name: 'foo'}},
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // Should execute this time, not route back to CONFIRMING
+    expect(result.next.type).toBe('thinking');
+    expect(destructiveTool.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('connection tool does NOT re-prompt after confirmedCallIds marks the call', async () => {
+    // Regression test for the latent infinite-loop bug: a connection tool
+    // whose ACL gate returns requiresConfirmation=true used to re-route back
+    // to CONFIRMING on every pass, since the permission checker has no
+    // notion of "already approved." confirmedCallIds fixes this.
+    const connectionTool = makeMockToolDef({
+      execute: vi.fn().mockResolvedValue({ok: true}),
+      metadata: {category: 'connection', connection: 'github'},
+    });
+    const registry = makeMockRegistry({request: connectionTool});
+    const ctx = makeMockContext({
+      toolRegistry: registry,
+      permissionChecker: {
+        check: vi.fn().mockReturnValue({
+          allowed: true,
+          requiresConfirmation: true,
+          reason: 'Write to github requires confirmation',
+        }),
+      },
+    });
+    // Simulate: CONFIRMING has already approved this call
+    ctx.confirmedCallIds.add('call-gh-write');
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {
+        toolCallId: 'call-gh-write',
+        toolName: 'request',
+        args: {method: 'POST', endpoint: '/repos/foo', intent: 'confirmed_write'},
+      },
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // Should execute the connection tool instead of re-routing to CONFIRMING
+    expect(result.next.type).toBe('thinking');
+    expect(connectionTool.execute).toHaveBeenCalledTimes(1);
+
+    // No ConfirmationRequired SSE event should have been emitted
+    const confirmEvents = result.effects.filter((e) => e.type === SSEEventType.ConfirmationRequired);
+    expect(confirmEvents.length).toBe(0);
   });
 
   it('transitions to compacting when context exceeds threshold', async () => {
@@ -701,6 +940,38 @@ describe('handleConfirming (via transition)', () => {
     expect(result.next.type).toBe('thinking');
     // A denial message should have been appended
     expect(ctx.messages.length).toBeGreaterThan(0);
+  });
+
+  it('approved confirmation marks the callId in ctx.confirmedCallIds', async () => {
+    const ctx = makeMockContext({
+      waitForConfirmation: vi.fn().mockResolvedValue(true),
+    });
+
+    const state: ConfirmingState = {
+      type: 'confirming',
+      call: {toolCallId: 'call-XYZ', toolName: 'delete_item', args: {id: '123'}},
+      remainingQueue: [],
+    };
+
+    await transition(state, ctx);
+
+    expect(ctx.confirmedCallIds.has('call-XYZ')).toBe(true);
+  });
+
+  it('denied confirmation does NOT mark callId as confirmed', async () => {
+    const ctx = makeMockContext({
+      waitForConfirmation: vi.fn().mockResolvedValue(false),
+    });
+
+    const state: ConfirmingState = {
+      type: 'confirming',
+      call: {toolCallId: 'call-DENIED', toolName: 'delete_item', args: {id: '123'}},
+      remainingQueue: [],
+    };
+
+    await transition(state, ctx);
+
+    expect(ctx.confirmedCallIds.has('call-DENIED')).toBe(false);
   });
 
   it('intercepts dispatch_task and transitions to DISPATCHING', async () => {
@@ -1023,6 +1294,60 @@ describe('handleDispatching (via transition)', () => {
       agent: 'broken-agent',
     }));
   });
+
+  it('propagates parent remaining token budget to child', async () => {
+    // Parent has 100 budget, 90 already used → child should get 10.
+    // Child's first mock turn yields 150 tokens, which exceeds the child's
+    // 10-token budget; the child's outer loop catches it on the next check
+    // and stops with budget_exceeded. Parent usage reflects the child's
+    // consumed tokens once the child merges back.
+    const parentCtx = makeMockContext({
+      maxTokens: 100,
+      usage: {inputTokens: 60, outputTokens: 30, totalTokens: 90},
+    });
+
+    const result = await transition({
+      type: 'dispatching',
+      task: {agentName: 'starved-child', toolSubset: [], prompt: 'Do lots of work'},
+      toolCallId: 'tc-starved',
+      queue: [],
+      results: [],
+    }, parentCtx);
+
+    // Parent should resume (doesn't crash on child budget exhaustion)
+    expect(result.next.type).toBe('thinking');
+
+    // Child should have stopped early — its merged-back token usage should
+    // not massively exceed the original budget, because the check fires on
+    // the next outer loop iteration after the first 150-token turn.
+    // (It won't be zero — the first turn runs fully and merges — but it
+    // won't compound across many turns.)
+    expect(parentCtx.usage.totalTokens).toBeLessThanOrEqual(90 + 150 + 150);
+  });
+
+  it('child inherits unlimited budget when parent has no cap', async () => {
+    // No maxTokens on parent → child should also have no cap (undefined).
+    // The child runs through normal termination (model_stop), not budget.
+    const parentCtx = makeMockContext({
+      // maxTokens intentionally omitted
+      usage: {inputTokens: 500, outputTokens: 500, totalTokens: 1000},
+    });
+
+    const result = await transition({
+      type: 'dispatching',
+      task: {agentName: 'unbounded-child', toolSubset: [], prompt: 'Go'},
+      toolCallId: 'tc-unbounded',
+      queue: [],
+      results: [],
+    }, parentCtx);
+
+    expect(result.next.type).toBe('thinking');
+    // No agent_loop_budget_exceeded log should have fired for the child
+    expect(parentCtx.logger.warn).not.toHaveBeenCalledWith(
+      'agent_loop_budget_exceeded',
+      expect.anything(),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1185,6 +1510,89 @@ describe('runAgent', () => {
 
     // Turn count should not exceed maxTurns
     expect(ctx.turnCount).toBeLessThanOrEqual(3);
+  });
+
+  it('token budget terminates the loop with reason=budget_exceeded', async () => {
+    const tool = makeMockToolDef();
+    const registry = makeMockRegistry({loop_tool: tool});
+
+    // Each turn yields 15 tokens (10 in + 5 out). With maxTokens=30, the loop
+    // should stop after the 2nd turn pushes cumulative usage past the cap.
+    const provider = {
+      model: 'test-model',
+      provider: 'test',
+      languageModel: {} as AgentContext['provider']['languageModel'],
+      streamText: vi.fn(() =>
+        makeMockStream([
+          {type: 'tool-call', toolCallId: `c-${Date.now()}`, toolName: 'loop_tool', args: {}},
+          {type: 'finish', usage: makeUsage({inputTokens: 10, outputTokens: 5, totalTokens: 15})},
+        ], ''),
+      ),
+      generateText: vi.fn(),
+    };
+
+    const ctx = makeMockContext({
+      provider,
+      toolRegistry: registry,
+      maxTurns: 100,
+      maxTokens: 30,
+    });
+
+    const events: SSEEvent[] = [];
+    for await (const event of runAgent({
+      messages: [{role: 'user', content: 'Burn tokens'}] as ModelMessage[],
+      context: ctx,
+    })) {
+      events.push(event);
+    }
+
+    // Should have terminated on budget, not max_turns
+    const doneEvent = events[events.length - 1] as SSEDoneEvent;
+    expect(doneEvent.type).toBe(SSEEventType.Done);
+    expect(ctx.turnCount).toBeLessThan(100);
+    expect(ctx.usage.totalTokens).toBeGreaterThanOrEqual(30);
+  });
+
+  it('undefined maxTokens means no budget cap', async () => {
+    // Same infinite-tool-call provider as max_turns test, but with no
+    // maxTokens set and a small maxTurns to bound the test. Verifies that
+    // undefined budget doesn't accidentally trip the check.
+    const tool = makeMockToolDef();
+    const registry = makeMockRegistry({loop_tool: tool});
+    const provider = {
+      model: 'test-model',
+      provider: 'test',
+      languageModel: {} as AgentContext['provider']['languageModel'],
+      streamText: vi.fn(() =>
+        makeMockStream([
+          {type: 'tool-call', toolCallId: `c-${Date.now()}`, toolName: 'loop_tool', args: {}},
+          {type: 'finish', usage: makeUsage({inputTokens: 100, outputTokens: 100, totalTokens: 200})},
+        ], ''),
+      ),
+      generateText: vi.fn(),
+    };
+
+    const ctx = makeMockContext({
+      provider,
+      toolRegistry: registry,
+      maxTurns: 2,
+      // maxTokens intentionally omitted
+    });
+
+    const events: SSEEvent[] = [];
+    for await (const event of runAgent({
+      messages: [{role: 'user', content: 'Run'}] as ModelMessage[],
+      context: ctx,
+    })) {
+      events.push(event);
+    }
+
+    // Should stop on max_turns, budget check should not interfere
+    const doneEvent = events[events.length - 1] as SSEDoneEvent;
+    expect(doneEvent.type).toBe(SSEEventType.Done);
+    expect(ctx.usage.totalTokens).toBeGreaterThan(0);
+    // No budget-exceeded log should have been emitted
+    // (positive assertion: we reached max_turns, accumulating tokens beyond any tiny cap)
   });
 
   it('done event always includes usage regardless of reason (G2)', async () => {

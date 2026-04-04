@@ -151,6 +151,13 @@ export interface AgentLoopConfig {
   maxLoopIterations: number;
   /** Repeated tool call count that triggers a warning injection. Default 3. */
   loopWarningThreshold: number;
+  /**
+   * Repeated tool call count that escalates: stronger warning + the looping
+   * tool is temporarily removed from the tool set passed to the model, so
+   * it is forced to try a different approach. Default 5 (between
+   * loopWarningThreshold=3 and maxLoopIterations=8).
+   */
+  loopEscalationThreshold: number;
   /** Max output tokens per LLM call. */
   maxOutputTokens: number;
   /** Timeout for individual tool execution in milliseconds. Default 30_000. */
@@ -172,6 +179,7 @@ export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
   clearThreshold: 15,
   maxLoopIterations: 8,
   loopWarningThreshold: 3,
+  loopEscalationThreshold: 5,
   maxOutputTokens: 16_384,
   toolTimeoutMs: 30_000,
   confirmationTimeoutMs: 300_000,
@@ -223,6 +231,17 @@ export interface AgentContext {
   /** Max context tokens (provider's limit) */
   maxContextTokens: number;
 
+  /**
+   * Optional token budget for the session. When `ctx.usage.totalTokens` reaches
+   * this value, the loop transitions to `done` with reason `budget_exceeded`.
+   * Undefined means no budget cap — the session runs until another terminal
+   * condition (`max_turns`, `loop_detected`, `model_stop`, etc.) fires.
+   *
+   * Counts input + output tokens across all turns in the session. Check runs
+   * between state transitions, so the in-flight turn completes first.
+   */
+  maxTokens?: number;
+
   /** Loop config */
   config: AgentLoopConfig;
 
@@ -231,6 +250,14 @@ export interface AgentContext {
 
   /** Cache for pre-executed read-only tool results (populated during STREAMING) */
   preExecutionCache: Map<string, Promise<unknown>>;
+
+  /**
+   * Set of tool-call IDs the user has already approved via `CONFIRMING`.
+   * Consulted by EXECUTING before routing a confirmation-gated tool call
+   * to CONFIRMING — prevents an infinite EXECUTING → CONFIRMING → EXECUTING
+   * loop after the user approves.
+   */
+  confirmedCallIds: Set<string>;
 
   /**
    * Wait for user confirmation on a tool call.
@@ -250,6 +277,23 @@ export interface AgentContext {
    * Default is no-op. Roadmap 6.3 (Stripe billing) plugs into this.
    */
   onUsage?: (usage: TurnUsage) => void;
+
+  /**
+   * Optional hook that produces a 1-2 sentence summary of a tool result
+   * that is being cleared from context. When set, the agent loop calls
+   * this for each tool result body it evicts, so the assistant retains a
+   * short signal of "what happened" instead of a generic marker.
+   *
+   * If unset, cleared messages fall back to a static marker. The hook
+   * should be cheap (e.g. a Haiku call) — callers are welcome to short-
+   * circuit or cache. Summarization failures are swallowed by the loop
+   * and fall back to the marker.
+   */
+  summarizeToolResult?: (opts: {
+    toolName: string;
+    content: string;
+    signal: AbortSignal;
+  }) => Promise<string>;
 }
 
 // ---------------------------------------------------------------------------

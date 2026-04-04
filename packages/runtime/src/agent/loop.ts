@@ -47,7 +47,6 @@ export async function transition(
 ): Promise<TransitionResult> {
   switch (state.type) {
     case 'thinking':
-      // handleThinking is synchronous (it starts the stream, doesn't await it)
       return handleThinking(state, ctx);
 
     case 'streaming':
@@ -144,6 +143,24 @@ export async function* runAgent(
         maxTurns: ctx.maxTurns,
       });
       state = {type: 'done', usage: {...ctx.usage}, reason: 'max_turns'};
+      continue;
+    }
+
+    // Check token budget — closes the silent-cost-runaway hole where a long-
+    // running automation could burn through a large budget in a tight retry
+    // loop. Undefined maxTokens means no cap (existing behavior).
+    if (
+      ctx.maxTokens !== undefined &&
+      ctx.usage.totalTokens >= ctx.maxTokens &&
+      result.next.type !== 'done'
+    ) {
+      ctx.logger.warn('agent_loop_budget_exceeded', {
+        session: ctx.sessionId,
+        turnCount: ctx.turnCount,
+        totalTokens: ctx.usage.totalTokens,
+        maxTokens: ctx.maxTokens,
+      });
+      state = {type: 'done', usage: {...ctx.usage}, reason: 'budget_exceeded'};
       continue;
     }
 

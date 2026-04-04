@@ -142,7 +142,7 @@ export async function handleCompacting(
   ctx.messages = compactedMessages;
   ctx.compactionFailures = 0; // Reset circuit breaker on success
 
-  const tokensAfter = estimateTokenCount(compactedMessages);
+  const tokensAfter = estimateTokenCount(compactedMessages, ctx.provider);
   const compactionTokens = summaryResult.value.usage.inputTokens + summaryResult.value.usage.outputTokens;
 
   ctx.logger.info('compaction_end', {

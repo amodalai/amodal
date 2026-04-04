@@ -103,9 +103,17 @@ export async function handleDispatching(
     turnCount: 0,
     maxTurns: task.maxTurns ?? DEFAULT_CHILD_MAX_TURNS,
     maxContextTokens: task.maxContextTokens ?? DEFAULT_CHILD_MAX_CONTEXT_TOKENS,
+    // Propagate parent's remaining token budget so a child can't blow through
+    // more than the parent had left. Child usage merges back into parent after
+    // the child completes, so the parent's next budget check catches any
+    // overshoot on subsequent turns regardless.
+    maxTokens: ctx.maxTokens !== undefined
+      ? Math.max(0, ctx.maxTokens - ctx.usage.totalTokens)
+      : undefined,
     config: {...DEFAULT_LOOP_CONFIG},
     compactionFailures: 0,
     preExecutionCache: new Map(),
+    confirmedCallIds: new Set(),
     waitForConfirmation: ctx.waitForConfirmation,
     buildToolContext: ctx.buildToolContext,
   };
