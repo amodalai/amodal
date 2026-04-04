@@ -56,7 +56,34 @@ export async function handleExecuting(
     return nextAfterToolResult(state, result, effects, ctx);
   }
 
-  // 2. Check permissions
+  // 2. Validate args against schema (cheap guard against hallucinated params)
+  //    Only for Zod schemas — FlexibleSchema (MCP/custom tools) uses jsonSchema()
+  //    which is validated by the AI SDK at the provider level.
+  if ('safeParse' in toolDef.parameters) {
+    const validation = toolDef.parameters.safeParse(current.args);
+    if (!validation.success) {
+      const result: ToolResult = {
+        callId: current.toolCallId,
+        toolName: current.toolName,
+        status: 'error',
+        content: `Invalid parameters: ${validation.error.message}`,
+      };
+      ctx.logger.warn('tool_args_invalid', {
+        tool: current.toolName,
+        callId: current.toolCallId,
+        session: ctx.sessionId,
+        errors: validation.error.issues,
+      });
+      return nextAfterToolResult(state, result, effects, ctx);
+    }
+  }
+
+  // 3. Check permissions
+  //    Currently scoped to connection tools only — they have access.json ACLs
+  //    with endpoint-level allow/deny/confirm rules. Store tools and admin tools
+  //    have their own guards (read-only paths, blocked filenames, schema validation).
+  //    A general confirmation gate for all non-readOnly tools is planned for Phase 3.4
+  //    when the session manager wires up the full confirmation flow.
   if (toolDef.metadata?.category === 'connection' && toolDef.metadata.connection) {
     const method = typeof current.args['method'] === 'string' ? current.args['method'] : 'GET';
     const endpoint = typeof current.args['endpoint'] === 'string' ? current.args['endpoint'] : '/';
@@ -170,6 +197,7 @@ export async function handleExecuting(
 
 /**
  * Execute a tool call, building the ToolContext from the AgentContext.
+ * Enforces a timeout via AbortSignal to prevent hanging on broken tools.
  */
 export async function executeTool(
   call: ToolCall,
@@ -177,7 +205,14 @@ export async function executeTool(
   ctx: AgentContext,
 ): Promise<unknown> {
   const toolCtx = ctx.buildToolContext(call.toolCallId);
-  return toolDef.execute(call.args, toolCtx);
+
+  // Combine session abort signal with a per-tool timeout
+  const timeoutSignal = AbortSignal.timeout(ctx.config.toolTimeoutMs);
+  const combinedSignal = AbortSignal.any([ctx.signal, timeoutSignal]);
+
+  // Override the tool context signal with the combined one
+  const timedCtx = {...toolCtx, signal: combinedSignal};
+  return toolDef.execute(call.args, timedCtx);
 }
 
 /**
@@ -189,12 +224,23 @@ function nextAfterToolResult(
   effects: SSEEvent[],
   ctx: AgentContext,
 ): TransitionResult {
-  // Append tool result message
-  const resultMessage = buildToolResultMessage(result);
-  ctx.messages = [...ctx.messages, resultMessage];
-
-  // Flag oversized tool output (actual snipping implemented in Phase 3.3)
-  if (result.content.length > ctx.config.maxResultSize) {
+  // Hard-truncate oversized tool results as a stopgap until Phase 3.3 snipping.
+  // Without this, a single large MCP response can blow the context budget.
+  if (result.content.length > ctx.config.hardResultTruncation) {
+    const originalSize = result.content.length;
+    result = {
+      ...result,
+      content: result.content.slice(0, ctx.config.hardResultTruncation)
+        + `\n\n[TRUNCATED: output was ${originalSize} chars, limit is ${ctx.config.hardResultTruncation}]`,
+    };
+    ctx.logger.warn('tool_result_truncated', {
+      callId: result.callId,
+      tool: result.toolName,
+      originalSize,
+      truncatedTo: ctx.config.hardResultTruncation,
+      session: ctx.sessionId,
+    });
+  } else if (result.content.length > ctx.config.maxResultSize) {
     ctx.logger.debug('tool_result_oversized', {
       callId: result.callId,
       tool: result.toolName,
@@ -202,6 +248,10 @@ function nextAfterToolResult(
       maxSize: ctx.config.maxResultSize,
     });
   }
+
+  // Append tool result message
+  const resultMessage = buildToolResultMessage(result);
+  ctx.messages = [...ctx.messages, resultMessage];
 
   const allResults = [...state.results, result];
 

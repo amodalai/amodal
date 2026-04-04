@@ -138,6 +138,12 @@ export interface AgentLoopConfig {
   maxLoopIterations: number;
   /** Max output tokens per LLM call. */
   maxOutputTokens: number;
+  /** Timeout for individual tool execution in milliseconds. Default 30_000. */
+  toolTimeoutMs: number;
+  /** Timeout for user confirmation in milliseconds. Default 300_000 (5 minutes). */
+  confirmationTimeoutMs: number;
+  /** Hard truncation limit for tool results (chars) before Phase 3.3 snipping. Default 100_000. */
+  hardResultTruncation: number;
 }
 
 export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
@@ -147,6 +153,9 @@ export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
   clearThreshold: 15,
   maxLoopIterations: 8,
   maxOutputTokens: 16_384,
+  toolTimeoutMs: 30_000,
+  confirmationTimeoutMs: 300_000,
+  hardResultTruncation: 100_000,
 };
 
 export interface AgentContext {

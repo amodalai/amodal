@@ -311,6 +311,36 @@ describe('handleStreaming (via transition)', () => {
     // Pre-execution cache should have an entry
     expect(ctx.preExecutionCache.has('call-ro')).toBe(true);
   });
+
+  it('logs pre-execution errors on abort instead of swallowing silently', async () => {
+    const failingTool = makeMockToolDef({
+      readOnly: true,
+      execute: vi.fn().mockRejectedValue(new Error('tool crashed')),
+    });
+    const registry = makeMockRegistry({broken_lookup: failingTool});
+
+    const stream = makeMockStream([
+      {type: 'tool-call', toolCallId: 'call-fail', toolName: 'broken_lookup', args: {}},
+      {type: 'finish', usage: makeUsage()},
+    ], '');
+
+    const ctx = makeMockContext({toolRegistry: registry});
+    const state: StreamingState = {type: 'streaming', stream, pendingToolCalls: []};
+
+    await transition(state, ctx);
+
+    // Wait for the pre-execution promise to settle (it rejects)
+    const cached = ctx.preExecutionCache.get('call-fail');
+    expect(cached).toBeDefined();
+    // The .catch() handler should have logged, not thrown
+    await expect(cached).rejects.toThrow('tool crashed');
+
+    // The suppression handler should have logged the error
+    expect(ctx.logger.debug).toHaveBeenCalledWith('preexec_suppressed', expect.objectContaining({
+      tool: 'broken_lookup',
+      error: 'tool crashed',
+    }));
+  });
 });
 
 describe('handleExecuting (via transition)', () => {
@@ -408,6 +438,32 @@ describe('handleExecuting (via transition)', () => {
     expect(ctx.logger.error).toHaveBeenCalledWith('tool_execution_error', expect.objectContaining({
       tool: 'api_call',
     }));
+  });
+
+  it('rejects hallucinated args that fail schema validation', async () => {
+    const {z} = await import('zod');
+    const strictTool = makeMockToolDef({
+      parameters: z.object({query: z.string(), limit: z.number().int().positive()}),
+    });
+    const registry = makeMockRegistry({search: strictTool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {toolCallId: 'call-1', toolName: 'search', args: {query: 123, limit: -5}},
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // Should recover — transition to thinking with error message for the model
+    expect(result.next.type).toBe('thinking');
+    expect(ctx.logger.warn).toHaveBeenCalledWith('tool_args_invalid', expect.objectContaining({
+      tool: 'search',
+    }));
+    // Should NOT have called execute
+    expect(strictTool.execute).not.toHaveBeenCalled();
   });
 
   it('sanitizes sensitive parameters in SSE events', async () => {

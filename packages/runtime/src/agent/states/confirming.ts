@@ -35,7 +35,15 @@ export async function handleConfirming(
     session: ctx.sessionId,
   });
 
-  const approved = await ctx.waitForConfirmation(state.call.toolCallId);
+  // Race confirmation against a timeout — don't hang forever if user never responds
+  const timeoutMs = ctx.config.confirmationTimeoutMs;
+  const timeoutPromise = new Promise<false>((resolve) => {
+    setTimeout(() => resolve(false), timeoutMs);
+  });
+  const approved = await Promise.race([
+    ctx.waitForConfirmation(state.call.toolCallId),
+    timeoutPromise,
+  ]);
 
   if (approved) {
     ctx.logger.info('tool_confirmation_approved', {

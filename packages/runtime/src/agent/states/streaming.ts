@@ -63,9 +63,15 @@ export async function handleStreaming(
         const toolDef = ctx.toolRegistry.get(event.toolName);
         if (toolDef?.readOnly) {
           const promise = executeTool(call, toolDef, ctx);
-          // Suppress unhandled rejection — errors are handled when awaited in EXECUTING.
+          // Log but suppress rejection — errors are re-surfaced when awaited in EXECUTING.
           // Without this, abort before reaching EXECUTING causes unhandled rejection.
-          promise.catch(() => {});
+          promise.catch((err: unknown) => {
+            ctx.logger.debug('preexec_suppressed', {
+              tool: event.toolName,
+              callId: event.toolCallId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
           ctx.preExecutionCache.set(event.toolCallId, promise);
         }
         break;
