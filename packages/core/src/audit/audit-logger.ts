@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type Kind, MUTATOR_KINDS } from '@google/gemini-cli-core';
+/** Tool call kind (replaces upstream Kind enum). */
+type Kind = string;
+/** HTTP methods that mutate state. */
+const MUTATOR_KINDS: string[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
 import type {
   AuditConfig,
   AuditContext,

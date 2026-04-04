@@ -19,7 +19,7 @@ export default defineConfig({
     },
     server: {
       deps: {
-        inline: [/@google\/gemini-cli-core/, /@amodalai\/core/],
+        inline: [/@amodalai\/core/],
       },
     },
     coverage: {

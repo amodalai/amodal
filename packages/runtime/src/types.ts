@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import type { AutomationDefinition, Question } from '@amodalai/core';
+import type { AutomationDefinition } from '@amodalai/core';
 
 // ---------------------------------------------------------------------------
 // Request schemas
@@ -80,7 +80,6 @@ export enum SSEEventType {
   KBProposal = 'kb_proposal',
   CredentialSaved = 'credential_saved',
   Approved = 'approved',
-  AskUser = 'ask_user',
   ExploreStart = 'explore_start',
   ExploreEnd = 'explore_end',
   PlanMode = 'plan_mode',
@@ -179,13 +178,6 @@ export interface SSEApprovedEvent {
   timestamp: string;
 }
 
-export interface SSEAskUserEvent {
-  type: SSEEventType.AskUser;
-  ask_id: string;
-  questions: Question[];
-  timestamp: string;
-}
-
 export interface SSEDoneEvent {
   type: SSEEventType.Done;
   timestamp: string;
@@ -261,7 +253,6 @@ export type SSEEvent =
   | SSEKBProposalEvent
   | SSECredentialSavedEvent
   | SSEApprovedEvent
-  | SSEAskUserEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent

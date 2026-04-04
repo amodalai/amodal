@@ -9,7 +9,16 @@ import { log } from './logger.js';
 
 export const SERVER_VERSION = '0.1.0';
 
+// ---------------------------------------------------------------------------
+// Public API (Phase 4.2)
+// ---------------------------------------------------------------------------
+
+export { createAgent } from './api/create-agent.js';
+export type { Agent, AgentConfig, AgentSession } from './api/types.js';
+
+// ---------------------------------------------------------------------------
 // Re-export for consumers
+// ---------------------------------------------------------------------------
 export { createServer } from './server.js';
 export type { ServerInstance, CreateServerOptions } from './server.js';
 export type { ServerConfig } from './types.js';
@@ -67,7 +76,7 @@ export type { Logger, LoggerConfig, LogFormat } from './logger.js';
 
 // Config
 export { loadConfig } from './config.js';
-export type { AgentConfig, ConfigOverrides, LoadConfigOptions, McpServerConfig } from './config.js';
+export type { AgentConfig as LegacyAgentConfig, ConfigOverrides, LoadConfigOptions, McpServerConfig } from './config.js';
 
 // LLM Provider (Vercel AI SDK abstraction)
 export { createProvider } from './providers/create-provider.js';
