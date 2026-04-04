@@ -321,7 +321,7 @@ describe('compileContext', () => {
     expect(prompt).toContain('| stage | lead | qualified | closed |');
     expect(prompt).toContain('| contacts | string[] |');
     expect(prompt).toContain('| closedAt | datetime | null |');
-    expect(prompt).toContain('store tools');
+    expect(prompt).toContain('query_store');
   });
 
   it('renders multiple stores', () => {

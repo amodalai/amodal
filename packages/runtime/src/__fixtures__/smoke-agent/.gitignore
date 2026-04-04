@@ -1,1 +1,4 @@
 .amodal/
+.amodal.lock
+tools/*/.build/
+knowledge/smoke-write-test.md

@@ -15,7 +15,7 @@
 import {describe, it, expect, beforeAll, afterAll} from 'vitest';
 import {fork, type ChildProcess} from 'node:child_process';
 import {resolve} from 'node:path';
-import {readFileSync, writeFileSync} from 'node:fs';
+import {readFileSync, writeFileSync, rmSync} from 'node:fs';
 import type {ServerInstance} from '../server.js';
 
 // Load API keys from repo root .env.test if not already set.
@@ -119,20 +119,24 @@ const skipReason = process.env['ANTHROPIC_API_KEY'] ? '' : 'ANTHROPIC_API_KEY no
 
 describe.skipIf(!!skipReason)('smoke tests', () => {
   beforeAll(async () => {
-    // 0. Write MCP server spec with absolute path (loadRepo reads this as-is)
+    // 0. Nuke prior state — clean slate for every run
+    rmSync(resolve(AGENT_DIR, '.amodal/store-data'), {recursive: true, force: true});
+    rmSync(resolve(AGENT_DIR, '.amodal/sessions'), {recursive: true, force: true});
+
+    // 2. Write MCP server spec with absolute path (loadRepo reads this as-is)
     writeFileSync(
       resolve(AGENT_DIR, 'connections/mock-mcp/spec.json'),
       JSON.stringify({protocol: 'mcp', transport: 'stdio', command: 'node', args: [MCP_SERVER]}, null, 2),
     );
 
-    // 1. Start mock REST server
+    // 3. Start mock REST server
     restServer = fork(REST_SERVER, [], {
       env: {...process.env, SMOKE_REST_PORT: String(REST_PORT)},
       stdio: 'pipe',
     });
     await new Promise((r) => setTimeout(r, 1000));
 
-    // 2. Start amodal dev programmatically
+    // 4. Start amodal dev programmatically
     const {createLocalServer} = await import('../agent/local-server.js');
     agentServer = await createLocalServer({
       repoPath: AGENT_DIR,
@@ -383,6 +387,87 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
   }, TIMEOUT * 2);
 
   // -------------------------------------------------------------------------
+  // 11b. Store batch write
+  // -------------------------------------------------------------------------
+
+  it('batch writes multiple items to store', async () => {
+    const {events} = await chat(
+      'Write two items to the test-items store using the batch tool: item_id="batch-1", name="First Batch", status="active" and item_id="batch-2", name="Second Batch", status="archived".',
+    );
+
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const batchTool = toolStarts.find((e) => String(e['tool_name'] ?? '').includes('batch'));
+
+    if (!batchTool) {
+      // Model didn't use batch — might have used individual writes, that's OK
+      return;
+    }
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    const batchResult = toolResults.find((e) => e['tool_id'] === batchTool['tool_id']);
+    expect(batchResult).toBeDefined();
+    expect(batchResult?.['status']).toBe('success');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 11c. Store single document fetch by key
+  // -------------------------------------------------------------------------
+
+  it('fetches a single document by key from store', async () => {
+    // First write a known item and verify the write succeeded
+    const writeResult = await chat(
+      'Write to the test-items store: item_id="key-lookup-test", name="Key Lookup Item", status="active".',
+    );
+    const writeSuccess = findEvents(writeResult.events, 'tool_call_result').find((e) => e['status'] === 'success');
+    if (!writeSuccess) return; // Write didn't happen — skip
+
+    // Fetch by key in a new session
+    const {events} = await chat(
+      'Use query_store with store="test-items" and key="key-lookup-test". What is the name field?',
+    );
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    if (toolResults.length === 0) {
+      // eslint-disable-next-line no-console -- intentional test diagnostic
+      console.warn('[smoke] Model did not call query_store for key lookup — LLM non-determinism');
+      return;
+    }
+
+    const responseText = allText(events);
+    expect(responseText).toContain('Key Lookup');
+  }, TIMEOUT * 2);
+
+  // -------------------------------------------------------------------------
+  // 11d. Store filtered query (multiple results)
+  // -------------------------------------------------------------------------
+
+  it('queries store with filter and returns multiple results', async () => {
+    // Write two items with a unique status we can filter on
+    const w1 = await chat('Write to test-items store: item_id="filter-a", name="Filter Alpha", status="archived".');
+    const w2 = await chat('Write to test-items store: item_id="filter-b", name="Filter Beta", status="archived".');
+
+    const w1ok = findEvents(w1.events, 'tool_call_result').some((e) => e['status'] === 'success');
+    const w2ok = findEvents(w2.events, 'tool_call_result').some((e) => e['status'] === 'success');
+    if (!w1ok || !w2ok) return; // Writes didn't happen — skip
+
+    // Query with filter in a new session
+    const {events} = await chat(
+      'Use query_store with store="test-items" and filter={"status": "archived"}. List the names of all results.',
+    );
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    if (toolResults.length === 0) {
+      // eslint-disable-next-line no-console -- intentional test diagnostic
+      console.warn('[smoke] Model did not call query_store for filtered query — LLM non-determinism');
+      return;
+    }
+
+    const responseText = allText(events);
+    const mentionsAny = responseText.includes('Filter Alpha') || responseText.includes('Filter Beta');
+    expect(mentionsAny).toBe(true);
+  }, TIMEOUT * 3);
+
+  // -------------------------------------------------------------------------
   // 12. Concurrent sessions don't bleed context
   // -------------------------------------------------------------------------
 
@@ -599,6 +684,200 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     const responseText = allText(events).toLowerCase();
     expect(responseText).toContain('yes');
   }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 22. Pages — user-defined React pages
+  // -------------------------------------------------------------------------
+
+  it('lists pages with metadata from repo', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/pages`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {pages: Array<Record<string, unknown>>};
+
+    expect(res.status).toBe(200);
+    expect(body.pages.length).toBeGreaterThan(0);
+    const testPage = body.pages.find((p) => p['name'] === 'TestPage');
+    expect(testPage).toBeDefined();
+    expect(testPage?.['description']).toBe('Smoke test page fixture');
+    expect(testPage?.['stores']).toEqual(['test-items']);
+  });
+
+  it('serves compiled page bundle', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/pages-bundle/TestPage.js`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const bundle = await res.text();
+    // IIFE bundle registers on window.__AMODAL_PAGES__
+    expect(bundle).toContain('__AMODAL_PAGES__');
+    expect(bundle).toContain('TestPage');
+  });
+
+  // -------------------------------------------------------------------------
+  // 23. Sessions — listing and history
+  // -------------------------------------------------------------------------
+
+  it('sessions endpoint returns a sessions array', async () => {
+    // Chat sessions in local dev don't auto-populate the legacy session store
+    // used by /sessions (only automation runs do), so we just verify the
+    // endpoint returns the expected shape.
+    const res = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {sessions: Array<Record<string, unknown>>};
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(body.sessions)).toBe(true);
+  });
+
+  it('returns 404 for unknown session', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/session/nonexistent-id`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(404);
+  });
+
+  // -------------------------------------------------------------------------
+  // 24. Files — browser and editor
+  // -------------------------------------------------------------------------
+
+  it('lists repo files as a tree', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/files`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {tree: Array<Record<string, unknown>>; repoPath: string};
+
+    expect(res.status).toBe(200);
+    expect(body.tree.length).toBeGreaterThan(0);
+    // Should include at least one convention directory
+    const names = body.tree.map((n) => String(n['name']));
+    expect(names.some((n) => ['skills', 'connections', 'stores', 'tools'].includes(n))).toBe(true);
+  });
+
+  it('reads a specific file', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/files/amodal.json`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const body = await res.json() as {path: string; content: string; language: string};
+    expect(body.path).toBe('amodal.json');
+    expect(body.language).toBe('json');
+    expect(body.content).toContain('smoke-test-agent');
+  });
+
+  it('writes a file and reads it back', async () => {
+    const testPath = 'knowledge/smoke-write-test.md';
+    const testContent = '# Smoke Write Test\n\nThis file was written by a smoke test.';
+
+    const writeRes = await fetch(`http://localhost:${AGENT_PORT}/api/files/${testPath}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content: testContent}),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(writeRes.status).toBe(200);
+
+    const readRes = await fetch(`http://localhost:${AGENT_PORT}/api/files/${testPath}`, {signal: AbortSignal.timeout(5000)});
+    expect(readRes.status).toBe(200);
+    const body = await readRes.json() as {content: string};
+    expect(body.content).toBe(testContent);
+  });
+
+  it('rejects path traversal attempts', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/files/..%2F..%2F..%2Fetc%2Fpasswd`, {signal: AbortSignal.timeout(5000)});
+    expect([400, 403, 404]).toContain(res.status);
+  });
+
+  // -------------------------------------------------------------------------
+  // 25. Webhooks — inbound automation trigger
+  // -------------------------------------------------------------------------
+
+  it('rejects webhook for unknown automation with 404', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/webhooks/nonexistent-automation`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({event: 'test'}),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json() as {error: string};
+    expect(body.error).toContain('not found');
+  });
+
+  // -------------------------------------------------------------------------
+  // 26. Store REST API — CRUD outside chat
+  // -------------------------------------------------------------------------
+
+  it('lists stores with document counts', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/stores`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const body = await res.json() as {stores: Array<Record<string, unknown>>};
+    expect(body.stores.length).toBeGreaterThan(0);
+    const testItems = body.stores.find((s) => s['name'] === 'test-items');
+    expect(testItems).toBeDefined();
+    expect(typeof testItems?.['documentCount']).toBe('number');
+  });
+
+  it('writes and retrieves a document via REST', async () => {
+    const writeRes = await fetch(`http://localhost:${AGENT_PORT}/api/stores/test-items`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({item_id: 'rest-api-test', name: 'REST API Item', status: 'active'}),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(writeRes.status).toBe(201);
+    const writeBody = await writeRes.json() as {stored: boolean; key: string};
+    expect(writeBody.key).toBe('rest-api-test');
+
+    const readRes = await fetch(`http://localhost:${AGENT_PORT}/api/stores/test-items/rest-api-test`, {signal: AbortSignal.timeout(5000)});
+    expect(readRes.status).toBe(200);
+    const readBody = await readRes.json() as {document: {payload: Record<string, unknown>}};
+    expect(readBody.document.payload['name']).toBe('REST API Item');
+  });
+
+  it('lists documents in a store', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/stores/test-items?limit=10`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const body = await res.json() as {documents: Array<Record<string, unknown>>; total: number};
+    expect(Array.isArray(body.documents)).toBe(true);
+    expect(typeof body.total).toBe('number');
+  });
+
+  it('returns 404 for unknown store', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/stores/nonexistent-store`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(404);
+  });
+
+  // -------------------------------------------------------------------------
+  // 27. Feedback
+  // -------------------------------------------------------------------------
+
+  it('saves feedback rating', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/feedback`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        sessionId: 'smoke-session',
+        messageId: 'smoke-msg-1',
+        rating: 'up',
+        query: 'Test query',
+        response: 'Test response',
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as {ok: boolean; id: string};
+    expect(body.ok).toBe(true);
+    expect(body.id).toBeTruthy();
+  });
+
+  it('returns feedback summary stats', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/feedback/summary`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const body = await res.json() as {total: number; thumbsUp: number; thumbsDown: number};
+    expect(typeof body.total).toBe('number');
+    expect(typeof body.thumbsUp).toBe('number');
+    expect(typeof body.thumbsDown).toBe('number');
+  });
+
+  it('rejects invalid feedback rating', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/feedback`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sessionId: 'x', messageId: 'y', rating: 'invalid'}),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(res.status).toBe(400);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -170,11 +170,14 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     if (!storeBackend) {
       const dataDir = storeConfig?.dataDir ?? `${config.repoPath}/.amodal/store-data`;
 
-      // Check for lock file — another instance may be using this data dir
-      const lockPath = `${dataDir}/server.lock`;
+      // Check for lock file — another instance may be using this data dir.
+      // Lock file lives in the PARENT dir (not inside dataDir) so it doesn't
+      // conflict with PGLite's own PostgreSQL data files (e.g. postmaster.pid).
+      const lockPath = `${dataDir}.lock`;
       try {
         const {readFileSync, writeFileSync, mkdirSync, unlinkSync} = await import('node:fs');
-        mkdirSync(dataDir, {recursive: true});
+        const path = await import('node:path');
+        mkdirSync(path.dirname(dataDir), {recursive: true});
         try {
           const existing = readFileSync(lockPath, 'utf-8').trim();
           try { process.kill(Number(existing), 0); log.warn('store_lock_conflict', {pid: existing}); }
@@ -192,7 +195,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         storeBackendType = 'pglite';
         log.info('store_backend_ready', {type: 'pglite', storeCount: bundle.stores.length, dataDir});
       } catch (err) {
-        log.error('store_backend_init_failed', {error: err instanceof Error ? err.message : String(err), dataDir});
+        const errMsg = err instanceof Error ? err.message : (typeof err === 'object' ? JSON.stringify(err) : String(err));
+        log.error('store_backend_init_failed', {error: errMsg, dataDir});
       }
     }
   }

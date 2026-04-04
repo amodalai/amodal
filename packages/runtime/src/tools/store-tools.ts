@@ -134,7 +134,7 @@ export function createStoreWriteTool(
   const entitySchema = buildStoreZodSchema(store);
 
   return {
-    description: `Store a ${store.entity.name} to the ${store.name} collection.`,
+    description: `Write a single ${store.entity.name} to the ${store.name} store. Creates or updates the document by key.`,
     parameters: entitySchema,
     readOnly: false,
     metadata: {category: 'store'},
@@ -162,7 +162,7 @@ export function createStoreBatchTool(
   const entitySchema = buildStoreZodSchema(store);
 
   return {
-    description: `Store multiple ${store.entity.name}(s) to the ${store.name} collection in one call.`,
+    description: `Write multiple ${store.entity.name}(s) to the ${store.name} store in one call. Each item is created or updated by key.`,
     parameters: z.object({
       items: z.array(entitySchema).min(1),
     }),
@@ -212,16 +212,17 @@ export function createStoreQueryTool(
   const storeNames = stores.map((s) => s.name);
 
   return {
-    description: 'Query documents from a store collection. Use "key" for a single document or "filter" for a list.',
+    description: `Query documents from a data store. Use the "store" parameter to specify which store (${storeNames.join(', ')}). Pass "key" to fetch a single document by ID, or "filter" to search for documents matching field values. Returns the matching document(s) with all fields.`,
     parameters: z.object({
-      store: storeNames.length > 0
+      store: (storeNames.length > 0
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by length > 0 check
         ? z.enum(storeNames as [string, ...string[]])
-        : z.string(),
-      key: z.string().optional(),
-      filter: z.record(z.unknown()).optional(),
-      sort: z.string().optional(),
-      limit: z.number().optional(),
+        : z.string()
+      ).describe(`Name of the store to query (${storeNames.join(', ')})`),
+      key: z.string().optional().describe('Fetch a single document by its key/ID'),
+      filter: z.record(z.unknown()).optional().describe('Filter documents by field values, e.g. {"status": "active"}'),
+      sort: z.string().optional().describe('Sort field name'),
+      limit: z.number().optional().describe('Max number of documents to return'),
     }),
     readOnly: true,
     metadata: {category: 'store'},
