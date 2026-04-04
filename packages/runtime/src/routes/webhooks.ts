@@ -9,6 +9,7 @@ import type { AutomationDefinition } from '@amodalai/core';
 import { WebhookPayloadSchema } from '../types.js';
 import { validate } from '../middleware/request-validation.js';
 import { AppError } from '../middleware/error-handler.js';
+import {asyncHandler} from './route-helpers.js';
 import type {AutomationResult} from '../types.js';
 
 type AutomationRunnerFn = (automation: AutomationDefinition, payload?: Record<string, unknown>) => Promise<AutomationResult>;
@@ -32,8 +33,7 @@ export function createWebhookRouter(options: WebhookRouterOptions): Router {
   router.post(
     '/webhooks/:name',
     validate(WebhookPayloadSchema),
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-    async (req, res, next) => {
+    asyncHandler(async (req, res, next) => {
       try {
         const { name } = req.params;
         if (!name) {
@@ -60,7 +60,7 @@ export function createWebhookRouter(options: WebhookRouterOptions): Router {
       } catch (err) {
         next(err);
       }
-    },
+    }),
   );
 
   return router;

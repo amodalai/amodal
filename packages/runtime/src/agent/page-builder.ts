@@ -5,7 +5,7 @@
  */
 
 import {existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync} from 'node:fs';
-import {join} from 'node:path';
+import {join, resolve} from 'node:path';
 import {build} from 'esbuild';
 
 export interface PageMetadata {
@@ -26,6 +26,12 @@ export interface BuiltPage {
  * React is expected to be available on window.React (provided by the SPA).
  */
 export async function buildPages(repoPath: string): Promise<{pages: BuiltPage[]; outDir: string}> {
+  // Resolve to absolute path. The wrapper .tsx file we generate lives in
+  // .amodal/pages-build/ and imports the page entry by path — if repoPath
+  // is relative, esbuild can't resolve the import from the wrapper's
+  // location.
+  repoPath = resolve(repoPath);
+
   // Collect page entries: {name, entryPath} — local pages override package pages
   const pageFileExt = /\.(tsx|jsx|ts|js)$/;
   const pageEntries = new Map<string, string>();

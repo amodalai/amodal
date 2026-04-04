@@ -23,6 +23,7 @@ import type {SharedResources} from '../../routes/session-resolver.js';
 import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 import {SessionError} from '../../errors.js';
+import {asyncHandler} from '../../routes/route-helpers.js';
 
 export interface AdminChatRouterOptions {
   sessionManager: StandaloneSessionManager;
@@ -47,8 +48,7 @@ function ts(): string {
 export function createAdminChatRouter(options: AdminChatRouterOptions): Router {
   const router = Router();
 
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.post('/config/chat', async (req: Request, res: Response) => {
+  router.post('/config/chat', asyncHandler(async (req: Request, res: Response) => {
     const parsed = AgentChatRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({error: 'Invalid request', details: parsed.error.issues});
@@ -141,7 +141,7 @@ export function createAdminChatRouter(options: AdminChatRouterOptions): Router {
 
     writeSSE(res, {type: SSEEventType.Done, timestamp: ts()});
     res.end();
-  });
+  }));
 
   return router;
 }

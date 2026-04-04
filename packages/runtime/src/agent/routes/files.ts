@@ -10,6 +10,7 @@ import rateLimit from 'express-rate-limit';
 import {readdir, readFile, writeFile, stat, mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {readLockFile, getNpmContextPaths} from '@amodalai/core';
+import {asyncHandler} from '../../routes/route-helpers.js';
 
 export interface FilesRouterOptions {
   repoPath: string;
@@ -124,8 +125,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
   });
 
   /** Get the repo file tree (convention directories + config). */
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.get('/api/files', filesLimiter, async (_req: Request, res: Response) => {
+  router.get('/api/files', filesLimiter, asyncHandler(async (_req: Request, res: Response) => {
     try {
       const tree: FileTreeEntry[] = [];
 
@@ -193,11 +193,10 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: {code: 'FILES_FAILED', message: msg}});
     }
-  });
+  }));
 
   /** Read a file's contents. Checks local repo first, then installed packages. */
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.get('/api/files/*', filesLimiter, async (req: Request, res: Response) => {
+  router.get('/api/files/*', filesLimiter, asyncHandler(async (req: Request, res: Response) => {
     try {
       const filePath = req.params[0] ?? '';
       if (!filePath) {
@@ -259,11 +258,10 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: {code: 'READ_FAILED', message: msg}});
     }
-  });
+  }));
 
   /** Write a file's contents. Creates parent dirs if needed. */
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.put('/api/files/*', filesLimiter, async (req: Request, res: Response) => {
+  router.put('/api/files/*', filesLimiter, asyncHandler(async (req: Request, res: Response) => {
     try {
       const filePath = req.params[0] ?? '';
       if (!filePath) {
@@ -294,7 +292,7 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: {code: 'WRITE_FAILED', message: msg}});
     }
-  });
+  }));
 
   return router;
 }

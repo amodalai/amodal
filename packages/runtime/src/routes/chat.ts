@@ -21,7 +21,7 @@ import type {StandaloneSessionManager} from '../session/manager.js';
 import type {StreamHooks} from '../session/stream-hooks.js';
 import {resolveSession} from './session-resolver.js';
 import type {BundleResolver, SharedResources} from './session-resolver.js';
-import {adaptOnUsage, fireDrainHooks, UNKNOWN_TOOL_NAME} from './route-helpers.js';
+import {adaptOnUsage, asyncHandler, fireDrainHooks, UNKNOWN_TOOL_NAME} from './route-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Route options
@@ -42,8 +42,7 @@ export interface ChatRouterOptions {
 export function createChatRouter(options: ChatRouterOptions): Router {
   const router = Router();
 
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.post('/chat/sync', validate(ChatRequestSchema), async (req, res, next) => {
+  router.post('/chat/sync', validate(ChatRequestSchema), asyncHandler(async (req, res, next) => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated by Zod middleware
       const body = req.body as ChatRequest;
@@ -107,7 +106,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     } catch (err) {
       next(err);
     }
-  });
+  }));
 
   return router;
 }

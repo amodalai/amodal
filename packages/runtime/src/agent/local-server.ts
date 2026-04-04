@@ -480,6 +480,18 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         const session = sessionManager.get(sessionId);
         if (session) {
           void sessionManager.persist(session);
+          // Also mirror to the legacy file-based store so the /sessions
+          // endpoints (read by the UI history panel) see chat sessions.
+          // Without this, chat sessions only land in PGLite and the UI
+          // only sees automation/task sessions.
+          legacySessionStore.save({
+            id: session.id,
+            appId: session.appId,
+            title: session.metadata.title,
+            messages: session.messages,
+            createdAt: session.createdAt,
+            lastAccessedAt: session.lastAccessedAt,
+          });
         }
       },
     }),

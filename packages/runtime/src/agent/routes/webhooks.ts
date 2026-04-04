@@ -8,6 +8,7 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import {verifyHmacSignature} from '../proactive/delivery.js';
 import type {ProactiveRunner} from '../proactive/proactive-runner.js';
+import {asyncHandler} from '../../routes/route-helpers.js';
 
 export interface WebhookRouterOptions {
   runner: ProactiveRunner;
@@ -22,8 +23,7 @@ export interface WebhookRouterOptions {
 export function createWebhookRouter(options: WebhookRouterOptions): Router {
   const router = Router();
 
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.post('/webhooks/:name', async (req: Request, res: Response) => {
+  router.post('/webhooks/:name', asyncHandler(async (req: Request, res: Response) => {
     const automationName = req.params['name'] ?? '';
 
     // HMAC verification
@@ -64,7 +64,7 @@ export function createWebhookRouter(options: WebhookRouterOptions): Router {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: msg});
     }
-  });
+  }));
 
   return router;
 }

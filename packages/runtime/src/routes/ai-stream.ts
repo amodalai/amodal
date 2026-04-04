@@ -27,7 +27,7 @@ import type {StreamHooks} from '../session/stream-hooks.js';
 import {SSEEventType, type SSEEvent} from '../types.js';
 import {resolveSession} from './session-resolver.js';
 import type {BundleResolver, SharedResources} from './session-resolver.js';
-import {adaptOnUsage, fireDrainHooks} from './route-helpers.js';
+import {adaptOnUsage, asyncHandler, fireDrainHooks} from './route-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Request schema (Vercel AI SDK message format)
@@ -180,7 +180,6 @@ export function translateEvent(
 ): UIStreamEvent[] {
   const out: UIStreamEvent[] = [];
 
-  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
   switch (event.type) {
     case SSEEventType.Init: {
       out.push({type: 'message-start', messageId: state.messageId});
@@ -317,8 +316,63 @@ export function translateEvent(
       break;
     }
 
-    default:
+    case SSEEventType.ConfirmationRequired: {
+      out.push({
+        type: 'data-confirmation-required',
+        data: {
+          endpoint: event.endpoint,
+          method: event.method,
+          reason: event.reason,
+          escalated: event.escalated,
+        },
+      });
       break;
+    }
+
+    case SSEEventType.CompactionStart: {
+      out.push({
+        type: 'data-compaction-start',
+        data: {
+          estimated_tokens: event.estimated_tokens,
+          threshold: event.threshold,
+        },
+      });
+      break;
+    }
+
+    case SSEEventType.CompactionEnd: {
+      out.push({
+        type: 'data-compaction-end',
+        data: {
+          tokens_before: event.tokens_before,
+          tokens_after: event.tokens_after,
+          compaction_tokens: event.compaction_tokens,
+        },
+      });
+      break;
+    }
+
+    case SSEEventType.ToolLog: {
+      out.push({
+        type: 'data-tool-log',
+        data: {tool_name: event.tool_name, message: event.message},
+      });
+      break;
+    }
+
+    // Audit/telemetry events — not forwarded to the chat UI. They're
+    // surfaced via other channels (audit log, field-scrub notifications,
+    // explore subagent stream in SubagentEvent).
+    case SSEEventType.ExploreStart:
+    case SSEEventType.ExploreEnd:
+    case SSEEventType.PlanMode:
+    case SSEEventType.FieldScrub:
+      break;
+
+    default: {
+      const _exhaustive: never = event;
+      throw new Error(`Unhandled SSEEvent type: ${(_exhaustive as SSEEvent).type}`);
+    }
   }
 
   return out;
@@ -362,8 +416,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
   router.post(
     '/chat/ai-stream',
     validate(AIStreamRequestSchema),
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-    async (req, res, next) => {
+    asyncHandler(async (req, res, next) => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated by Zod middleware
         const body = req.body as AIStreamRequest;
@@ -437,7 +490,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
           next(err);
         }
       }
-    },
+    }),
   );
 
   return router;

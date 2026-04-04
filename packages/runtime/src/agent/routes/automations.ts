@@ -7,6 +7,7 @@
 import {Router} from 'express';
 import type {Request, Response} from 'express';
 import type {ProactiveRunner} from '../proactive/proactive-runner.js';
+import {asyncHandler} from '../../routes/route-helpers.js';
 
 export interface AutomationRouterOptions {
   runner: ProactiveRunner;
@@ -48,8 +49,7 @@ export function createAutomationRouter(options: AutomationRouterOptions): Router
     res.json({status: 'stopped', automation: name});
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.post('/automations/:name/run', async (req: Request, res: Response) => {
+  router.post('/automations/:name/run', asyncHandler(async (req: Request, res: Response) => {
     const name = req.params['name'] ?? '';
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Express body parsing
     const payload = (req.body ?? {}) as Record<string, unknown>;
@@ -65,11 +65,10 @@ export function createAutomationRouter(options: AutomationRouterOptions): Router
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: msg});
     }
-  });
+  }));
 
   // SSE streaming endpoint for live automation runs
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.post('/automations/:name/stream', async (req: Request, res: Response) => {
+  router.post('/automations/:name/stream', asyncHandler(async (req: Request, res: Response) => {
     const name = req.params['name'] ?? '';
 
     // SSE headers
@@ -97,7 +96,7 @@ export function createAutomationRouter(options: AutomationRouterOptions): Router
 
     res.write(`data: ${JSON.stringify({type: 'done', timestamp: new Date().toISOString()})}\n\n`);
     res.end();
-  });
+  }));
 
   return router;
 }
