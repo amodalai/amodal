@@ -207,7 +207,15 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Runtime event bus (powers /api/events SSE for live UI updates)
   // -------------------------------------------------------------------------
 
-  const eventBus = new RuntimeEventBus();
+  const eventBus = new RuntimeEventBus({
+    onListenerError: (err, event) => {
+      log.warn('event_bus_listener_error', {
+        seq: event.seq,
+        type: event.type,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
 
   // -------------------------------------------------------------------------
   // Session manager (new standalone stack)
@@ -474,7 +482,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.use(createFilesRouter({repoPath: config.repoPath}));
 
   // Event bus SSE stream (live UI updates)
-  app.use(createEventsRouter({bus: eventBus}));
+  app.use(createEventsRouter({bus: eventBus, logger: log}));
 
   // Evals
   const evalStore = new EvalStore(config.repoPath);

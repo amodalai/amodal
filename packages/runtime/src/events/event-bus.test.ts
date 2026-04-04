@@ -90,6 +90,20 @@ describe('RuntimeEventBus', () => {
     expect(good).toHaveBeenCalledTimes(1);
   });
 
+  it('surfaces listener errors via onListenerError callback', () => {
+    const onListenerError = vi.fn();
+    const bus = new RuntimeEventBus({onListenerError});
+    bus.subscribe(() => { throw new Error('oops'); });
+
+    bus.emit({type: 'manifest_changed'});
+
+    expect(onListenerError).toHaveBeenCalledTimes(1);
+    const [err, event] = onListenerError.mock.calls[0] ?? [];
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe('oops');
+    expect((event as {type: string}).type).toBe('manifest_changed');
+  });
+
   it('listenerCount tracks active subscriptions', () => {
     const bus = new RuntimeEventBus();
     expect(bus.listenerCount).toBe(0);

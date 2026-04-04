@@ -25,17 +25,24 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import type {RuntimeEventBus} from './event-bus.js';
 
+/** Minimal logger surface — matches the runtime's Logger interface. */
+interface EventsRouterLogger {
+  debug(event: string, data?: Record<string, unknown>): void;
+}
+
 export interface EventsRouterOptions {
   bus: RuntimeEventBus;
   /** Heartbeat interval in ms. Default 15000. */
   heartbeatMs?: number;
+  /** Optional logger for connect/disconnect observability */
+  logger?: EventsRouterLogger;
 }
 
 const HEARTBEAT_DEFAULT_MS = 15_000;
 
 export function createEventsRouter(options: EventsRouterOptions): Router {
   const router = Router();
-  const {bus} = options;
+  const {bus, logger} = options;
   const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_DEFAULT_MS;
 
   router.get('/api/events', (req: Request, res: Response) => {
@@ -48,6 +55,11 @@ export function createEventsRouter(options: EventsRouterOptions): Router {
         sinceSeq = parsed;
       }
     }
+
+    logger?.debug('events_client_connected', {
+      sinceSeq,
+      listenerCount: bus.listenerCount + 1,
+    });
 
     // SSE response headers
     res.setHeader('Content-Type', 'text/event-stream');
@@ -73,9 +85,15 @@ export function createEventsRouter(options: EventsRouterOptions): Router {
     }, heartbeatMs);
 
     // Clean up on disconnect
+    let cleanedUp = false;
     const cleanup = (): void => {
+      if (cleanedUp) return;
+      cleanedUp = true;
       clearInterval(heartbeat);
       unsubscribe();
+      logger?.debug('events_client_disconnected', {
+        listenerCount: bus.listenerCount,
+      });
     };
 
     req.on('close', cleanup);

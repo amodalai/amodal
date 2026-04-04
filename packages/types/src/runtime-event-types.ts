@@ -17,16 +17,25 @@
  * are server-level state changes, not conversation output.
  */
 
-export type RuntimeEventType =
-  | 'session_created'
-  | 'session_updated'
-  | 'session_deleted'
-  | 'automation_triggered'
-  | 'automation_completed'
-  | 'automation_failed'
-  | 'store_updated'
-  | 'manifest_changed'
-  | 'files_changed';
+/**
+ * All runtime event types. Single source of truth — the union type below
+ * is derived from this array, so adding a type here propagates to both
+ * compile-time narrowing and runtime iteration (e.g., client subscription
+ * registration).
+ */
+export const RUNTIME_EVENT_TYPES = [
+  'session_created',
+  'session_updated',
+  'session_deleted',
+  'automation_triggered',
+  'automation_completed',
+  'automation_failed',
+  'store_updated',
+  'manifest_changed',
+  'files_changed',
+] as const;
+
+export type RuntimeEventType = typeof RUNTIME_EVENT_TYPES[number];
 
 export interface RuntimeEventBase {
   /** Monotonic sequence number, starts at 1 per server run */

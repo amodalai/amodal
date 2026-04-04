@@ -17,24 +17,11 @@
 
 import { createContext, useContext, useEffect, useRef, useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
+import { RUNTIME_EVENT_TYPES } from '@amodalai/types';
+import type { RuntimeEvent, RuntimeEventType } from '@amodalai/types';
 
-export type RuntimeEventType =
-  | 'session_created'
-  | 'session_updated'
-  | 'session_deleted'
-  | 'automation_triggered'
-  | 'automation_completed'
-  | 'automation_failed'
-  | 'store_updated'
-  | 'manifest_changed'
-  | 'files_changed';
-
-export interface RuntimeEvent {
-  seq: number;
-  timestamp: string;
-  type: RuntimeEventType;
-  [key: string]: unknown;
-}
+// Re-export for consumers of this context
+export type { RuntimeEvent, RuntimeEventType };
 
 type Listener = (event: RuntimeEvent) => void;
 
@@ -70,13 +57,23 @@ export function RuntimeEventsProvider({ runtimeUrl, children }: RuntimeEventsPro
       const typed = listenersRef.current.get(event.type);
       if (typed) {
         for (const listener of typed) {
-          try { listener(event); } catch { /* ignore bad listener */ }
+          try {
+            listener(event);
+          } catch (err) {
+            // eslint-disable-next-line no-console -- subscriber bug, surface for debugging
+            console.warn('[RuntimeEvents] listener threw', event.type, err);
+          }
         }
       }
       const wildcard = listenersRef.current.get('*');
       if (wildcard) {
         for (const listener of wildcard) {
-          try { listener(event); } catch { /* ignore bad listener */ }
+          try {
+            listener(event);
+          } catch (err) {
+            // eslint-disable-next-line no-console -- subscriber bug, surface for debugging
+            console.warn('[RuntimeEvents] wildcard listener threw', event.type, err);
+          }
         }
       }
     }
@@ -119,15 +116,13 @@ export function RuntimeEventsProvider({ runtimeUrl, children }: RuntimeEventsPro
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server event payload
           const parsed = JSON.parse(evt.data as string) as RuntimeEvent;
           dispatch(parsed);
-        } catch { /* bad frame, ignore */ }
+        } catch (err) {
+          // eslint-disable-next-line no-console -- malformed SSE frame, log for debugging
+          console.warn('[RuntimeEvents] failed to parse event frame', err);
+        }
       };
 
-      const eventTypes: RuntimeEventType[] = [
-        'session_created', 'session_updated', 'session_deleted',
-        'automation_triggered', 'automation_completed', 'automation_failed',
-        'store_updated', 'manifest_changed', 'files_changed',
-      ];
-      for (const type of eventTypes) {
+      for (const type of RUNTIME_EVENT_TYPES) {
         source.addEventListener(type, handle);
       }
     }

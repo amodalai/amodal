@@ -30,16 +30,24 @@ export type RuntimeEventListener = (event: RuntimeEvent) => void;
 export interface EventBusOptions {
   /** Max events retained for reconnect-and-resume. Default 200. */
   bufferSize?: number;
+  /**
+   * Called when a listener throws. The bus never rethrows listener errors
+   * (one bad subscriber shouldn't break the broadcast to others), but a
+   * throwing listener is a bug worth surfacing. Wire this to a logger.
+   */
+  onListenerError?: (err: unknown, event: RuntimeEvent) => void;
 }
 
 export class RuntimeEventBus {
   private listeners = new Set<RuntimeEventListener>();
   private seq = 0;
   private readonly bufferSize: number;
+  private readonly onListenerError: EventBusOptions['onListenerError'];
   private buffer: RuntimeEvent[] = [];
 
   constructor(options: EventBusOptions = {}) {
     this.bufferSize = options.bufferSize ?? DEFAULT_BUFFER_SIZE;
+    this.onListenerError = options.onListenerError;
   }
 
   /**
@@ -63,13 +71,15 @@ export class RuntimeEventBus {
       this.buffer.shift();
     }
 
-    // Fan out to listeners
+    // Fan out to listeners. Errors in one listener must not break the
+    // broadcast to others — so we catch, surface via `onListenerError`
+    // (for observability), and continue. Not a silent swallow: the
+    // caller sees every failure via the injected callback.
     for (const listener of this.listeners) {
       try {
         listener(event);
-      } catch {
-        // Swallow listener errors — one bad subscriber shouldn't break
-        // the broadcast. The listener is a boundary the bus doesn't own.
+      } catch (err) {
+        this.onListenerError?.(err, event);
       }
     }
 
@@ -89,8 +99,8 @@ export class RuntimeEventBus {
         if (event.seq > sinceSeq) {
           try {
             listener(event);
-          } catch {
-            // same boundary contract as above
+          } catch (err) {
+            this.onListenerError?.(err, event);
           }
         }
       }

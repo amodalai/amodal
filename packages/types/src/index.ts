@@ -113,6 +113,7 @@ export type {
 } from './repo-types.js';
 
 // Runtime event bus types
+export {RUNTIME_EVENT_TYPES} from './runtime-event-types.js';
 export type {
   RuntimeEventType,
   RuntimeEventBase,
