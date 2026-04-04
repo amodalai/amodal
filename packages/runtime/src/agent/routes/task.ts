@@ -5,7 +5,7 @@
  */
 
 /**
- * Task route (Phase 3.5e).
+ * Task route.
  *
  * Fire-and-forget task execution via the new StandaloneSessionManager.
  */
@@ -19,6 +19,7 @@ import type {Session} from '../../session/types.js';
 import type {ToolContext} from '../../tools/types.js';
 import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
+import {asyncHandler} from '../../routes/route-helpers.js';
 
 export interface TaskRouterOptions {
   sessionManager: StandaloneSessionManager;
@@ -43,8 +44,7 @@ export function createTaskRouter(options: TaskRouterOptions): Router {
   const router = Router();
 
   // POST /task — fire-and-forget task
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.post('/task', async (req: Request, res: Response) => {
+  router.post('/task', asyncHandler(async (req: Request, res: Response) => {
     const parsed = TaskRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({error: {code: 'VALIDATION_ERROR', message: parsed.error.message}});
@@ -92,7 +92,7 @@ export function createTaskRouter(options: TaskRouterOptions): Router {
         record.events.push({type: SSEEventType.Error, message: errMsg, timestamp: new Date().toISOString()});
       }
     })();
-  });
+  }));
 
   // GET /task/:id — poll task status
   router.get('/task/:id', (req: Request, res: Response) => {

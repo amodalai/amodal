@@ -1,0 +1,121 @@
+---
+description: What an agent actually is — intelligence, a reasoning loop, and configuration. And where Amodal fits in the stack.
+---
+
+# What is an agent?
+
+Useful definition:
+
+> **An agent is intelligence + a reasoning loop + configuration.**
+
+Most "what is an AI agent" explanations wave at emergent autonomy. That's the marketing answer. The engineering answer is three concrete pieces.
+
+## 1. Intelligence
+
+The LLM. This is what people usually mean by "AI" — a model that takes tokens in and predicts tokens out. Claude, GPT-4, Gemini, whichever.
+
+The intelligence is **not** the agent. It's one component. A raw LLM call is stateless, has no tools, and has no idea what you're working on. Give it a chat interface and you have a chatbot — not an agent.
+
+Swapping the intelligence is a configuration change. Amodal supports Anthropic, OpenAI, and Google today, and can fail over between them. See [Providers](/guide/providers).
+
+## 2. A reasoning loop
+
+The loop is what turns a single LLM call into something that can gather information, take actions, correct itself, and keep going. Without a loop, the LLM sees your message, emits a response, done. With a loop, the LLM can:
+
+- Ask for information ("call this API")
+- See the result
+- Decide what's next (ask for more, take an action, answer the user)
+- Repeat until it's done
+
+Every agent framework has some version of this loop. The canonical pattern is **ReAct** (Reason + Act, Princeton/Google, 2022): the model alternates between reasoning about what it knows and taking actions to learn more.
+
+Amodal's loop is an explicit state machine: `thinking → streaming → executing → back to thinking`, with additional states for sub-agent dispatch, user confirmation, and context compaction. It's deliberately more structured than a `while` loop so adding new behaviors (pausing for approval, detecting when the agent is stuck, spawning sub-agents) is additive instead of tangled. See [State Machine](/learn/architecture/state-machine).
+
+The loop is **domain-agnostic**. The same loop runs every agent you build.
+
+## 3. Configuration
+
+This is the agent's knowledge of *your* domain. Where the first two are generic infrastructure, this is the thing that makes your agent different from every other agent.
+
+In Amodal, configuration is a git repo of plain files:
+
+- **Connections** tell the agent which APIs it can call, how to authenticate, and which endpoints/fields are off-limits.
+- **Skills** are markdown documents encoding expert reasoning ("when a user asks about payment failures, here's how to investigate").
+- **Knowledge** is persistent domain context (environment details, team structure, historical patterns).
+- **Stores** are typed data buckets the agent reads and writes (findings, user preferences, automation outputs).
+- **Tools** are actions the agent can take (HTTP calls, custom handlers, MCP integrations).
+- **`amodal.json`** pins the provider, model, timeouts, sandbox rules, and everything else.
+
+The loop compiles this configuration into the system prompt for every turn. The LLM sees a coherent picture: who it is, what it knows, what it can do, and what rules it has to follow.
+
+## The three pieces are independent
+
+| Piece | Swap example | Impact |
+|---|---|---|
+| Intelligence | Switch from Claude Sonnet to GPT-4o | Reasoning style changes, cost changes, speed changes. Configuration and loop are untouched. |
+| Reasoning loop | Add a new state (e.g., async approval) | All agents get the new behavior. Configuration and intelligence are untouched. |
+| Configuration | Edit `skills/triage.md` | Behavior on triage tasks changes. Loop and model are untouched. |
+
+---
+
+## Where Amodal fits in the stack
+
+This framing makes it easy to see what each tool in the ecosystem gives you.
+
+### Raw provider SDKs (Anthropic, OpenAI, Google)
+
+**What you get:** Intelligence (streaming LLM calls, tool-calling primitives).
+
+**What you build yourself:** The loop. All of the configuration layer. Sessions, security, evals, scheduling, persistence.
+
+Starting here means ~3-6 months of infrastructure before you ship a single line of domain logic.
+
+### Vercel AI SDK
+
+**What you get:** Intelligence + *loop primitives*. Unified streaming across providers, tool-calling with schema validation, built-in tool-loop control (`stopWhen: stepCountIs(N)`).
+
+**What you build yourself:** All of the configuration layer. Sessions, skills, knowledge, connections, security, stores, scheduling, MCP, evals.
+
+Vercel AI SDK is deliberately scoped to the loop primitives — their [own docs](https://ai-sdk.dev) describe it as "a unified API for generating text and structured objects, streaming responses, and building agentic systems." It's the right primitive layer. Amodal uses it internally for every LLM call.
+
+If you only need streaming LLM calls with tool support, use Vercel AI SDK directly. If you need a full agent, you'll keep building on top of it.
+
+### LangChain, LlamaIndex
+
+**What you get:** Intelligence + loop + some configuration primitives (retrieval, memory, callbacks).
+
+**What you build yourself:** A coherent configuration model. The flexibility is also the burden — big API surface, many ways to do the same thing, lots to learn, more footguns.
+
+### Mastra, CrewAI, AutoGen (framework peers)
+
+**What you get:** Intelligence + loop + configuration *in code*. Agents are defined as TypeScript/Python classes, workflows are chains, memory is an opinion.
+
+**What you build yourself:** Not much at the runtime layer. But you commit to defining agents in code, which means non-engineers can't edit agent behavior without a code deploy.
+
+### Amodal
+
+**What you get:**
+- Intelligence (via Vercel AI SDK, provider-agnostic, with failover)
+- Loop (explicit state machine: thinking, streaming, executing, confirming, compacting, dispatching, done)
+- **Configuration in files, not code** — skills, knowledge, connections, stores, automations are markdown and JSON in a git repo
+- A security model baked in (field scrubbing, ACL enforcement, action tiers, confirmation gates)
+- Persistence (PGLite for dev, Postgres for production)
+- Package registry (`amodal pkg install @amodalai/stripe`, etc.)
+- Eval framework, automation scheduling, MCP client, sub-agent dispatch — all included
+
+**What you build yourself:** Your domain. Edit markdown, ship.
+
+**The bet:** agent behavior should be a git-versioned configuration asset that product/ops/domain experts can edit, not TypeScript classes that require a code deploy. Configuration-as-data > configuration-as-code for the thing that changes most often.
+
+## What you don't get — and why
+
+Agents don't magically know your systems. They don't magically know your rules. They don't magically know which tool to call or which field to redact. That's all configuration. A framework that claims "zero config" is either hiding the config (making it hard to change) or operating on such a thin slice of the problem that the agent is barely useful.
+
+Good agents require work — but the work is writing markdown and editing JSON, not writing code. That's the trade.
+
+## Next
+
+- [The Core Loop](/learn/architecture/core-loop) — the explore/plan/execute cycle
+- [State Machine](/learn/architecture/state-machine) — how the loop is implemented
+- [Project Structure](/quickstart/project-structure) — what a configuration repo looks like
+- [FAQ](/learn/faq) — practical questions

@@ -5,7 +5,7 @@
  */
 
 /**
- * Store tools rewritten for the new ToolRegistry (Phase 2.2).
+ * Store tools rewritten for the new ToolRegistry.
  *
  * These replace the BaseDeclarativeTool subclasses in core with Zod-based
  * ToolDefinition objects. Each function returns a ToolDefinition that can

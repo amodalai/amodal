@@ -5,7 +5,7 @@
  */
 
 /**
- * Stream hooks type (extracted from session-runner.ts in Phase 3.5f).
+ * Stream hooks type.
  *
  * These callbacks are invoked by route handlers after runMessage() drains.
  * Hosted-mode consumers use them for audit logging, usage reporting, and

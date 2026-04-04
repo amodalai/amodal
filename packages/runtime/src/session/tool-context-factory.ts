@@ -5,10 +5,10 @@
  */
 
 /**
- * Tool Context Factory (Phase 3.5a).
+ * Tool Context Factory.
  *
  * Builds a ToolContext from session-level dependencies. This is the bridge
- * between the Phase 3 agent loop and Phase 2 tool implementations.
+ * between the agent loop and tool implementations.
  *
  * Replaces the old `buildToolContext()` in agent/tool-context-builder.ts
  * which depended on the legacy AgentSession type. This factory takes

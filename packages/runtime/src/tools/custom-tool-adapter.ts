@@ -6,7 +6,7 @@
 
 /**
  * Adapts custom tools (handler.ts → esbuild → dynamic import) to
- * ToolDefinition objects for the new ToolRegistry (Phase 2.4).
+ * ToolDefinition objects for the new ToolRegistry.
  *
  * The compiled handler exports `default async function(params, ctx)`.
  * This adapter wraps it with:

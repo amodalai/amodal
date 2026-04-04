@@ -5,11 +5,7 @@
  */
 
 /**
- * Session types for the standalone session manager (Phase 3.4).
- *
- * These are separate from the legacy session-manager.ts types. The old
- * types (ManagedSession, SessionMessage, etc.) remain for the upstream
- * code path until Phase 3 is fully complete.
+ * Session types for the standalone session manager.
  */
 
 import type {ModelMessage} from 'ai';
@@ -42,10 +38,10 @@ export interface TurnUsage {
 /**
  * Full automation configuration from the agent repo.
  *
- * All fields from the design doc are defined here. Only `schedule`,
- * `prompt`, and `enabled` are implemented in Phase 3. The parser reads
- * and validates the full schema; unimplemented fields are stored but
- * ignored. When roadmap features ship, the config is already parsed.
+ * All fields are defined here. Only `schedule`, `prompt`, and `enabled`
+ * are currently implemented. The parser reads and validates the full
+ * schema; unimplemented fields are stored but ignored, so when future
+ * features ship the config is already parsed.
  */
 export interface AutomationConfig {
   name: string;

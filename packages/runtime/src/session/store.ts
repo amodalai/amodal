@@ -5,11 +5,11 @@
  */
 
 /**
- * Session persistence layer (Phase 3.4).
+ * Session persistence layer.
  *
  * Defines the `SessionStore` interface and a PGLite implementation
- * backed by Drizzle ORM. The Drizzle schema is in `stores/schema.ts`
- * so it can be shared with store tables when Phase 4.3b ships.
+ * backed by Drizzle ORM. The Drizzle schema is in `stores/schema.ts`,
+ * shared with the store document tables.
  */
 
 import {eq, lt, desc} from 'drizzle-orm';

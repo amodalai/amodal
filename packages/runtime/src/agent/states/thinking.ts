@@ -250,7 +250,8 @@ function countSimilarCalls(argsList: string[]): number {
  *
  * If there are more than `threshold` tool result messages, keep the last
  * `keepRecent` full and replace older ones with "[Tool result cleared]".
- * Phase 3.3 upgrades this with actual content summarization.
+ * TODO: replace the marker with an actual LLM-generated summary of the
+ * cleared content.
  */
 function clearOldToolResults(
   messages: ModelMessage[],

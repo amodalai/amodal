@@ -4,7 +4,9 @@ description: Runtime server reference — endpoints, SSE events, session lifecyc
 
 # Runtime Server
 
-The runtime (`@amodalai/runtime`) is an HTTP server that wraps the SDK and exposes it over SSE for chat clients. It handles session management, automation scheduling, webhook ingestion, and tool execution. It is the bridge between "someone sends a message" and "the SDK reasons about it and responds."
+The runtime (`@amodalai/runtime`) is an HTTP server that hosts the agent engine and exposes it over SSE for chat clients. It handles session management, automation scheduling, webhook ingestion, and tool execution. It is the bridge between "someone sends a message" and "the agent reasons about it and responds."
+
+The underlying engine is a state machine — see [State Machine](/learn/architecture/state-machine) for the architecture.
 
 The runtime is deliberately stateless in its HTTP layer — all persistent state lives in the store backend (PGLite or Postgres). This means you can run multiple runtime instances behind a load balancer, and sessions will work correctly as long as they share the same store.
 
@@ -35,7 +37,7 @@ The `/chat/stream` endpoint is what most clients use. You POST a message and kee
 | `POST` | `/ask-user-response` | Respond to a confirmation prompt |
 | `POST` | `/widget-actions` | Handle widget button/action clicks |
 
-When the agent needs confirmation for a write operation, it emits a `confirmation_required` SSE event. The client shows the confirmation UI and sends the user's response back via `/ask-user-response`. The agent's ReAct loop is paused while waiting.
+When the agent needs confirmation for a write operation, it emits a `confirmation_required` SSE event. The client shows the confirmation UI and sends the user's response back via `/ask-user-response`. The agent's state machine is paused in the `confirming` state while waiting.
 
 ### System
 

@@ -8,6 +8,7 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import type {AgentBundle} from '@amodalai/types';
 import type {McpManager} from '@amodalai/core';
+import {asyncHandler} from '../../routes/route-helpers.js';
 
 export interface InspectRouterOptions {
   /** Returns the current agent bundle */
@@ -40,8 +41,7 @@ async function checkRestHealth(baseUrl: string, testPath?: string): Promise<{ok:
 export function createInspectRouter(options: InspectRouterOptions): Router {
   const router = Router();
 
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.get('/inspect/context', async (_req: Request, res: Response) => {
+  router.get('/inspect/context', asyncHandler(async (_req: Request, res: Response) => {
     try {
       const repo = options.getBundle();
       if (!repo) {
@@ -210,7 +210,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: {code: 'INSPECT_FAILED', message: msg}});
     }
-  });
+  }));
 
   /** Health check — used by the UI "Connected" indicator. */
   router.get('/inspect/health', (_req: Request, res: Response) => {
@@ -218,8 +218,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
   });
 
   /** Connection detail by name — reads repo directly, no session needed. */
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.get('/inspect/connections/:name', async (_req: Request, res: Response) => {
+  router.get('/inspect/connections/:name', asyncHandler(async (_req: Request, res: Response) => {
     const repo = options.getBundle();
     if (!repo) { res.status(500).json({error: {code: 'NO_BUNDLE', message: 'No repo available'}}); return; }
     const connName = _req.params['name'] ?? '';
@@ -276,11 +275,10 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
       rules: conn.rules ?? null,
       location: conn.location,
     });
-  });
+  }));
 
   /** MCP server detail by name — returns tools with parameter schemas. */
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.get('/inspect/mcp/:name', async (_req: Request, res: Response) => {
+  router.get('/inspect/mcp/:name', asyncHandler(async (_req: Request, res: Response) => {
     try {
       const mcpManager = await options.getMcpManager?.();
       if (!mcpManager) {
@@ -325,7 +323,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: {code: 'INSPECT_FAILED', message: msg}});
     }
-  });
+  }));
 
   /** Skill detail by name — reads repo directly, no session needed. */
   router.get('/inspect/skills/:name', (_req: Request, res: Response) => {

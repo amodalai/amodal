@@ -5,15 +5,35 @@
  */
 
 /**
- * Shared helpers for chat route handlers (Phase 3.5c).
+ * Shared helpers for chat route handlers.
  *
  * Deduplicates post-drain hook logic and session persistence across
  * chat-stream, ai-stream, and chat routes.
  */
 
+import type {Request, Response, NextFunction, RequestHandler} from 'express';
 import type {StandaloneSessionManager} from '../session/manager.js';
 import type {Session, TurnUsage} from '../session/types.js';
 import type {StreamHooks} from '../session/stream-hooks.js';
+
+// ---------------------------------------------------------------------------
+// Async handler wrapper
+// ---------------------------------------------------------------------------
+
+/**
+ * Wrap an async Express handler so rejected promises propagate to the error
+ * middleware instead of hanging the request.
+ *
+ * Express doesn't await async handlers — if one throws, the request hangs
+ * forever. This wrapper catches the rejection and passes it to `next()`.
+ */
+export function asyncHandler(
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<void> | Promise<Response>,
+): RequestHandler {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Constants

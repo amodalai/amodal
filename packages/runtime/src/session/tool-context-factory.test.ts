@@ -5,7 +5,7 @@
  */
 
 /**
- * Tool Context Factory Tests (Phase 3.5a).
+ * Tool Context Factory Tests.
  *
  * Covers:
  * 1. ctx.request() — makes HTTP calls through connections with auth headers

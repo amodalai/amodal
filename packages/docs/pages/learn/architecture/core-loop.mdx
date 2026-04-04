@@ -1,16 +1,18 @@
 ---
-description: The explore-plan-execute loop — the fundamental cycle behind every Amodal agent.
+description: The explore-plan-execute cycle — the conceptual model behind every Amodal agent.
 ---
 
 # The Core Loop
 
-Every Amodal agent runs the same fundamental loop:
+Every Amodal agent runs the same fundamental cycle:
 
 ```
 Explore → what's going on? query systems, load context, gather data
 Plan    → what should happen? reason about findings, decide next steps
 Execute → do it. call APIs, dispatch agents, present results, learn
 ```
+
+This is the conceptual model. For the actual runtime implementation — the discriminated-union state machine that drives every agent turn — see [State Machine](/learn/architecture/state-machine).
 
 ## Adaptive Depth
 
@@ -20,7 +22,7 @@ Not every question needs the full loop. The runtime matches depth to the questio
 |----------|--------------|
 | "What's the current error rate?" | Explore only — query and answer |
 | "Why did latency spike at 3 PM?" | Explore + Plan — gather data, correlate, explain |
-| "Investigate the payment failures" | Full loop — multi-agent dispatch, iterative reasoning, skill activation |
+| "Investigate the payment failures" | Full loop — sub-agent dispatch, iterative reasoning, skill activation |
 
 ## The Compounding Effect
 
@@ -38,11 +40,14 @@ Session 50: Explore → fast, KB has patterns and baselines
 
 This is the flywheel — the system learns from use. See [Knowledge Base](/guide/knowledge-base) for details.
 
-## ReAct Loop
+## How the loop actually runs
 
-Under the hood, the core loop is implemented as a **ReAct loop** (Reason + Act). The agent alternates between reasoning about what it knows and taking actions (tool calls) to learn more.
+Under the hood, the loop is implemented as an explicit state machine rather than a while loop with implicit states. Each agent turn transitions through: `thinking` → `streaming` → `executing` (if tools were called) → back to `thinking`, until the model stops or a stopping condition fires.
 
-The SDK provides configurable limits:
+Runtime guards:
 - **Max turns** — prevent infinite loops
-- **Timeout** — hard time limit on sessions
-- **Loop detection** — pattern matching + LLM-based detection of unproductive states
+- **Max tokens** — hard budget ceiling
+- **Loop detection** — detects when the agent is stuck calling the same tool repeatedly with similar arguments
+- **Context compaction** — when the conversation exceeds a token threshold, older turns are summarized into a structured snapshot so the agent can keep going
+
+For the full state machine — all six states, the transition rules, and how streaming/tool-calls/compaction interleave — see [State Machine](/learn/architecture/state-machine).

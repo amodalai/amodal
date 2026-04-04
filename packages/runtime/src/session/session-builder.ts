@@ -5,7 +5,7 @@
  */
 
 /**
- * Session Builder (Phase 3.5b).
+ * Session Builder.
  *
  * Translates an AgentBundle (repo config) into SessionComponents: the
  * LLMProvider, ToolRegistry, PermissionChecker, system prompt, and

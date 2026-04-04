@@ -5,13 +5,13 @@
  */
 
 /**
- * Standalone Session Manager (Phase 3.4).
+ * Standalone Session Manager.
  *
  * Replaces gemini-cli-core's session lifecycle with our own. Manages
  * session creation, persistence, resume, and cleanup using:
  * - Agent loop (3.1) for message execution
  * - Context compiler (3.2) for system prompt building
- * - Tool registry (Phase 2) for tool management
+ * - Tool registry for tool management
  * - PGLite session store (this phase) for persistence
  *
  * The old `session-manager.ts` remains for the upstream code path

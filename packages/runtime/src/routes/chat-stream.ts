@@ -5,7 +5,7 @@
  */
 
 /**
- * Streaming chat route (Phase 3.5c).
+ * Streaming chat route.
  *
  * Accepts POST to /chat and /chat/stream, resolves a session via the
  * standalone session manager, runs the message through the agent loop,
@@ -22,7 +22,7 @@ import type {StandaloneSessionManager} from '../session/manager.js';
 import type {StreamHooks} from '../session/stream-hooks.js';
 import {resolveSession} from './session-resolver.js';
 import type {BundleResolver, SharedResources} from './session-resolver.js';
-import {adaptOnUsage, fireDrainHooks, UNKNOWN_TOOL_NAME} from './route-helpers.js';
+import {adaptOnUsage, asyncHandler, fireDrainHooks, UNKNOWN_TOOL_NAME} from './route-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Route options
@@ -49,8 +49,7 @@ export function createChatStreamRouter(
   router.post(
     ['/chat', '/chat/stream'],
     validate(ChatRequestSchema),
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-    async (req, res, next) => {
+    asyncHandler(async (req, res, next) => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated by Zod middleware
         const body = req.body as ChatRequest;
@@ -123,7 +122,7 @@ export function createChatStreamRouter(
           next(err);
         }
       }
-    },
+    }),
   );
 
   return router;

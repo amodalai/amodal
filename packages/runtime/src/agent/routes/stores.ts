@@ -7,6 +7,7 @@
 import {Router} from 'express';
 import type {Request, Response} from 'express';
 import type {AgentBundle, StoreBackend} from '@amodalai/core';
+import {asyncHandler} from '../../routes/route-helpers.js';
 
 export interface StoreRouterOptions {
   repo: AgentBundle;
@@ -26,8 +27,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
   const {repo, storeBackend, appId} = options;
 
   // List all store definitions with document counts
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.get('/api/stores', async (_req: Request, res: Response) => {
+  router.get('/api/stores', asyncHandler(async (_req: Request, res: Response) => {
     try {
       const stores = await Promise.all(
         repo.stores.map(async (store) => {
@@ -47,11 +47,10 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: message});
     }
-  });
+  }));
 
   // List documents from a store
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.get('/api/stores/:name', async (req: Request, res: Response) => {
+  router.get('/api/stores/:name', asyncHandler(async (req: Request, res: Response) => {
     const storeName = req.params['name'] ?? '';
 
     // Verify store exists
@@ -88,11 +87,10 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: message});
     }
-  });
+  }));
 
   // Get a single document + version history
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.get('/api/stores/:name/:key', async (req: Request, res: Response) => {
+  router.get('/api/stores/:name/:key', asyncHandler(async (req: Request, res: Response) => {
     const storeName = req.params['name'] ?? '';
     const key = req.params['key'] ?? '';
 
@@ -121,11 +119,10 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: message});
     }
-  });
+  }));
 
   // Write a document to a store (for seeding/testing)
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.post('/api/stores/:name', async (req: Request, res: Response) => {
+  router.post('/api/stores/:name', asyncHandler(async (req: Request, res: Response) => {
     const storeName = req.params['name'] ?? '';
 
     const store = repo.stores.find((s) => s.name === storeName);
@@ -158,7 +155,7 @@ export function createStoresRouter(options: StoreRouterOptions): Router {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({error: message});
     }
-  });
+  }));
 
   return router;
 }

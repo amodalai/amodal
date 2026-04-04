@@ -11,6 +11,7 @@ import type {EvalStore} from '../eval-store.js';
 import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost, createRuntimeProvider} from '@amodalai/core';
 import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo, ModelConfig} from '@amodalai/core';
 import {SSEEventType} from '../../types.js';
+import {asyncHandler} from '../../routes/route-helpers.js';
 
 export interface EvalRouterOptions {
   /** Returns the current agent bundle (replaces sessionManager.getBundle()) */
@@ -203,8 +204,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
   });
 
   /** Run eval suite — SSE stream with full per-eval results */
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.post('/api/evals/run', async (req: Request, res: Response) => {
+  router.post('/api/evals/run', asyncHandler(async (req: Request, res: Response) => {
     const port = options.getPort();
     if (!port) {
       res.status(503).json({error: 'Server not ready'});
@@ -408,7 +408,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     writeSSE(res, {type: 'run_complete', run});
     writeSSE(res, {type: 'done'});
     res.end();
-  });
+  }));
 
   /** Get eval history for a specific eval */
   router.get('/api/evals/runs/by-eval/:evalName', (req: Request, res: Response) => {

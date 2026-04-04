@@ -5,7 +5,7 @@
  */
 
 /**
- * Local server for repo-based agent mode (Phase 3.5e).
+ * Local server for repo-based agent mode.
  *
  * Loads the `.amodal/` config from `config.repoPath`, creates a
  * StandaloneSessionManager, mounts all routes, and optionally watches
@@ -480,6 +480,28 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         const session = sessionManager.get(sessionId);
         if (session) {
           void sessionManager.persist(session);
+          // Also mirror to the legacy file-based store so the /sessions
+          // endpoints (read by the UI history panel) see chat sessions.
+          // Without this, chat sessions only land in PGLite and the UI
+          // only sees automation/task sessions. PGLite remains the source
+          // of truth — a mirror failure is logged and swallowed (the hook
+          // is invoked from fireDrainHooks after the response has drained,
+          // so throwing here would break the route handler).
+          try {
+            legacySessionStore.save({
+              id: session.id,
+              appId: session.appId,
+              title: session.metadata.title,
+              messages: session.messages,
+              createdAt: session.createdAt,
+              lastAccessedAt: session.lastAccessedAt,
+            });
+          } catch (err) {
+            log.warn('legacy_session_mirror_failed', {
+              sessionId: session.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
         }
       },
     }),

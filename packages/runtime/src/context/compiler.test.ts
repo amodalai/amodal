@@ -5,7 +5,7 @@
  */
 
 /**
- * Context Compiler Tests (Phase 3.2).
+ * Context Compiler Tests.
  *
  * Covers:
  * 1. Basic compilation — identity, core behavior, error handling

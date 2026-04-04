@@ -5,7 +5,7 @@
  */
 
 /**
- * Admin file tools rewritten for the new ToolRegistry (Phase 2.6).
+ * Admin file tools rewritten for the new ToolRegistry.
  *
  * Four tools for managing agent repo files:
  * - read_repo_file    — read a file from the agent repo

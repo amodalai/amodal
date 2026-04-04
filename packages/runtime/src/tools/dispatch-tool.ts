@@ -5,7 +5,7 @@
  */
 
 /**
- * Dispatch tool (Phase 3.6).
+ * Dispatch tool.
  *
  * Allows the model to delegate a sub-task to a child agent with a
  * subset of tools. The EXECUTING state handler intercepts this tool

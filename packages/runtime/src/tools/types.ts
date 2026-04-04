@@ -99,7 +99,7 @@ export interface ToolDefinition<TParams = unknown> {
    * Whether this tool only reads data (no side effects).
    *
    * Used for:
-   * - Pre-execution: read-only tools can start during streaming (Phase 3)
+   * - Pre-execution: read-only tools can start during streaming
    * - Parallel execution: read-only tools can run concurrently (Roadmap 2.5)
    * - Confirmation flow: write tools may require user confirmation
    */

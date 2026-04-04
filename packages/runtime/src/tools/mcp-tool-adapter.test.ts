@@ -5,7 +5,7 @@
  */
 
 /**
- * Phase 2.5 — MCP Tool Adapter Tests
+ * MCP Tool Adapter Tests
  *
  * Tests the conversion of MCP discovered tools to ToolDefinition objects:
  * 1. Tool creation with JSON Schema passthrough
