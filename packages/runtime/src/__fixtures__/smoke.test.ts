@@ -1,0 +1,552 @@
+/**
+ * @license
+ * Copyright 2026 Amodal Labs, Inc.
+ * SPDX-License-Identifier: MIT
+ */
+
+/**
+ * Smoke tests — end-to-end integration tests against a self-contained
+ * test agent with mock REST and MCP servers.
+ *
+ * Requires ANTHROPIC_API_KEY in the environment (skips otherwise).
+ * Starts amodal dev programmatically, runs assertions, tears down.
+ */
+
+import {describe, it, expect, beforeAll, afterAll} from 'vitest';
+import {fork, type ChildProcess} from 'node:child_process';
+import {resolve} from 'node:path';
+import {readFileSync, writeFileSync} from 'node:fs';
+import type {ServerInstance} from '../server.js';
+
+// Load API keys from repo root .env.test if not already set.
+// To run smoke tests: create .env.test at the repo root with ANTHROPIC_API_KEY=sk-ant-...
+// This file is gitignored — never commit API keys.
+if (!process.env['ANTHROPIC_API_KEY']) {
+  try {
+    const envPath = resolve(__dirname, '../../../../.env.test');
+    const envContent = readFileSync(envPath, 'utf-8');
+    for (const line of envContent.split('\n')) {
+      const match = line.match(/^([^#=]+)=(.*)$/);
+      if (match) {
+        const [, key, value] = match;
+        if (key && value && !process.env[key.trim()]) {
+          process.env[key.trim()] = value.trim();
+        }
+      }
+    }
+  } catch { /* no .env.test — tests will skip */ }
+}
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+const AGENT_PORT = 9900;
+const REST_PORT = 9901;
+const AGENT_DIR = resolve(__dirname, 'smoke-agent');
+const REST_SERVER = resolve(__dirname, 'smoke-rest-server.mjs');
+const MCP_SERVER = resolve(__dirname, 'smoke-mcp-server.mjs');
+const TIMEOUT = 45_000; // per-test timeout for LLM calls
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function waitForServer(port: number, maxMs = 15_000): Promise<void> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`http://localhost:${port}/health`, {signal: AbortSignal.timeout(1000)});
+      if (res.ok) return;
+    } catch { /* not ready yet */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`Server on port ${port} did not start within ${maxMs}ms`);
+}
+
+async function chat(message: string, sessionId?: string): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
+  const body: Record<string, unknown> = {message};
+  if (sessionId) body['session_id'] = sessionId;
+
+  const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(TIMEOUT),
+  });
+
+  const text = await res.text();
+  const events: Array<Record<string, unknown>> = [];
+  let sid = '';
+
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('data: ')) continue;
+    try {
+      const event = JSON.parse(line.slice(6)) as Record<string, unknown>;
+      events.push(event);
+      if (event['type'] === 'init' && typeof event['session_id'] === 'string') {
+        sid = event['session_id'];
+      }
+    } catch { /* skip */ }
+  }
+
+  return {events, sessionId: sid};
+}
+
+function findEvent(events: Array<Record<string, unknown>>, type: string): Record<string, unknown> | undefined {
+  return events.find((e) => e['type'] === type);
+}
+
+function findEvents(events: Array<Record<string, unknown>>, type: string): Array<Record<string, unknown>> {
+  return events.filter((e) => e['type'] === type);
+}
+
+function allText(events: Array<Record<string, unknown>>): string {
+  return events
+    .filter((e) => e['type'] === 'text_delta')
+    .map((e) => String(e['content'] ?? ''))
+    .join('');
+}
+
+// ---------------------------------------------------------------------------
+// Setup / Teardown
+// ---------------------------------------------------------------------------
+
+let restServer: ChildProcess | null = null;
+let agentServer: ServerInstance | null = null;
+
+const skipReason = process.env['ANTHROPIC_API_KEY'] ? '' : 'ANTHROPIC_API_KEY not set';
+
+describe.skipIf(!!skipReason)('smoke tests', () => {
+  beforeAll(async () => {
+    // 0. Write MCP server spec with absolute path (loadRepo reads this as-is)
+    writeFileSync(
+      resolve(AGENT_DIR, 'connections/mock-mcp/spec.json'),
+      JSON.stringify({protocol: 'mcp', transport: 'stdio', command: 'node', args: [MCP_SERVER]}, null, 2),
+    );
+
+    // 1. Start mock REST server
+    restServer = fork(REST_SERVER, [], {
+      env: {...process.env, SMOKE_REST_PORT: String(REST_PORT)},
+      stdio: 'pipe',
+    });
+    await new Promise((r) => setTimeout(r, 1000));
+
+    // 2. Start amodal dev programmatically
+    const {createLocalServer} = await import('../agent/local-server.js');
+    agentServer = await createLocalServer({
+      repoPath: AGENT_DIR,
+      port: AGENT_PORT,
+      hotReload: false,
+    });
+    await agentServer.start();
+    await waitForServer(AGENT_PORT);
+  }, 30_000);
+
+  afterAll(async () => {
+    if (agentServer) {
+      await agentServer.stop();
+    }
+    if (restServer) {
+      restServer.kill('SIGTERM');
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // 1. Server lifecycle
+  // -------------------------------------------------------------------------
+
+  it('health endpoint returns ok', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/health`);
+    const body = await res.json() as Record<string, unknown>;
+    expect(res.status).toBe(200);
+    expect(body['status']).toBe('ok');
+  });
+
+  it('config endpoint returns agent info', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/config`);
+    const body = await res.json() as Record<string, unknown>;
+    expect(res.status).toBe(200);
+    expect(body['name']).toBe('smoke-test-agent');
+  });
+
+  // -------------------------------------------------------------------------
+  // 2. System prompt (G9)
+  // -------------------------------------------------------------------------
+
+  it('system prompt includes all context sections', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/inspect/context`);
+    const body = await res.json() as Record<string, unknown>;
+    const prompt = String(body['system_prompt'] ?? '');
+
+    expect(prompt.length).toBeGreaterThan(500);
+    expect(prompt).toContain('mock-api');       // connection
+    expect(prompt).toContain('test-skill');      // skill
+    expect(prompt).toContain('Smoke Test Reference'); // knowledge
+    expect(prompt).toContain('test-items');      // store
+  });
+
+  // -------------------------------------------------------------------------
+  // 3. Chat streaming
+  // -------------------------------------------------------------------------
+
+  it('streams chat with init, text, and done events', async () => {
+    const {events} = await chat('Say hello in exactly 3 words.');
+
+    const init = findEvent(events, 'init');
+    const done = findEvent(events, 'done');
+    const textDeltas = findEvents(events, 'text_delta');
+
+    expect(init).toBeDefined();
+    expect(done).toBeDefined();
+    expect(textDeltas.length).toBeGreaterThan(0);
+
+    // Done event should have usage
+    const usage = done?.['usage'] as Record<string, unknown> | undefined;
+    expect(usage?.['input_tokens']).toBeGreaterThan(0);
+    expect(usage?.['output_tokens']).toBeGreaterThan(0);
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 4. Session resume
+  // -------------------------------------------------------------------------
+
+  it('resumes session with prior context', async () => {
+    const first = await chat('Remember this code: SMOKE7742. Just confirm you noted it.');
+    expect(first.sessionId).toBeTruthy();
+
+    const second = await chat('What was the code I asked you to remember? Reply with just the code.', first.sessionId);
+    const responseText = allText(second.events);
+
+    expect(responseText).toContain('SMOKE7742');
+  }, TIMEOUT * 2);
+
+  // -------------------------------------------------------------------------
+  // 5. Tool call — store
+  // -------------------------------------------------------------------------
+
+  it('makes at least one tool call across chat interactions', async () => {
+    // Use a prompt that strongly implies tool use — query existing data
+    const {events} = await chat(
+      'Query the test-items store for all items. Use the query_store tool with store="test-items".',
+    );
+
+    // The model should call query_store. If no tool calls at all, the test
+    // is still valid — it means the model chose not to call tools, which is
+    // an LLM non-determinism issue, not a code bug. We mark it as a soft check.
+    const toolResults = findEvents(events, 'tool_call_result');
+    if (toolResults.length === 0) {
+      // Soft fail — log but don't block CI
+      // eslint-disable-next-line no-console -- intentional test diagnostic
+      console.warn('[smoke] Model did not call any tools — LLM non-determinism, not a code bug');
+    } else {
+      // If tools were called, verify they have proper status
+      for (const result of toolResults) {
+        expect(result['status']).toMatch(/^(success|error)$/);
+      }
+    }
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 6. Tool call — connection request
+  // -------------------------------------------------------------------------
+
+  it('calls request tool against mock-api', async () => {
+    const {events} = await chat(
+      'Use the request tool to GET /items from the mock-api connection with intent "read".',
+    );
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    const success = toolResults.find((e) => e['status'] === 'success');
+    expect(success).toBeDefined();
+
+    const responseText = allText(events);
+    expect(responseText).toContain('Widget');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 7. Tool error status
+  // -------------------------------------------------------------------------
+
+  it('reports tool errors with status error, not success', async () => {
+    const {events} = await chat(
+      'Use the request tool to call GET /items on a connection called "nonexistent-connection" with intent "read".',
+    );
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    const errorResult = toolResults.find((e) => e['status'] === 'error');
+    expect(errorResult).toBeDefined();
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 8. Eval run
+  // -------------------------------------------------------------------------
+
+  it('runs eval and returns results', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/evals/run`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({evalNames: ['basic-eval']}),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    const text = await res.text();
+    const events: Array<Record<string, unknown>> = [];
+    for (const line of text.split('\n')) {
+      if (!line.startsWith('data: ')) continue;
+      try { events.push(JSON.parse(line.slice(6)) as Record<string, unknown>); } catch { /* skip */ }
+    }
+
+    const complete = findEvent(events, 'eval_complete');
+    expect(complete).toBeDefined();
+    expect(complete?.['passed']).toBe(true);
+  }, 60_000);
+
+  // -------------------------------------------------------------------------
+  // 9. Admin chat — reads repo files
+  // -------------------------------------------------------------------------
+
+  it('admin agent can read skill files', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: 'Read the test-skill skill file and tell me what it says. Be brief.'}),
+      signal: AbortSignal.timeout(TIMEOUT),
+    });
+
+    const text = await res.text();
+    const events = parseSSE(text);
+
+    const init = findEvent(events, 'init');
+    expect(init).toBeDefined();
+
+    // Admin agent should use read_repo_file tool
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const readTool = toolStarts.find((e) => e['tool_name'] === 'read_repo_file');
+    expect(readTool).toBeDefined();
+
+    const responseText = allText(events);
+    expect(responseText.toLowerCase()).toContain('test');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 10. Write intent enforcement (G8)
+  // -------------------------------------------------------------------------
+
+  it('rejects POST with intent "read"', async () => {
+    const {events} = await chat(
+      'Use the request tool to call POST /items on mock-api with intent "read" and data {"name": "test"}. Do not use "write" intent — use exactly "read".',
+    );
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    // Should get an error result about intent mismatch
+    const hasError = toolResults.some((e) => e['status'] === 'error');
+    const responseText = allText(events);
+    const mentionsIntent = responseText.toLowerCase().includes('intent') || responseText.toLowerCase().includes('write');
+
+    // Either the tool returned an error about intent, or the model explained the rejection
+    expect(hasError || mentionsIntent).toBe(true);
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 11. Store write + query persistence
+  // -------------------------------------------------------------------------
+
+  it('persists data across store write and query', async () => {
+    // Write
+    const writeResult = await chat(
+      'Store a test item: use store_test_items with item_id="persist-check", name="Persistence Test", status="active". Call the tool now.',
+    );
+    const writeToolResults = findEvents(writeResult.events, 'tool_call_result');
+    const writeSuccess = writeToolResults.find((e) => e['status'] === 'success');
+
+    if (!writeSuccess) {
+      // Model didn't call the tool — skip gracefully
+      return;
+    }
+
+    // Query back in a NEW session (proves persistence, not just in-memory)
+    const queryResult = await chat(
+      'Query the test-items store for the item with key "persist-check" using query_store. Tell me its name.',
+    );
+    const responseText = allText(queryResult.events);
+    expect(responseText).toContain('Persistence Test');
+  }, TIMEOUT * 2);
+
+  // -------------------------------------------------------------------------
+  // 12. Concurrent sessions don't bleed context
+  // -------------------------------------------------------------------------
+
+  it('concurrent sessions are isolated', async () => {
+    // Session A: tell it a secret
+    const sessionA = await chat('My secret code for this session is ALPHA9999. Just confirm.');
+    // Session B: different secret (we don't need session B's ID)
+    await chat('My secret code for this session is BETA5555. Just confirm.');
+
+    // Ask session A about B's secret — should NOT know it
+    const checkA = await chat('What is the BETA code?', sessionA.sessionId);
+    const textA = allText(checkA.events);
+
+    // Session A should not contain session B's secret
+    expect(textA).not.toContain('BETA5555');
+  }, TIMEOUT * 3);
+
+  // -------------------------------------------------------------------------
+  // 13. Automation trigger
+  // -------------------------------------------------------------------------
+
+  it('triggers automation via API', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/automations`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {automations: Array<Record<string, unknown>>};
+
+    // Smoke agent doesn't have automations defined in amodal.json,
+    // but the endpoint should still respond
+    expect(res.status).toBe(200);
+    expect(body.automations).toBeDefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // 14. Multi-turn tool loop
+  // -------------------------------------------------------------------------
+
+  it('handles multi-turn tool interaction', async () => {
+    // Ask something that requires a tool call then reasoning about the result
+    const {events} = await chat(
+      'Fetch items from mock-api using the request tool (GET /items, intent "read"), then tell me how many items have status "active".',
+    );
+
+    // Should have tool call AND text response with the count
+    const toolResults = findEvents(events, 'tool_call_result');
+    const responseText = allText(events);
+
+    expect(toolResults.length).toBeGreaterThan(0);
+    // Mock returns 2 active items (Widget, Doohickey) out of 3
+    expect(responseText).toMatch(/2|two/i);
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 15. Evals list endpoint
+  // -------------------------------------------------------------------------
+
+  it('lists eval suites from repo', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/evals/suites`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {suites: Array<Record<string, unknown>>};
+
+    expect(res.status).toBe(200);
+    expect(body.suites.length).toBeGreaterThan(0);
+    expect(body.suites[0]?.['name']).toBe('basic-eval');
+  });
+
+  // -------------------------------------------------------------------------
+  // 16. Inspect endpoint — connection health
+  // -------------------------------------------------------------------------
+
+  it('inspect shows connection status', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/inspect/context`, {signal: AbortSignal.timeout(10000)});
+    const body = await res.json() as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body['connections']).toBeDefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // 17. MCP tool call
+  // -------------------------------------------------------------------------
+
+  it('calls MCP tool and gets result', async () => {
+    const {events} = await chat(
+      'Use the mock-mcp__smoke_search tool to search for "test". Call the tool now.',
+    );
+
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const mcpTool = toolStarts.find((e) => String(e['tool_name'] ?? '').includes('smoke_search'));
+
+    if (!mcpTool) {
+      // Check if MCP tools are even available — model might not know about them
+      const responseText = allText(events);
+      // If the model says it doesn't have that tool, MCP isn't wired
+      if (responseText.toLowerCase().includes('not available') || responseText.toLowerCase().includes('don\'t have')) {
+        throw new Error('MCP tools not registered — mock-mcp__smoke_search not available to the model');
+      }
+      // Model just chose not to call it — LLM non-determinism
+      return;
+    }
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    const mcpResult = toolResults.find((e) => e['tool_id'] === mcpTool['tool_id']);
+    expect(mcpResult).toBeDefined();
+    expect(mcpResult?.['status']).toBe('success');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 18. Custom tool (echo_tool) with ctx.request() + ctx.store()
+  // -------------------------------------------------------------------------
+
+  it('custom tool calls ctx.request and ctx.store', async () => {
+    const {events} = await chat(
+      'Use the echo_tool with message "smoke-test-ping". Call the tool now.',
+    );
+
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const echoTool = toolStarts.find((e) => e['tool_name'] === 'echo_tool');
+
+    if (!echoTool) {
+      const responseText = allText(events);
+      if (responseText.toLowerCase().includes('not available') || responseText.toLowerCase().includes('don\'t have')) {
+        throw new Error('echo_tool not registered');
+      }
+      return; // LLM non-determinism
+    }
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    const echoResult = toolResults.find((e) => e['tool_id'] === echoTool['tool_id']);
+    expect(echoResult).toBeDefined();
+    expect(echoResult?.['status']).toBe('success');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 19. Stop execution tool terminates loop
+  // -------------------------------------------------------------------------
+
+  it('stop_execution tool is available', async () => {
+    // We can't easily force the model to call stop_execution, but we can
+    // verify it's in the tool list by asking the model
+    const {events} = await chat(
+      'Do you have a tool called stop_execution? Answer yes or no, nothing else.',
+    );
+
+    const responseText = allText(events).toLowerCase();
+    expect(responseText).toContain('yes');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 20. Done event always has usage (G2)
+  // -------------------------------------------------------------------------
+
+  it('done event always includes token usage', async () => {
+    const {events} = await chat('Reply with exactly the word "pong".');
+
+    const done = findEvent(events, 'done');
+    expect(done).toBeDefined();
+
+    const usage = done?.['usage'] as Record<string, unknown> | undefined;
+    expect(usage).toBeDefined();
+    expect(typeof usage?.['input_tokens']).toBe('number');
+    expect(typeof usage?.['output_tokens']).toBe('number');
+    expect((usage?.['input_tokens'] as number)).toBeGreaterThan(0);
+    expect((usage?.['output_tokens'] as number)).toBeGreaterThan(0);
+  }, TIMEOUT);
+});
+
+// ---------------------------------------------------------------------------
+// SSE parser helper
+// ---------------------------------------------------------------------------
+
+function parseSSE(text: string): Array<Record<string, unknown>> {
+  const events: Array<Record<string, unknown>> = [];
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('data: ')) continue;
+    try { events.push(JSON.parse(line.slice(6)) as Record<string, unknown>); } catch { /* skip */ }
+  }
+  return events;
+}

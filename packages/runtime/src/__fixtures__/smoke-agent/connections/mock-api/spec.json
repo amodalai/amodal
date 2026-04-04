@@ -1,0 +1,4 @@
+{
+  "protocol": "rest",
+  "baseUrl": "http://localhost:9901"
+}

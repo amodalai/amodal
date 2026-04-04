@@ -1,0 +1,11 @@
+{
+  "name": "smoke-test-agent",
+  "version": "1.0.0",
+  "description": "Self-contained agent for smoke testing the runtime",
+  "models": {
+    "main": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514"
+    }
+  }
+}
