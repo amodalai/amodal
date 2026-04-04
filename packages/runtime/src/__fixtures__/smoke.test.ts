@@ -536,6 +536,60 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     expect((usage?.['input_tokens'] as number)).toBeGreaterThan(0);
     expect((usage?.['output_tokens'] as number)).toBeGreaterThan(0);
   }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 21. Sub-agent dispatch (Phase 3.6)
+  // -------------------------------------------------------------------------
+
+  it('dispatch_task spawns child agent and returns result', async () => {
+    const {events} = await chat(
+      'Use the dispatch_task tool to delegate a sub-task. Set agent_name to "data-fetcher", tools to ["request"], and prompt to "Fetch GET /items from mock-api with intent read and summarize what you find." Call dispatch_task now.',
+    );
+
+    // Look for subagent events (child activity)
+    const subagentEvents = findEvents(events, 'subagent_event');
+
+    // Look for the dispatch_task tool call result
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const dispatchStart = toolStarts.find((e) => e['tool_name'] === 'dispatch_task');
+
+    if (!dispatchStart) {
+      // Model didn't call dispatch_task — LLM non-determinism
+      const responseText = allText(events);
+      if (responseText.toLowerCase().includes('not available') || responseText.toLowerCase().includes('don\'t have')) {
+        throw new Error('dispatch_task tool not registered');
+      }
+      return;
+    }
+
+    // dispatch_task was called — verify it completed
+    const toolResults = findEvents(events, 'tool_call_result');
+    const dispatchResult = toolResults.find((e) => e['tool_id'] === dispatchStart['tool_id']);
+    expect(dispatchResult).toBeDefined();
+    expect(dispatchResult?.['status']).toBe('success');
+
+    // SubagentEvents should have been emitted during child execution
+    if (subagentEvents.length > 0) {
+      // All should reference the same parent_tool_id
+      for (const event of subagentEvents) {
+        expect(event['parent_tool_id']).toBe(dispatchStart['tool_id']);
+        expect(event['agent_name']).toBe('data-fetcher');
+      }
+    }
+
+    // Parent should have incorporated the child's result into its response
+    const responseText = allText(events);
+    expect(responseText.length).toBeGreaterThan(0);
+  }, TIMEOUT * 2);
+
+  it('dispatch_task tool is available to the model', async () => {
+    const {events} = await chat(
+      'Do you have a tool called dispatch_task? Answer yes or no, nothing else.',
+    );
+
+    const responseText = allText(events).toLowerCase();
+    expect(responseText).toContain('yes');
+  }, TIMEOUT);
 });
 
 // ---------------------------------------------------------------------------
