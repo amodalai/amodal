@@ -10,6 +10,7 @@ import type {AgentBundle} from '@amodalai/types';
 import type {EvalStore} from '../eval-store.js';
 import {buildEvalRun, judgeAllAssertions, computeEvalCost, aggregateRunCost, createRuntimeProvider} from '@amodalai/core';
 import type {JudgeProvider, EvalResult, EvalSuiteResult, EvalCostInfo, ModelConfig} from '@amodalai/core';
+import {SSEEventType} from '../../types.js';
 
 export interface EvalRouterOptions {
   /** Returns the current agent bundle (replaces sessionManager.getBundle()) */
@@ -60,22 +61,22 @@ async function streamQuery(
       const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
       const eventType = String(event['type'] ?? '');
 
-      if (eventType === 'text_delta') {
+      if (eventType === SSEEventType.TextDelta) {
         const content = String(event['content'] ?? '');
         fullResponse += content;
         writeSSE(evalRes, {type: 'agent_text', evalName, content});
-      } else if (eventType === 'tool_call_start') {
+      } else if (eventType === SSEEventType.ToolCallStart) {
         const params = (event['parameters'] ?? {}) as Record<string, unknown>; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
         toolCalls.push({name: String(event['tool_name'] ?? ''), parameters: params});
         writeSSE(evalRes, {type: 'agent_tool', evalName, toolName: event['tool_name'], parameters: params});
-      } else if (eventType === 'tool_call_result') {
+      } else if (eventType === SSEEventType.ToolCallResult) {
         const resultRaw = String(event['result'] ?? event['error'] ?? '');
         toolResults.push(`${String(event['tool_name'] ?? 'request')}: ${resultRaw}`);
         writeSSE(evalRes, {type: 'agent_tool_result', evalName, toolName: event['tool_name'] ?? 'request', status: event['status'], durationMs: event['duration_ms']});
-      } else if (eventType === 'error') {
+      } else if (eventType === SSEEventType.Error) {
         queryError = String(event['message'] ?? event['error'] ?? 'Unknown error');
         writeSSE(evalRes, {type: 'agent_error', evalName, error: queryError});
-      } else if (eventType === 'done') {
+      } else if (eventType === SSEEventType.Done) {
          
         const u = (event['usage'] ?? {}) as {input_tokens?: number; output_tokens?: number; cached_tokens?: number; cache_creation_tokens?: number};
         // Accumulate tokens across multiple done events (multi-turn agent loops
@@ -95,7 +96,7 @@ async function streamQuery(
         }
       }
     } catch {
-      // skip
+      /* Malformed SSE line — skip non-JSON data lines (e.g. partial chunks, comments) */
     }
   }
 
