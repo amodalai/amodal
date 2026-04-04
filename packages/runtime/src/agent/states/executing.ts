@@ -224,28 +224,25 @@ function nextAfterToolResult(
   effects: SSEEvent[],
   ctx: AgentContext,
 ): TransitionResult {
-  // Hard-truncate oversized tool results as a stopgap until Phase 3.3 snipping.
-  // Without this, a single large MCP response can blow the context budget.
-  if (result.content.length > ctx.config.hardResultTruncation) {
+  // Smart snipping: if a tool result exceeds maxResultSize, keep the first
+  // and last 2K chars with a [snipped] marker in between. This preserves
+  // the beginning (usually headers/structure) and end (usually the answer)
+  // while cutting the middle bulk.
+  if (result.content.length > ctx.config.maxResultSize) {
     const originalSize = result.content.length;
+    const keepChars = 2_000;
+    const head = result.content.slice(0, keepChars);
+    const tail = result.content.slice(-keepChars);
     result = {
       ...result,
-      content: result.content.slice(0, ctx.config.hardResultTruncation)
-        + `\n\n[TRUNCATED: output was ${originalSize} chars, limit is ${ctx.config.hardResultTruncation}]`,
+      content: `${head}\n\n[... snipped ${originalSize - keepChars * 2} chars — full output was ${originalSize} chars ...]\n\n${tail}`,
     };
-    ctx.logger.warn('tool_result_truncated', {
+    ctx.logger.info('tool_result_snipped', {
       callId: result.callId,
       tool: result.toolName,
       originalSize,
-      truncatedTo: ctx.config.hardResultTruncation,
+      snippedTo: keepChars * 2,
       session: ctx.sessionId,
-    });
-  } else if (result.content.length > ctx.config.maxResultSize) {
-    ctx.logger.debug('tool_result_oversized', {
-      callId: result.callId,
-      tool: result.toolName,
-      originalSize: result.content.length,
-      maxSize: ctx.config.maxResultSize,
     });
   }
 
@@ -279,7 +276,7 @@ function nextAfterToolResult(
       threshold: ctx.config.compactThreshold,
     });
     return {
-      next: {type: 'compacting', messages: ctx.messages},
+      next: {type: 'compacting', messages: ctx.messages, estimatedTokens},
       effects,
     };
   }

@@ -87,6 +87,7 @@ export interface ConfirmingState {
 export interface CompactingState {
   type: 'compacting';
   messages: ModelMessage[];
+  estimatedTokens: number;
 }
 
 export interface DispatchingState {
@@ -144,8 +145,14 @@ export interface AgentLoopConfig {
   toolTimeoutMs: number;
   /** Timeout for user confirmation in milliseconds. Default 300_000 (5 minutes). */
   confirmationTimeoutMs: number;
-  /** Hard truncation limit for tool results (chars). Default 40_000. */
-  hardResultTruncation: number;
+  /** Number of recent turns to keep verbatim during compaction. Default 6. */
+  keepRecentTurns: number;
+  /** Max tokens for the compaction summary. Default 4_000. */
+  maxSummaryTokens: number;
+  /** Consecutive compaction failures before circuit breaker trips. Default 3. */
+  compactionCircuitBreaker: number;
+  /** Model to use for compaction summaries (cheap model). Default 'haiku'. */
+  compactionModel?: string;
 }
 
 export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
@@ -158,7 +165,9 @@ export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
   maxOutputTokens: 16_384,
   toolTimeoutMs: 30_000,
   confirmationTimeoutMs: 300_000,
-  hardResultTruncation: 40_000,
+  keepRecentTurns: 6,
+  maxSummaryTokens: 4_000,
+  compactionCircuitBreaker: 3,
 };
 
 export interface AgentContext {
@@ -206,6 +215,9 @@ export interface AgentContext {
 
   /** Loop config */
   config: AgentLoopConfig;
+
+  /** Mutable: consecutive compaction failures (circuit breaker counter) */
+  compactionFailures: number;
 
   /** Cache for pre-executed read-only tool results (populated during STREAMING) */
   preExecutionCache: Map<string, Promise<unknown>>;
