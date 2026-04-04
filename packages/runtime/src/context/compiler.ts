@@ -185,7 +185,7 @@ function renderStoreSection(
     parts.push('');
   }
 
-  parts.push('Use the store tools (`write_<store>`, `batch_<store>`, `query_stores`) to read and write data.');
+  parts.push('Use `store_<name>` to write a single document, `store_<name>_batch` for multiple, and `query_store` to read from any store.');
   parts.push('');
 
   return parts.join('\n');

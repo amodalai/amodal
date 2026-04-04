@@ -15,7 +15,7 @@
 import {describe, it, expect, beforeAll, afterAll} from 'vitest';
 import {fork, type ChildProcess} from 'node:child_process';
 import {resolve} from 'node:path';
-import {readFileSync, writeFileSync} from 'node:fs';
+import {readFileSync, writeFileSync, rmSync} from 'node:fs';
 import type {ServerInstance} from '../server.js';
 
 // Load API keys from repo root .env.test if not already set.
@@ -119,20 +119,24 @@ const skipReason = process.env['ANTHROPIC_API_KEY'] ? '' : 'ANTHROPIC_API_KEY no
 
 describe.skipIf(!!skipReason)('smoke tests', () => {
   beforeAll(async () => {
-    // 0. Write MCP server spec with absolute path (loadRepo reads this as-is)
+    // 0. Nuke prior state — clean slate for every run
+    rmSync(resolve(AGENT_DIR, '.amodal/store-data'), {recursive: true, force: true});
+    rmSync(resolve(AGENT_DIR, '.amodal/sessions'), {recursive: true, force: true});
+
+    // 2. Write MCP server spec with absolute path (loadRepo reads this as-is)
     writeFileSync(
       resolve(AGENT_DIR, 'connections/mock-mcp/spec.json'),
       JSON.stringify({protocol: 'mcp', transport: 'stdio', command: 'node', args: [MCP_SERVER]}, null, 2),
     );
 
-    // 1. Start mock REST server
+    // 3. Start mock REST server
     restServer = fork(REST_SERVER, [], {
       env: {...process.env, SMOKE_REST_PORT: String(REST_PORT)},
       stdio: 'pipe',
     });
     await new Promise((r) => setTimeout(r, 1000));
 
-    // 2. Start amodal dev programmatically
+    // 4. Start amodal dev programmatically
     const {createLocalServer} = await import('../agent/local-server.js');
     agentServer = await createLocalServer({
       repoPath: AGENT_DIR,
@@ -381,6 +385,87 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     const responseText = allText(queryResult.events);
     expect(responseText).toContain('Persistence Test');
   }, TIMEOUT * 2);
+
+  // -------------------------------------------------------------------------
+  // 11b. Store batch write
+  // -------------------------------------------------------------------------
+
+  it('batch writes multiple items to store', async () => {
+    const {events} = await chat(
+      'Write two items to the test-items store using the batch tool: item_id="batch-1", name="First Batch", status="active" and item_id="batch-2", name="Second Batch", status="archived".',
+    );
+
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const batchTool = toolStarts.find((e) => String(e['tool_name'] ?? '').includes('batch'));
+
+    if (!batchTool) {
+      // Model didn't use batch — might have used individual writes, that's OK
+      return;
+    }
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    const batchResult = toolResults.find((e) => e['tool_id'] === batchTool['tool_id']);
+    expect(batchResult).toBeDefined();
+    expect(batchResult?.['status']).toBe('success');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 11c. Store single document fetch by key
+  // -------------------------------------------------------------------------
+
+  it('fetches a single document by key from store', async () => {
+    // First write a known item and verify the write succeeded
+    const writeResult = await chat(
+      'Write to the test-items store: item_id="key-lookup-test", name="Key Lookup Item", status="active".',
+    );
+    const writeSuccess = findEvents(writeResult.events, 'tool_call_result').find((e) => e['status'] === 'success');
+    if (!writeSuccess) return; // Write didn't happen — skip
+
+    // Fetch by key in a new session
+    const {events} = await chat(
+      'Use query_store with store="test-items" and key="key-lookup-test". What is the name field?',
+    );
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    if (toolResults.length === 0) {
+      // eslint-disable-next-line no-console -- intentional test diagnostic
+      console.warn('[smoke] Model did not call query_store for key lookup — LLM non-determinism');
+      return;
+    }
+
+    const responseText = allText(events);
+    expect(responseText).toContain('Key Lookup');
+  }, TIMEOUT * 2);
+
+  // -------------------------------------------------------------------------
+  // 11d. Store filtered query (multiple results)
+  // -------------------------------------------------------------------------
+
+  it('queries store with filter and returns multiple results', async () => {
+    // Write two items with a unique status we can filter on
+    const w1 = await chat('Write to test-items store: item_id="filter-a", name="Filter Alpha", status="archived".');
+    const w2 = await chat('Write to test-items store: item_id="filter-b", name="Filter Beta", status="archived".');
+
+    const w1ok = findEvents(w1.events, 'tool_call_result').some((e) => e['status'] === 'success');
+    const w2ok = findEvents(w2.events, 'tool_call_result').some((e) => e['status'] === 'success');
+    if (!w1ok || !w2ok) return; // Writes didn't happen — skip
+
+    // Query with filter in a new session
+    const {events} = await chat(
+      'Use query_store with store="test-items" and filter={"status": "archived"}. List the names of all results.',
+    );
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    if (toolResults.length === 0) {
+      // eslint-disable-next-line no-console -- intentional test diagnostic
+      console.warn('[smoke] Model did not call query_store for filtered query — LLM non-determinism');
+      return;
+    }
+
+    const responseText = allText(events);
+    const mentionsAny = responseText.includes('Filter Alpha') || responseText.includes('Filter Beta');
+    expect(mentionsAny).toBe(true);
+  }, TIMEOUT * 3);
 
   // -------------------------------------------------------------------------
   // 12. Concurrent sessions don't bleed context
