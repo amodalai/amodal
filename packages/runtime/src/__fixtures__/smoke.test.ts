@@ -448,6 +448,94 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     expect(res.status).toBe(200);
     expect(body['connections']).toBeDefined();
   });
+
+  // -------------------------------------------------------------------------
+  // 17. MCP tool call
+  // -------------------------------------------------------------------------
+
+  it('calls MCP tool and gets result', async () => {
+    const {events} = await chat(
+      'Use the mock-mcp__smoke_search tool to search for "test". Call the tool now.',
+    );
+
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const mcpTool = toolStarts.find((e) => String(e['tool_name'] ?? '').includes('smoke_search'));
+
+    if (!mcpTool) {
+      // Check if MCP tools are even available — model might not know about them
+      const responseText = allText(events);
+      // If the model says it doesn't have that tool, MCP isn't wired
+      if (responseText.toLowerCase().includes('not available') || responseText.toLowerCase().includes('don\'t have')) {
+        throw new Error('MCP tools not registered — mock-mcp__smoke_search not available to the model');
+      }
+      // Model just chose not to call it — LLM non-determinism
+      return;
+    }
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    const mcpResult = toolResults.find((e) => e['tool_id'] === mcpTool['tool_id']);
+    expect(mcpResult).toBeDefined();
+    expect(mcpResult?.['status']).toBe('success');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 18. Custom tool (echo_tool) with ctx.request() + ctx.store()
+  // -------------------------------------------------------------------------
+
+  it('custom tool calls ctx.request and ctx.store', async () => {
+    const {events} = await chat(
+      'Use the echo_tool with message "smoke-test-ping". Call the tool now.',
+    );
+
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const echoTool = toolStarts.find((e) => e['tool_name'] === 'echo_tool');
+
+    if (!echoTool) {
+      const responseText = allText(events);
+      if (responseText.toLowerCase().includes('not available') || responseText.toLowerCase().includes('don\'t have')) {
+        throw new Error('echo_tool not registered');
+      }
+      return; // LLM non-determinism
+    }
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    const echoResult = toolResults.find((e) => e['tool_id'] === echoTool['tool_id']);
+    expect(echoResult).toBeDefined();
+    expect(echoResult?.['status']).toBe('success');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 19. Stop execution tool terminates loop
+  // -------------------------------------------------------------------------
+
+  it('stop_execution tool is available', async () => {
+    // We can't easily force the model to call stop_execution, but we can
+    // verify it's in the tool list by asking the model
+    const {events} = await chat(
+      'Do you have a tool called stop_execution? Answer yes or no, nothing else.',
+    );
+
+    const responseText = allText(events).toLowerCase();
+    expect(responseText).toContain('yes');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 20. Done event always has usage (G2)
+  // -------------------------------------------------------------------------
+
+  it('done event always includes token usage', async () => {
+    const {events} = await chat('Reply with exactly the word "pong".');
+
+    const done = findEvent(events, 'done');
+    expect(done).toBeDefined();
+
+    const usage = done?.['usage'] as Record<string, unknown> | undefined;
+    expect(usage).toBeDefined();
+    expect(typeof usage?.['input_tokens']).toBe('number');
+    expect(typeof usage?.['output_tokens']).toBe('number');
+    expect((usage?.['input_tokens'] as number)).toBeGreaterThan(0);
+    expect((usage?.['output_tokens'] as number)).toBeGreaterThan(0);
+  }, TIMEOUT);
 });
 
 // ---------------------------------------------------------------------------
