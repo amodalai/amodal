@@ -65,6 +65,7 @@ export class StandaloneSessionManager {
   private readonly cleanupIntervalMs: number;
   private readonly defaultMaxTurns: number;
   private readonly defaultMaxContextTokens: number;
+  private readonly eventBus: SessionManagerOptions['eventBus'];
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(opts: SessionManagerOptions & {store?: SessionStore}) {
@@ -74,6 +75,7 @@ export class StandaloneSessionManager {
     this.cleanupIntervalMs = opts.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS;
     this.defaultMaxTurns = opts.defaultMaxTurns ?? DEFAULT_MAX_TURNS;
     this.defaultMaxContextTokens = opts.defaultMaxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
+    this.eventBus = opts.eventBus;
   }
 
   // -------------------------------------------------------------------------
@@ -163,6 +165,12 @@ export class StandaloneSessionManager {
       model: session.model,
       provider: session.providerName,
       toolCount: opts.toolRegistry.size,
+    });
+
+    this.eventBus?.emit({
+      type: 'session_created',
+      sessionId: id,
+      appId: session.appId,
     });
 
     return session;
@@ -262,6 +270,13 @@ export class StandaloneSessionManager {
     };
 
     await this.store.save(persisted);
+
+    this.eventBus?.emit({
+      type: 'session_updated',
+      sessionId: session.id,
+      appId: session.appId,
+      title: session.metadata.title,
+    });
   }
 
   /**
@@ -380,6 +395,13 @@ export class StandaloneSessionManager {
       session: sessionId,
       tenant: session.tenantId,
     });
+
+    if (opts?.deleteFromStore) {
+      this.eventBus?.emit({
+        type: 'session_deleted',
+        sessionId,
+      });
+    }
   }
 
   /**

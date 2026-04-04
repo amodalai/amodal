@@ -4,31 +4,27 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Sun, Moon, Settings, Bot, KeyRound, FileText, ArrowLeft, FolderCode, MessageSquare, PanelRightOpen, PanelRightClose, FlaskConical, Swords } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
+import { useRuntimeConnection } from '@/contexts/RuntimeEventsContext';
 import { AdminChatPanel } from './ConfigChatPage';
 import { cn } from '@/lib/utils';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
 
 function useConnectionStatus(): ConnectionStatus {
-  const [status, setStatus] = useState<ConnectionStatus>('checking');
-  const timer = useRef<ReturnType<typeof setInterval>>();
+  // SSE event bus connection is the liveness signal — no polling needed.
+  const connected = useRuntimeConnection();
+  const [hasEverConnected, setHasEverConnected] = useState(false);
 
   useEffect(() => {
-    const check = () => {
-      fetch('/inspect/health', { signal: AbortSignal.timeout(3000) })
-        .then((res) => { setStatus(res.ok ? 'connected' : 'disconnected'); })
-        .catch(() => { setStatus('disconnected'); });
-    };
-    check();
-    timer.current = setInterval(check, 10_000);
-    return () => clearInterval(timer.current);
-  }, []);
+    if (connected) setHasEverConnected(true);
+  }, [connected]);
 
-  return status;
+  if (connected) return 'connected';
+  return hasEverConnected ? 'disconnected' : 'checking';
 }
 
 function useTheme() {

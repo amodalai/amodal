@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { StoreDefinitionInfo } from '@amodalai/react';
+import { useRuntimeEvents } from './RuntimeEventsContext';
 
 export interface ConnectionStatus {
   name: string;
@@ -71,6 +72,8 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
     isLoading: true,
     error: null,
   });
+
+  const fetchManifestRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
@@ -156,10 +159,15 @@ export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) 
       }
     }
 
+    fetchManifestRef.current = fetchManifest;
     void fetchManifest();
-    const timer = setInterval(() => { void fetchManifest(); }, 10000);
-    return () => { cancelled = true; clearInterval(timer); };
+    return () => { cancelled = true; };
   }, [runtimeUrl]);
+
+  // Refetch the manifest when the runtime signals it changed. No more polling.
+  useRuntimeEvents(['manifest_changed'], () => {
+    void fetchManifestRef.current();
+  });
 
   return (
     <RuntimeContext.Provider value={state}>

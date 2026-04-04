@@ -28,6 +28,8 @@ import type {SharedResources} from '../routes/session-resolver.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
 import {buildMcpConfigs} from './mcp-config.js';
 import {ConfigWatcher} from './config-watcher.js';
+import {RuntimeEventBus} from '../events/event-bus.js';
+import {createEventsRouter} from '../events/events-route.js';
 import {ProactiveRunner} from './proactive/proactive-runner.js';
 import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createChatRouter} from '../routes/chat.js';
@@ -202,6 +204,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   }
 
   // -------------------------------------------------------------------------
+  // Runtime event bus (powers /api/events SSE for live UI updates)
+  // -------------------------------------------------------------------------
+
+  const eventBus = new RuntimeEventBus();
+
+  // -------------------------------------------------------------------------
   // Session manager (new standalone stack)
   // -------------------------------------------------------------------------
 
@@ -213,6 +221,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     logger: sessionLogger,
     store: sessionStore,
     ttlMs: config.sessionTtlMs,
+    eventBus,
   });
   sessionManager.start();
 
@@ -292,6 +301,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     onSessionComplete: (session) => {
       void sessionManager.persist(session);
     },
+    eventBus,
   });
 
   // -------------------------------------------------------------------------
@@ -456,11 +466,15 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       res.status(404).json({error: 'Session not found'});
       return;
     }
+    eventBus.emit({type: 'session_deleted', sessionId});
     res.json({ok: true});
   });
 
   // File browser/editor
   app.use(createFilesRouter({repoPath: config.repoPath}));
+
+  // Event bus SSE stream (live UI updates)
+  app.use(createEventsRouter({bus: eventBus}));
 
   // Evals
   const evalStore = new EvalStore(config.repoPath);
@@ -592,6 +606,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           // Shared resources and session components will pick up the new
           // bundle on next session creation via getBundle().
           log.info('config_reloaded', {name: newBundle.config.name});
+          eventBus.emit({type: 'manifest_changed'});
+          eventBus.emit({type: 'files_changed'});
         });
         watcher.start();
       }
