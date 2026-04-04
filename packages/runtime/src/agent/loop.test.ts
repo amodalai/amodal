@@ -733,8 +733,10 @@ describe('handleCompacting (via transition)', () => {
     if (result.next.type === 'thinking') {
       // Should have fewer messages (summary + recent turns)
       expect(result.next.messages.length).toBeLessThan(messages.length);
-      // First message should be the summary
-      const firstContent = result.next.messages[0].content;
+      // First message should be the system summary
+      const firstMsg = result.next.messages[0];
+      expect(firstMsg.role).toBe('system');
+      const firstContent = firstMsg.content;
       expect(typeof firstContent === 'string' && firstContent.includes('Conversation Summary')).toBe(true);
     }
 

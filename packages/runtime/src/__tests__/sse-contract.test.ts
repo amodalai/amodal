@@ -452,6 +452,53 @@ describe('SSE Event Contract', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Compaction event shapes (emitted by the state machine, not streamMessage)
+  // -----------------------------------------------------------------------
+
+  describe('compaction_start event shape', () => {
+    it('has estimated_tokens, threshold, and timestamp', () => {
+      const event: SSEEvent = {
+        type: SSEEventType.CompactionStart,
+        estimated_tokens: 150_000,
+        threshold: 0.7,
+        timestamp: new Date().toISOString(),
+      };
+
+      expect(event.type).toBe(SSEEventType.CompactionStart);
+      if (event.type === SSEEventType.CompactionStart) {
+        expect(typeof event.estimated_tokens).toBe('number');
+        expect(event.estimated_tokens).toBeGreaterThan(0);
+        expect(typeof event.threshold).toBe('number');
+        expect(event.threshold).toBeGreaterThan(0);
+        expect(event.threshold).toBeLessThanOrEqual(1);
+        expect(isValidTimestamp(event.timestamp)).toBe(true);
+      }
+    });
+  });
+
+  describe('compaction_end event shape', () => {
+    it('has tokens_before, tokens_after, compaction_tokens, and timestamp', () => {
+      const event: SSEEvent = {
+        type: SSEEventType.CompactionEnd,
+        tokens_before: 150_000,
+        tokens_after: 40_000,
+        compaction_tokens: 500,
+        timestamp: new Date().toISOString(),
+      };
+
+      expect(event.type).toBe(SSEEventType.CompactionEnd);
+      if (event.type === SSEEventType.CompactionEnd) {
+        expect(typeof event.tokens_before).toBe('number');
+        expect(typeof event.tokens_after).toBe('number');
+        expect(typeof event.compaction_tokens).toBe('number');
+        expect(event.tokens_after).toBeLessThan(event.tokens_before);
+        expect(event.compaction_tokens).toBeGreaterThanOrEqual(0);
+        expect(isValidTimestamp(event.timestamp)).toBe(true);
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Type exhaustiveness — every event is a valid SSEEvent member
   // -----------------------------------------------------------------------
 

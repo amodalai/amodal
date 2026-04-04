@@ -130,9 +130,10 @@ export async function handleCompacting(
     };
   }
 
-  // Build the compacted message list: summary + recent turns
+  // Build the compacted message list: summary + recent turns.
+  // Uses 'system' role — this is context injected by the runtime, not user input.
   const summaryMessage: ModelMessage = {
-    role: 'user',
+    role: 'system',
     content: `${COMPACTION_SUMMARY_PREFIX}\n\n${summaryResult.value.text}`,
   };
   const compactedMessages = [summaryMessage, ...recentMessages];
