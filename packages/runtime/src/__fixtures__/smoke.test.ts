@@ -684,6 +684,200 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     const responseText = allText(events).toLowerCase();
     expect(responseText).toContain('yes');
   }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 22. Pages — user-defined React pages
+  // -------------------------------------------------------------------------
+
+  it('lists pages with metadata from repo', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/pages`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {pages: Array<Record<string, unknown>>};
+
+    expect(res.status).toBe(200);
+    expect(body.pages.length).toBeGreaterThan(0);
+    const testPage = body.pages.find((p) => p['name'] === 'TestPage');
+    expect(testPage).toBeDefined();
+    expect(testPage?.['description']).toBe('Smoke test page fixture');
+    expect(testPage?.['stores']).toEqual(['test-items']);
+  });
+
+  it('serves compiled page bundle', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/pages-bundle/TestPage.js`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const bundle = await res.text();
+    // IIFE bundle registers on window.__AMODAL_PAGES__
+    expect(bundle).toContain('__AMODAL_PAGES__');
+    expect(bundle).toContain('TestPage');
+  });
+
+  // -------------------------------------------------------------------------
+  // 23. Sessions — listing and history
+  // -------------------------------------------------------------------------
+
+  it('sessions endpoint returns a sessions array', async () => {
+    // Chat sessions in local dev don't auto-populate the legacy session store
+    // used by /sessions (only automation runs do), so we just verify the
+    // endpoint returns the expected shape.
+    const res = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {sessions: Array<Record<string, unknown>>};
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(body.sessions)).toBe(true);
+  });
+
+  it('returns 404 for unknown session', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/session/nonexistent-id`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(404);
+  });
+
+  // -------------------------------------------------------------------------
+  // 24. Files — browser and editor
+  // -------------------------------------------------------------------------
+
+  it('lists repo files as a tree', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/files`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {tree: Array<Record<string, unknown>>; repoPath: string};
+
+    expect(res.status).toBe(200);
+    expect(body.tree.length).toBeGreaterThan(0);
+    // Should include at least one convention directory
+    const names = body.tree.map((n) => String(n['name']));
+    expect(names.some((n) => ['skills', 'connections', 'stores', 'tools'].includes(n))).toBe(true);
+  });
+
+  it('reads a specific file', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/files/amodal.json`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const body = await res.json() as {path: string; content: string; language: string};
+    expect(body.path).toBe('amodal.json');
+    expect(body.language).toBe('json');
+    expect(body.content).toContain('smoke-test-agent');
+  });
+
+  it('writes a file and reads it back', async () => {
+    const testPath = 'knowledge/smoke-write-test.md';
+    const testContent = '# Smoke Write Test\n\nThis file was written by a smoke test.';
+
+    const writeRes = await fetch(`http://localhost:${AGENT_PORT}/api/files/${testPath}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content: testContent}),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(writeRes.status).toBe(200);
+
+    const readRes = await fetch(`http://localhost:${AGENT_PORT}/api/files/${testPath}`, {signal: AbortSignal.timeout(5000)});
+    expect(readRes.status).toBe(200);
+    const body = await readRes.json() as {content: string};
+    expect(body.content).toBe(testContent);
+  });
+
+  it('rejects path traversal attempts', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/files/..%2F..%2F..%2Fetc%2Fpasswd`, {signal: AbortSignal.timeout(5000)});
+    expect([400, 403, 404]).toContain(res.status);
+  });
+
+  // -------------------------------------------------------------------------
+  // 25. Webhooks — inbound automation trigger
+  // -------------------------------------------------------------------------
+
+  it('rejects webhook for unknown automation with 404', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/webhooks/nonexistent-automation`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({event: 'test'}),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json() as {error: string};
+    expect(body.error).toContain('not found');
+  });
+
+  // -------------------------------------------------------------------------
+  // 26. Store REST API — CRUD outside chat
+  // -------------------------------------------------------------------------
+
+  it('lists stores with document counts', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/stores`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const body = await res.json() as {stores: Array<Record<string, unknown>>};
+    expect(body.stores.length).toBeGreaterThan(0);
+    const testItems = body.stores.find((s) => s['name'] === 'test-items');
+    expect(testItems).toBeDefined();
+    expect(typeof testItems?.['documentCount']).toBe('number');
+  });
+
+  it('writes and retrieves a document via REST', async () => {
+    const writeRes = await fetch(`http://localhost:${AGENT_PORT}/api/stores/test-items`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({item_id: 'rest-api-test', name: 'REST API Item', status: 'active'}),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(writeRes.status).toBe(201);
+    const writeBody = await writeRes.json() as {stored: boolean; key: string};
+    expect(writeBody.key).toBe('rest-api-test');
+
+    const readRes = await fetch(`http://localhost:${AGENT_PORT}/api/stores/test-items/rest-api-test`, {signal: AbortSignal.timeout(5000)});
+    expect(readRes.status).toBe(200);
+    const readBody = await readRes.json() as {document: {payload: Record<string, unknown>}};
+    expect(readBody.document.payload['name']).toBe('REST API Item');
+  });
+
+  it('lists documents in a store', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/stores/test-items?limit=10`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const body = await res.json() as {documents: Array<Record<string, unknown>>; total: number};
+    expect(Array.isArray(body.documents)).toBe(true);
+    expect(typeof body.total).toBe('number');
+  });
+
+  it('returns 404 for unknown store', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/stores/nonexistent-store`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(404);
+  });
+
+  // -------------------------------------------------------------------------
+  // 27. Feedback
+  // -------------------------------------------------------------------------
+
+  it('saves feedback rating', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/feedback`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        sessionId: 'smoke-session',
+        messageId: 'smoke-msg-1',
+        rating: 'up',
+        query: 'Test query',
+        response: 'Test response',
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as {ok: boolean; id: string};
+    expect(body.ok).toBe(true);
+    expect(body.id).toBeTruthy();
+  });
+
+  it('returns feedback summary stats', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/feedback/summary`, {signal: AbortSignal.timeout(5000)});
+    expect(res.status).toBe(200);
+    const body = await res.json() as {total: number; thumbsUp: number; thumbsDown: number};
+    expect(typeof body.total).toBe('number');
+    expect(typeof body.thumbsUp).toBe('number');
+    expect(typeof body.thumbsDown).toBe('number');
+  });
+
+  it('rejects invalid feedback rating', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/feedback`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sessionId: 'x', messageId: 'y', rating: 'invalid'}),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(res.status).toBe(400);
+  });
 });
 
 // ---------------------------------------------------------------------------
