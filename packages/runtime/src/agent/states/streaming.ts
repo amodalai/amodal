@@ -89,6 +89,18 @@ export async function handleStreaming(
         if (usage.cacheCreationInputTokens) {
           ctx.usage.cacheCreationInputTokens = (ctx.usage.cacheCreationInputTokens ?? 0) + usage.cacheCreationInputTokens;
         }
+
+        // Fire onUsage hook (billing, metering)
+        if (ctx.onUsage) {
+          ctx.onUsage({
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cachedInputTokens: usage.cachedInputTokens ?? 0,
+            cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
+            totalTokens: usage.inputTokens + usage.outputTokens,
+            turnNumber: ctx.turnCount,
+          });
+        }
         break;
       }
 

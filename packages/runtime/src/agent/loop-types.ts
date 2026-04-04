@@ -222,6 +222,19 @@ export interface AgentContext {
    * Wires high-level interfaces (store, request, env) to low-level components.
    */
   buildToolContext: (callId: string) => ToolContext;
+
+  /**
+   * Optional callback fired after each turn with token usage.
+   * Default is no-op. Roadmap 6.3 (Stripe billing) plugs into this.
+   */
+  onUsage?: (usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cachedInputTokens: number;
+    cacheCreationInputTokens: number;
+    totalTokens: number;
+    turnNumber: number;
+  }) => void;
 }
 
 // ---------------------------------------------------------------------------
