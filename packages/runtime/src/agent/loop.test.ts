@@ -16,6 +16,7 @@
  */
 
 import {describe, it, expect, vi} from 'vitest';
+import {z} from 'zod';
 import type {ModelMessage} from 'ai';
 import {SSEEventType} from '../types.js';
 import type {SSEEvent, SSEDoneEvent, SSEInitEvent} from '../types.js';
@@ -700,6 +701,75 @@ describe('handleConfirming (via transition)', () => {
     expect(result.next.type).toBe('thinking');
     // A denial message should have been appended
     expect(ctx.messages.length).toBeGreaterThan(0);
+  });
+
+  it('intercepts dispatch_task and transitions to DISPATCHING', async () => {
+    const dispatchTool: ToolDefinition = {
+      description: 'Dispatch sub-task',
+      parameters: z.object({agent_name: z.string(), tools: z.array(z.string()), prompt: z.string()}),
+      execute: vi.fn(),
+      readOnly: false,
+      metadata: {category: 'system'},
+    };
+    const registry = makeMockRegistry({dispatch_task: dispatchTool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {
+        toolCallId: 'tc-dispatch',
+        toolName: 'dispatch_task',
+        args: {agent_name: 'fetcher', tools: ['request'], prompt: 'Fetch data'},
+      },
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // Should transition to DISPATCHING, not execute the tool
+    expect(result.next.type).toBe('dispatching');
+    if (result.next.type === 'dispatching') {
+      expect(result.next.task.agentName).toBe('fetcher');
+      expect(result.next.task.toolSubset).toEqual(['request']);
+      expect(result.next.task.prompt).toBe('Fetch data');
+      expect(result.next.toolCallId).toBe('tc-dispatch');
+    }
+
+    // Should emit ToolCallStart but NOT call execute
+    const startEvents = result.effects.filter((e) => e.type === SSEEventType.ToolCallStart);
+    expect(startEvents.length).toBe(1);
+    expect(dispatchTool.execute).not.toHaveBeenCalled();
+  });
+
+  it('strips dispatch_task from child tool subset', async () => {
+    const dispatchTool: ToolDefinition = {
+      description: 'Dispatch',
+      parameters: z.object({agent_name: z.string(), tools: z.array(z.string()), prompt: z.string()}),
+      execute: vi.fn(),
+      readOnly: false,
+      metadata: {category: 'system'},
+    };
+    const registry = makeMockRegistry({dispatch_task: dispatchTool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {
+        toolCallId: 'tc-d',
+        toolName: 'dispatch_task',
+        args: {agent_name: 'child', tools: ['request', 'dispatch_task', 'query_store'], prompt: 'Go'},
+      },
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    if (result.next.type === 'dispatching') {
+      expect(result.next.task.toolSubset).toEqual(['request', 'query_store']);
+      expect(result.next.task.toolSubset).not.toContain('dispatch_task');
+    }
   });
 });
 
