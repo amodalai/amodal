@@ -129,7 +129,7 @@ export async function handleExecuting(
     }
   }
 
-  // 3. Execute the tool
+  // 4. Execute the tool
   effects.push({
     type: SSEEventType.ToolCallStart,
     tool_name: current.toolName,
