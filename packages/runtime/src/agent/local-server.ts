@@ -211,12 +211,35 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   const legacySessionStore = new SessionStore(config.repoPath);
 
   // -------------------------------------------------------------------------
+  // MCP connections (shared across sessions)
+  // -------------------------------------------------------------------------
+
+  let mcpManager: import('@amodalai/core').McpManager | null = null;
+  {
+    const {McpManager} = await import('@amodalai/core');
+    const mcpConfigs = buildMcpConfigs(bundle);
+    if (Object.keys(mcpConfigs).length > 0) {
+      const manager = new McpManager();
+      try {
+        await manager.startServers(mcpConfigs);
+        if (manager.connectedCount > 0) {
+          mcpManager = manager;
+          const tools = manager.getDiscoveredTools();
+          log.info('mcp_initialized', {servers: manager.connectedCount, tools: tools.length});
+        }
+      } catch (err) {
+        log.error('mcp_init_failed', {error: err instanceof Error ? err.message : String(err)});
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Shared resources for route handlers
   // -------------------------------------------------------------------------
 
   const shared: SharedResources = {
     storeBackend: storeBackend ?? null,
-    mcpManager: null, // MCP initialized lazily when needed
+    mcpManager,
     logger: log,
     toolExecutor,
   };
@@ -229,7 +252,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     const components = buildSessionComponents({
       bundle,
       storeBackend: storeBackend ?? null,
-      mcpManager: null,
+      mcpManager,
       logger: log,
       toolExecutor,
       sessionType: 'automation',
@@ -572,6 +595,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
       await sessionManager.shutdown();
 
+      if (mcpManager) {
+        await mcpManager.shutdown();
+      }
+
       if (storeBackend) {
         await storeBackend.close();
       }
@@ -579,4 +606,50 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       log.info('server_stopped', {});
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// MCP config builder
+// ---------------------------------------------------------------------------
+
+function resolveEnvRefs(obj: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value.startsWith('env:')) {
+      result[key] = process.env[value.slice(4)] ?? '';
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function buildMcpConfigs(
+  bundle: AgentBundle,
+): Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean}> {
+  const configs: Record<string, {transport: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string>; trust?: boolean}> = {};
+
+  for (const [name, conn] of bundle.connections) {
+    if (conn.spec.protocol === 'mcp') {
+      configs[name] = {
+        transport: conn.spec.transport ?? 'stdio',
+        command: conn.spec.command,
+        args: conn.spec.args,
+        env: conn.spec.env ? resolveEnvRefs(conn.spec.env) : undefined,
+        url: conn.spec.url,
+        headers: conn.spec.headers ? resolveEnvRefs(conn.spec.headers) : undefined,
+        trust: conn.spec.trust,
+      };
+    }
+  }
+
+  if (bundle.mcpServers) {
+    for (const [name, config] of Object.entries(bundle.mcpServers)) {
+      if (!configs[name]) {
+        configs[name] = config;
+      }
+    }
+  }
+
+  return configs;
 }
