@@ -86,6 +86,28 @@ export type {
   StreamEvent,
 } from './providers/types.js';
 
+// Agent loop (state machine)
+export { runAgent, transition } from './agent/loop.js';
+export type {
+  AgentState,
+  AgentContext,
+  AgentLoopConfig,
+  TransitionResult,
+  RunAgentOptions,
+  ToolCall,
+  ToolResult,
+  DoneReason,
+  ThinkingState,
+  StreamingState,
+  ExecutingState,
+  ConfirmingState,
+  CompactingState,
+  DispatchingState,
+  DoneState,
+  DispatchConfig,
+} from './agent/loop-types.js';
+export { DEFAULT_LOOP_CONFIG } from './agent/loop-types.js';
+
 // Tool registry
 export { createToolRegistry } from './tools/registry.js';
 export type {

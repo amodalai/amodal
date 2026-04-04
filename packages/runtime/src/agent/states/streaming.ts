@@ -1,0 +1,177 @@
+/**
+ * @license
+ * Copyright 2026 Amodal Labs, Inc.
+ * SPDX-License-Identifier: MIT
+ */
+
+/**
+ * STREAMING state handler.
+ *
+ * Consumes the provider's fullStream, emits text deltas to the client,
+ * collects tool calls, and tracks token usage. Pre-executes read-only
+ * tools while the LLM might still be generating.
+ *
+ * Transitions:
+ * - No tool calls → DONE (model_stop)
+ * - Tool calls collected → EXECUTING
+ * - Stream error → DONE (error)
+ */
+
+import {SSEEventType} from '../../types.js';
+import type {SSEEvent} from '../../types.js';
+import type {
+  StreamingState,
+  AgentContext,
+  TransitionResult,
+  ToolCall,
+} from '../loop-types.js';
+import {executeTool} from './executing.js';
+
+/**
+ * Handle the STREAMING state.
+ */
+export async function handleStreaming(
+  state: StreamingState,
+  ctx: AgentContext,
+): Promise<TransitionResult> {
+  const effects: SSEEvent[] = [];
+  const toolCalls: ToolCall[] = [...state.pendingToolCalls];
+
+  // Consume the full stream
+  for await (const event of state.stream.fullStream) {
+    if (ctx.signal.aborted) break;
+
+    switch (event.type) {
+      case 'text-delta': {
+        effects.push({
+          type: SSEEventType.TextDelta,
+          content: event.textDelta,
+          timestamp: new Date().toISOString(),
+        });
+        break;
+      }
+
+      case 'tool-call': {
+        const call: ToolCall = {
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: event.args,
+        };
+        toolCalls.push(call);
+
+        // Pre-execute read-only tools while the model might still be generating
+        const toolDef = ctx.toolRegistry.get(event.toolName);
+        if (toolDef?.readOnly) {
+          const promise = executeTool(call, toolDef, ctx);
+          // Log but suppress rejection — errors are re-surfaced when awaited in EXECUTING.
+          // Without this, abort before reaching EXECUTING causes unhandled rejection.
+          promise.catch((err: unknown) => {
+            ctx.logger.debug('preexec_suppressed', {
+              tool: event.toolName,
+              callId: event.toolCallId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+          ctx.preExecutionCache.set(event.toolCallId, promise);
+        }
+        break;
+      }
+
+      case 'finish': {
+        // Track token usage
+        const usage = event.usage;
+        ctx.usage.inputTokens += usage.inputTokens;
+        ctx.usage.outputTokens += usage.outputTokens;
+        ctx.usage.totalTokens += usage.inputTokens + usage.outputTokens;
+        if (usage.cachedInputTokens) {
+          ctx.usage.cachedInputTokens = (ctx.usage.cachedInputTokens ?? 0) + usage.cachedInputTokens;
+        }
+        if (usage.cacheCreationInputTokens) {
+          ctx.usage.cacheCreationInputTokens = (ctx.usage.cacheCreationInputTokens ?? 0) + usage.cacheCreationInputTokens;
+        }
+        break;
+      }
+
+      case 'tool-result':
+        // We don't pass execute functions to the AI SDK, so tool-result events
+        // should not arrive. If they do (provider auto-execution), ignore them —
+        // we handle tool execution ourselves in EXECUTING state.
+        break;
+
+      case 'error': {
+        ctx.logger.error('provider_stream_error', {
+          session: ctx.sessionId,
+          error: event.error instanceof Error ? event.error.message : String(event.error),
+          turn: ctx.turnCount,
+        });
+        effects.push({
+          type: SSEEventType.Error,
+          message: event.error instanceof Error ? event.error.message : String(event.error),
+          timestamp: new Date().toISOString(),
+        });
+        return {
+          next: {type: 'done', usage: {...ctx.usage}, reason: 'error'},
+          effects,
+        };
+      }
+
+      default:
+        // Future stream event types — skip
+        break;
+    }
+  }
+
+  // Append assistant message to conversation (text + tool calls)
+  const text = await state.stream.text;
+  const assistantMessage = buildAssistantMessage(text, toolCalls);
+  ctx.messages = [...ctx.messages, assistantMessage];
+
+  // No tool calls → model is done
+  if (toolCalls.length === 0) {
+    return {
+      next: {type: 'done', usage: {...ctx.usage}, reason: 'model_stop'},
+      effects,
+    };
+  }
+
+  // Tool calls → transition to EXECUTING
+  const [first, ...rest] = toolCalls;
+  return {
+    next: {type: 'executing', queue: rest, current: first, results: []},
+    effects,
+  };
+}
+
+/**
+ * Build a ModelMessage for the assistant's response.
+ */
+function buildAssistantMessage(
+  text: string,
+  toolCalls: ToolCall[],
+): import('ai').ModelMessage {
+  // If text only, use string content shorthand
+  if (toolCalls.length === 0) {
+    return {role: 'assistant', content: text};
+  }
+
+  // Mix of text + tool calls — use content array
+  const content: Array<
+    | {type: 'text'; text: string}
+    | {type: 'tool-call'; toolCallId: string; toolName: string; input: unknown}
+  > = [];
+
+  if (text) {
+    content.push({type: 'text', text});
+  }
+
+  for (const call of toolCalls) {
+    content.push({
+      type: 'tool-call',
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      input: call.args,
+    });
+  }
+
+  return {role: 'assistant', content};
+}
