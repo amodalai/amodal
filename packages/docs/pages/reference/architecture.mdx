@@ -10,22 +10,21 @@ The runtime is transport-agnostic. The same engine runs behind an HTTP server (`
 
 ## System Diagram
 
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#DBEAFE','primaryBorderColor':'#1E40AF','primaryTextColor':'#1E293B','lineColor':'#475569','fontFamily':'Inter, system-ui, sans-serif','clusterBkg':'#F8FAFC','clusterBorder':'#CBD5E1'}}}%%
-flowchart TD
-    CLI["CLI (amodal chat)"]
-    React["React SDK (@amodalai/react)"]
-    Widget["Chat Widget"]
-    Runtime["Runtime (@amodalai/runtime)"]
-    Anthropic["Anthropic"]
-    OpenAI["OpenAI"]
-    Google["Google Gemini"]
-    CLI --> Runtime
-    React --> Runtime
-    Widget --> Runtime
-    Runtime --> Anthropic
-    Runtime --> OpenAI
-    Runtime --> Google
+```
+Chat Interfaces
+  ├── CLI (amodal chat)
+  ├── React SDK (@amodalai/react)
+  └── Chat Widget (@amodalai/react/widget)
+        │
+        ▼
+Runtime (@amodalai/runtime)
+  │ HTTP server, SSE streaming, session management,
+  │ state machine agent loop, tools, stores, automations
+  ▼
+Providers (via Vercel AI SDK)
+  ├── Anthropic
+  ├── OpenAI
+  └── Google Gemini
 ```
 
 ## Packages

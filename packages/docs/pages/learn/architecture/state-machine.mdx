@@ -29,23 +29,21 @@ Every piece of the runtime logic lives inside the state handlers. The loop just 
 
 ## The states
 
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#DBEAFE','primaryBorderColor':'#1E40AF','primaryTextColor':'#1E293B','lineColor':'#475569','fontFamily':'Inter, system-ui, sans-serif'}}}%%
-stateDiagram-v2
-    [*] --> thinking
-    thinking --> streaming: call streamText()
-    streaming --> done: text only
-    streaming --> executing: tool calls
-    executing --> confirming: needs approval
-    confirming --> executing: approved
-    confirming --> thinking: denied
-    executing --> dispatching: dispatch_task
-    dispatching --> thinking
-    executing --> compacting: context heavy
-    compacting --> thinking
-    executing --> thinking: all results done
-    executing --> executing: more in queue
-    done --> [*]
+```
+   thinking ──────► streaming ──────► done (text only)
+      ▲                 │
+      │                 ▼
+      │             executing ──► confirming ──► thinking (denied)
+      │                 │                  │
+      │                 │                  └──► executing (approved)
+      │                 ▼
+      │           dispatching ──────► thinking
+      │                 │
+      │                 ▼
+      └──── compacting ◄─── executing (context heavy)
+             │
+             │
+             └──► thinking
 ```
 
 | State | What happens | Next |
