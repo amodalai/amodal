@@ -16,6 +16,7 @@
  */
 
 import {describe, it, expect, vi} from 'vitest';
+import {z} from 'zod';
 import type {ModelMessage} from 'ai';
 import {SSEEventType} from '../types.js';
 import type {SSEEvent, SSEDoneEvent, SSEInitEvent} from '../types.js';
@@ -74,7 +75,7 @@ function makeMockRegistry(tools: Record<string, ToolDefinition> = {}): ToolRegis
     get: vi.fn((name: string) => tools[name]),
     getTools: vi.fn(() => tools),
     names: vi.fn(() => Object.keys(tools)),
-    subset: vi.fn(),
+    subset: vi.fn().mockReturnValue({}),
     size: Object.keys(tools).length,
   };
 }
@@ -701,6 +702,75 @@ describe('handleConfirming (via transition)', () => {
     // A denial message should have been appended
     expect(ctx.messages.length).toBeGreaterThan(0);
   });
+
+  it('intercepts dispatch_task and transitions to DISPATCHING', async () => {
+    const dispatchTool: ToolDefinition = {
+      description: 'Dispatch sub-task',
+      parameters: z.object({agent_name: z.string(), tools: z.array(z.string()), prompt: z.string()}),
+      execute: vi.fn(),
+      readOnly: false,
+      metadata: {category: 'system'},
+    };
+    const registry = makeMockRegistry({dispatch_task: dispatchTool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {
+        toolCallId: 'tc-dispatch',
+        toolName: 'dispatch_task',
+        args: {agent_name: 'fetcher', tools: ['request'], prompt: 'Fetch data'},
+      },
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // Should transition to DISPATCHING, not execute the tool
+    expect(result.next.type).toBe('dispatching');
+    if (result.next.type === 'dispatching') {
+      expect(result.next.task.agentName).toBe('fetcher');
+      expect(result.next.task.toolSubset).toEqual(['request']);
+      expect(result.next.task.prompt).toBe('Fetch data');
+      expect(result.next.toolCallId).toBe('tc-dispatch');
+    }
+
+    // Should emit ToolCallStart but NOT call execute
+    const startEvents = result.effects.filter((e) => e.type === SSEEventType.ToolCallStart);
+    expect(startEvents.length).toBe(1);
+    expect(dispatchTool.execute).not.toHaveBeenCalled();
+  });
+
+  it('strips dispatch_task from child tool subset', async () => {
+    const dispatchTool: ToolDefinition = {
+      description: 'Dispatch',
+      parameters: z.object({agent_name: z.string(), tools: z.array(z.string()), prompt: z.string()}),
+      execute: vi.fn(),
+      readOnly: false,
+      metadata: {category: 'system'},
+    };
+    const registry = makeMockRegistry({dispatch_task: dispatchTool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [],
+      current: {
+        toolCallId: 'tc-d',
+        toolName: 'dispatch_task',
+        args: {agent_name: 'child', tools: ['request', 'dispatch_task', 'query_store'], prompt: 'Go'},
+      },
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    if (result.next.type === 'dispatching') {
+      expect(result.next.task.toolSubset).toEqual(['request', 'query_store']);
+      expect(result.next.task.toolSubset).not.toContain('dispatch_task');
+    }
+  });
 });
 
 describe('handleCompacting (via transition)', () => {
@@ -848,25 +918,109 @@ describe('handleCompacting (via transition)', () => {
 });
 
 describe('handleDispatching (via transition)', () => {
-  it('stub transitions to done with error', async () => {
+  it('runs child agent and returns text result to parent', async () => {
     const ctx = makeMockContext();
 
     const result = await transition({
       type: 'dispatching',
-      task: {agentName: 'research-agent', toolSubset: ['search'], prompt: 'Find info'},
-      parentMessages: [],
+      task: {agentName: 'research-agent', toolSubset: [], prompt: 'Find info'},
+
+      toolCallId: 'tc-dispatch-1',
+      queue: [],
+      results: [],
     }, ctx);
 
-    expect(result.next.type).toBe('done');
-    if (result.next.type === 'done') {
-      expect(result.next.reason).toBe('error');
+    // Child completes → parent goes to THINKING (no more queue items)
+    expect(result.next.type).toBe('thinking');
+
+    // Should have SubagentEvent effects (thought + complete)
+    const subagentEvents = result.effects.filter((e) => e.type === SSEEventType.SubagentEvent);
+    expect(subagentEvents.length).toBeGreaterThanOrEqual(1);
+
+    // Should have a ToolCallResult for the dispatch_task call
+    const toolResult = result.effects.find((e) => e.type === SSEEventType.ToolCallResult);
+    expect(toolResult).toBeDefined();
+
+    // Child usage merged into parent
+    expect(ctx.usage.inputTokens).toBeGreaterThan(0);
+  });
+
+  it('emits SubagentEvent with correct parent_tool_id', async () => {
+    const ctx = makeMockContext();
+
+    const result = await transition({
+      type: 'dispatching',
+      task: {agentName: 'profiler', toolSubset: [], prompt: 'Profile entity'},
+
+      toolCallId: 'tc-abc',
+      queue: [],
+      results: [],
+    }, ctx);
+
+    const subagentEvents = result.effects.filter((e) => e.type === SSEEventType.SubagentEvent);
+    for (const event of subagentEvents) {
+      if (event.type === SSEEventType.SubagentEvent) {
+        expect(event.parent_tool_id).toBe('tc-abc');
+        expect(event.agent_name).toBe('profiler');
+      }
+    }
+  });
+
+  it('continues execution queue after dispatch completes', async () => {
+    const ctx = makeMockContext();
+
+    const result = await transition({
+      type: 'dispatching',
+      task: {agentName: 'fetcher', toolSubset: [], prompt: 'Fetch data'},
+
+      toolCallId: 'tc-dispatch',
+      queue: [{toolCallId: 'tc-next', toolName: 'request', args: {}}],
+      results: [],
+    }, ctx);
+
+    // Should transition to executing the next tool in queue
+    expect(result.next.type).toBe('executing');
+  });
+
+  it('handles child agent error gracefully', async () => {
+    // Provider that throws on streamText
+    const failingProvider = {
+      model: 'test-model',
+      provider: 'test',
+      languageModel: {} as AgentContext['provider']['languageModel'],
+      streamText: vi.fn(() => { throw new Error('Provider crashed'); }),
+      generateText: vi.fn(),
+    };
+    const ctx = makeMockContext({provider: failingProvider});
+
+    const result = await transition({
+      type: 'dispatching',
+      task: {agentName: 'broken-agent', toolSubset: [], prompt: 'Do something'},
+
+      toolCallId: 'tc-fail',
+      queue: [],
+      results: [],
+    }, ctx);
+
+    // Should NOT crash — transitions to thinking so parent can recover
+    expect(result.next.type).toBe('thinking');
+
+    // Should emit SubagentEvent with error
+    const errorEvents = result.effects.filter(
+      (e) => e.type === SSEEventType.SubagentEvent && 'event_type' in e && e.event_type === 'error',
+    );
+    expect(errorEvents.length).toBeGreaterThanOrEqual(1);
+
+    // Should emit ToolCallResult with error status
+    const toolResult = result.effects.find((e) => e.type === SSEEventType.ToolCallResult);
+    expect(toolResult).toBeDefined();
+    if (toolResult && toolResult.type === SSEEventType.ToolCallResult) {
+      expect(toolResult.status).toBe('error');
     }
 
-    const errorEvents = result.effects.filter((e) => e.type === SSEEventType.Error);
-    expect(errorEvents.length).toBe(1);
-
-    expect(ctx.logger.warn).toHaveBeenCalledWith('dispatching_not_implemented', expect.objectContaining({
-      agent: 'research-agent',
+    // Should log the error
+    expect(ctx.logger.error).toHaveBeenCalledWith('dispatch_child_error', expect.objectContaining({
+      agent: 'broken-agent',
     }));
   });
 });
