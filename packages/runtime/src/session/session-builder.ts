@@ -315,20 +315,18 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // -------------------------------------------------------------------------
 
   const connectionsMap = buildConnectionsMap(bundle.connections, bundle.resolvedCredentials);
+  const accessConfigs = buildAccessConfigs(bundle.connections);
   const connectionNames = [...bundle.connections.keys()].filter(
     (name) => bundle.connections.get(name)?.spec.protocol !== 'mcp',
   );
 
   if (connectionNames.length > 0) {
-    const accessConfigs = buildAccessConfigs(bundle.connections);
-    const permissionChecker = new AccessJsonPermissionChecker({
-      accessConfigs,
-      isDelegated: false,
-    });
-
     registry.register(REQUEST_TOOL_NAME, createRequestTool({
       connectionsMap,
-      permissionChecker,
+      permissionChecker: new AccessJsonPermissionChecker({
+        accessConfigs,
+        isDelegated: false,
+      }),
     }));
   }
 
@@ -378,7 +376,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // 10. Build permission checker (session-level)
   // -------------------------------------------------------------------------
 
-  const accessConfigs = buildAccessConfigs(bundle.connections);
   const sessionPermissionChecker = new AccessJsonPermissionChecker({
     accessConfigs,
     isDelegated: sessionType === 'automation',
