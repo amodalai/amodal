@@ -152,6 +152,7 @@ export class StandaloneSessionManager {
       lastAccessedAt: now,
       maxTurns: opts.maxTurns ?? this.defaultMaxTurns,
       maxContextTokens: opts.maxContextTokens ?? this.defaultMaxContextTokens,
+      toolContextFactory: opts.toolContextFactory,
     };
 
     this.sessions.set(id, session);

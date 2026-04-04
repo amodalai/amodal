@@ -170,7 +170,7 @@ export type { ToolContextFactoryOptions } from './session/tool-context-factory.j
 
 // Session resolver (Phase 3.5c)
 export { resolveSession, resolveBundle } from './routes/session-resolver.js';
-export type { BundleResolver, SharedResources, ResolvedSession } from './routes/session-resolver.js';
+export type { BundleResolver, SharedResources, ResolvedSession, ResolveSessionOptions } from './routes/session-resolver.js';
 
 // Context compiler
 export { compileContext } from './context/compiler.js';

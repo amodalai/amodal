@@ -12,7 +12,7 @@
  * LLM provider is stubbed since we're testing the manager, not the loop.
  */
 
-import {describe, it, expect, beforeAll, afterAll} from 'vitest';
+import {describe, it, expect, vi, beforeAll, afterAll} from 'vitest';
 import {StandaloneSessionManager} from './manager.js';
 import {PGLiteSessionStore} from './store.js';
 import type {CreateSessionOptions, TurnUsage} from './types.js';
@@ -201,6 +201,35 @@ describe('StandaloneSessionManager', () => {
 
       const persisted = await store.load(session.id);
       expect(persisted!.version).toBe(1);
+    });
+
+    it('deduplicates concurrent resume calls for the same session ID', async () => {
+      const mgr = new StandaloneSessionManager({logger, store});
+      const session = mgr.create(makeCreateOpts());
+      session.messages = [{role: 'user', content: 'test'}];
+      await mgr.persist(session);
+      await mgr.destroy(session.id);
+
+      // Spy on store.load to verify it's called once
+      const loadSpy = vi.spyOn(store, 'load');
+
+      // Fire two concurrent resumes for the same session
+      const opts = makeCreateOpts({systemPrompt: 'fresh'});
+      const [result1, result2] = await Promise.all([
+        mgr.resume(session.id, opts),
+        mgr.resume(session.id, opts),
+      ]);
+
+      // Both should resolve to the same session (same ID)
+      expect(result1).not.toBeNull();
+      expect(result2).not.toBeNull();
+      expect(result1!.id).toBe(session.id);
+      expect(result2!.id).toBe(session.id);
+
+      // Store should only be hit once (deduplication)
+      expect(loadSpy).toHaveBeenCalledTimes(1);
+
+      loadSpy.mockRestore();
     });
   });
 

@@ -386,7 +386,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
         const auth = getAuthContext(res);
 
         // Resolve session (lookup in memory, resume from store, or create new)
-        const {session, components} = await resolveSession(body.session_id, {
+        const {session, toolContextFactory} = await resolveSession(body.session_id, {
           sessionManager: options.sessionManager,
           bundleResolver: options.bundleResolver,
           shared: options.shared,
@@ -426,7 +426,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
         // Run message through the agent loop
         const stream = options.sessionManager.runMessage(session.id, message, {
           signal: controller.signal,
-          buildToolContext: components.toolContextFactory,
+          buildToolContext: toolContextFactory,
           onUsage,
         });
 

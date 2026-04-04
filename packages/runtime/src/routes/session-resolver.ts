@@ -16,11 +16,20 @@ import type {AgentBundle, CustomToolExecutor, StoreBackend} from '@amodalai/type
 import type {McpManager, FieldScrubber} from '@amodalai/core';
 import type {StandaloneSessionManager} from '../session/manager.js';
 import type {Session} from '../session/types.js';
+import type {ToolContext} from '../tools/types.js';
 import type {SessionComponents, SessionType} from '../session/session-builder.js';
 import {buildSessionComponents} from '../session/session-builder.js';
 import type {AuthContext} from '../middleware/auth.js';
 import {SessionError} from '../errors.js';
+import {LOCAL_APP_ID} from '../constants.js';
 import type {Logger} from '../logger.js';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const DEFAULT_TENANT_ID = LOCAL_APP_ID;
+const DEFAULT_USER_ID = 'anonymous';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,10 +52,10 @@ export interface SharedResources {
   fieldScrubber?: FieldScrubber;
 }
 
-/** Result of session resolution — includes components for wiring into runMessage. */
+/** Result of session resolution — includes the tool context factory for wiring into runMessage. */
 export interface ResolvedSession {
   session: Session;
-  components: SessionComponents;
+  toolContextFactory: (callId: string) => ToolContext;
 }
 
 /** Options for resolving a session. */
@@ -67,8 +76,8 @@ export interface ResolveSessionOptions {
 /**
  * Resolve an AgentBundle from the bundle resolver.
  *
- * Prefers the static bundle (local dev). Falls back to the dynamic
- * bundleProvider when a deploy_id is available (hosted mode).
+ * Prefers the dynamic bundleProvider when a deploy_id is available (hosted
+ * mode). Falls back to the static bundle (local dev).
  */
 export async function resolveBundle(
   resolver: BundleResolver,
@@ -82,6 +91,34 @@ export async function resolveBundle(
 }
 
 // ---------------------------------------------------------------------------
+// Internal: build components + wire factory
+// ---------------------------------------------------------------------------
+
+function buildComponents(
+  bundle: AgentBundle,
+  shared: SharedResources,
+  opts: {
+    sessionType?: SessionType;
+    userRoles: string[];
+    sessionId?: string;
+    tenantId: string;
+  },
+): SessionComponents {
+  return buildSessionComponents({
+    bundle,
+    storeBackend: shared.storeBackend,
+    mcpManager: shared.mcpManager,
+    logger: shared.logger,
+    toolExecutor: shared.toolExecutor,
+    fieldScrubber: shared.fieldScrubber,
+    sessionType: opts.sessionType,
+    userRoles: opts.userRoles,
+    sessionId: opts.sessionId,
+    tenantId: opts.tenantId,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Session resolution
 // ---------------------------------------------------------------------------
 
@@ -92,54 +129,30 @@ export async function resolveBundle(
  * 1. If session_id: try in-memory get → try resume from store → fall through
  * 2. Create new session from resolved bundle
  * 3. Throws SessionError if no bundle is available
+ *
+ * For in-memory sessions, the cached `toolContextFactory` from session
+ * creation is reused — no redundant buildSessionComponents call.
  */
 export async function resolveSession(
   sessionId: string | undefined,
   opts: ResolveSessionOptions,
 ): Promise<ResolvedSession> {
   const {sessionManager, bundleResolver, shared, auth} = opts;
-  const tenantId = auth?.orgId ?? 'local';
-  const userId = auth?.actor ?? 'anonymous';
+  const tenantId = auth?.orgId ?? DEFAULT_TENANT_ID;
+  const userId = auth?.actor ?? DEFAULT_USER_ID;
   const userRoles = opts.role ? [opts.role] : [];
 
   // 1. In-memory lookup (existing live session)
   if (sessionId) {
     const existing = sessionManager.get(sessionId);
-    if (existing) {
-      // Build fresh components for the toolContextFactory — the session
-      // is already live but the route needs components for buildToolContext.
-      const bundle = await resolveBundle(bundleResolver, opts.deployId, auth?.token);
-      if (!bundle) {
-        throw new SessionError('No bundle available for existing session', {
-          sessionId,
-          context: {operation: 'resolveSession', deployId: opts.deployId},
-        });
-      }
-      const components = buildSessionComponents({
-        bundle,
-        storeBackend: shared.storeBackend,
-        mcpManager: shared.mcpManager,
-        logger: shared.logger,
-        toolExecutor: shared.toolExecutor,
-        fieldScrubber: shared.fieldScrubber,
-        sessionType: opts.sessionType,
-        userRoles,
-        sessionId,
-        tenantId,
-      });
-      return {session: existing, components};
+    if (existing && existing.toolContextFactory) {
+      return {session: existing, toolContextFactory: existing.toolContextFactory};
     }
 
     // 2. Resume from store (with dedup handled by StandaloneSessionManager)
     const bundle = await resolveBundle(bundleResolver, opts.deployId, auth?.token);
     if (bundle) {
-      const components = buildSessionComponents({
-        bundle,
-        storeBackend: shared.storeBackend,
-        mcpManager: shared.mcpManager,
-        logger: shared.logger,
-        toolExecutor: shared.toolExecutor,
-        fieldScrubber: shared.fieldScrubber,
+      const components = buildComponents(bundle, shared, {
         sessionType: opts.sessionType,
         userRoles,
         sessionId,
@@ -154,10 +167,11 @@ export async function resolveSession(
         permissionChecker: components.permissionChecker,
         systemPrompt: components.systemPrompt,
         userRoles: components.userRoles,
+        toolContextFactory: components.toolContextFactory,
       });
 
       if (resumed) {
-        return {session: resumed, components};
+        return {session: resumed, toolContextFactory: components.toolContextFactory};
       }
     }
 
@@ -173,13 +187,7 @@ export async function resolveSession(
     });
   }
 
-  const components = buildSessionComponents({
-    bundle,
-    storeBackend: shared.storeBackend,
-    mcpManager: shared.mcpManager,
-    logger: shared.logger,
-    toolExecutor: shared.toolExecutor,
-    fieldScrubber: shared.fieldScrubber,
+  const components = buildComponents(bundle, shared, {
     sessionType: opts.sessionType,
     userRoles,
     tenantId,
@@ -193,7 +201,8 @@ export async function resolveSession(
     permissionChecker: components.permissionChecker,
     systemPrompt: components.systemPrompt,
     userRoles: components.userRoles,
+    toolContextFactory: components.toolContextFactory,
   });
 
-  return {session, components};
+  return {session, toolContextFactory: components.toolContextFactory};
 }
