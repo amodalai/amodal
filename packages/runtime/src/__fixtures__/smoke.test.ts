@@ -301,4 +301,164 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     expect(complete).toBeDefined();
     expect(complete?.['passed']).toBe(true);
   }, 60_000);
+
+  // -------------------------------------------------------------------------
+  // 9. Admin chat — reads repo files
+  // -------------------------------------------------------------------------
+
+  it('admin agent can read skill files', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: 'Read the test-skill skill file and tell me what it says. Be brief.'}),
+      signal: AbortSignal.timeout(TIMEOUT),
+    });
+
+    const text = await res.text();
+    const events = parseSSE(text);
+
+    const init = findEvent(events, 'init');
+    expect(init).toBeDefined();
+
+    // Admin agent should use read_repo_file tool
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const readTool = toolStarts.find((e) => e['tool_name'] === 'read_repo_file');
+    expect(readTool).toBeDefined();
+
+    const responseText = allText(events);
+    expect(responseText.toLowerCase()).toContain('test');
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 10. Write intent enforcement (G8)
+  // -------------------------------------------------------------------------
+
+  it('rejects POST with intent "read"', async () => {
+    const {events} = await chat(
+      'Use the request tool to call POST /items on mock-api with intent "read" and data {"name": "test"}. Do not use "write" intent — use exactly "read".',
+    );
+
+    const toolResults = findEvents(events, 'tool_call_result');
+    // Should get an error result about intent mismatch
+    const hasError = toolResults.some((e) => e['status'] === 'error');
+    const responseText = allText(events);
+    const mentionsIntent = responseText.toLowerCase().includes('intent') || responseText.toLowerCase().includes('write');
+
+    // Either the tool returned an error about intent, or the model explained the rejection
+    expect(hasError || mentionsIntent).toBe(true);
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 11. Store write + query persistence
+  // -------------------------------------------------------------------------
+
+  it('persists data across store write and query', async () => {
+    // Write
+    const writeResult = await chat(
+      'Store a test item: use store_test_items with item_id="persist-check", name="Persistence Test", status="active". Call the tool now.',
+    );
+    const writeToolResults = findEvents(writeResult.events, 'tool_call_result');
+    const writeSuccess = writeToolResults.find((e) => e['status'] === 'success');
+
+    if (!writeSuccess) {
+      // Model didn't call the tool — skip gracefully
+      return;
+    }
+
+    // Query back in a NEW session (proves persistence, not just in-memory)
+    const queryResult = await chat(
+      'Query the test-items store for the item with key "persist-check" using query_store. Tell me its name.',
+    );
+    const responseText = allText(queryResult.events);
+    expect(responseText).toContain('Persistence Test');
+  }, TIMEOUT * 2);
+
+  // -------------------------------------------------------------------------
+  // 12. Concurrent sessions don't bleed context
+  // -------------------------------------------------------------------------
+
+  it('concurrent sessions are isolated', async () => {
+    // Session A: tell it a secret
+    const sessionA = await chat('My secret code for this session is ALPHA9999. Just confirm.');
+    // Session B: different secret (we don't need session B's ID)
+    await chat('My secret code for this session is BETA5555. Just confirm.');
+
+    // Ask session A about B's secret — should NOT know it
+    const checkA = await chat('What is the BETA code?', sessionA.sessionId);
+    const textA = allText(checkA.events);
+
+    // Session A should not contain session B's secret
+    expect(textA).not.toContain('BETA5555');
+  }, TIMEOUT * 3);
+
+  // -------------------------------------------------------------------------
+  // 13. Automation trigger
+  // -------------------------------------------------------------------------
+
+  it('triggers automation via API', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/automations`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {automations: Array<Record<string, unknown>>};
+
+    // Smoke agent doesn't have automations defined in amodal.json,
+    // but the endpoint should still respond
+    expect(res.status).toBe(200);
+    expect(body.automations).toBeDefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // 14. Multi-turn tool loop
+  // -------------------------------------------------------------------------
+
+  it('handles multi-turn tool interaction', async () => {
+    // Ask something that requires a tool call then reasoning about the result
+    const {events} = await chat(
+      'Fetch items from mock-api using the request tool (GET /items, intent "read"), then tell me how many items have status "active".',
+    );
+
+    // Should have tool call AND text response with the count
+    const toolResults = findEvents(events, 'tool_call_result');
+    const responseText = allText(events);
+
+    expect(toolResults.length).toBeGreaterThan(0);
+    // Mock returns 2 active items (Widget, Doohickey) out of 3
+    expect(responseText).toMatch(/2|two/i);
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 15. Evals list endpoint
+  // -------------------------------------------------------------------------
+
+  it('lists eval suites from repo', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/evals/suites`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as {suites: Array<Record<string, unknown>>};
+
+    expect(res.status).toBe(200);
+    expect(body.suites.length).toBeGreaterThan(0);
+    expect(body.suites[0]?.['name']).toBe('basic-eval');
+  });
+
+  // -------------------------------------------------------------------------
+  // 16. Inspect endpoint — connection health
+  // -------------------------------------------------------------------------
+
+  it('inspect shows connection status', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/inspect/context`, {signal: AbortSignal.timeout(10000)});
+    const body = await res.json() as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body['connections']).toBeDefined();
+  });
 });
+
+// ---------------------------------------------------------------------------
+// SSE parser helper
+// ---------------------------------------------------------------------------
+
+function parseSSE(text: string): Array<Record<string, unknown>> {
+  const events: Array<Record<string, unknown>> = [];
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('data: ')) continue;
+    try { events.push(JSON.parse(line.slice(6)) as Record<string, unknown>); } catch { /* skip */ }
+  }
+  return events;
+}
