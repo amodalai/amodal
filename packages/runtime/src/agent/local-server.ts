@@ -123,7 +123,9 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     for (const f of failed) {
       log.warn('provider_key_invalid', {provider: f.provider, error: f.error});
     }
-  }).catch(() => {});
+  }).catch((err: unknown) => {
+    log.error('provider_check_failed', {error: err instanceof Error ? err.message : String(err)});
+  });
 
   // Create custom tool executor
   const toolExecutor = bundle.tools.length > 0 ? new LocalToolExecutor() : undefined;
@@ -175,12 +177,14 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         try {
           const existing = readFileSync(lockPath, 'utf-8').trim();
           try { process.kill(Number(existing), 0); log.warn('store_lock_conflict', {pid: existing}); }
-          catch { /* PID not running, stale lock */ }
-        } catch { /* no lock file */ }
+          catch { /* PID not running — stale lock, safe to overwrite */ }
+        } catch { /* No lock file exists — first run */ }
         writeFileSync(lockPath, String(process.pid));
         const lockCleanup = lockPath;
-        process.on('exit', () => { try { unlinkSync(lockCleanup); } catch { /* */ } });
-      } catch { /* lock file handling failed, proceed anyway */ }
+        process.on('exit', () => { try { unlinkSync(lockCleanup); } catch { /* exit handler — can't log */ } });
+      } catch (err: unknown) {
+        log.warn('store_lock_setup_failed', {dataDir, error: err instanceof Error ? err.message : String(err)});
+      }
 
       try {
         storeBackend = await createPGLiteStoreBackend(bundle.stores, dataDir);
