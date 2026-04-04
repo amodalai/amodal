@@ -812,7 +812,7 @@ describe('handleCompacting (via transition)', () => {
     }
     expect(ctx.compactionFailures).toBe(1);
     expect(ctx.logger.error).toHaveBeenCalledWith('compaction_failed', expect.objectContaining({
-      error: 'Provider rate limited',
+      error: 'Summarization failed: Provider rate limited',
     }));
   });
 

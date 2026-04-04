@@ -18,6 +18,7 @@
  * observation for the model, not a crash.
  */
 
+import type {ModelMessage} from 'ai';
 import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 import type {ToolDefinition} from '../../tools/types.js';
@@ -28,6 +29,7 @@ import type {
   ToolCall,
   ToolResult,
 } from '../loop-types.js';
+import {estimateTokenCount} from '../token-estimate.js';
 
 /**
  * Handle the EXECUTING state — execute a single tool call.
@@ -291,7 +293,7 @@ function nextAfterToolResult(
 /**
  * Build a tool result message in AI SDK format.
  */
-function buildToolResultMessage(result: ToolResult): import('ai').ModelMessage {
+function buildToolResultMessage(result: ToolResult): ModelMessage {
   return {
     role: 'tool',
     content: [{
@@ -318,13 +320,3 @@ function sanitizeParams(params: Record<string, unknown>): Record<string, unknown
   return sanitized;
 }
 
-/**
- * Rough token estimate from message array. ~4 chars per token.
- * Phase 3.3 replaces this with actual tokenizer counting.
- */
-function estimateTokenCount(messages: Array<import('ai').ModelMessage>): number {
-  // Rough estimate: serialize to JSON and count chars / 4
-  // Phase 3.3 replaces with actual tokenizer
-  const serialized = JSON.stringify(messages);
-  return Math.ceil(serialized.length / 4);
-}

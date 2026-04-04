@@ -24,6 +24,11 @@ import type {
   TransitionResult,
 } from '../loop-types.js';
 
+/** Sentinel values for cleared tool results. */
+const CLEARED_TOOL_CALL_ID = 'cleared';
+const CLEARED_TOOL_NAME = 'cleared';
+const CLEARED_TOOL_RESULT_TEXT = '[Tool result cleared to save context space]';
+
 /**
  * Handle the THINKING state.
  *
@@ -65,10 +70,11 @@ export function handleThinking(
       tool: loop.toolName,
       count: loop.count,
     });
-    messages = [...messages, {
+    const warningMessage: ModelMessage = {
       role: 'system',
       content: `[Warning] You have called ${loop.toolName} ${loop.count} times with similar parameters. Try a different approach.`,
-    } as ModelMessage];
+    };
+    messages = [...messages, warningMessage];
   }
 
   // 3. Clear old tool result bodies — keep last N full, replace older with summaries
@@ -81,10 +87,11 @@ export function handleThinking(
   const allTools = ctx.toolRegistry.getTools();
   const tools: Record<string, Tool> = {};
   for (const [name, def] of Object.entries(allTools)) {
+    // ToolDefinition.parameters is either a Zod schema or FlexibleSchema —
+    // both are accepted by AI SDK as inputSchema.
+     
     tools[name] = {
       description: def.description,
-      // ToolDefinition.parameters is either a Zod schema or FlexibleSchema —
-      // both are accepted by AI SDK as inputSchema
       inputSchema: def.parameters,
     } as Tool;
   }
@@ -268,15 +275,16 @@ function clearOldToolResults(
   const result = [...messages];
 
   for (const idx of indicesToClear) {
-    result[idx] = {
+    const cleared: ModelMessage = {
       role: 'tool',
       content: [{
         type: 'tool-result' as const,
-        toolCallId: 'cleared',
-        toolName: 'cleared',
-        output: {type: 'text' as const, value: '[Tool result cleared to save context space]'},
+        toolCallId: CLEARED_TOOL_CALL_ID,
+        toolName: CLEARED_TOOL_NAME,
+        output: {type: 'text' as const, value: CLEARED_TOOL_RESULT_TEXT},
       }],
-    } as ModelMessage;
+    };
+    result[idx] = cleared;
   }
 
   return result;

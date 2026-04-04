@@ -23,11 +23,19 @@ import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 import type {ModelMessage} from 'ai';
 import {CompactionError} from '../../errors.js';
+import type {Result} from '../../errors.js';
 import type {
   CompactingState,
   AgentContext,
   TransitionResult,
 } from '../loop-types.js';
+import {estimateTokenCount} from '../token-estimate.js';
+
+/** Prefix for the summary message injected after compaction. */
+const COMPACTION_SUMMARY_PREFIX = '[Conversation Summary — older messages compacted]';
+
+/** Timeout for the compaction generateText call (30 seconds). */
+const COMPACTION_TIMEOUT_MS = 30_000;
 
 const COMPACTION_PROMPT = `Summarize this conversation as a structured handoff into these sections:
 
@@ -104,54 +112,16 @@ export async function handleCompacting(
     tokensBefore,
   });
 
-  try {
-    const summary = await summarizeMessages(oldMessages, ctx, maxSummaryTokens);
+  const summaryResult = await summarizeMessages(oldMessages, ctx, maxSummaryTokens);
 
-    // Build the compacted message list: summary + recent turns
-    const summaryMessage: ModelMessage = {
-      role: 'user',
-      content: `[Conversation Summary — older messages compacted]\n\n${summary}`,
-    };
-    const compactedMessages = [summaryMessage, ...recentMessages];
-
-    // Update context
-    ctx.messages = compactedMessages;
-    ctx.compactionFailures = 0; // Reset circuit breaker on success
-
-    const tokensAfter = estimateTokenCount(compactedMessages);
-    const compactionTokens = ctx.usage.totalTokens - (ctx.usage.inputTokens + ctx.usage.outputTokens);
-
-    ctx.logger.info('compaction_end', {
-      session: ctx.sessionId,
-      tokensBefore,
-      tokensAfter,
-      messagesBefore: state.messages.length,
-      messagesAfter: compactedMessages.length,
-    });
-
-    effects.push({
-      type: SSEEventType.CompactionEnd,
-      tokens_before: tokensBefore,
-      tokens_after: tokensAfter,
-      compaction_tokens: compactionTokens,
-      timestamp: new Date().toISOString(),
-    });
-
-    return {
-      next: {type: 'thinking', messages: compactedMessages},
-      effects,
-    };
-  } catch (err) {
+  if (!summaryResult.ok) {
     ctx.compactionFailures++;
-    const message = err instanceof Error ? err.message : String(err);
-
     ctx.logger.error('compaction_failed', {
       session: ctx.sessionId,
-      error: message,
+      error: summaryResult.error.message,
       failure: ctx.compactionFailures,
       circuitBreakerAt: compactionCircuitBreaker,
     });
-
     // Continue without compaction — the agent can still work, just with
     // a fuller context. Better than crashing the loop.
     return {
@@ -159,45 +129,113 @@ export async function handleCompacting(
       effects,
     };
   }
+
+  // Build the compacted message list: summary + recent turns
+  const summaryMessage: ModelMessage = {
+    role: 'user',
+    content: `${COMPACTION_SUMMARY_PREFIX}\n\n${summaryResult.value.text}`,
+  };
+  const compactedMessages = [summaryMessage, ...recentMessages];
+
+  // Update context
+  ctx.messages = compactedMessages;
+  ctx.compactionFailures = 0; // Reset circuit breaker on success
+
+  const tokensAfter = estimateTokenCount(compactedMessages);
+  const compactionTokens = summaryResult.value.usage.inputTokens + summaryResult.value.usage.outputTokens;
+
+  ctx.logger.info('compaction_end', {
+    session: ctx.sessionId,
+    tokensBefore,
+    tokensAfter,
+    messagesBefore: state.messages.length,
+    messagesAfter: compactedMessages.length,
+  });
+
+  effects.push({
+    type: SSEEventType.CompactionEnd,
+    tokens_before: tokensBefore,
+    tokens_after: tokensAfter,
+    compaction_tokens: compactionTokens,
+    timestamp: new Date().toISOString(),
+  });
+
+  return {
+    next: {type: 'thinking', messages: compactedMessages},
+    effects,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Summarization
 // ---------------------------------------------------------------------------
 
+interface SummarySuccess {
+  text: string;
+  usage: {inputTokens: number; outputTokens: number};
+}
+
 /**
- * Summarize old messages using generateText with a cheap model.
+ * Summarize old messages using generateText.
+ * Returns Result to avoid try/catch in the caller.
  */
 async function summarizeMessages(
   messages: ModelMessage[],
   ctx: AgentContext,
   maxSummaryTokens: number,
-): Promise<string> {
+): Promise<Result<SummarySuccess, CompactionError>> {
   // Serialize old messages into a readable conversation format
   const conversationText = messagesToText(messages);
 
-  const result = await ctx.provider.generateText({
-    messages: [
-      {role: 'user', content: `Here is a conversation to summarize:\n\n${conversationText}`},
-    ],
-    system: COMPACTION_PROMPT,
-    maxOutputTokens: maxSummaryTokens,
-    abortSignal: ctx.signal,
-  });
+  // Per-call timeout composed with session abort signal — prevents a hung
+  // provider from blocking the loop until session-level abort.
+  const timeoutSignal = AbortSignal.timeout(COMPACTION_TIMEOUT_MS);
+  const combinedSignal = AbortSignal.any([ctx.signal, timeoutSignal]);
 
-  // Track compaction token usage
-  ctx.usage.inputTokens += result.usage.inputTokens;
-  ctx.usage.outputTokens += result.usage.outputTokens;
-  ctx.usage.totalTokens += result.usage.inputTokens + result.usage.outputTokens;
-
-  if (!result.text || result.text.trim().length === 0) {
-    throw new CompactionError('Summarization returned empty text', {
-      stage: 'summarize',
-      context: {messageCount: messages.length},
+  try {
+    const result = await ctx.provider.generateText({
+      messages: [
+        {role: 'user', content: `Here is a conversation to summarize:\n\n${conversationText}`},
+      ],
+      system: COMPACTION_PROMPT,
+      maxOutputTokens: maxSummaryTokens,
+      abortSignal: combinedSignal,
     });
-  }
 
-  return result.text;
+    // Track compaction token usage
+    ctx.usage.inputTokens += result.usage.inputTokens;
+    ctx.usage.outputTokens += result.usage.outputTokens;
+    ctx.usage.totalTokens += result.usage.inputTokens + result.usage.outputTokens;
+
+    if (!result.text || result.text.trim().length === 0) {
+      return {
+        ok: false,
+        error: new CompactionError('Summarization returned empty text', {
+          stage: 'summarize',
+          context: {messageCount: messages.length},
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      value: {
+        text: result.text,
+        usage: {inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens},
+      },
+    };
+  } catch (err) {
+    // Specific expected failure with specific handling (reason #3):
+    // Provider errors during compaction are non-fatal — the caller degrades
+    // gracefully by continuing without compaction.
+    return {
+      ok: false,
+      error: new CompactionError(
+        `Summarization failed: ${err instanceof Error ? err.message : String(err)}`,
+        {stage: 'summarize', cause: err, context: {messageCount: messages.length}},
+      ),
+    };
+  }
 }
 
 /**
@@ -225,11 +263,7 @@ function messagesToText(messages: ModelMessage[]): string {
         const args = 'input' in part ? JSON.stringify(part.input) : '{}';
         lines.push(`${role} [tool_call: ${part.toolName}(${args})]`);
       } else if (part.type === 'tool-result' && 'output' in part) {
-        const output = typeof part.output === 'string'
-          ? part.output
-          : typeof part.output === 'object' && part.output !== null && 'value' in part.output
-            ? String((part.output as {value: unknown}).value)
-            : JSON.stringify(part.output);
+        const output = extractToolResultText(part.output);
         // Truncate long tool results for the summarizer — it doesn't need 20K
         const truncated = output.length > 2_000
           ? output.slice(0, 2_000) + '... [truncated for summarization]'
@@ -240,6 +274,18 @@ function messagesToText(messages: ModelMessage[]): string {
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Extract text from a tool result output field.
+ */
+function extractToolResultText(output: unknown): string {
+  if (typeof output === 'string') return output;
+  if (typeof output === 'object' && output !== null && 'value' in output) {
+    // `in` narrows to `object & Record<'value', unknown>` — safe to access
+    return String(output.value);
+  }
+  return JSON.stringify(output);
 }
 
 // ---------------------------------------------------------------------------
@@ -266,12 +312,4 @@ function findSplitIndex(messages: ModelMessage[], keepTurns: number): number {
 
   // Not enough turns to split — return 0 (don't compact)
   return 0;
-}
-
-/**
- * Rough token estimate from message array. ~4 chars per token.
- */
-function estimateTokenCount(messages: ModelMessage[]): number {
-  const serialized = JSON.stringify(messages);
-  return Math.ceil(serialized.length / 4);
 }

@@ -151,8 +151,6 @@ export interface AgentLoopConfig {
   maxSummaryTokens: number;
   /** Consecutive compaction failures before circuit breaker trips. Default 3. */
   compactionCircuitBreaker: number;
-  /** Model to use for compaction summaries (cheap model). Default 'haiku'. */
-  compactionModel?: string;
 }
 
 export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
