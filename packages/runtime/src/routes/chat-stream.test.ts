@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { createChatStreamRouter } from './chat-stream.js';
+import { createChatStreamRouter } from './chat-stream-legacy.js';
 import { errorHandler } from '../middleware/error-handler.js';
 import { SSEEventType } from '../types.js';
 

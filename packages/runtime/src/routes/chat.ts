@@ -1,51 +1,108 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { ChatRequestSchema } from '../types.js';
-import { validate } from '../middleware/request-validation.js';
-import { AppError } from '../middleware/error-handler.js';
-import { getAuthContext } from '../middleware/auth.js';
-import type { AuthContext } from '../middleware/auth.js';
-import type { SessionManager } from '../session/session-manager.js';
-import { runMessage, type StreamHooks } from '../session/session-runner.js';
+/**
+ * Non-streaming chat route (Phase 3.5c).
+ *
+ * Accepts POST to /chat/sync, resolves a session, runs the message through
+ * the agent loop, collects all events, and returns a JSON ChatResponse.
+ */
+
+import {Router} from 'express';
+import {ChatRequestSchema, SSEEventType} from '../types.js';
+import type {ChatRequest, ChatResponse, ToolCallSummary} from '../types.js';
+import {validate} from '../middleware/request-validation.js';
+import {getAuthContext} from '../middleware/auth.js';
+import type {AuthContext} from '../middleware/auth.js';
+import type {StandaloneSessionManager} from '../session/manager.js';
+import type {StreamHooks} from '../session/session-runner.js';
+import {resolveSession} from './session-resolver.js';
+import type {BundleResolver, SharedResources} from './session-resolver.js';
+import {adaptOnUsage, fireDrainHooks, UNKNOWN_TOOL_NAME} from './route-helpers.js';
+
+// ---------------------------------------------------------------------------
+// Route options
+// ---------------------------------------------------------------------------
 
 export interface ChatRouterOptions {
-  sessionManager: SessionManager;
+  sessionManager: StandaloneSessionManager;
+  bundleResolver: BundleResolver;
+  shared: SharedResources;
   /** Factory that builds per-request stream hooks from the auth context */
   createStreamHooks?: (auth?: AuthContext) => StreamHooks;
 }
+
+// ---------------------------------------------------------------------------
+// Router
+// ---------------------------------------------------------------------------
 
 export function createChatRouter(options: ChatRouterOptions): Router {
   const router = Router();
 
   // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
-  router.post('/chat', validate(ChatRequestSchema), async (req, res, next) => {
+  router.post('/chat/sync', validate(ChatRequestSchema), async (req, res, next) => {
     try {
-      const { message, session_id, role, deploy_id } = req.body;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated by Zod middleware
+      const body = req.body as ChatRequest;
+      const auth = getAuthContext(res);
 
-      // Get or create session
-      let session;
-      if (session_id) {
-        session = options.sessionManager.get(session_id);
-        if (!session) {
-          throw new AppError(404, 'SESSION_NOT_FOUND', `Session ${session_id} not found`);
-        }
-      } else {
-        const auth = getAuthContext(res);
-        session = await options.sessionManager.create(role, auth, undefined, undefined, deploy_id);
-      }
+      const {session, toolContextFactory} = await resolveSession(body.session_id, {
+        sessionManager: options.sessionManager,
+        bundleResolver: options.bundleResolver,
+        shared: options.shared,
+        role: body.role,
+        sessionType: body.session_type,
+        deployId: body.deploy_id,
+        auth,
+      });
 
       const controller = new AbortController();
-
-      // Abort on client disconnect
       res.on('close', () => controller.abort());
 
-      const hooks = options.createStreamHooks?.(getAuthContext(res));
-      const result = await runMessage(session, message, controller.signal, hooks);
+      const hooks = options.createStreamHooks?.(auth);
+
+      const stream = options.sessionManager.runMessage(
+        session.id,
+        body.message,
+        {
+          signal: controller.signal,
+          buildToolContext: toolContextFactory,
+          onUsage: adaptOnUsage(hooks, session),
+        },
+      );
+
+      let responseText = '';
+      const toolNames = new Map<string, string>();
+      const toolCalls: ToolCallSummary[] = [];
+
+      for await (const event of stream) {
+        if (controller.signal.aborted) break;
+
+        if (event.type === SSEEventType.TextDelta) {
+          responseText += event.content;
+        } else if (event.type === SSEEventType.ToolCallStart) {
+          toolNames.set(event.tool_id, event.tool_name);
+        } else if (event.type === SSEEventType.ToolCallResult) {
+          toolCalls.push({
+            tool_name: toolNames.get(event.tool_id) ?? UNKNOWN_TOOL_NAME,
+            tool_id: event.tool_id,
+            status: event.status,
+            error: event.error,
+          });
+        }
+      }
+
+      await fireDrainHooks(options.sessionManager, hooks, {session, toolCalls});
+
+      const result: ChatResponse = {
+        session_id: session.id,
+        response: responseText,
+        tool_calls: toolCalls,
+      };
+
       res.json(result);
     } catch (err) {
       next(err);

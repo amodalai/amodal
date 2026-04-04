@@ -14,7 +14,7 @@
 
 import type {ModelMessage} from 'ai';
 import type {TokenUsage, LLMProvider} from '../providers/types.js';
-import type {ToolRegistry} from '../tools/types.js';
+import type {ToolRegistry, ToolContext} from '../tools/types.js';
 import type {PermissionChecker} from '../security/permission-checker.js';
 import type {Logger} from '../logger.js';
 
@@ -177,6 +177,9 @@ export interface Session {
   maxTurns: number;
   /** Max context tokens (provider limit) */
   maxContextTokens: number;
+
+  /** Tool context factory cached from session creation (avoids rebuilding per request) */
+  toolContextFactory?: (callId: string) => ToolContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,4 +220,6 @@ export interface CreateSessionOptions {
   userRoles?: string[];
   /** Optional: onUsage callback fired after each turn */
   onUsage?: (usage: TurnUsage) => void;
+  /** Optional: tool context factory to cache on the session */
+  toolContextFactory?: (callId: string) => ToolContext;
 }

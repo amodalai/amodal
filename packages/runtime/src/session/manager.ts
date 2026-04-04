@@ -58,6 +58,7 @@ const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
  */
 export class StandaloneSessionManager {
   private readonly sessions = new Map<string, Session>();
+  private readonly pendingResumes = new Map<string, Promise<Session | null>>();
   private readonly store: SessionStore | null;
   private readonly logger: Logger;
   private readonly ttlMs: number;
@@ -151,6 +152,7 @@ export class StandaloneSessionManager {
       lastAccessedAt: now,
       maxTurns: opts.maxTurns ?? this.defaultMaxTurns,
       maxContextTokens: opts.maxContextTokens ?? this.defaultMaxContextTokens,
+      toolContextFactory: opts.toolContextFactory,
     };
 
     this.sessions.set(id, session);
@@ -268,8 +270,34 @@ export class StandaloneSessionManager {
    * Loads persisted messages and token usage, then creates a new live
    * session with a fresh provider/registry/prompt. The system prompt is
    * recompiled (not stale) — the caller provides the current prompt.
+   *
+   * Concurrent resume calls for the same session ID are deduplicated —
+   * only one store fetch runs, and all callers share the result.
    */
   async resume(
+    sessionId: string,
+    opts: CreateSessionOptions,
+  ): Promise<Session | null> {
+    const pending = this.pendingResumes.get(sessionId);
+    if (pending) {
+      this.logger.debug('session_resume_dedup', {
+        session: sessionId,
+        message: 'Concurrent resume request deduplicated — second caller receives first caller\'s session. CreateSessionOptions from second call are ignored.',
+      });
+      return pending;
+    }
+
+    const promise = this.doResume(sessionId, opts);
+    this.pendingResumes.set(sessionId, promise);
+
+    try {
+      return await promise;
+    } finally {
+      this.pendingResumes.delete(sessionId);
+    }
+  }
+
+  private async doResume(
     sessionId: string,
     opts: CreateSessionOptions,
   ): Promise<Session | null> {

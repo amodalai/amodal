@@ -10,7 +10,7 @@ import {loadSnapshotFromFile, snapshotToBundle} from '@amodalai/core';
 import type {AgentBundle, DeploySnapshot, CustomToolExecutor, CustomShellExecutor} from '@amodalai/core';
 import {SessionManager} from '../session/session-manager.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
-import {createChatStreamRouter} from '../routes/chat-stream.js';
+import {createChatStreamRouter} from '../routes/chat-stream-legacy.js';
 import {createTaskRouter} from './routes/task.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {ServerInstance} from '../server.js';
