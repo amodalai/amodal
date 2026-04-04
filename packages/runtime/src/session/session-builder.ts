@@ -46,6 +46,7 @@ import {createToolContextFactory} from './tool-context-factory.js';
 import type {ToolContextFactoryOptions} from './tool-context-factory.js';
 import {LOCAL_APP_ID} from '../constants.js';
 import {StoreError} from '../errors.js';
+import {createDispatchTool, DISPATCH_TOOL_NAME} from '../tools/dispatch-tool.js';
 import type {Logger} from '../logger.js';
 
 // ---------------------------------------------------------------------------
@@ -372,7 +373,13 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   registry.register(STOP_EXECUTION_TOOL_NAME, createStopExecutionTool());
 
   // -------------------------------------------------------------------------
-  // 10. Build permission checker (session-level)
+  // 10. Register dispatch_task tool (sub-agent dispatch)
+  // -------------------------------------------------------------------------
+
+  registry.register(DISPATCH_TOOL_NAME, createDispatchTool());
+
+  // -------------------------------------------------------------------------
+  // 11. Build permission checker (session-level)
   // -------------------------------------------------------------------------
 
   const sessionPermissionChecker = new AccessJsonPermissionChecker({
@@ -510,4 +517,4 @@ function resolveApiKey(
 }
 
 // Re-export constants for use in tests and state handlers
-export {PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME};
+export {PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME, DISPATCH_TOOL_NAME};

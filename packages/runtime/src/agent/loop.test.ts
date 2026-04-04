@@ -74,7 +74,7 @@ function makeMockRegistry(tools: Record<string, ToolDefinition> = {}): ToolRegis
     get: vi.fn((name: string) => tools[name]),
     getTools: vi.fn(() => tools),
     names: vi.fn(() => Object.keys(tools)),
-    subset: vi.fn(),
+    subset: vi.fn().mockReturnValue({}),
     size: Object.keys(tools).length,
   };
 }
@@ -848,26 +848,68 @@ describe('handleCompacting (via transition)', () => {
 });
 
 describe('handleDispatching (via transition)', () => {
-  it('stub transitions to done with error', async () => {
+  it('runs child agent and returns text result to parent', async () => {
     const ctx = makeMockContext();
 
     const result = await transition({
       type: 'dispatching',
-      task: {agentName: 'research-agent', toolSubset: ['search'], prompt: 'Find info'},
+      task: {agentName: 'research-agent', toolSubset: [], prompt: 'Find info'},
       parentMessages: [],
+      toolCallId: 'tc-dispatch-1',
+      queue: [],
+      results: [],
     }, ctx);
 
-    expect(result.next.type).toBe('done');
-    if (result.next.type === 'done') {
-      expect(result.next.reason).toBe('error');
+    // Child completes → parent goes to THINKING (no more queue items)
+    expect(result.next.type).toBe('thinking');
+
+    // Should have SubagentEvent effects (thought + complete)
+    const subagentEvents = result.effects.filter((e) => e.type === SSEEventType.SubagentEvent);
+    expect(subagentEvents.length).toBeGreaterThanOrEqual(1);
+
+    // Should have a ToolCallResult for the dispatch_task call
+    const toolResult = result.effects.find((e) => e.type === SSEEventType.ToolCallResult);
+    expect(toolResult).toBeDefined();
+
+    // Child usage merged into parent
+    expect(ctx.usage.inputTokens).toBeGreaterThan(0);
+  });
+
+  it('emits SubagentEvent with correct parent_tool_id', async () => {
+    const ctx = makeMockContext();
+
+    const result = await transition({
+      type: 'dispatching',
+      task: {agentName: 'profiler', toolSubset: [], prompt: 'Profile entity'},
+      parentMessages: [],
+      toolCallId: 'tc-abc',
+      queue: [],
+      results: [],
+    }, ctx);
+
+    const subagentEvents = result.effects.filter((e) => e.type === SSEEventType.SubagentEvent);
+    for (const event of subagentEvents) {
+      if (event.type === SSEEventType.SubagentEvent) {
+        expect(event.parent_tool_id).toBe('tc-abc');
+        expect(event.agent_name).toBe('profiler');
+      }
     }
+  });
 
-    const errorEvents = result.effects.filter((e) => e.type === SSEEventType.Error);
-    expect(errorEvents.length).toBe(1);
+  it('continues execution queue after dispatch completes', async () => {
+    const ctx = makeMockContext();
 
-    expect(ctx.logger.warn).toHaveBeenCalledWith('dispatching_not_implemented', expect.objectContaining({
-      agent: 'research-agent',
-    }));
+    const result = await transition({
+      type: 'dispatching',
+      task: {agentName: 'fetcher', toolSubset: [], prompt: 'Fetch data'},
+      parentMessages: [],
+      toolCallId: 'tc-dispatch',
+      queue: [{toolCallId: 'tc-next', toolName: 'request', args: {}}],
+      results: [],
+    }, ctx);
+
+    // Should transition to executing the next tool in queue
+    expect(result.next.type).toBe('executing');
   });
 });
 

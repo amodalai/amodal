@@ -95,6 +95,12 @@ export interface DispatchingState {
   type: 'dispatching';
   task: DispatchConfig;
   parentMessages: ModelMessage[];
+  /** Tool call ID of the dispatch_task call — needed for the tool result message */
+  toolCallId: string;
+  /** Remaining tool calls in the parent's execution queue */
+  queue: ToolCall[];
+  /** Results from prior tool calls in this execution round */
+  results: ToolResult[];
 }
 
 export interface DoneState {
@@ -104,13 +110,17 @@ export interface DoneState {
 }
 
 // ---------------------------------------------------------------------------
-// Dispatch config (placeholder for sub-agent dispatch)
+// Dispatch config (sub-agent dispatch)
 // ---------------------------------------------------------------------------
 
 export interface DispatchConfig {
   agentName: string;
   toolSubset: string[];
   prompt: string;
+  /** Max turns for child agent (default: 10) */
+  maxTurns?: number;
+  /** Max context tokens for child agent */
+  maxContextTokens?: number;
 }
 
 // ---------------------------------------------------------------------------

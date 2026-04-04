@@ -30,6 +30,7 @@ import type {
   ToolResult,
 } from '../loop-types.js';
 import {estimateTokenCount} from '../token-estimate.js';
+import {DISPATCH_TOOL_NAME} from '../../tools/dispatch-tool.js';
 
 /**
  * Handle the EXECUTING state — execute a single tool call.
@@ -131,7 +132,41 @@ export async function handleExecuting(
     }
   }
 
-  // 4. Execute the tool
+  // 4. Intercept dispatch_task — transition to DISPATCHING instead of executing
+  if (current.toolName === DISPATCH_TOOL_NAME) {
+    const args = current.args;
+    const rawTools = Array.isArray(args['tools']) ? args['tools'] : [];
+    const toolSubset = rawTools
+      .filter((t): t is string => typeof t === 'string')
+      .filter((t) => t !== DISPATCH_TOOL_NAME);
+
+    effects.push({
+      type: SSEEventType.ToolCallStart,
+      tool_name: current.toolName,
+      tool_id: current.toolCallId,
+      parameters: sanitizeParams(current.args),
+      timestamp,
+    });
+
+    return {
+      next: {
+        type: 'dispatching',
+        task: {
+          agentName: String(args['agent_name'] ?? 'sub-agent'),
+          toolSubset,
+          prompt: String(args['prompt'] ?? ''),
+          maxTurns: typeof args['max_turns'] === 'number' ? args['max_turns'] : undefined,
+        },
+        parentMessages: ctx.messages,
+        toolCallId: current.toolCallId,
+        queue,
+        results: state.results,
+      },
+      effects,
+    };
+  }
+
+  // 5. Execute the tool
   effects.push({
     type: SSEEventType.ToolCallStart,
     tool_name: current.toolName,
@@ -239,7 +274,7 @@ export async function executeTool(
 /**
  * After a tool result: append to messages, then continue to next call or back to THINKING.
  */
-function nextAfterToolResult(
+export function nextAfterToolResult(
   state: ExecutingState,
   result: ToolResult,
   effects: SSEEvent[],
