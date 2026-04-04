@@ -52,19 +52,29 @@ function generateFieldGuidance(
     if (!conn.fieldRestrictions || conn.fieldRestrictions.length === 0) continue;
 
     for (const r of conn.fieldRestrictions) {
-      if (r.policy === 'never_retrieve') {
-        const reason = r.reason ? ` (${r.reason})` : '';
-        lines.push(`Do not request: ${r.entity}.${r.field}${reason}`);
-      } else if (r.policy === 'role_gated') {
-        const allowed = r.allowedRoles ?? [];
-        const hasAccess = userRoles.some((role) => allowed.includes(role));
-        if (!hasAccess) {
-          lines.push(
-            `Do not request: ${r.entity}.${r.field} (requires role: ${allowed.join(', ')})`,
-          );
+      switch (r.policy) {
+        case 'never_retrieve': {
+          const reason = r.reason ? ` (${r.reason})` : '';
+          lines.push(`Do not request: ${r.entity}.${r.field}${reason}`);
+          break;
         }
-      } else if (r.policy === 'retrieve_but_redact') {
-        lines.push(`Will be redacted: ${r.entity}.${r.field}`);
+        case 'role_gated': {
+          const allowed = r.allowedRoles ?? [];
+          const hasAccess = userRoles.some((role) => allowed.includes(role));
+          if (!hasAccess) {
+            lines.push(
+              `Do not request: ${r.entity}.${r.field} (requires role: ${allowed.join(', ')})`,
+            );
+          }
+          break;
+        }
+        case 'retrieve_but_redact':
+          lines.push(`Will be redacted: ${r.entity}.${r.field}`);
+          break;
+        default: {
+          const _exhaustive: never = r.policy;
+          throw new Error(`Unknown field restriction policy: ${String(_exhaustive)}`);
+        }
       }
     }
   }
