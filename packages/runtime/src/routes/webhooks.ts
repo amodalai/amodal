@@ -9,7 +9,9 @@ import type { AutomationDefinition } from '@amodalai/core';
 import { WebhookPayloadSchema } from '../types.js';
 import { validate } from '../middleware/request-validation.js';
 import { AppError } from '../middleware/error-handler.js';
-import type { AutomationRunnerFn } from '../cron/heartbeat-runner.js';
+import type {AutomationResult} from '../types.js';
+
+type AutomationRunnerFn = (automation: AutomationDefinition, payload?: Record<string, unknown>) => Promise<AutomationResult>;
 
 export interface WebhookRouterOptions {
   automations: AutomationDefinition[];

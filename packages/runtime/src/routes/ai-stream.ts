@@ -23,7 +23,7 @@ import {validate} from '../middleware/request-validation.js';
 import {getAuthContext} from '../middleware/auth.js';
 import type {AuthContext} from '../middleware/auth.js';
 import type {StandaloneSessionManager} from '../session/manager.js';
-import type {StreamHooks} from '../session/session-runner.js';
+import type {StreamHooks} from '../session/stream-hooks.js';
 import {SSEEventType, type SSEEvent} from '../types.js';
 import {resolveSession} from './session-resolver.js';
 import type {BundleResolver, SharedResources} from './session-resolver.js';

@@ -6,10 +6,14 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
-import type {SessionManager} from '../../session/session-manager.js';
+import type {AgentBundle} from '@amodalai/types';
+import type {McpManager} from '@amodalai/core';
 
 export interface InspectRouterOptions {
-  sessionManager: SessionManager;
+  /** Returns the current agent bundle */
+  getBundle: () => AgentBundle | undefined;
+  /** Returns the MCP manager for inspect operations */
+  getMcpManager?: () => Promise<McpManager | undefined>;
   repoPath: string;
 }
 
@@ -39,14 +43,14 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
   // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/inspect/context', async (_req: Request, res: Response) => {
     try {
-      const repo = options.sessionManager.getBundle()!;
+      const repo = options.getBundle();
       if (!repo) {
         res.status(500).json({error: {code: 'INSPECT_FAILED', message: 'No repo available'}});
         return;
       }
 
       // Get MCP server info from persistent inspect manager
-      const mcpManager = await options.sessionManager.getInspectMcpManager();
+      const mcpManager = await options.getMcpManager?.();
       const mcpServers = mcpManager
         ? mcpManager.getServerInfo().map((s: { name: string; status: string; tools: unknown[]; error?: string }) => ({
             name: s.name,
@@ -216,7 +220,8 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
   /** Connection detail by name — reads repo directly, no session needed. */
   // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/inspect/connections/:name', async (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getBundle()!;
+    const repo = options.getBundle();
+    if (!repo) { res.status(500).json({error: {code: 'NO_BUNDLE', message: 'No repo available'}}); return; }
     const connName = _req.params['name'] ?? '';
     const conn = repo.connections.get(connName);
 
@@ -228,7 +233,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
     // MCP connections defined in connections/ folder — return tools from MCP manager
     if (conn.spec.protocol === 'mcp') {
       try {
-        const mcpManager = await options.sessionManager.getInspectMcpManager();
+        const mcpManager = await options.getMcpManager?.();
         const serverInfo = mcpManager?.getServerInfo().find((s) => s.name === connName);
         const allTools = mcpManager?.getDiscoveredTools() ?? [];
         const serverTools = allTools
@@ -277,7 +282,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
   // eslint-disable-next-line @typescript-eslint/no-misused-promises -- TODO: wrap async route handler
   router.get('/inspect/mcp/:name', async (_req: Request, res: Response) => {
     try {
-      const mcpManager = await options.sessionManager.getInspectMcpManager();
+      const mcpManager = await options.getMcpManager?.();
       if (!mcpManager) {
         res.status(404).json({error: {code: 'NOT_FOUND', message: 'No MCP servers configured'}});
         return;
@@ -302,7 +307,8 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
         }));
 
       // Get transport info from repo config
-      const repo = options.sessionManager.getBundle()!;
+      const repo = options.getBundle();
+      if (!repo) { res.status(500).json({error: {code: 'NO_BUNDLE', message: 'No repo available'}}); return; }
       const mcpConfig = repo.mcpServers?.[serverName];
 
       res.json({
@@ -323,7 +329,8 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   /** Skill detail by name — reads repo directly, no session needed. */
   router.get('/inspect/skills/:name', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getBundle()!;
+    const repo = options.getBundle();
+    if (!repo) { res.status(500).json({error: {code: 'NO_BUNDLE', message: 'No repo available'}}); return; }
     const skill = repo.skills.find((s) => s.name === _req.params['name']);
 
     if (!skill) {
@@ -342,7 +349,8 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
 
   /** Knowledge document detail by name — reads repo directly, no session needed. */
   router.get('/inspect/knowledge/:name', (_req: Request, res: Response) => {
-    const repo = options.sessionManager.getBundle()!;
+    const repo = options.getBundle();
+    if (!repo) { res.status(500).json({error: {code: 'NO_BUNDLE', message: 'No repo available'}}); return; }
     const doc = repo.knowledge.find((k) => k.name === _req.params['name']);
 
     if (!doc) {

@@ -13,7 +13,7 @@
 
 import type {StandaloneSessionManager} from '../session/manager.js';
 import type {Session, TurnUsage} from '../session/types.js';
-import type {StreamHooks} from '../session/session-runner.js';
+import type {StreamHooks} from '../session/stream-hooks.js';
 
 // ---------------------------------------------------------------------------
 // Constants

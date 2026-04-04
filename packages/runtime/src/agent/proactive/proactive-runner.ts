@@ -1,24 +1,41 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
-import type {AgentBundle} from '@amodalai/core';
+/**
+ * Proactive Runner (Phase 3.5d).
+ *
+ * Manages scheduled and webhook-triggered automation execution using
+ * StandaloneSessionManager. Creates ephemeral sessions for each run,
+ * collects results, delivers them, and destroys the session.
+ */
+
+import type {AgentBundle} from '@amodalai/types';
 import {bridgeAutomations, type RunnableAutomation} from '../automation-bridge.js';
 import {deliverResult} from './delivery.js';
-import {streamMessage} from '../../session/session-runner.js';
-import type {ManagedSession} from '../../session/session-manager.js';
-import {log} from '../../logger.js';
+import type {StandaloneSessionManager} from '../../session/manager.js';
+import type {Session} from '../../session/types.js';
+import type {ToolContext} from '../../tools/types.js';
+import {SSEEventType} from '../../types.js';
+import {ToolExecutionError} from '../../errors.js';
+import type {Logger} from '../../logger.js';
 
 export interface ProactiveRunnerConfig {
+  /** Session manager for creating ephemeral automation sessions */
+  sessionManager: StandaloneSessionManager;
+  /** Factory to build components for a new automation session */
+  createSessionComponents: () => {
+    session: Session;
+    toolContextFactory: (callId: string) => ToolContext;
+  };
+  /** Logger instance */
+  logger: Logger;
+  /** Webhook HMAC secret for delivery */
   webhookSecret?: string;
-  /** Factory for creating ephemeral sessions */
-  createSession: () => Promise<ManagedSession>;
-  /** Cleanup after ephemeral session */
-  destroySession: (sessionId: string) => Promise<void>;
   /** Called before session is destroyed — use to persist session history */
-  onSessionComplete?: (session: ManagedSession, automationName: string) => void;
+  onSessionComplete?: (session: Session, automationName: string) => void;
 }
 
 interface CronJob {
@@ -92,7 +109,7 @@ export class ProactiveRunner {
       void this.runAutomation(automation);
     }, intervalMs);
     this.cronJobs.set(name, {name, timer});
-    log.info(`Started "${name}" every ${intervalMs}ms`, 'proactive');
+    this.config.logger.info('automation_started', {name, intervalMs});
     return {success: true};
   }
 
@@ -107,7 +124,7 @@ export class ProactiveRunner {
 
     clearInterval(job.timer);
     this.cronJobs.delete(name);
-    log.info(`Stopped "${name}"`, 'proactive');
+    this.config.logger.info('automation_stopped', {name});
     return {success: true};
   }
 
@@ -207,24 +224,30 @@ export class ProactiveRunner {
     const automation = this.automations.get(name);
     if (!automation) return;
 
-    log.debug(`Streaming "${name}"...`, 'proactive');
-    let session: ManagedSession | undefined;
+    this.config.logger.debug('automation_stream_start', {name});
+    let session: Session | undefined;
+    let toolContextFactory: ((callId: string) => ToolContext) | undefined;
     try {
-      session = await this.config.createSession();
-      const signal = new AbortController().signal;
+      const created = this.config.createSessionComponents();
+      session = created.session;
+      toolContextFactory = created.toolContextFactory;
 
       yield {type: 'init', session_id: session.id, automation: name, timestamp: new Date().toISOString()};
 
-      for await (const event of streamMessage(session, automation.prompt, signal)) {
+      for await (const event of this.config.sessionManager.runMessage(
+        session.id,
+        automation.prompt,
+        {buildToolContext: toolContextFactory},
+      )) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE event from agent runner
         yield event as unknown as Record<string, unknown>;
       }
 
-      if (session && this.config.onSessionComplete) {
+      if (this.config.onSessionComplete) {
         this.config.onSessionComplete(session, name);
       }
       this.runHistory.set(name, {timestamp: new Date().toISOString(), status: 'success', sessionId: session.id});
-      log.debug(`Stream completed "${name}"`, 'proactive');
+      this.config.logger.debug('automation_stream_complete', {name, session: session.id});
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (session && this.config.onSessionComplete) {
@@ -234,7 +257,7 @@ export class ProactiveRunner {
       yield {type: 'error', message: msg};
     } finally {
       if (session) {
-        await this.config.destroySession(session.id);
+        await this.config.sessionManager.destroy(session.id);
       }
     }
   }
@@ -247,11 +270,12 @@ export class ProactiveRunner {
     automation: RunnableAutomation,
     payload?: Record<string, unknown>,
   ): Promise<void> {
-    log.debug(`Running "${automation.name}"...`, 'proactive');
+    this.config.logger.debug('automation_run_start', {name: automation.name});
 
-    let session: ManagedSession | undefined;
+    let session: Session | undefined;
     try {
-      session = await this.config.createSession();
+      const created = this.config.createSessionComponents();
+      session = created.session;
 
       let prompt = automation.prompt;
       if (payload && Object.keys(payload).length > 0) {
@@ -264,47 +288,50 @@ export class ProactiveRunner {
       }
 
       // Collect full response from agent
-      const signal = new AbortController().signal;
       let responseText = '';
-      for await (const event of streamMessage(session, prompt, signal)) {
-        if ('type' in event && event['type'] === 'error' && 'message' in event) {
-          throw new Error(String(event['message']));
+      for await (const event of this.config.sessionManager.runMessage(
+        session.id,
+        prompt,
+        {buildToolContext: created.toolContextFactory},
+      )) {
+        if (event.type === SSEEventType.Error && 'message' in event) {
+          throw new ToolExecutionError(
+            `Automation "${automation.name}" agent error: ${String(event.message)}`,
+            {toolName: automation.name, callId: session.id},
+          );
         }
-        if ('content' in event && typeof event['content'] === 'string') {
-          responseText += event['content'];
+        if (event.type === SSEEventType.TextDelta && 'content' in event) {
+          responseText += String(event.content);
         }
       }
 
-      // Deliver result (stdout or proactive webhook if configured)
+      // Deliver result
       await deliverResult(
         {
           automation: automation.name,
           response: responseText,
           timestamp: new Date().toISOString(),
         },
-        undefined, // proactive webhook URL — could come from amodal.json
+        undefined,
         this.config.webhookSecret,
       );
 
-      const sessionId = session?.id;
-      // Persist session before destroying so it shows in session history
-      if (session && this.config.onSessionComplete) {
+      if (this.config.onSessionComplete) {
         this.config.onSessionComplete(session, automation.name);
       }
-      this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'success', sessionId});
-      log.debug(`Completed "${automation.name}" (session ${sessionId ?? 'none'})`, 'proactive');
+      this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'success', sessionId: session.id});
+      this.config.logger.debug('automation_run_complete', {name: automation.name, session: session.id});
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const sessionId = session?.id;
       if (session && this.config.onSessionComplete) {
         this.config.onSessionComplete(session, automation.name);
       }
-      this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'error', error: msg, sessionId});
-      log.error(`Error in "${automation.name}": ${msg}`, 'proactive');
+      this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'error', error: msg, sessionId: session?.id});
+      this.config.logger.error('automation_run_error', {name: automation.name, error: msg});
       throw err;
     } finally {
       if (session) {
-        await this.config.destroySession(session.id);
+        await this.config.sessionManager.destroy(session.id);
       }
     }
   }

@@ -1,52 +1,41 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
+ */
+
+/**
+ * Snapshot server (Phase 3.5e).
+ *
+ * Creates an Express server from an immutable deploy snapshot. Used for
+ * local testing before deploying to the platform.
  */
 
 import express from 'express';
 import type http from 'node:http';
 import {loadSnapshotFromFile, snapshotToBundle} from '@amodalai/core';
-import type {AgentBundle, DeploySnapshot, CustomToolExecutor, CustomShellExecutor} from '@amodalai/core';
-import {SessionManager} from '../session/session-manager.js';
+import type {AgentBundle, DeploySnapshot, CustomToolExecutor} from '@amodalai/types';
+import {StandaloneSessionManager} from '../session/manager.js';
+import {buildSessionComponents} from '../session/session-builder.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
-import {createChatStreamRouter} from '../routes/chat-stream-legacy.js';
+import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createTaskRouter} from './routes/task.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {ServerInstance} from '../server.js';
-import {log} from '../logger.js';
+import {ConfigError} from '../errors.js';
+import {log, createLogger} from '../logger.js';
 
-/**
- * Config for creating a server from a local snapshot.
- *
- * Exactly one source must be provided:
- * - `snapshotPath` — load from a local JSON file
- * - `snapshot` — use a pre-loaded DeploySnapshot object
- * - `bundle` — use a pre-loaded AgentBundle
- */
 export interface SnapshotServerConfig {
-  /** Path to a resolved-config.json snapshot file. */
   snapshotPath?: string;
-  /** A pre-loaded DeploySnapshot object. */
   snapshot?: DeploySnapshot;
-  /** A pre-loaded AgentBundle (e.g. from snapshotToBundle). */
   bundle?: AgentBundle;
   port: number;
   host?: string;
   sessionTtlMs?: number;
   corsOrigin?: string;
-  /** Optional custom tool executor (e.g., Daytona sandbox executor) */
   toolExecutor?: CustomToolExecutor;
-  /** Optional custom shell executor (e.g., Daytona sandbox executor) */
-  shellExecutor?: CustomShellExecutor;
 }
 
-/**
- * Creates an Express server that runs from an immutable deploy snapshot.
- *
- * This is the local testing path: the CLI builds a snapshot and tests it
- * locally before deploying to the platform.
- */
 export async function createSnapshotServer(config: SnapshotServerConfig): Promise<ServerInstance> {
   let bundle: AgentBundle;
   let deployId: string;
@@ -62,28 +51,48 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
     bundle = snapshotToBundle(snapshot, config.snapshotPath);
     deployId = snapshot.deployId;
   } else {
-    throw new Error('One of snapshotPath, snapshot, or bundle must be provided');
+    throw new ConfigError('One of snapshotPath, snapshot, or bundle must be provided', {key: 'snapshotSource'});
   }
 
-  // Set up tool executor — use injected executor if provided, otherwise local
   let toolExecutor: CustomToolExecutor | undefined = config.toolExecutor;
   if (!toolExecutor && bundle.tools.length > 0) {
     toolExecutor = new LocalToolExecutor();
   }
 
-  const sessionManager = new SessionManager({
-    baseParams: {
-      sessionId: 'snapshot-init',
-      interactive: false,
-      noBrowser: true,
-      cwd: process.cwd(),
-      targetDir: process.cwd(),
-    },
+  const sessionLogger = createLogger({component: 'snapshot-session'});
+  const sessionManager = new StandaloneSessionManager({
+    logger: sessionLogger,
     ttlMs: config.sessionTtlMs,
-    bundle,
-    toolExecutor,
-    shellExecutor: config.shellExecutor,
   });
+  sessionManager.start();
+
+  const shared = {
+    storeBackend: null,
+    mcpManager: null,
+    logger: log,
+    toolExecutor,
+  };
+
+  const createTaskSession = () => {
+    const components = buildSessionComponents({
+      bundle,
+      storeBackend: null,
+      mcpManager: null,
+      logger: log,
+      toolExecutor,
+    });
+    const session = sessionManager.create({
+      tenantId: 'snapshot',
+      userId: 'snapshot',
+      provider: components.provider,
+      toolRegistry: components.toolRegistry,
+      permissionChecker: components.permissionChecker,
+      systemPrompt: components.systemPrompt,
+      userRoles: components.userRoles,
+      toolContextFactory: components.toolContextFactory,
+    });
+    return {session, toolContextFactory: components.toolContextFactory};
+  };
 
   const app = express();
 
@@ -91,14 +100,8 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
   const corsOrigin = config.corsOrigin ?? '*';
   app.use((_req, res, next) => {
     res.header('Access-Control-Allow-Origin', corsOrigin);
-    res.header(
-      'Access-Control-Allow-Headers',
-      'Origin, X-Requested-With, Content-Type, Accept, Authorization',
-    );
-    res.header(
-      'Access-Control-Allow-Methods',
-      'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    );
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     if (_req.method === 'OPTIONS') {
       res.sendStatus(204);
       return;
@@ -124,8 +127,12 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
   });
 
   // Routes
-  app.use(createChatStreamRouter({sessionManager}));
-  app.use(createTaskRouter({sessionManager}));
+  app.use(createChatStreamRouter({
+    sessionManager,
+    bundleResolver: {staticBundle: bundle},
+    shared,
+  }));
+  app.use(createTaskRouter({sessionManager, createTaskSession}));
 
   // Error handler (must be last)
   app.use(errorHandler);
@@ -140,8 +147,7 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
     async start(): Promise<http.Server> {
       return new Promise((resolve) => {
         const httpServer = app.listen(port, host, () => {
-          log.info(`Snapshot server listening on ${host}:${port}`);
-          log.info(`Deploy: ${deployId}, Agent: ${bundle.config.name}`);
+          log.info('snapshot_server_started', {host, port, deployId, agent: bundle.config.name});
           resolve(httpServer);
         });
         server = httpServer;
@@ -159,10 +165,8 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
         });
         server = null;
       }
-
       await sessionManager.shutdown();
-
-      log.info('Snapshot server stopped');
+      log.info('snapshot_server_stopped', {});
     },
   };
 }

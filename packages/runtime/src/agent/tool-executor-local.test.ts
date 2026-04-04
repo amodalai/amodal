@@ -101,13 +101,12 @@ describe('LocalToolExecutor', () => {
     expect(result).toEqual({result: [1, 2, 3]});
   });
 
-  it('catches handler errors', async () => {
+  it('propagates handler errors', async () => {
     const handlerPath = createHandler('err-handler',
       'export default async () => { throw new Error("boom"); };',
     );
     const tool = makeTool(handlerPath);
-    const result = await executor.execute(tool, {}, makeCtx());
-    expect(result).toEqual({error: 'boom'});
+    await expect(executor.execute(tool, {}, makeCtx())).rejects.toThrow('boom');
   });
 
   it('caches imported modules', async () => {
@@ -146,7 +145,6 @@ describe('LocalToolExecutor', () => {
       'export const handler = async () => ({});',
     );
     const tool = makeTool(handlerPath);
-    const result = await executor.execute(tool, {}, makeCtx());
-    expect(result).toHaveProperty('error');
+    await expect(executor.execute(tool, {}, makeCtx())).rejects.toThrow();
   });
 });

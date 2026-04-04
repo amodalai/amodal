@@ -151,12 +151,30 @@ export async function handleExecuting(
       : await executeTool(current, toolDef, ctx);
 
     const content = typeof output === 'string' ? output : JSON.stringify(output);
+
+    // Detect error-as-result pattern: tool returned {error: "..."} without throwing.
+    // This happens when tool internals catch errors and return them as data.
+    // Treat these as failures so the SSE event shows status: 'error'.
+    const isErrorResult = typeof output === 'object' && output !== null
+      && 'error' in output && typeof (output as Record<string, unknown>)['error'] === 'string'
+      && Object.keys(output as Record<string, unknown>).length === 1;
+
     result = {
       callId: current.toolCallId,
       toolName: current.toolName,
-      status: 'success',
+      status: isErrorResult ? 'error' : 'success',
       content,
     };
+
+    if (isErrorResult) {
+      ctx.logger.warn('tool_returned_error', {
+        tool: current.toolName,
+        callId: current.toolCallId,
+        error: (output as Record<string, unknown>)['error'],
+        session: ctx.sessionId,
+        duration: Date.now() - startedAt,
+      });
+    }
   } catch (err) {
     // Tool execution failed — don't crash the loop, tell the model what happened
     result = {

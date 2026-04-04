@@ -1,22 +1,21 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {ProactiveRunner} from './proactive-runner.js';
 import type {AgentBundle, LoadedAutomation} from '@amodalai/core';
+import type {Session} from '../../session/types.js';
+import {SSEEventType} from '../../types.js';
+import {createLogger} from '../../logger.js';
 
-// Mock dependencies — use hoisted refs so beforeEach can re-apply implementations
-// after vi.restoreAllMocks() from global test-setup.ts
-const {mockRunAgentTurn, mockDeliverResult} = vi.hoisted(() => ({
-  mockRunAgentTurn: vi.fn(),
+const logger = createLogger({component: 'test:proactive-runner'});
+
+// Mock delivery
+const {mockDeliverResult} = vi.hoisted(() => ({
   mockDeliverResult: vi.fn(),
-}));
-
-vi.mock('../../session/session-runner.js', () => ({
-  streamMessage: mockRunAgentTurn,
 }));
 
 vi.mock('./delivery.js', () => ({
@@ -55,33 +54,74 @@ function makeRepo(automations: LoadedAutomation[]): AgentBundle {
   };
 }
 
-const mockSession = {
+// Mock session and session manager
+const mockSession: Session = {
   id: 'test-session',
-  runtime: {} as AgentSession['runtime'],
-  appId: 'test',
-  conversationHistory: [],
+  tenantId: 'local',
+  userId: 'automation',
+  provider: {} as Session['provider'],
+  toolRegistry: {register: vi.fn(), get: vi.fn(), getTools: vi.fn(), names: vi.fn(() => []), subset: vi.fn(), size: 0},
+  permissionChecker: {check: vi.fn()},
+  logger,
+  systemPrompt: 'test',
+  messages: [],
+  usage: {inputTokens: 0, outputTokens: 0, totalTokens: 0},
+  model: 'test-model',
+  providerName: 'test',
+  userRoles: [],
+  appId: 'local',
+  metadata: {},
   createdAt: Date.now(),
   lastAccessedAt: Date.now(),
-  planModeManager: {} as AgentSession['planModeManager'],
-  exploreConfig: {} as AgentSession['exploreConfig'],
+  maxTurns: 50,
+  maxContextTokens: 200_000,
 };
 
-import type {AgentSession} from '../agent-types.js';
+const mockToolContextFactory = vi.fn();
 
-const mockCreateSession = vi.fn().mockResolvedValue(mockSession);
-const mockDestroySession = vi.fn().mockResolvedValue(undefined);
+function makeRunMessageMock() {
+  return vi.fn().mockImplementation(async function* () {
+    yield {type: SSEEventType.TextDelta, content: 'Test response', timestamp: new Date().toISOString()};
+    yield {type: SSEEventType.Done, timestamp: new Date().toISOString()};
+  });
+}
+
+function makeSessionManager(runMessageImpl?: ReturnType<typeof vi.fn>) {
+  return {
+    create: vi.fn().mockReturnValue(mockSession),
+    get: vi.fn(),
+    has: vi.fn(),
+    resume: vi.fn(),
+    destroy: vi.fn().mockResolvedValue(undefined),
+    persist: vi.fn().mockResolvedValue(undefined),
+    listPersisted: vi.fn(),
+    start: vi.fn(),
+    shutdown: vi.fn(),
+    cleanup: vi.fn(),
+    runMessage: runMessageImpl ?? makeRunMessageMock(),
+    size: 0,
+  };
+}
+
+import type {ProactiveRunnerConfig} from './proactive-runner.js';
+
+ 
+function makeConfig(overrides?: Record<string, unknown>): ProactiveRunnerConfig {
+  const sm = makeSessionManager();
+  return {
+    sessionManager: sm,
+    createSessionComponents: vi.fn().mockReturnValue({
+      session: mockSession,
+      toolContextFactory: mockToolContextFactory,
+    }),
+    logger,
+    ...overrides,
+  } as unknown as ProactiveRunnerConfig;
+}
 
 describe('ProactiveRunner', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    mockCreateSession.mockClear().mockResolvedValue(mockSession);
-    mockDestroySession.mockClear().mockResolvedValue(undefined);
-    mockSession.conversationHistory = [];
-    // Re-apply mock implementations (vi.restoreAllMocks in global afterEach resets these)
-    mockRunAgentTurn.mockImplementation(async function* () {
-      yield {type: 'text_delta', content: 'Test response', timestamp: new Date().toISOString()};
-      yield {type: 'done', timestamp: new Date().toISOString()};
-    });
     mockDeliverResult.mockResolvedValue(true);
   });
 
@@ -95,16 +135,12 @@ describe('ProactiveRunner', () => {
       makeAutomation({name: 'a2', trigger: 'webhook', schedule: undefined, prompt: 'Run on webhook.'}),
     ]);
 
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     const list = runner.listAutomations();
     expect(list).toHaveLength(2);
     expect(list[0]?.name).toBe('a1');
     expect(list[0]?.running).toBe(false);
-    // Webhook automations are always "running"
     expect(list[1]?.name).toBe('a2');
     expect(list[1]?.running).toBe(true);
   });
@@ -115,12 +151,8 @@ describe('ProactiveRunner', () => {
       makeAutomation({name: 'cron-b', schedule: '*/10 * * * *'}),
     ]);
 
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
-    // Start just one
     const startResult = runner.startAutomation('cron-a');
     expect(startResult.success).toBe(true);
 
@@ -128,7 +160,6 @@ describe('ProactiveRunner', () => {
     expect(list.find((a) => a.name === 'cron-a')?.running).toBe(true);
     expect(list.find((a) => a.name === 'cron-b')?.running).toBe(false);
 
-    // Stop it
     const stopResult = runner.stopAutomation('cron-a');
     expect(stopResult.success).toBe(true);
     expect(runner.listAutomations().find((a) => a.name === 'cron-a')?.running).toBe(false);
@@ -136,10 +167,7 @@ describe('ProactiveRunner', () => {
 
   it('should reject starting unknown automation', () => {
     const repo = makeRepo([]);
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     const result = runner.startAutomation('unknown');
     expect(result.success).toBe(false);
@@ -148,10 +176,7 @@ describe('ProactiveRunner', () => {
 
   it('should reject starting already running automation', () => {
     const repo = makeRepo([makeAutomation({name: 'a', schedule: '*/5 * * * *'})]);
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     runner.startAutomation('a');
     const result = runner.startAutomation('a');
@@ -163,10 +188,7 @@ describe('ProactiveRunner', () => {
 
   it('should reject starting webhook-triggered automation', () => {
     const repo = makeRepo([makeAutomation({name: 'hook', trigger: 'webhook', schedule: undefined, prompt: 'Run on webhook.'})]);
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     const result = runner.startAutomation('hook');
     expect(result.success).toBe(false);
@@ -175,10 +197,7 @@ describe('ProactiveRunner', () => {
 
   it('should reject stopping automation that is not running', () => {
     const repo = makeRepo([makeAutomation({name: 'a'})]);
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     const result = runner.stopAutomation('a');
     expect(result.success).toBe(false);
@@ -192,11 +211,7 @@ describe('ProactiveRunner', () => {
       makeAutomation({name: 'hook', trigger: 'webhook', schedule: undefined, prompt: 'Run on webhook.'}),
     ]);
 
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
-
+    const runner = new ProactiveRunner(repo, makeConfig());
     runner.start();
 
     const list = runner.listAutomations();
@@ -211,11 +226,7 @@ describe('ProactiveRunner', () => {
       makeAutomation({name: 'cron-a', schedule: '*/5 * * * *'}),
     ]);
 
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
-
+    const runner = new ProactiveRunner(repo, makeConfig());
     runner.start();
     runner.stop();
 
@@ -232,21 +243,14 @@ describe('ProactiveRunner', () => {
       }),
     ]);
 
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
-
+    const runner = new ProactiveRunner(repo, makeConfig());
     const result = await runner.handleWebhook('webhook-auto', {alert: 'high-cpu'});
     expect(result.matched).toBe(true);
   });
 
   it('should return not matched for unknown automation', async () => {
     const repo = makeRepo([]);
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     const result = await runner.handleWebhook('unknown', {});
     expect(result.matched).toBe(false);
@@ -255,10 +259,7 @@ describe('ProactiveRunner', () => {
 
   it('should return not matched for non-webhook automation', async () => {
     const repo = makeRepo([makeAutomation({name: 'cron-only'})]);
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     const result = await runner.handleWebhook('cron-only', {});
     expect(result.matched).toBe(false);
@@ -267,10 +268,7 @@ describe('ProactiveRunner', () => {
 
   it('should trigger automation manually', async () => {
     const repo = makeRepo([makeAutomation({name: 'manual'})]);
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     const result = await runner.triggerAutomation('manual');
     expect(result.success).toBe(true);
@@ -278,10 +276,7 @@ describe('ProactiveRunner', () => {
 
   it('should return error when triggering unknown automation', async () => {
     const repo = makeRepo([]);
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     const result = await runner.triggerAutomation('unknown');
     expect(result.success).toBe(false);
@@ -289,14 +284,12 @@ describe('ProactiveRunner', () => {
   });
 
   it('should destroy session after automation run', async () => {
+    const config = makeConfig();
     const repo = makeRepo([makeAutomation({name: 'cleanup-test'})]);
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, config);
 
     await runner.triggerAutomation('cleanup-test');
-    expect(mockDestroySession).toHaveBeenCalledWith('test-session');
+    expect(config.sessionManager.destroy).toHaveBeenCalledWith('test-session');
   });
 
   it('should indicate webhook-triggered automations in list', () => {
@@ -305,10 +298,7 @@ describe('ProactiveRunner', () => {
       makeAutomation({name: 'hook', trigger: 'webhook', schedule: undefined, prompt: 'Run on webhook.'}),
     ]);
 
-    const runner = new ProactiveRunner(repo, {
-      createSession: mockCreateSession,
-      destroySession: mockDestroySession,
-    });
+    const runner = new ProactiveRunner(repo, makeConfig());
 
     const list = runner.listAutomations();
     const cron = list.find((a) => a.name === 'cron');
