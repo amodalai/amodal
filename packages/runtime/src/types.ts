@@ -181,6 +181,17 @@ export interface SSEApprovedEvent {
 export interface SSEDoneEvent {
   type: SSEEventType.Done;
   timestamp: string;
+  /**
+   * Why the loop stopped. Consumers use this to distinguish normal
+   * termination from enforced caps (budget, turns, loop detection).
+   */
+  reason?:
+    | 'model_stop'
+    | 'max_turns'
+    | 'user_abort'
+    | 'error'
+    | 'budget_exceeded'
+    | 'loop_detected';
   usage?: {
     input_tokens: number;
     output_tokens: number;

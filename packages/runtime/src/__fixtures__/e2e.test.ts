@@ -5,16 +5,22 @@
  */
 
 /**
- * End-to-end tests for Phase 3 deferred features, against a real
- * Anthropic provider. Exercises:
+ * End-to-end tests for the agent loop against real LLM providers.
+ * Exercises:
  *
- *   (a) Token budget enforcement — the loop terminates with
- *       DoneReason='budget_exceeded' when cumulative tokens hit maxTokens.
- *   (c) Summarizer hook — context eviction invokes summarizeToolResult
- *       and the generated summary flows into subsequent prompts.
+ *   - Token budget enforcement — the loop terminates with
+ *     DoneReason='budget_exceeded' when cumulative tokens hit maxTokens.
+ *   - Summarizer hook — context eviction invokes summarizeToolResult
+ *     and the generated summary flows into subsequent prompts.
  *
- * Uses claude-haiku-4-5 to keep per-run cost tiny (< $0.02). Auto-skips
- * when ANTHROPIC_API_KEY is not set.
+ * Parameterized over multiple providers. Select which to run via the
+ * E2E_TARGETS env var (comma-separated); defaults to `google`
+ * (gemini-2.5-flash) as the cheapest base model. Targets missing an
+ * API key auto-skip.
+ *
+ *   E2E_TARGETS=google                   # base (default)
+ *   E2E_TARGETS=anthropic                # single provider
+ *   E2E_TARGETS=google,anthropic,openai,groq   # all
  */
 
 import {describe, it, expect, beforeAll, afterAll} from 'vitest';
@@ -33,27 +39,61 @@ import type {PermissionChecker} from '../security/permission-checker.js';
 import type {ToolRegistry, ToolDefinition} from '../tools/types.js';
 
 // Load API keys from repo root .env.test if not already set.
-if (!process.env['ANTHROPIC_API_KEY']) {
-  try {
-    const envPath = resolve(__dirname, '../../../../.env.test');
-    const envContent = readFileSync(envPath, 'utf-8');
-    for (const line of envContent.split('\n')) {
-      const match = line.match(/^([^#=]+)=(.*)$/);
-      if (match) {
-        const [, key, value] = match;
-        if (key && value && !process.env[key.trim()]) {
-          process.env[key.trim()] = value.trim();
-        }
+try {
+  const envPath = resolve(__dirname, '../../../../.env.test');
+  const envContent = readFileSync(envPath, 'utf-8');
+  for (const line of envContent.split('\n')) {
+    const match = line.match(/^([^#=]+)=(.*)$/);
+    if (match) {
+      const [, key, value] = match;
+      if (key && value && !process.env[key.trim()]) {
+        process.env[key.trim()] = value.trim();
       }
     }
-  } catch { /* no .env.test — tests will skip */ }
+  }
+} catch { /* no .env.test — tests will skip */ }
+
+const logger = createLogger({component: 'test:e2e'});
+
+// ---------------------------------------------------------------------------
+// Provider targets
+// ---------------------------------------------------------------------------
+
+interface E2ETarget {
+  provider: string;
+  model: string;
+  apiKeyEnv: string;
 }
 
-const skipReason = process.env['ANTHROPIC_API_KEY'] ? '' : 'ANTHROPIC_API_KEY not set';
+const TARGETS: Record<string, E2ETarget> = {
+  google: {provider: 'google', model: 'gemini-2.5-flash', apiKeyEnv: 'GOOGLE_API_KEY'},
+  anthropic: {provider: 'anthropic', model: 'claude-haiku-4-5-20251001', apiKeyEnv: 'ANTHROPIC_API_KEY'},
+  openai: {provider: 'openai', model: 'gpt-4o-mini', apiKeyEnv: 'OPENAI_API_KEY'},
+  groq: {provider: 'groq', model: 'llama-3.3-70b-versatile', apiKeyEnv: 'GROQ_API_KEY'},
+};
 
-const logger = createLogger({component: 'test:phase3-e2e'});
+// Default to the "base" model (cheapest, fastest) unless caller overrides.
+const selected = (process.env['E2E_TARGETS'] ?? 'google')
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0);
 
-const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+const activeTargets: Array<[string, E2ETarget]> = selected
+  .map((name): [string, E2ETarget | undefined] => [name, TARGETS[name]])
+  .filter((entry): entry is [string, E2ETarget] => {
+    const [name, cfg] = entry;
+    if (!cfg) {
+      // eslint-disable-next-line no-console
+      console.warn(`[e2e] unknown target "${name}" — skipped. Known: ${Object.keys(TARGETS).join(', ')}`);
+      return false;
+    }
+    if (!process.env[cfg.apiKeyEnv]) {
+      // eslint-disable-next-line no-console
+      console.warn(`[e2e] ${name}: ${cfg.apiKeyEnv} not set — skipped`);
+      return false;
+    }
+    return true;
+  });
 
 const allowAll: PermissionChecker = {
   check: () => ({allowed: true as const}),
@@ -76,7 +116,7 @@ function buildRegistry(): ToolRegistry {
   return registry;
 }
 
-describe.skipIf(!!skipReason)('phase 3 e2e (real Anthropic Haiku)', () => {
+describe.skipIf(activeTargets.length === 0)('e2e', () => {
   let store: PGLiteSessionStore;
   let mgr: StandaloneSessionManager;
 
@@ -92,16 +132,20 @@ describe.skipIf(!!skipReason)('phase 3 e2e (real Anthropic Haiku)', () => {
     await store.close();
   });
 
+  describe.each(activeTargets)('[%s]', (_name, target) => {
   it('terminates with budget_exceeded when maxTokens cap is hit', async () => {
     const provider = createProvider({
-      provider: 'anthropic',
-      model: HAIKU_MODEL,
-       
-      apiKey: process.env['ANTHROPIC_API_KEY']!,
+      provider: target.provider,
+      model: target.model,
+
+      apiKey: process.env[target.apiKeyEnv]!,
     });
 
-    // Tiny budget — the first turn's input tokens alone will blow past this,
+    // Tiny budget — any first-turn input+output will blow past this,
     // causing budget_exceeded to fire on the next outer-loop check.
+    // Small enough that every provider trips regardless of how terse
+    // the model chooses to be.
+    const MAX_TOKENS = 200;
     const session = mgr.create({
       tenantId: 'e2e-tenant',
       userId: 'e2e-user',
@@ -110,7 +154,7 @@ describe.skipIf(!!skipReason)('phase 3 e2e (real Anthropic Haiku)', () => {
       permissionChecker: allowAll,
       systemPrompt: 'You are a terse assistant. Use the echo_tool when asked.',
       maxTurns: 10,
-      maxTokens: 500,
+      maxTokens: MAX_TOKENS,
     });
 
     const events: SSEEvent[] = [];
@@ -125,25 +169,17 @@ describe.skipIf(!!skipReason)('phase 3 e2e (real Anthropic Haiku)', () => {
     const done = events.find((e) => e.type === SSEEventType.Done);
     expect(done).toBeDefined();
     if (done && done.type === SSEEventType.Done) {
-      // Actual termination reason isn't on the SSE Done event (the event
-      // only carries usage), but session usage should match the cap.
-      expect(done.usage?.total_tokens).toBeGreaterThanOrEqual(500);
+      expect(done.reason).toBe('budget_exceeded');
+      expect(done.usage?.total_tokens ?? 0).toBeGreaterThanOrEqual(MAX_TOKENS);
     }
-
-    // The session's accumulated usage should reflect the cap being hit
-    expect(session.usage.totalTokens).toBeGreaterThanOrEqual(500);
-
-    // Session should not have completed all 6 echo calls — budget capped it
-    const toolCalls = events.filter((e) => e.type === SSEEventType.ToolCallStart);
-    expect(toolCalls.length).toBeLessThan(6);
   }, 90_000);
 
   it('invokes summarizeToolResult hook when context is evicted', async () => {
     const provider = createProvider({
-      provider: 'anthropic',
-      model: HAIKU_MODEL,
-       
-      apiKey: process.env['ANTHROPIC_API_KEY']!,
+      provider: target.provider,
+      model: target.model,
+
+      apiKey: process.env[target.apiKeyEnv]!,
     });
 
     // Seed 20 tool-result messages so the default clearThreshold=15 fires
@@ -239,4 +275,5 @@ describe.skipIf(!!skipReason)('phase 3 e2e (real Anthropic Haiku)', () => {
     );
     expect(clearedWithSummary.length).toBe(15);
   }, 90_000);
+  });
 });

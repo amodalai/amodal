@@ -179,6 +179,7 @@ export async function* runAgent(
   yield {
     type: SSEEventType.Done,
     timestamp: new Date().toISOString(),
+    reason: state.reason,
     usage: {
       input_tokens: ctx.usage.inputTokens,
       output_tokens: ctx.usage.outputTokens,
