@@ -136,6 +136,11 @@ export class StandaloneSessionManager {
     const id = randomUUID();
     const now = Date.now();
 
+    const appId = opts.appId ?? 'local';
+    // Persist appId into metadata so SessionStore.list() can filter by it
+    // (e.g. exclude eval-runner / admin sessions from the chat history UI).
+    const metadata = {...(opts.metadata ?? {}), appId};
+
     const session: Session = {
       id,
       tenantId: opts.tenantId,
@@ -150,8 +155,8 @@ export class StandaloneSessionManager {
       model: opts.provider.model,
       providerName: opts.provider.provider,
       userRoles: opts.userRoles ?? [],
-      appId: opts.appId ?? 'local',
-      metadata: opts.metadata ?? {},
+      appId,
+      metadata,
       createdAt: now,
       lastAccessedAt: now,
       maxTurns: opts.maxTurns ?? this.defaultMaxTurns,
@@ -167,6 +172,7 @@ export class StandaloneSessionManager {
       tenant: opts.tenantId,
       model: session.model,
       provider: session.providerName,
+      appId: session.appId,
       toolCount: opts.toolRegistry.size,
     });
 
@@ -265,6 +271,14 @@ export class StandaloneSessionManager {
   async persist(session: Session): Promise<void> {
     if (!this.store) return;
 
+    // Bump lastAccessedAt in lockstep with updatedAt. Keeping them
+    // synchronized means the in-memory session's "most recent activity"
+    // timestamp and the DB's `updated_at` column (which drives
+    // list-ordering) can't drift — the list order users see always
+    // matches what the live session would say.
+    const now = Date.now();
+    session.lastAccessedAt = now;
+
     const persisted: PersistedSession = {
       version: 1,
       id: session.id,
@@ -274,7 +288,7 @@ export class StandaloneSessionManager {
       tokenUsage: session.usage,
       metadata: session.metadata,
       createdAt: new Date(session.createdAt),
-      updatedAt: new Date(),
+      updatedAt: new Date(now),
     };
 
     await this.store.save(persisted);
