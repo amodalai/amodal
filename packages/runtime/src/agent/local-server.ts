@@ -46,11 +46,11 @@ import {createStoresRouter} from './routes/stores.js';
 import {createFilesRouter} from './routes/files.js';
 import {createEvalRouter} from './routes/evals.js';
 import {errorHandler} from '../middleware/error-handler.js';
+import {asyncHandler} from '../routes/route-helpers.js';
 import type {LocalServerConfig} from './agent-types.js';
 import type {ServerInstance} from '../server.js';
 import {createPGLiteStoreBackend} from '../stores/pglite-store-backend.js';
 import type {StoreBackend} from '@amodalai/types';
-import {SessionStore} from './session-store.js';
 import {EvalStore} from './eval-store.js';
 import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
@@ -269,9 +269,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   });
   sessionManager.start();
 
-  // Legacy session store for UI history (file-based)
-  const legacySessionStore = new SessionStore(config.repoPath);
-
   // -------------------------------------------------------------------------
   // MCP connections (shared across sessions)
   // -------------------------------------------------------------------------
@@ -320,8 +317,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       sessionType: 'automation',
     });
     const session = sessionManager.create({
-      tenantId: 'local',
-      userId: 'automation',
       provider: components.provider,
       toolRegistry: components.toolRegistry,
       permissionChecker: components.permissionChecker,
@@ -343,7 +338,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     logger: log,
     webhookSecret: config.webhookSecret,
     summarizeToolResult: config.summarizeToolResult,
-    onSessionComplete: (session) => {
+    onSessionComplete: (session, automationName) => {
+      // Tag the automation name onto metadata so the UI can filter
+      // sessions by automation via /sessions?automation=<name>.
+      session.metadata.automationName = automationName;
       void sessionManager.persist(session);
     },
     eventBus,
@@ -435,7 +433,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Resolve resume session ID
   let resumeSessionId = config.resumeSessionId;
   if (resumeSessionId === 'latest') {
-    resumeSessionId = legacySessionStore.latest() ?? undefined;
+    const {sessions: recent} = await sessionStore.list({
+      limit: 1,
+      filter: {appId: LOCAL_APP_ID},
+    });
+    resumeSessionId = recent[0]?.id;
   }
   if (resumeSessionId) {
     log.debug('resume_session', {sessionId: resumeSessionId});
@@ -446,48 +448,50 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     res.json({resumeSessionId: resumeSessionId ?? null});
   });
 
-  // Sessions endpoints (legacy file-based store for UI history)
-  app.get('/sessions', (req, res) => {
+  // Sessions endpoints — served directly from the DrizzleSessionStore.
+  //
+  // Dev-UI consumers (sidebar Recent list, Sessions page, Automation detail
+  // page) don't paginate — they render what they get and slice the top N.
+  // A 500-session ceiling keeps the response bounded without forcing a
+  // cursor API on the client today. If dev sessions regularly exceed this,
+  // the store already supports cursor pagination via SessionListOptions.
+  const SESSION_LIST_LIMIT = 500;
+  app.get('/sessions', asyncHandler(async (req, res) => {
     const automationFilter = typeof req.query?.['automation'] === 'string' ? String(req.query['automation']) : undefined;
-    const all = legacySessionStore.list();
-    const visible = all.filter((s) => s.appId !== 'eval-runner' && s.appId !== 'admin');
-    const filtered = automationFilter ? visible.filter((s) => s.automationName === automationFilter) : visible;
-    res.json({sessions: filtered});
-  });
+    // Automation filter uses metadata.automationName; otherwise restrict
+    // to chat sessions by metadata.appId (excludes eval-runner / admin).
+    const filter = automationFilter
+      ? {automationName: automationFilter}
+      : {appId: LOCAL_APP_ID};
+    const {sessions: rows} = await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
+    const sessions = rows.map((s) => {
+      const title = typeof s.metadata['title'] === 'string' ? s.metadata['title'] : undefined;
+      const appId = typeof s.metadata['appId'] === 'string' ? s.metadata['appId'] : LOCAL_APP_ID;
+      const automationName = typeof s.metadata['automationName'] === 'string' ? s.metadata['automationName'] : undefined;
+      return {
+        id: s.id,
+        appId,
+        title,
+        summary: title ?? extractFirstUserText(s.messages) ?? 'Untitled',
+        createdAt: s.createdAt.getTime(),
+        lastAccessedAt: s.updatedAt.getTime(),
+        automationName,
+      };
+    });
+    res.json({sessions});
+  }));
 
-  app.get('/session/:id', (req, res) => {
-    const persisted = legacySessionStore.load(req.params['id'] ?? '');
+  app.get('/session/:id', asyncHandler(async (req, res) => {
+    const persisted = await sessionStore.load(req.params['id'] ?? '');
     if (!persisted) {
       res.status(404).json({error: 'Session not found'});
       return;
     }
-    const messages = persisted.conversationHistory.map((msg: unknown) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Persisted message
-      const m = msg as Record<string, unknown>;
-
-      if (m['type'] === 'user') {
-        return {role: 'user', text: String(m['text'] ?? '')};
-      }
-      if (m['type'] === 'assistant_text') {
-        return {role: 'assistant', text: String(m['text'] ?? ''), toolCalls: m['toolCalls']};
-      }
-      if (m['role'] === 'user') {
-        return {role: 'user', text: typeof m['content'] === 'string' ? m['content'] : ''};
-      }
-      if (m['role'] === 'assistant') {
-        const blocks = Array.isArray(m['content']) ? m['content'] : [];
-        const isTextBlock = (b: unknown): b is {text: string} =>
-          typeof b === 'object' && b !== null && 'type' in b && (b as Record<string, unknown>)['type'] === 'text' && 'text' in b;
-        const text = blocks.filter(isTextBlock).map((b) => b.text).join('');
-        return {role: 'assistant', text};
-      }
-
-      return {role: String(m['role'] ?? m['type'] ?? 'unknown'), text: String(m['text'] ?? '')};
-    });
+    const messages = persisted.messages.map(flattenModelMessage).filter((m) => m !== null);
     res.json({session_id: persisted.id, messages});
-  });
+  }));
 
-  app.patch('/session/:id', express.json(), (req, res) => {
+  app.patch('/session/:id', express.json(), asyncHandler(async (req, res) => {
     const sessionId = req.params['id'] ?? '';
     const body: unknown = req.body;
     if (!body || typeof body !== 'object' || !('title' in body) || typeof (body as Record<string, unknown>)['title'] !== 'string') {
@@ -496,29 +500,46 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     }
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated above
     const title = (body as Record<string, unknown>)['title'] as string;
-    const updated = legacySessionStore.updateTitle(sessionId, title);
-    if (!updated) {
-      res.status(404).json({error: 'Session not found'});
-      return;
+
+    // Live session: mutate metadata on the shared object and persist so
+    // the next /sessions read reflects the new title. A concurrent
+    // runMessage may be mid-turn, but JSON.stringify runs atomically in
+    // JS's single-threaded event loop — no torn writes. The next
+    // end-of-turn persist will overwrite with the completed messages
+    // array; metadata.title stays because it's on the live session.
+    //
+    // Not-live: load → mutate → save. No race possible.
+    const live = sessionManager.get(sessionId);
+    if (live) {
+      live.metadata.title = title;
+      await sessionManager.persist(live);
+    } else {
+      const persisted = await sessionStore.load(sessionId);
+      if (!persisted) {
+        res.status(404).json({error: 'Session not found'});
+        return;
+      }
+      persisted.metadata.title = title;
+      persisted.updatedAt = new Date();
+      await sessionStore.save(persisted);
     }
+
     // Emit session_updated so the sidebar picks up the new title live.
-    // appId isn't tracked in the legacy store PATCH path; LOCAL_APP_ID is
-    // the only app in single-tenant dev mode.
     eventBus.emit({type: 'session_updated', sessionId, appId: LOCAL_APP_ID, title});
     res.json({ok: true});
-  });
+  }));
 
-  app.delete('/session/:id', (req, res) => {
+  app.delete('/session/:id', asyncHandler(async (req, res) => {
     const sessionId = req.params['id'] ?? '';
-    void sessionManager.destroy(sessionId);
-    const deleted = legacySessionStore.delete(sessionId);
+    await sessionManager.destroy(sessionId);
+    const deleted = await sessionStore.delete(sessionId);
     if (!deleted) {
       res.status(404).json({error: 'Session not found'});
       return;
     }
     eventBus.emit({type: 'session_deleted', sessionId});
     res.json({ok: true});
-  });
+  }));
 
   // File browser/editor
   app.use(createFilesRouter({repoPath: config.repoPath}));
@@ -534,42 +555,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   const feedbackStore = new FeedbackStore(config.repoPath);
   app.use(createFeedbackRouter({feedbackStore}));
 
-  // Chat routes (new stack)
+  // Chat routes (new stack) — persistence is handled inside runMessage /
+  // route-helpers, so no explicit hooks are needed here.
   app.use(createChatStreamRouter({
     sessionManager,
     bundleResolver: {staticBundle: bundle},
     shared,
     summarizeToolResult: config.summarizeToolResult,
-    createStreamHooks: () => ({
-      onSessionPersist: (sessionId) => {
-        const session = sessionManager.get(sessionId);
-        if (session) {
-          void sessionManager.persist(session);
-          // Also mirror to the legacy file-based store so the /sessions
-          // endpoints (read by the UI history panel) see chat sessions.
-          // Without this, chat sessions only land in PGLite and the UI
-          // only sees automation/task sessions. PGLite remains the source
-          // of truth — a mirror failure is logged and swallowed (the hook
-          // is invoked from fireDrainHooks after the response has drained,
-          // so throwing here would break the route handler).
-          try {
-            legacySessionStore.save({
-              id: session.id,
-              appId: session.appId,
-              title: session.metadata.title,
-              messages: session.messages,
-              createdAt: session.createdAt,
-              lastAccessedAt: session.lastAccessedAt,
-            });
-          } catch (err) {
-            log.warn('legacy_session_mirror_failed', {
-              sessionId: session.id,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
-        }
-      },
-    }),
   }));
   app.use(createChatRouter({
     sessionManager,
@@ -705,5 +697,105 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       log.info('server_stopped', {});
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// /sessions + /session/:id response helpers
+// ---------------------------------------------------------------------------
+
+/** Max length of the first-user-message excerpt shown in session lists. */
+const SUMMARY_EXCERPT_MAX = 80;
+
+/** Rendered history-message shape consumed by the dev-UI chat page. */
+interface HistoryMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  toolCalls?: Array<{
+    toolId: string;
+    toolName: string;
+    parameters: Record<string, unknown>;
+  }>;
+}
+
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === 'object' && x !== null;
+}
+
+function isTextPart(part: unknown): part is {type: 'text'; text: string} {
+  return isRecord(part) && part['type'] === 'text' && typeof part['text'] === 'string';
+}
+
+function isToolCallPart(part: unknown): part is {
+  type: 'tool-call';
+  toolCallId: string;
+  toolName: string;
+  input?: unknown;
+} {
+  return (
+    isRecord(part) &&
+    part['type'] === 'tool-call' &&
+    typeof part['toolCallId'] === 'string' &&
+    typeof part['toolName'] === 'string'
+  );
+}
+
+function getMessageRole(raw: unknown): string | null {
+  if (!isRecord(raw)) return null;
+  const role = raw['role'];
+  return typeof role === 'string' ? role : null;
+}
+
+function getMessageContent(raw: unknown): unknown {
+  if (!isRecord(raw)) return undefined;
+  return raw['content'];
+}
+
+/** Truncate with an ellipsis when the source exceeds the excerpt budget. */
+function excerpt(s: string): string {
+  return s.length > SUMMARY_EXCERPT_MAX ? `${s.slice(0, SUMMARY_EXCERPT_MAX)}…` : s;
+}
+
+/** Extract the first user-message text from a persisted message array for list summaries. */
+function extractFirstUserText(messages: readonly unknown[]): string | undefined {
+  for (const raw of messages) {
+    if (getMessageRole(raw) !== 'user') continue;
+    const content = getMessageContent(raw);
+    if (typeof content === 'string') return excerpt(content);
+    if (Array.isArray(content)) {
+      const firstText = content.find(isTextPart);
+      if (firstText) return excerpt(firstText.text);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Flatten a persisted `ModelMessage` (ai SDK v6) into the shape the web UI's
+ * /session/:id consumer expects: {role, text, toolCalls?}. Returns null for
+ * tool-result messages and for assistant turns with no renderable content
+ * (the history panel shows conversation + tool-call chips, not raw tool
+ * plumbing).
+ */
+function flattenModelMessage(raw: unknown): HistoryMessage | null {
+  const role = getMessageRole(raw);
+  if (role !== 'user' && role !== 'assistant') return null;
+
+  const content = getMessageContent(raw);
+  if (typeof content === 'string') {
+    return {role, text: content};
+  }
+  if (Array.isArray(content)) {
+    const text = content.filter(isTextPart).map((p) => p.text).join('');
+    const toolCalls = role === 'assistant'
+      ? content.filter(isToolCallPart).map((p) => ({
+        toolId: p.toolCallId,
+        toolName: p.toolName,
+        parameters: isRecord(p.input) ? p.input : {},
+      }))
+      : [];
+    if (text.length === 0 && toolCalls.length === 0) return null;
+    return toolCalls.length > 0 ? {role, text, toolCalls} : {role, text};
+  }
+  return null;
 }
 

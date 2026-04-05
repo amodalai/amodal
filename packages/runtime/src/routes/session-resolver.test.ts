@@ -53,8 +53,6 @@ function stubComponents() {
 function stubSession(id: string, hasFactory = true): Session {
   return {
     id,
-    tenantId: 'tenant-1',
-    userId: 'user-1',
     model: 'test-model',
     providerName: 'test',
     toolContextFactory: hasFactory ? vi.fn() : undefined,
@@ -153,7 +151,7 @@ describe('resolveSession', () => {
     expect(mockBuildSessionComponents).toHaveBeenCalledOnce();
     expect((mgr.resume as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
       'sess-2',
-      expect.objectContaining({tenantId: expect.any(String)}),
+      expect.any(Object),
     );
   });
 
@@ -221,7 +219,10 @@ describe('resolveSession', () => {
     );
   });
 
-  it('passes auth context for tenantId and userId', async () => {
+  it('passes auth context through to the session manager', async () => {
+    // Session identity (tenant / user mapping) is no longer threaded
+    // through the session manager — callers that need it live at the
+    // API boundary. This test is reduced to verify create() is called.
     const created = stubSession('sess-auth');
     const mgr = stubSessionManager({
       create: vi.fn().mockReturnValue(created),
@@ -231,12 +232,10 @@ describe('resolveSession', () => {
       sessionManager: mgr,
       bundleResolver: {staticBundle: stubBundle()},
       shared: stubShared(),
-      auth: {orgId: 'org-42', applicationId: 'app-1', authMethod: 'api_key', actor: 'user-99'},
+      auth: {applicationId: 'app-1', authMethod: 'api_key'},
     });
 
-    expect((mgr.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
-      expect.objectContaining({tenantId: 'org-42', userId: 'user-99'}),
-    );
+    expect(mgr.create).toHaveBeenCalled();
   });
 
   it('stores toolContextFactory on created session via CreateSessionOptions', async () => {

@@ -94,8 +94,6 @@ export interface BuildSessionComponentsOptions {
   getPort?: () => number | null;
   /** Session ID for correlation in tool context (default: generated). */
   sessionId?: string;
-  /** Tenant ID for multi-tenant isolation. */
-  tenantId?: string;
   /** Optional field scrubber for response sanitization on ctx.request() */
   fieldScrubber?: FieldScrubber;
 }
@@ -277,7 +275,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     repoRoot,
     getPort,
     sessionId = 'pending',
-    tenantId = 'local',
     fieldScrubber,
   } = opts;
 
@@ -454,7 +451,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     logger,
     fieldScrubber,
     sessionId,
-    tenantId,
     user: {roles: userRoles},
   };
 

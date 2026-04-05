@@ -112,28 +112,19 @@ export interface SessionStore {
    */
   save(session: PersistedSession): Promise<void>;
 
-  /**
-   * Load a session by (tenantId, sessionId). Returns null if not found
-   * OR if the session exists but belongs to a different tenant. The
-   * tenant check is enforced in SQL (`WHERE tenant_id = $tenantId`),
-   * so a caller passing the wrong tenantId cannot read another
-   * tenant's data.
-   */
-  load(tenantId: string, sessionId: string): Promise<PersistedSession | null>;
+  /** Load a session by id. Returns null if not found. */
+  load(sessionId: string): Promise<PersistedSession | null>;
 
   /**
-   * List sessions for a tenant, newest first.
-   *
-   * Returns sessions + a pagination cursor.
+   * List sessions newest first. Returns sessions + a pagination cursor.
+   * Callers that need any form of scoping should namespace their
+   * session IDs directly (e.g. `app-a:session-123`) and/or filter by
+   * `metadata` fields via `opts.filter`.
    */
-  list(tenantId: string, opts?: SessionListOptions): Promise<SessionListResult>;
+  list(opts?: SessionListOptions): Promise<SessionListResult>;
 
-  /**
-   * Delete a session by (tenantId, sessionId). Returns true if a row
-   * was deleted. Tenant-scoped in SQL — a caller with the wrong
-   * tenantId cannot delete another tenant's session.
-   */
-  delete(tenantId: string, sessionId: string): Promise<boolean>;
+  /** Delete a session by id. Returns true if a row was deleted. */
+  delete(sessionId: string): Promise<boolean>;
 
   /** Delete sessions not updated since `before`. Returns count deleted. */
   cleanup(before: Date): Promise<number>;
@@ -200,8 +191,6 @@ export function decodeCursor(
  */
 export function sessionToRow(session: PersistedSession): {
   id: string;
-  tenantId: string;
-  userId: string;
   messages: unknown[];
   tokenUsage: {inputTokens: number; outputTokens: number; totalTokens: number};
   metadata: Record<string, unknown>;
@@ -211,8 +200,6 @@ export function sessionToRow(session: PersistedSession): {
 } {
   return {
     id: session.id,
-    tenantId: session.tenantId,
-    userId: session.userId,
     messages: session.messages as unknown[],
     tokenUsage: session.tokenUsage as {
       inputTokens: number;
@@ -260,8 +247,6 @@ export function rowToPersistedSession(
   return {
     version: 1,
     id: row.id,
-    tenantId: row.tenantId,
-    userId: row.userId,
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: array-shape checked above; element shape is not validated
     messages: row.messages as ModelMessage[],
 
@@ -280,7 +265,6 @@ export function rowToPersistedSession(
  * column names, only the table name differs.
  */
 export interface AgentSessionsColumns {
-  tenantId: AnyPgColumn;
   updatedAt: AnyPgColumn;
   id: AnyPgColumn;
   metadata: AnyPgColumn;
@@ -291,14 +275,16 @@ export interface AgentSessionsColumns {
  * table's column bindings so both PGLite (static `agentSessions`) and
  * Postgres (dynamic `makeAgentSessionsTable(name)`) pass their own
  * tables without a cast.
+ *
+ * Returns `undefined` when `opts` yields no conditions — drizzle's
+ * `.where(undefined)` is a no-op, equivalent to "no filter".
  */
 export function buildListConditions(
   backend: string,
-  tenantId: string,
   opts: SessionListOptions | undefined,
   table: AgentSessionsColumns,
 ): ReturnType<typeof and> {
-  const conditions = [eq(table.tenantId, tenantId)];
+  const conditions: Array<ReturnType<typeof eq>> = [];
 
   if (opts?.cursor) {
     const {updatedAt: cursorTs, id: cursorId} = decodeCursor(backend, opts.cursor);

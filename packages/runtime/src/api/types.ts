@@ -54,8 +54,6 @@ export interface AgentConfig {
 export interface Agent {
   /** Create a new chat session. */
   createSession(opts?: {
-    tenantId?: string;
-    userId?: string;
     userRoles?: string[];
   }): AgentSession;
 

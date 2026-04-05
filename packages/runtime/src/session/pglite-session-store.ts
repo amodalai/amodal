@@ -30,8 +30,6 @@ const BACKEND_NAME = 'pglite';
 const CREATE_TABLE_DDL = `
   CREATE TABLE IF NOT EXISTS agent_sessions (
     id TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
     messages JSONB NOT NULL,
     token_usage JSONB NOT NULL,
     metadata JSONB DEFAULT '{}',
@@ -40,8 +38,8 @@ const CREATE_TABLE_DDL = `
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 
-  CREATE INDEX IF NOT EXISTS idx_agent_sessions_tenant
-    ON agent_sessions (tenant_id, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_agent_sessions_updated
+    ON agent_sessions (updated_at DESC);
 `;
 
 export interface PGLiteSessionStoreOptions {

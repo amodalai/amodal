@@ -156,11 +156,11 @@ describe('SessionError', () => {
   it('carries session ID', () => {
     const err = new SessionError('session expired', {
       sessionId: 'sess_abc',
-      context: {tenantId: 'tenant_1'},
+      context: {appId: 'app_1'},
     });
     expect(err.code).toBe('SESSION_ERROR');
     expect(err.sessionId).toBe('sess_abc');
-    expect(err.context['tenantId']).toBe('tenant_1');
+    expect(err.context['appId']).toBe('app_1');
     expect(err).toBeInstanceOf(AmodalError);
   });
 });

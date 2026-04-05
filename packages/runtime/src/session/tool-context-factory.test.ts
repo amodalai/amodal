@@ -15,7 +15,7 @@
  * 5. ctx.store() — store not found error
  * 6. ctx.env() — allowlisted vars exposed, others blocked
  * 7. ctx.log() — emits structured log event
- * 8. ctx.user, ctx.sessionId, ctx.tenantId — passthrough
+ * 8. ctx.user, ctx.sessionId — passthrough
  * 9. Factory returns fresh context per callId
  */
 
@@ -103,7 +103,6 @@ function makeFactoryOpts(overrides?: Partial<ToolContextFactoryOptions>): ToolCo
     logger: makeMockLogger(),
     user: {roles: ['analyst']},
     sessionId: 'sess-123',
-    tenantId: 'tenant-456',
     ...overrides,
   };
 }
@@ -126,7 +125,6 @@ describe('createToolContextFactory', () => {
     const ctx = factory('call-1');
 
     expect(ctx.sessionId).toBe('sess-123');
-    expect(ctx.tenantId).toBe('tenant-456');
     expect(ctx.user.roles).toEqual(['analyst']);
     expect(ctx.signal).toBeDefined();
     expect(ctx.signal.aborted).toBe(false);
@@ -175,7 +173,6 @@ describe('createToolContextFactory', () => {
       callId: 'call-42',
       message: 'processing item',
       session: 'sess-123',
-      tenant: 'tenant-456',
     });
   });
 

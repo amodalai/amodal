@@ -80,7 +80,6 @@ function makeToolContext(overrides?: Partial<ToolContext>): ToolContext {
     user: { roles: ['admin'] },
     signal: AbortSignal.timeout(30_000),
     sessionId: 'sess-1',
-    tenantId: 'tenant-1',
     ...overrides,
   };
 }

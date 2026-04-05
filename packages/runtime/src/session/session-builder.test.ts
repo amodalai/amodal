@@ -403,13 +403,11 @@ describe('buildSessionComponents', () => {
     it('factory produces ToolContext with correct session info', () => {
       const components = buildSessionComponents(makeOpts({
         sessionId: 'sess-123',
-        tenantId: 'tenant-456',
         userRoles: ['analyst'],
       }));
 
       const ctx = components.toolContextFactory('call-1');
       expect(ctx.sessionId).toBe('sess-123');
-      expect(ctx.tenantId).toBe('tenant-456');
       expect(ctx.user.roles).toEqual(['analyst']);
     });
   });

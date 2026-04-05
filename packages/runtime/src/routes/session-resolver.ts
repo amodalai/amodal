@@ -21,15 +21,12 @@ import type {SessionComponents, SessionType} from '../session/session-builder.js
 import {buildSessionComponents} from '../session/session-builder.js';
 import type {AuthContext} from '../middleware/auth.js';
 import {SessionError} from '../errors.js';
-import {LOCAL_APP_ID} from '../constants.js';
 import type {Logger} from '../logger.js';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_TENANT_ID = LOCAL_APP_ID;
-const DEFAULT_USER_ID = 'anonymous';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,7 +103,6 @@ function buildComponents(
     sessionType?: SessionType;
     userRoles: string[];
     sessionId?: string;
-    tenantId: string;
   },
 ): SessionComponents {
   return buildSessionComponents({
@@ -119,7 +115,6 @@ function buildComponents(
     sessionType: opts.sessionType,
     userRoles: opts.userRoles,
     sessionId: opts.sessionId,
-    tenantId: opts.tenantId,
   });
 }
 
@@ -146,8 +141,6 @@ export async function resolveSession(
   opts: ResolveSessionOptions,
 ): Promise<ResolvedSession> {
   const {sessionManager, bundleResolver, shared, auth} = opts;
-  const tenantId = auth?.orgId ?? DEFAULT_TENANT_ID;
-  const userId = auth?.actor ?? DEFAULT_USER_ID;
   const userRoles = opts.role ? [opts.role] : [];
 
   // 1. In-memory lookup (existing live session)
@@ -167,12 +160,9 @@ export async function resolveSession(
       sessionType: opts.sessionType,
       userRoles,
       sessionId,
-      tenantId,
     });
 
     const resumed = await sessionManager.resume(sessionId, {
-      tenantId,
-      userId,
       provider: components.provider,
       toolRegistry: components.toolRegistry,
       permissionChecker: components.permissionChecker,
@@ -197,12 +187,9 @@ export async function resolveSession(
   const components = buildComponents(bundle, shared, {
     sessionType: opts.sessionType,
     userRoles,
-    tenantId,
   });
 
   const session = sessionManager.create({
-    tenantId,
-    userId,
     provider: components.provider,
     toolRegistry: components.toolRegistry,
     permissionChecker: components.permissionChecker,

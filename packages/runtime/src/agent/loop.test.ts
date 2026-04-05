@@ -121,7 +121,6 @@ function makeMockContext(overrides?: Partial<AgentContext>): AgentContext {
     logger,
     signal: new AbortController().signal,
     sessionId: 'test-session',
-    tenantId: 'test-tenant',
     user: {roles: ['user']},
     systemPrompt: 'You are a helpful assistant.',
     messages: [],
@@ -143,7 +142,6 @@ function makeMockContext(overrides?: Partial<AgentContext>): AgentContext {
       user: {roles: []},
       signal: new AbortController().signal,
       sessionId: 'test-session',
-      tenantId: 'test-tenant',
     }),
     ...overrides,
   };
@@ -1701,7 +1699,6 @@ describe('runAgent', () => {
 
     expect(ctx.logger.info).toHaveBeenCalledWith('agent_loop_start', expect.objectContaining({
       session: 'test-session',
-      tenant: 'test-tenant',
     }));
     expect(ctx.logger.info).toHaveBeenCalledWith('agent_loop_done', expect.objectContaining({
       session: 'test-session',

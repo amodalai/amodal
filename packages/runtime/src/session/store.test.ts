@@ -7,15 +7,18 @@
 /**
  * Shared session-store tests.
  *
- * Runs the full behaviour matrix (save/load, upsert, tenant isolation,
- * pagination, metadata filters, hooks, cleanup) against the PGLite
- * backend by default.
+ * Runs the full behaviour matrix (save/load, upsert, pagination,
+ * metadata filters, hooks, cleanup) against the PGLite backend by
+ * default.
  *
- * A Postgres variant runs only when TEST_POSTGRES_URL is set in the
- * environment — mirrors the pattern in `stores/drizzle-store-backend.test.ts`.
- * This keeps CI fast and local devs can opt into the Postgres path with:
+ * A Postgres variant runs only when TEST_POSTGRES_URL is set — same
+ * opt-in pattern as `stores/drizzle-store-backend.test.ts`:
  *
  *   TEST_POSTGRES_URL=postgres://postgres:postgres@localhost:5433/amodal_test pnpm test
+ *
+ * Tests that need cross-test isolation use a per-test `scope` string
+ * stamped into `metadata.scope` and filter by it. There is no tenant
+ * or user concept in the session store.
  */
 
 import {describe, it, expect, beforeEach, afterEach} from 'vitest';
@@ -28,12 +31,15 @@ import {createLogger} from '../logger.js';
 
 const logger = createLogger({component: 'test:session-store'});
 
+/** Fresh per-test scope so list() filters return only this test's rows. */
+function newScope(label: string): string {
+  return `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
 function makeSession(overrides: Partial<PersistedSession> = {}): PersistedSession {
   return {
     version: 1,
     id: `sess-${Math.random().toString(36).slice(2, 10)}`,
-    tenantId: 'tenant-1',
-    userId: 'user-1',
     messages: [{role: 'user', content: 'Hello'}],
     tokenUsage: {inputTokens: 100, outputTokens: 50, totalTokens: 150},
     metadata: {},
@@ -82,11 +88,9 @@ function runSuite(makeBackend: BackendFactory): void {
       });
       await store.save(session);
 
-      const loaded = await store.load(session.tenantId, session.id);
+      const loaded = await store.load(session.id);
       expect(loaded).not.toBeNull();
       expect(loaded!.id).toBe(session.id);
-      expect(loaded!.tenantId).toBe(session.tenantId);
-      expect(loaded!.userId).toBe(session.userId);
       expect(loaded!.version).toBe(1);
       expect(loaded!.messages).toEqual(session.messages);
       expect(loaded!.tokenUsage).toEqual(session.tokenUsage);
@@ -94,7 +98,7 @@ function runSuite(makeBackend: BackendFactory): void {
     });
 
     it('returns null for a missing session', async () => {
-      expect(await store.load('tenant-1', 'nonexistent')).toBeNull();
+      expect(await store.load('nonexistent')).toBeNull();
     });
 
     it('save updates an existing session (upsert) and refreshes fields', async () => {
@@ -106,7 +110,7 @@ function runSuite(makeBackend: BackendFactory): void {
       session.updatedAt = new Date(Date.now() + 1000);
       await store.save(session);
 
-      const loaded = await store.load(session.tenantId, session.id);
+      const loaded = await store.load(session.id);
       expect(loaded!.messages).toHaveLength(2);
       expect(loaded!.tokenUsage.totalTokens).toBe(300);
     });
@@ -123,65 +127,26 @@ function runSuite(makeBackend: BackendFactory): void {
         },
       });
       await store.save(session);
-      const loaded = await store.load(session.tenantId, session.id);
+      const loaded = await store.load(session.id);
       expect(loaded!.metadata).toEqual(session.metadata);
-    });
-  });
-
-  describe('tenant isolation', () => {
-    it('list only returns sessions for the requested tenant', async () => {
-      const a = `tenant-a-${Date.now()}`;
-      const b = `tenant-b-${Date.now()}`;
-      await store.save(makeSession({tenantId: a}));
-      await store.save(makeSession({tenantId: a}));
-      await store.save(makeSession({tenantId: b}));
-
-      const {sessions: sessionsA} = await store.list(a);
-      const {sessions: sessionsB} = await store.list(b);
-      expect(sessionsA).toHaveLength(2);
-      expect(sessionsB).toHaveLength(1);
-      expect(sessionsA.every((s) => s.tenantId === a)).toBe(true);
-    });
-
-    it('load returns null when tenantId does not match the row', async () => {
-      // SQL-level enforcement: a caller with the wrong tenant cannot
-      // read another tenant's session, even with the correct sessionId.
-      const session = makeSession({tenantId: 'tenant-owner'});
-      await store.save(session);
-
-      // Correct tenant → found
-      const asOwner = await store.load('tenant-owner', session.id);
-      expect(asOwner).not.toBeNull();
-
-      // Wrong tenant → null
-      const asOther = await store.load('tenant-intruder', session.id);
-      expect(asOther).toBeNull();
-    });
-
-    it('delete is a no-op when tenantId does not match', async () => {
-      const session = makeSession({tenantId: 'tenant-owner'});
-      await store.save(session);
-
-      // Wrong tenant → delete returns false and leaves the row intact
-      const deletedByIntruder = await store.delete('tenant-intruder', session.id);
-      expect(deletedByIntruder).toBe(false);
-      expect(await store.load('tenant-owner', session.id)).not.toBeNull();
-
-      // Correct tenant → delete succeeds
-      const deletedByOwner = await store.delete('tenant-owner', session.id);
-      expect(deletedByOwner).toBe(true);
     });
   });
 
   describe('list — ordering', () => {
     it('returns sessions newest first', async () => {
-      const tenantId = `tenant-order-${Date.now()}`;
-      const older = makeSession({tenantId, updatedAt: new Date('2026-01-01')});
-      const newer = makeSession({tenantId, updatedAt: new Date('2026-03-01')});
+      const scope = newScope('order');
+      const older = makeSession({
+        metadata: {scope},
+        updatedAt: new Date('2026-01-01'),
+      });
+      const newer = makeSession({
+        metadata: {scope},
+        updatedAt: new Date('2026-03-01'),
+      });
       await store.save(older);
       await store.save(newer);
 
-      const {sessions} = await store.list(tenantId);
+      const {sessions} = await store.list({filter: {scope}});
       const ids = sessions.map((s) => s.id);
       expect(ids.indexOf(newer.id)).toBeLessThan(ids.indexOf(older.id));
     });
@@ -189,22 +154,22 @@ function runSuite(makeBackend: BackendFactory): void {
 
   describe('list — pagination', () => {
     it('returns nextCursor when more rows exist, null when page is final', async () => {
-      const tenantId = `tenant-page-${Date.now()}`;
+      const scope = newScope('page');
       for (let i = 0; i < 5; i++) {
         await store.save(
-          makeSession({tenantId, updatedAt: new Date(2026, 0, 1 + i)}),
+          makeSession({metadata: {scope}, updatedAt: new Date(2026, 0, 1 + i)}),
         );
       }
 
-      const page1 = await store.list(tenantId, {limit: 2});
+      const page1 = await store.list({limit: 2, filter: {scope}});
       expect(page1.sessions).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
 
-      const page2 = await store.list(tenantId, {limit: 2, cursor: page1.nextCursor!});
+      const page2 = await store.list({limit: 2, filter: {scope}, cursor: page1.nextCursor!});
       expect(page2.sessions).toHaveLength(2);
       expect(page2.nextCursor).not.toBeNull();
 
-      const page3 = await store.list(tenantId, {limit: 2, cursor: page2.nextCursor!});
+      const page3 = await store.list({limit: 2, filter: {scope}, cursor: page2.nextCursor!});
       expect(page3.sessions).toHaveLength(1);
       expect(page3.nextCursor).toBeNull();
 
@@ -214,7 +179,7 @@ function runSuite(makeBackend: BackendFactory): void {
 
     it('throws SessionStoreError on malformed cursor', async () => {
       await expect(
-        store.list('tenant-1', {cursor: 'not-base64-at-all!!!'}),
+        store.list({cursor: 'not-base64-at-all!!!'}),
       ).rejects.toBeInstanceOf(SessionStoreError);
     });
 
@@ -222,68 +187,67 @@ function runSuite(makeBackend: BackendFactory): void {
       // Compound (updated_at, id) cursor must visit every row exactly
       // once even when rows tie on updated_at (batch inserts, sources
       // with millisecond-precision clocks).
-      const tenantId = `tenant-tied-${Date.now()}`;
+      const scope = newScope('tied');
       const sameTs = new Date('2026-05-15T12:00:00.000Z');
-      // Use explicit ids so ordering is deterministic across backends
       for (let i = 0; i < 4; i++) {
         await store.save(makeSession({
-          id: `tied-${String.fromCharCode(97 + i)}`, // tied-a .. tied-d
-          tenantId,
+          id: `tied-${String.fromCharCode(97 + i)}-${scope}`,
+          metadata: {scope},
           updatedAt: sameTs,
         }));
       }
 
-      const page1 = await store.list(tenantId, {limit: 2});
+      const page1 = await store.list({limit: 2, filter: {scope}});
       expect(page1.sessions).toHaveLength(2);
       expect(page1.nextCursor).not.toBeNull();
 
-      const page2 = await store.list(tenantId, {limit: 2, cursor: page1.nextCursor!});
+      const page2 = await store.list({limit: 2, filter: {scope}, cursor: page1.nextCursor!});
       expect(page2.sessions).toHaveLength(2);
 
       const allIds = [...page1.sessions, ...page2.sessions].map((s) => s.id);
       expect(new Set(allIds).size).toBe(4);
-      expect(allIds.sort()).toEqual(['tied-a', 'tied-b', 'tied-c', 'tied-d']);
     });
   });
 
   describe('list — metadata filters', () => {
     it('filters by a metadata string field', async () => {
-      const tenantId = `tenant-filter-${Date.now()}`;
-      await store.save(makeSession({tenantId, metadata: {status: 'active', appId: 'x'}}));
-      await store.save(makeSession({tenantId, metadata: {status: 'archived', appId: 'x'}}));
-      await store.save(makeSession({tenantId, metadata: {status: 'active', appId: 'y'}}));
+      const scope = newScope('filter');
+      await store.save(makeSession({metadata: {scope, status: 'active', appId: 'x'}}));
+      await store.save(makeSession({metadata: {scope, status: 'archived', appId: 'x'}}));
+      await store.save(makeSession({metadata: {scope, status: 'active', appId: 'y'}}));
 
-      const {sessions: active} = await store.list(tenantId, {filter: {status: 'active'}});
+      const {sessions: active} = await store.list({filter: {scope, status: 'active'}});
       expect(active).toHaveLength(2);
       expect(active.every((s) => s.metadata['status'] === 'active')).toBe(true);
 
-      const {sessions: inApp} = await store.list(tenantId, {
-        filter: {status: 'active', appId: 'x'},
+      const {sessions: inApp} = await store.list({
+        filter: {scope, status: 'active', appId: 'x'},
       });
       expect(inApp).toHaveLength(1);
     });
 
     it('rejects filter keys with injection characters', async () => {
       await expect(
-        store.list('tenant-1', {filter: {"'; DROP TABLE agent_sessions; --": 'x'}}),
+        store.list({filter: {"'; DROP TABLE agent_sessions; --": 'x'}}),
       ).rejects.toBeInstanceOf(SessionStoreError);
     });
 
     it('rejects filter keys with whitespace / punctuation', async () => {
       await expect(
-        store.list('tenant-1', {filter: {'status OR 1=1': 'x'}}),
+        store.list({filter: {'status OR 1=1': 'x'}}),
       ).rejects.toBeInstanceOf(SessionStoreError);
     });
   });
 
   describe('list — date range', () => {
     it('updatedAfter / updatedBefore constrain the result window', async () => {
-      const tenantId = `tenant-date-${Date.now()}`;
-      await store.save(makeSession({tenantId, updatedAt: new Date('2026-01-01')}));
-      await store.save(makeSession({tenantId, updatedAt: new Date('2026-02-15')}));
-      await store.save(makeSession({tenantId, updatedAt: new Date('2026-04-01')}));
+      const scope = newScope('date');
+      await store.save(makeSession({metadata: {scope}, updatedAt: new Date('2026-01-01')}));
+      await store.save(makeSession({metadata: {scope}, updatedAt: new Date('2026-02-15')}));
+      await store.save(makeSession({metadata: {scope}, updatedAt: new Date('2026-04-01')}));
 
-      const {sessions} = await store.list(tenantId, {
+      const {sessions} = await store.list({
+        filter: {scope},
         updatedAfter: new Date('2026-02-01'),
         updatedBefore: new Date('2026-03-01'),
       });
@@ -295,27 +259,27 @@ function runSuite(makeBackend: BackendFactory): void {
     it('removes a session and returns true', async () => {
       const session = makeSession();
       await store.save(session);
-      expect(await store.delete(session.tenantId, session.id)).toBe(true);
-      expect(await store.load(session.tenantId, session.id)).toBeNull();
+      expect(await store.delete(session.id)).toBe(true);
+      expect(await store.load(session.id)).toBeNull();
     });
 
     it('returns false for a missing session', async () => {
-      expect(await store.delete('tenant-1', 'nonexistent')).toBe(false);
+      expect(await store.delete('nonexistent')).toBe(false);
     });
   });
 
   describe('cleanup', () => {
     it('removes only sessions older than the cutoff', async () => {
-      const tenantId = `tenant-cleanup-${Date.now()}`;
-      const old = makeSession({tenantId, updatedAt: new Date('2020-01-01')});
-      const recent = makeSession({tenantId, updatedAt: new Date()});
+      const scope = newScope('cleanup');
+      const old = makeSession({metadata: {scope}, updatedAt: new Date('2020-01-01')});
+      const recent = makeSession({metadata: {scope}, updatedAt: new Date()});
       await store.save(old);
       await store.save(recent);
 
       const cleaned = await store.cleanup(new Date('2025-01-01'));
       expect(cleaned).toBeGreaterThanOrEqual(1);
-      expect(await store.load(tenantId, old.id)).toBeNull();
-      expect(await store.load(tenantId, recent.id)).not.toBeNull();
+      expect(await store.load(old.id)).toBeNull();
+      expect(await store.load(recent.id)).not.toBeNull();
     });
   });
 
@@ -342,8 +306,8 @@ function runSuite(makeBackend: BackendFactory): void {
       try {
         const session = makeSession();
         await hooked.store.save(session);
-        await hooked.store.delete(session.tenantId, 'nonexistent');
-        await hooked.store.delete(session.tenantId, session.id);
+        await hooked.store.delete('nonexistent');
+        await hooked.store.delete(session.id);
         expect(events).toEqual([`del:${session.id}`]);
       } finally {
         await hooked.cleanup();
@@ -357,10 +321,10 @@ function runSuite(makeBackend: BackendFactory): void {
       });
       try {
         await hooked.store.save(
-          makeSession({updatedAt: new Date('2020-01-01'), tenantId: 'hook-t'}),
+          makeSession({updatedAt: new Date('2020-01-01')}),
         );
         await hooked.store.save(
-          makeSession({updatedAt: new Date('2020-02-01'), tenantId: 'hook-t'}),
+          makeSession({updatedAt: new Date('2020-02-01')}),
         );
         await hooked.store.cleanup(new Date('2025-01-01'));
         expect(events).toHaveLength(1);
@@ -485,7 +449,7 @@ pgDescribe('Postgres session store (via TEST_POSTGRES_URL)', () => {
       await store.close();
       await store.close();
       await expect(store.save(makeSession())).rejects.toBeInstanceOf(SessionStoreError);
-      await expect(store.load('tenant-1', 'x')).rejects.toBeInstanceOf(SessionStoreError);
+      await expect(store.load('x')).rejects.toBeInstanceOf(SessionStoreError);
       await dropTable(localTable);
     });
 
@@ -518,14 +482,12 @@ pgDescribe('Postgres session store (via TEST_POSTGRES_URL)', () => {
         const saves = Array.from({length: 10}, (_, i) =>
           store.save(makeSession({
             id,
-            tenantId: 't',
-            userId: 'u',
             updatedAt: new Date(2026, 0, 1, 0, 0, i),
             tokenUsage: {inputTokens: i, outputTokens: 0, totalTokens: i},
           })),
         );
         await Promise.all(saves);
-        const loaded = await store.load('t', id);
+        const loaded = await store.load(id);
         expect(loaded).not.toBeNull();
         expect(loaded!.tokenUsage.totalTokens).toBeGreaterThanOrEqual(0);
         expect(loaded!.tokenUsage.totalTokens).toBeLessThanOrEqual(9);

@@ -111,7 +111,6 @@ export async function* runAgent(
 
   ctx.logger.info('agent_loop_start', {
     session: ctx.sessionId,
-    tenant: ctx.tenantId,
     maxTurns: ctx.maxTurns,
     messageCount: messages.length,
   });
@@ -170,7 +169,6 @@ export async function* runAgent(
   // Emit done event with usage — always, regardless of done reason
   ctx.logger.info('agent_loop_done', {
     session: ctx.sessionId,
-    tenant: ctx.tenantId,
     reason: state.reason,
     turns: ctx.turnCount,
     usage: ctx.usage,

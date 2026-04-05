@@ -81,8 +81,6 @@ function validateTableName(name: string): void {
 function makeAgentSessionsTable(name: string): AgentSessionsTable {
   const t = pgTable(name, {
     id: text('id').primaryKey(),
-    tenantId: text('tenant_id').notNull(),
-    userId: text('user_id').notNull(),
     messages: jsonb('messages').notNull().$type<unknown[]>(),
     tokenUsage: jsonb('token_usage').notNull().$type<{
       inputTokens: number;
@@ -102,8 +100,6 @@ function buildDdl(tableName: string): string {
   return `
     CREATE TABLE IF NOT EXISTS ${tableName} (
       id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
       messages JSONB NOT NULL,
       token_usage JSONB NOT NULL,
       metadata JSONB DEFAULT '{}',
@@ -112,8 +108,8 @@ function buildDdl(tableName: string): string {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    CREATE INDEX IF NOT EXISTS idx_${tableName}_tenant
-      ON ${tableName} (tenant_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_${tableName}_updated
+      ON ${tableName} (updated_at DESC);
   `;
 }
 
