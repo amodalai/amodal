@@ -1,0 +1,9 @@
+{
+  "title": "Delivery Callback Test",
+  "trigger": "manual",
+  "prompt": "Reply with just this JSON object: {\"status\":\"done\",\"count\":7}",
+  "delivery": {
+    "targets": [{ "type": "callback" }],
+    "template": "Automation {{automation}} finished with count={{count}}"
+  }
+}

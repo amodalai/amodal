@@ -114,6 +114,8 @@ function allText(events: Array<Record<string, unknown>>): string {
 
 let restServer: ChildProcess | null = null;
 let agentServer: ServerInstance | null = null;
+/** Captures payloads delivered to callback-type targets for assertion. */
+const receivedAutomationResults: Array<Record<string, unknown>> = [];
 
 const skipReason = process.env['ANTHROPIC_API_KEY'] ? '' : 'ANTHROPIC_API_KEY not set';
 
@@ -142,6 +144,9 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
       repoPath: AGENT_DIR,
       port: AGENT_PORT,
       hotReload: false,
+      onAutomationResult: (payload) => {
+        receivedAutomationResults.push(payload as unknown as Record<string, unknown>);
+      },
     });
     await agentServer.start();
     await waitForServer(AGENT_PORT);
@@ -979,6 +984,38 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     } finally {
       stream.close();
     }
+  }, TIMEOUT + 10_000);
+
+  it('delivers automation result via onAutomationResult callback (full chain)', async () => {
+    // This test verifies the full wiring:
+    //   automation runs → DeliveryRouter dispatches callback target →
+    //   LocalServerConfig.onAutomationResult fires with the payload.
+    //
+    // The delivery-callback-test automation has `delivery.targets: [{ type:
+    // 'callback' }]` with a template. When it completes, our onAutomationResult
+    // (configured in beforeAll) should receive the full DeliveryPayload.
+    const before = receivedAutomationResults.length;
+
+    const runRes = await fetch(
+      `http://localhost:${AGENT_PORT}/automations/delivery-callback-test/run`,
+      {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}', signal: AbortSignal.timeout(TIMEOUT)},
+    );
+    expect([200, 500]).toContain(runRes.status);
+
+    // Poll briefly for the callback to fire (delivery happens after runMessage drains)
+    const deadline = Date.now() + 5000;
+    while (receivedAutomationResults.length === before && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    expect(receivedAutomationResults.length).toBeGreaterThan(before);
+    const payload = receivedAutomationResults[receivedAutomationResults.length - 1];
+    expect(payload?.['automation']).toBe('delivery-callback-test');
+    expect(payload?.['status']).toBe('success');
+    // Template renders with {{automation}} built-in; {{count}} should come
+    // from the JSON result (soft-check since LLM output varies slightly).
+    const message = String(payload?.['message'] ?? '');
+    expect(message).toContain('delivery-callback-test');
   }, TIMEOUT + 10_000);
 
   it('replays buffered events via Last-Event-ID on reconnect', async () => {

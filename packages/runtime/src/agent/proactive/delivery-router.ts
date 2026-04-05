@@ -146,17 +146,27 @@ export class DeliveryRouter {
 
   private async dispatchTarget(target: DeliveryTarget, payload: DeliveryPayload): Promise<void> {
     try {
-      if (target.type === 'webhook') {
-        await this.deliverWebhook(target.url, payload);
-      } else if (target.type === 'callback') {
-        if (!this.onResult) {
-          this.logger.warn('delivery_callback_not_configured', {
-            automation: payload.automation,
-            hint: 'Pass onAutomationResult when creating the server to receive callback deliveries.',
-          });
-          return;
+      switch (target.type) {
+        case 'webhook':
+          await this.deliverWebhook(target.url, payload);
+          break;
+        case 'callback':
+          if (!this.onResult) {
+            this.logger.warn('delivery_callback_not_configured', {
+              automation: payload.automation,
+              hint: 'Pass onAutomationResult when creating the server to receive callback deliveries.',
+            });
+            return;
+          }
+          await this.onResult(payload);
+          break;
+        default: {
+          // Exhaustiveness guard: adding a new DeliveryTarget variant
+          // (e.g., 'email') will fail to compile here until a case is
+          // added, preventing silent "nothing delivered" regressions.
+          const _exhaustive: never = target;
+          throw new Error(`Unhandled delivery target: ${String((_exhaustive as {type: string}).type)}`);
         }
-        await this.onResult(payload);
       }
     } catch (err) {
       // Delivery failures must not break the automation run. Log and

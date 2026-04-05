@@ -318,6 +318,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       void sessionManager.persist(session);
     },
     eventBus,
+    onAutomationResult: config.onAutomationResult,
   });
 
   // -------------------------------------------------------------------------
