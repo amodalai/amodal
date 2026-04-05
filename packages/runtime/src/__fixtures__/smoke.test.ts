@@ -48,6 +48,23 @@ const REST_SERVER = resolve(__dirname, 'smoke-rest-server.mjs');
 const MCP_SERVER = resolve(__dirname, 'smoke-mcp-server.mjs');
 const TIMEOUT = 45_000; // per-test timeout for LLM calls
 
+// Provider selection — override via SMOKE_TARGET env var.
+// Defaults to anthropic + claude-sonnet-4 for backward compatibility.
+interface SmokeTarget {
+  provider: string;
+  model: string;
+  apiKeyEnv: string;
+}
+const SMOKE_TARGETS: Record<string, SmokeTarget> = {
+  anthropic: {provider: 'anthropic', model: 'claude-sonnet-4-20250514', apiKeyEnv: 'ANTHROPIC_API_KEY'},
+  google: {provider: 'google', model: 'gemini-2.5-flash', apiKeyEnv: 'GOOGLE_API_KEY'},
+  openai: {provider: 'openai', model: 'gpt-4o-mini', apiKeyEnv: 'OPENAI_API_KEY'},
+  groq: {provider: 'groq', model: 'llama-3.3-70b-versatile', apiKeyEnv: 'GROQ_API_KEY'},
+};
+const smokeTargetName = process.env['SMOKE_TARGET'] ?? 'anthropic';
+ 
+const smokeTarget = SMOKE_TARGETS[smokeTargetName];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -115,13 +132,25 @@ function allText(events: Array<Record<string, unknown>>): string {
 let restServer: ChildProcess | null = null;
 let agentServer: ServerInstance | null = null;
 
-const skipReason = process.env['ANTHROPIC_API_KEY'] ? '' : 'ANTHROPIC_API_KEY not set';
+const skipReason = !smokeTarget
+  ? `unknown SMOKE_TARGET "${smokeTargetName}"; known: ${Object.keys(SMOKE_TARGETS).join(', ')}`
+  : process.env[smokeTarget.apiKeyEnv]
+    ? ''
+    : `${smokeTarget.apiKeyEnv} not set`;
 
-describe.skipIf(!!skipReason)('smoke tests', () => {
+describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   beforeAll(async () => {
     // 0. Nuke prior state — clean slate for every run
     rmSync(resolve(AGENT_DIR, '.amodal/store-data'), {recursive: true, force: true});
     rmSync(resolve(AGENT_DIR, '.amodal/sessions'), {recursive: true, force: true});
+
+    // 1. Rewrite amodal.json with the selected provider/model
+    const amodalPath = resolve(AGENT_DIR, 'amodal.json');
+    const amodalConfig = JSON.parse(readFileSync(amodalPath, 'utf-8')) as Record<string, unknown>;
+    amodalConfig['models'] = {
+      main: {provider: smokeTarget.provider, model: smokeTarget.model},
+    };
+    writeFileSync(amodalPath, JSON.stringify(amodalConfig, null, 2));
 
     // 2. Write MCP server spec with absolute path (loadRepo reads this as-is)
     writeFileSync(

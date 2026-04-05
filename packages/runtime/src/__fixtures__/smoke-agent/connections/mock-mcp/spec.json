@@ -3,6 +3,6 @@
   "transport": "stdio",
   "command": "node",
   "args": [
-    "/Users/bob/code/amodal-smoke/packages/runtime/src/__fixtures__/smoke-mcp-server.mjs"
+    "/Users/bobbaxley/code/amodal-phase3-deferred/packages/runtime/src/__fixtures__/smoke-mcp-server.mjs"
   ]
 }
