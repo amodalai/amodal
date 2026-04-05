@@ -15,7 +15,7 @@
 import {describe, it, expect, beforeAll, afterAll} from 'vitest';
 import {fork, type ChildProcess} from 'node:child_process';
 import {resolve} from 'node:path';
-import {readFileSync, writeFileSync, rmSync} from 'node:fs';
+import {readFileSync, writeFileSync, rmSync, readdirSync} from 'node:fs';
 import type {ServerInstance} from '../server.js';
 import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
 
@@ -403,6 +403,87 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const responseText = allText(events);
     expect(responseText.toLowerCase()).toContain('test');
   }, TIMEOUT);
+
+  // End-to-end: the "reduce emojis in formatting rules" scenario from the
+  // admin-agent regression. Before the discovery + edit tools existed, the
+  // agent guessed wrong paths and often created a new skill file instead
+  // of editing the existing knowledge doc. With list_repo_files /
+  // glob_repo_files / grep_repo_files / edit_repo_file available, it
+  // should discover knowledge/formatting-rules.md and edit it in place.
+  it('admin agent discovers and edits the right file (emoji-reduction scenario)', async () => {
+    const formattingRulesPath = resolve(AGENT_DIR, 'knowledge', 'formatting-rules.md');
+    const emojiHeavyBody = [
+      '# Formatting Rules 🎨',
+      '',
+      'Use emojis liberally to make the output more engaging! 🎉🎉🎉',
+      '',
+      '## Tone 💬',
+      '',
+      "Drop a 🚀 when celebrating a win, a 🔥 when highlighting risk, and a ✨ when introducing a new feature. Don't hold back! 🙌",
+      '',
+      'Every bullet point should start with an emoji. 📝 Every heading should have one too. 🏷️',
+      '',
+      '## Examples 📚',
+      '- ✅ "Deployment succeeded 🎉"',
+      '- ❌ "Deployment failed 💥"',
+      '',
+    ].join('\n');
+    const emojiCount = (s: string): number => (s.match(/\p{Emoji_Presentation}/gu) ?? []).length;
+    const initialEmojis = emojiCount(emojiHeavyBody);
+    expect(initialEmojis).toBeGreaterThan(5);
+
+    writeFileSync(formattingRulesPath, emojiHeavyBody);
+
+    // Snapshot skills/ so we can assert the agent didn't create a bogus skill.
+    const skillsDir = resolve(AGENT_DIR, 'skills');
+    const skillsBefore = new Set(readdirSync(skillsDir));
+
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          message:
+            'I want to use emojis less often in my formatting rules. Find where they are defined in my repo and reduce the emoji guidance — remove most emoji usage from the instructions, keep the document but make it plain text. Work carefully: first look around to find the right file, then edit it in place. Do not create any new skills.',
+        }),
+        signal: AbortSignal.timeout(TIMEOUT * 2),
+      });
+
+      const text = await res.text();
+      const events = parseSSE(text);
+      const toolStarts = findEvents(events, 'tool_call_start');
+      const toolNames = toolStarts.map((e) => String(e['tool_name']));
+
+      // Discovery: the agent should have used at least one of the new
+      // discovery tools to find formatting-rules.md instead of guessing.
+      const usedDiscovery = toolNames.some(
+        (n) => n === 'list_repo_files' || n === 'glob_repo_files' || n === 'grep_repo_files',
+      );
+      expect(usedDiscovery).toBe(true);
+
+      // Action: should edit in place, NOT rewrite the whole file or create
+      // a new skill. We allow either edit_repo_file (preferred) or
+      // write_repo_file targeting the same path (acceptable).
+      const editedInPlace = toolNames.includes('edit_repo_file');
+      const rewroteFile = toolNames.includes('write_repo_file');
+      expect(editedInPlace || rewroteFile).toBe(true);
+
+      // Regression guard: agent must NOT have created a new skill.
+      const skillsAfter = new Set(readdirSync(skillsDir));
+      const newSkills = [...skillsAfter].filter((s) => !skillsBefore.has(s));
+      expect(newSkills).toEqual([]);
+
+      // Outcome: the file should still exist and contain significantly
+      // fewer emojis than before.
+      const after = readFileSync(formattingRulesPath, 'utf-8');
+      expect(after.length).toBeGreaterThan(0);
+      const afterEmojis = emojiCount(after);
+      expect(afterEmojis).toBeLessThan(initialEmojis);
+    } finally {
+      // Clean up — remove the formatting-rules.md fixture regardless of pass/fail.
+      rmSync(formattingRulesPath, {force: true});
+    }
+  }, TIMEOUT * 2);
 
   // -------------------------------------------------------------------------
   // 10. Write intent enforcement (G8)

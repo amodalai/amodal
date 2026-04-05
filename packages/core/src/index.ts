@@ -13,13 +13,6 @@ export {
   DISPATCH_TOOL_NAME,
 } from './tools/amodal-tool-names.js';
 
-// Amodal tool definitions
-export {
-  getProposeKnowledgeDefinition,
-  getPresentToolDefinition,
-  getRequestToolDefinition,
-} from './tools/definitions/amodal-tools.js';
-
 // Tool definition types
 export type { ToolDefinition } from './tools/tool-definition-types.js';
 
