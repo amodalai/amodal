@@ -40,7 +40,7 @@ export default defineConfig({
         },
       },
       fontSize: {
-        root: '13px',
+        root: '14px',
       },
       content: {
         horizontalPadding: '48px',
@@ -229,10 +229,6 @@ export default defineConfig({
         {
           text: 'Context Management',
           link: '/learn/architecture/context',
-        },
-        {
-          text: 'Architecture Decisions',
-          link: '/learn/architecture/decisions',
         },
       ],
     },

@@ -161,6 +161,7 @@ The `stores` block configures the database backend used for **both** agent docum
 | `stores` | object | Data store backend config. Defaults to PGLite in the local `.amodal/store-data` directory. |
 | `proactive` | object | Webhook URL for external triggers (automation webhooks, third-party integrations). |
 | `mcp` | object | MCP server connections. Each server exposes additional tools to the agent. |
+| `webTools` | object | Enables `web_search` + `fetch_url` built-in tools via Gemini grounding. See [Web Tools](/guide/tools#web-tools). |
 
 ## ModelConfig
 
