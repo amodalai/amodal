@@ -31,6 +31,7 @@ Run `git diff main...HEAD --name-only` to get changed files, then review each on
 ### Async Discipline
 
 - Floating promises: async function called without `await` or `.catch()` (use `void` prefix if intentional fire-and-forget)
+- **Sibling promises from shared-source async results**: when code does `for await (const x of result.stream)` or `await result.a` and the result object ALSO has sibling promises (`result.text`, `result.usage`) tied to the same underlying operation, check that those siblings have passive `.catch(() => {})` handlers attached BEFORE the for-await / first await. A mid-iteration throw leaks the siblings as unhandled rejections.
 - External calls (fetch, database, MCP) without `AbortSignal.timeout()`
 - Switch on discriminated union without `default: { const _exhaustive: never = x; }` exhaustive check
 

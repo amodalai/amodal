@@ -111,7 +111,33 @@ async function checkProviders(): Promise<ProviderStatus[]> {
  * `StandaloneSessionManager`, mounts all routes, and optionally watches
  * for config changes (hot reload).
  */
+/**
+ * Install a process-level unhandledRejection listener that logs instead
+ * of crashing. An escaped rejection is always a bug — we want loud logs,
+ * not silent outages. The previous behavior (default Node: print + crash)
+ * turned small bugs (one leaked promise) into whole-server downtime for
+ * every active session. Logging + continuing preserves service for all
+ * other sessions while still surfacing the issue to operators.
+ *
+ * Idempotent: only installs once per process (the local-server can be
+ * created and torn down repeatedly during tests).
+ */
+let unhandledRejectionListenerInstalled = false;
+function installUnhandledRejectionLogger(): void {
+  if (unhandledRejectionListenerInstalled) return;
+  unhandledRejectionListenerInstalled = true;
+  process.on('unhandledRejection', (reason: unknown) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    log.error('unhandled_rejection', {
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+    });
+  });
+}
+
 export async function createLocalServer(config: LocalServerConfig): Promise<ServerInstance> {
+  installUnhandledRejectionLogger();
   let bundle = await loadRepo({localPath: config.repoPath});
 
   // Check provider API keys in the background at startup
