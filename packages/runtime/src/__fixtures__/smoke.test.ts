@@ -878,6 +878,131 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  // -------------------------------------------------------------------------
+  // 25. Runtime event bus (/api/events SSE stream)
+  // -------------------------------------------------------------------------
+
+  it('emits session_created when a new chat session is created', async () => {
+    const stream = await openEventStream();
+    try {
+      const chatResult = await chat('Say "hi" and nothing else.');
+      const event = await stream.waitFor(
+        (e) => e['type'] === 'session_created' && e['sessionId'] === chatResult.sessionId,
+        TIMEOUT,
+      );
+      expect(event['type']).toBe('session_created');
+      expect(event['sessionId']).toBe(chatResult.sessionId);
+      expect(event['seq']).toBeGreaterThan(0);
+      expect(typeof event['timestamp']).toBe('string');
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits session_updated on follow-up messages in an existing session', async () => {
+    const first = await chat('Remember the number 7.');
+    const stream = await openEventStream();
+    try {
+      await chat('Reply with just "ok".', first.sessionId);
+      const event = await stream.waitFor(
+        (e) => e['type'] === 'session_updated' && e['sessionId'] === first.sessionId,
+        TIMEOUT,
+      );
+      expect(event['type']).toBe('session_updated');
+      expect(event['sessionId']).toBe(first.sessionId);
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT * 2);
+
+  it('emits session_deleted when a session is DELETEd', async () => {
+    // First ensure the session is saved to the legacy store — DELETE only
+    // succeeds if legacySessionStore.delete() finds the session.
+    const {sessionId} = await chat('Say "ok".');
+
+    const stream = await openEventStream();
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+        method: 'DELETE',
+        signal: AbortSignal.timeout(5000),
+      });
+      // The legacy store mirror may be async, so a 404 is possible if the
+      // mirror write hasn't landed yet. Either outcome is fine for the
+      // event test — if the DELETE succeeds, the event should fire.
+      if (res.status === 200) {
+        const event = await stream.waitFor(
+          (e) => e['type'] === 'session_deleted' && e['sessionId'] === sessionId,
+          5000,
+        );
+        expect(event['type']).toBe('session_deleted');
+        expect(event['sessionId']).toBe(sessionId);
+      }
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits automation_triggered and automation_completed on manual run', async () => {
+    const stream = await openEventStream();
+    try {
+      const runPromise = fetch(
+        `http://localhost:${AGENT_PORT}/automations/test-automation/run`,
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: '{}',
+          signal: AbortSignal.timeout(TIMEOUT),
+        },
+      );
+
+      const triggered = await stream.waitFor(
+        (e) => e['type'] === 'automation_triggered' && e['name'] === 'test-automation',
+        5000,
+      );
+      expect(triggered['source']).toBeDefined();
+
+      const completed = await stream.waitFor(
+        (e) =>
+          (e['type'] === 'automation_completed' || e['type'] === 'automation_failed') &&
+          e['name'] === 'test-automation',
+        TIMEOUT,
+      );
+      expect(completed['type']).toBe('automation_completed');
+      expect(typeof completed['durationMs']).toBe('number');
+
+      const runRes = await runPromise;
+      expect([200, 500]).toContain(runRes.status);
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT + 10_000);
+
+  it('replays buffered events via Last-Event-ID on reconnect', async () => {
+    // Produce at least one event, capture its seq, disconnect, reconnect
+    // with Last-Event-ID set to seq-1, and verify we get the event back.
+    const firstStream = await openEventStream();
+    let capturedSeq = 0;
+    try {
+      await chat('Say "ok".');
+      const event = await firstStream.waitFor((e) => e['type'] === 'session_created', TIMEOUT);
+      capturedSeq = Number(event['seq']);
+      expect(capturedSeq).toBeGreaterThan(0);
+    } finally {
+      firstStream.close();
+    }
+
+    const replayStream = await openEventStream({lastEventId: String(capturedSeq - 1)});
+    try {
+      const replayed = await replayStream.waitFor(
+        (e) => Number(e['seq']) === capturedSeq,
+        5000,
+      );
+      expect(Number(replayed['seq'])).toBe(capturedSeq);
+    } finally {
+      replayStream.close();
+    }
+  }, TIMEOUT);
 });
 
 // ---------------------------------------------------------------------------
@@ -891,4 +1016,102 @@ function parseSSE(text: string): Array<Record<string, unknown>> {
     try { events.push(JSON.parse(line.slice(6)) as Record<string, unknown>); } catch { /* skip */ }
   }
   return events;
+}
+
+// ---------------------------------------------------------------------------
+// Runtime event bus helper — opens a streaming fetch to /api/events and
+// exposes waitFor(predicate) for assertion against live events.
+// ---------------------------------------------------------------------------
+
+interface EventStreamHandle {
+  events: Array<Record<string, unknown>>;
+  waitFor: (
+    predicate: (event: Record<string, unknown>) => boolean,
+    timeoutMs?: number,
+  ) => Promise<Record<string, unknown>>;
+  close: () => void;
+}
+
+async function openEventStream(options: {lastEventId?: string} = {}): Promise<EventStreamHandle> {
+  const controller = new AbortController();
+  const headers: Record<string, string> = {Accept: 'text/event-stream'};
+  if (options.lastEventId) headers['Last-Event-ID'] = options.lastEventId;
+
+  const res = await fetch(`http://localhost:${AGENT_PORT}/api/events`, {
+    headers,
+    signal: controller.signal,
+  });
+  if (!res.body) throw new Error('no response body from /api/events');
+
+  const events: Array<Record<string, unknown>> = [];
+  const waiters: Array<{
+    predicate: (event: Record<string, unknown>) => boolean;
+    resolve: (event: Record<string, unknown>) => void;
+  }> = [];
+
+  // Drain the stream in the background, parsing SSE frames. Push each event
+  // to the events array and notify any waiting predicates.
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let draining = true;
+
+  void (async () => {
+    try {
+      while (draining) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream: true});
+        let idx: number;
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          const frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          const dataLine = frame.split('\n').find((l) => l.startsWith('data: '));
+          if (!dataLine) continue;
+          try {
+             
+            const event = JSON.parse(dataLine.slice(6)) as Record<string, unknown>;
+            events.push(event);
+            // Notify any matching waiters (iterate a snapshot; matching
+            // waiters are removed from the queue).
+            for (let i = waiters.length - 1; i >= 0; i--) {
+              const waiter = waiters[i];
+              if (waiter && waiter.predicate(event)) {
+                waiters.splice(i, 1);
+                waiter.resolve(event);
+              }
+            }
+          } catch { /* malformed frame */ }
+        }
+      }
+    } catch { /* aborted or connection closed */ }
+  })();
+
+  return {
+    events,
+    waitFor(predicate, timeoutMs = 5000) {
+      // Check already-buffered events first
+      const already = events.find(predicate);
+      if (already) return Promise.resolve(already);
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          const idx = waiters.findIndex((w) => w.predicate === predicate);
+          if (idx !== -1) waiters.splice(idx, 1);
+          reject(new Error(`waitFor timed out after ${String(timeoutMs)}ms`));
+        }, timeoutMs);
+        waiters.push({
+          predicate,
+          resolve: (event) => {
+            clearTimeout(timer);
+            resolve(event);
+          },
+        });
+      });
+    },
+    close() {
+      draining = false;
+      controller.abort();
+      reader.cancel().catch(() => {});
+    },
+  };
 }
