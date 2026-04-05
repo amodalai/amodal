@@ -49,6 +49,8 @@ export const AIStreamRequestSchema = z.object({
   session_id: z.string().optional(),
   role: z.string().optional(),
   deploy_id: z.string().optional(),
+  /** Optional total-token budget cap applied when this request creates a new session. */
+  max_tokens: z.number().int().positive().optional(),
 });
 
 export type AIStreamRequest = z.infer<typeof AIStreamRequestSchema>;
@@ -406,6 +408,12 @@ export interface AIStreamRouterOptions {
   shared: SharedResources;
   /** Factory that builds per-request stream hooks from the auth context */
   createStreamHooks?: (auth?: AuthContext) => StreamHooks;
+  /** Server-side summarizer hook passed into every runMessage call. */
+  summarizeToolResult?: (opts: {
+    toolName: string;
+    content: string;
+    signal: AbortSignal;
+  }) => Promise<string>;
 }
 
 export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
@@ -437,6 +445,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
           role: body.role,
           deployId: body.deploy_id,
           auth,
+          maxTokens: body.max_tokens,
         });
 
         // Set up SSE headers with Vercel AI SDK protocol marker
@@ -457,6 +466,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
           signal: controller.signal,
           buildToolContext: toolContextFactory,
           onUsage: adaptOnUsage(hooks, session),
+          summarizeToolResult: options.summarizeToolResult,
         });
 
         const state = createAdapterState();

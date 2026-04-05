@@ -22,6 +22,12 @@ export const ChatRequestSchema = z.object({
   session_type: z.enum(['chat', 'admin', 'automation']).optional(),
   /** Optional deployment ID — load a specific snapshot instead of the active one */
   deploy_id: z.string().optional(),
+  /**
+   * Optional total-token budget cap for this session. When cumulative
+   * usage reaches this value the loop terminates with
+   * `reason: 'budget_exceeded'`. Absent = no cap.
+   */
+  max_tokens: z.number().int().positive().optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;

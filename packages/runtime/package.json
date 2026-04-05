@@ -20,6 +20,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:smoke": "vitest run src/__fixtures__/smoke.test.ts",
+    "test:smoke:quick": "vitest run src/__fixtures__/smoke.test.ts -t 'health endpoint|streams chat with init|makes at least one tool call|persists data across store|calls MCP tool|reason=model_stop|reason=budget_exceeded'",
     "test:smoke:anthropic": "SMOKE_TARGET=anthropic vitest run src/__fixtures__/smoke.test.ts",
     "test:smoke:google": "SMOKE_TARGET=google vitest run src/__fixtures__/smoke.test.ts",
     "test:smoke:openai": "SMOKE_TARGET=openai vitest run src/__fixtures__/smoke.test.ts",

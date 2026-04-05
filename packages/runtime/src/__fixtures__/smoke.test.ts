@@ -17,6 +17,7 @@ import {fork, type ChildProcess} from 'node:child_process';
 import {resolve} from 'node:path';
 import {readFileSync, writeFileSync, rmSync} from 'node:fs';
 import type {ServerInstance} from '../server.js';
+import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
 
 // Load API keys from repo root .env.test if not already set.
 // To run smoke tests: create .env.test at the repo root with ANTHROPIC_API_KEY=sk-ant-...
@@ -99,9 +100,14 @@ async function waitForServer(port: number, maxMs = 15_000): Promise<void> {
   throw new Error(`Server on port ${port} did not start within ${maxMs}ms`);
 }
 
-async function chat(message: string, sessionId?: string): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
+async function chat(
+  message: string,
+  sessionId?: string,
+  opts?: {maxTokens?: number},
+): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
   const body: Record<string, unknown> = {message};
   if (sessionId) body['session_id'] = sessionId;
+  if (opts?.maxTokens !== undefined) body['max_tokens'] = opts.maxTokens;
 
   const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
     method: 'POST',
@@ -157,10 +163,12 @@ const skipReason = !smokeTarget
     : `${smokeTarget.apiKeyEnv} not set`;
 
 describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
-  // Stash the committed amodal.json so afterAll can restore it; otherwise
-  // the per-run provider rewrite leaks into the repo.
+  // Stash fixture files so afterAll can restore them; otherwise the
+  // per-run rewrites (provider + absolute MCP path) leak into the repo.
   const amodalPath = resolve(AGENT_DIR, 'amodal.json');
+  const mcpSpecPath = resolve(AGENT_DIR, 'connections/mock-mcp/spec.json');
   const originalAmodalJson = readFileSync(amodalPath, 'utf-8');
+  const originalMcpSpec = readFileSync(mcpSpecPath, 'utf-8');
 
   beforeAll(async () => {
     // 0. Nuke prior state — clean slate for every run
@@ -177,9 +185,10 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     };
     writeFileSync(amodalPath, JSON.stringify(amodalConfig, null, 2));
 
-    // 2. Write MCP server spec with absolute path (loadRepo reads this as-is)
+    // 2. Write MCP server spec with absolute path (loadRepo reads this as-is).
+    //    Restored in afterAll so the env-specific path doesn't leak into git.
     writeFileSync(
-      resolve(AGENT_DIR, 'connections/mock-mcp/spec.json'),
+      mcpSpecPath,
       JSON.stringify({protocol: 'mcp', transport: 'stdio', command: 'node', args: [MCP_SERVER]}, null, 2),
     );
 
@@ -208,9 +217,10 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     if (restServer) {
       restServer.kill('SIGTERM');
     }
-    // Restore the committed amodal.json so the provider rewrite stays
-    // test-local and does not show up in git status.
+    // Restore fixture files so the per-run rewrites stay test-local and
+    // don't show up in git status afterwards.
     writeFileSync(amodalPath, originalAmodalJson);
+    writeFileSync(mcpSpecPath, originalMcpSpec);
   });
 
   // -------------------------------------------------------------------------
@@ -934,6 +944,27 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
       signal: AbortSignal.timeout(5000),
     });
     expect(res.status).toBe(400);
+  });
+
+  // -------------------------------------------------------------------------
+  // Agent loop safety features (budget, done reason)
+  // -------------------------------------------------------------------------
+
+  it('done event carries reason=model_stop on normal completion', async () => {
+    const {events} = await chat('Reply with just the word "ok".');
+    expectDoneReason(events, 'model_stop');
+  });
+
+  it('max_tokens budget terminates the loop with reason=budget_exceeded', async () => {
+    // 200 tokens is well below what any single-turn + tool-call response
+    // will consume, so the budget check fires after the first turn.
+    const {events} = await chat(
+      'Echo these strings one at a time, calling echo_tool for each: alpha, bravo, charlie, delta, echo, foxtrot.',
+      undefined,
+      {maxTokens: 200},
+    );
+    expectDoneReason(events, 'budget_exceeded');
+    expectTotalTokens(events, {atLeast: 200});
   });
 });
 

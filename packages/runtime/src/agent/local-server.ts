@@ -475,6 +475,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     sessionManager,
     bundleResolver: {staticBundle: bundle},
     shared,
+    summarizeToolResult: config.summarizeToolResult,
     createStreamHooks: () => ({
       onSessionPersist: (sessionId) => {
         const session = sessionManager.get(sessionId);
@@ -510,6 +511,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     sessionManager,
     bundleResolver: {staticBundle: bundle},
     shared,
+    summarizeToolResult: config.summarizeToolResult,
   }));
 
   // Task runner

@@ -45,6 +45,7 @@ export default tseslint.config(
       'packages/test-utils/**',
       'references/**',
       'packages/*/src/generated/**',
+      'packages/runtime/src/__fixtures__/smoke-agent/.amodal/**',
       '**/*-env.d.ts',
       '**/tailwind.config.js',
     ],
