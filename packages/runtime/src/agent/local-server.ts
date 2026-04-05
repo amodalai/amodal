@@ -407,7 +407,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Resolve resume session ID
   let resumeSessionId = config.resumeSessionId;
   if (resumeSessionId === 'latest') {
-    const {sessions: recent} = await sessionStore.list(LOCAL_APP_ID, {
+    const {sessions: recent} = await sessionStore.list({
       limit: 1,
       filter: {appId: LOCAL_APP_ID},
     });
@@ -437,14 +437,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     const filter = automationFilter
       ? {automationName: automationFilter}
       : {appId: LOCAL_APP_ID};
-    const {sessions: rows} = await sessionStore.list(LOCAL_APP_ID, {limit: SESSION_LIST_LIMIT, filter});
+    const {sessions: rows} = await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
     const sessions = rows.map((s) => {
       const title = typeof s.metadata['title'] === 'string' ? s.metadata['title'] : undefined;
       const appId = typeof s.metadata['appId'] === 'string' ? s.metadata['appId'] : LOCAL_APP_ID;
       const automationName = typeof s.metadata['automationName'] === 'string' ? s.metadata['automationName'] : undefined;
       return {
         id: s.id,
-        tenantId: s.tenantId,
         appId,
         title,
         summary: title ?? extractFirstUserText(s.messages) ?? 'Untitled',
@@ -457,7 +456,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   }));
 
   app.get('/session/:id', asyncHandler(async (req, res) => {
-    const persisted = await sessionStore.load(LOCAL_APP_ID, req.params['id'] ?? '');
+    const persisted = await sessionStore.load(req.params['id'] ?? '');
     if (!persisted) {
       res.status(404).json({error: 'Session not found'});
       return;
@@ -484,16 +483,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     // array; metadata.title stays because it's on the live session.
     //
     // Not-live: load → mutate → save. No race possible.
-    //
-    // sessionManager.get() is not tenant-scoped (it reads the in-memory
-    // map by ID only). Safe here because local-server is single-tenant
-    // ('local'); every session in the map belongs to the same tenant.
     const live = sessionManager.get(sessionId);
     if (live) {
       live.metadata.title = title;
       await sessionManager.persist(live);
     } else {
-      const persisted = await sessionStore.load(LOCAL_APP_ID, sessionId);
+      const persisted = await sessionStore.load(sessionId);
       if (!persisted) {
         res.status(404).json({error: 'Session not found'});
         return;
@@ -511,7 +506,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.delete('/session/:id', asyncHandler(async (req, res) => {
     const sessionId = req.params['id'] ?? '';
     await sessionManager.destroy(sessionId);
-    const deleted = await sessionStore.delete(LOCAL_APP_ID, sessionId);
+    const deleted = await sessionStore.delete(sessionId);
     if (!deleted) {
       res.status(404).json({error: 'Session not found'});
       return;

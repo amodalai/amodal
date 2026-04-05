@@ -14,10 +14,8 @@ export interface AuthContext {
   apiKey?: string;
   /** Raw Bearer token (JWT or ak_ key) for forwarding to platform API */
   token?: string;
-  orgId: string;
   applicationId: string;
   authMethod: string;
-  actor?: string;
 }
 
 const AUTH_CONTEXT_KEY = 'authContext';

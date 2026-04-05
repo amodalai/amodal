@@ -232,7 +232,7 @@ describe('resolveSession', () => {
       sessionManager: mgr,
       bundleResolver: {staticBundle: stubBundle()},
       shared: stubShared(),
-      auth: {orgId: 'org-42', applicationId: 'app-1', authMethod: 'api_key', actor: 'user-99'},
+      auth: {applicationId: 'app-1', authMethod: 'api_key'},
     });
 
     expect(mgr.create).toHaveBeenCalled();
