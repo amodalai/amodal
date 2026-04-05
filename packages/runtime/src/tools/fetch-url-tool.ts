@@ -48,6 +48,25 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 10;
 
 // ---------------------------------------------------------------------------
+// Internal error type for the local fetch path
+// ---------------------------------------------------------------------------
+
+/**
+ * Internal signaling error thrown by `fetchLocally()`. Always caught and
+ * re-wrapped in `ToolExecutionError` at the tool boundary — it never escapes
+ * the module. Carrying the hostname/status/size on the error lets the
+ * wrapping layer include that context in the structured error response.
+ */
+class LocalFetchError extends Error {
+  readonly context: Record<string, unknown>;
+  constructor(message: string, context: Record<string, unknown>) {
+    super(message);
+    this.name = 'LocalFetchError';
+    this.context = context;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Params schema
 // ---------------------------------------------------------------------------
 
@@ -149,7 +168,11 @@ async function fetchLocally(url: string, signal: AbortSignal): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP ${String(response.status)} ${response.statusText}`);
+    throw new LocalFetchError(`HTTP ${String(response.status)} ${response.statusText}`, {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+    });
   }
 
   // Enforce size limit while reading. `content-length` can be absent
@@ -158,13 +181,19 @@ async function fetchLocally(url: string, signal: AbortSignal): Promise<string> {
   if (contentLength !== null) {
     const declared = Number(contentLength);
     if (Number.isFinite(declared) && declared > LOCAL_FETCH_MAX_BYTES) {
-      throw new Error(`Response too large: ${String(declared)} bytes (limit ${String(LOCAL_FETCH_MAX_BYTES)})`);
+      throw new LocalFetchError(
+        `Response too large: ${String(declared)} bytes (limit ${String(LOCAL_FETCH_MAX_BYTES)})`,
+        {url, declaredBytes: declared, limit: LOCAL_FETCH_MAX_BYTES},
+      );
     }
   }
 
   const buffer = await response.arrayBuffer();
   if (buffer.byteLength > LOCAL_FETCH_MAX_BYTES) {
-    throw new Error(`Response too large: ${String(buffer.byteLength)} bytes (limit ${String(LOCAL_FETCH_MAX_BYTES)})`);
+    throw new LocalFetchError(
+      `Response too large: ${String(buffer.byteLength)} bytes (limit ${String(LOCAL_FETCH_MAX_BYTES)})`,
+      {url, actualBytes: buffer.byteLength, limit: LOCAL_FETCH_MAX_BYTES},
+    );
   }
   const html = new TextDecoder('utf-8', {fatal: false}).decode(buffer);
   return extractWithReadability(html, url);
@@ -301,39 +330,13 @@ When NOT to use:
         };
       }
 
-      // Decide path
-      const useLocalFirst = parsed.isPrivate || !ctx.searchProvider;
+      // Decide path. The condition narrows `ctx.searchProvider` inside the
+      // primary branch so we can use it without a non-null assertion.
       let usedFallback = false;
       let text: string;
 
-      if (useLocalFirst) {
-        try {
-          text = await fetchLocally(url, ctx.signal);
-          usedFallback = true;
-        } catch (err) {
-          log.error('fetch_url_failed', {
-            session: ctx.sessionId,
-            hostname: parsed.hostname,
-            duration_ms: Date.now() - started,
-            path: 'local',
-            error: err instanceof Error ? err.message : String(err),
-          });
-          throw new ToolExecutionError('fetch_url failed (local fetch)', {
-            toolName: FETCH_URL_TOOL_NAME,
-            callId: ctx.sessionId,
-            cause: err,
-          });
-        }
-      } else {
-        // ctx.searchProvider is defined here (useLocalFirst would be true otherwise)
+      if (!parsed.isPrivate && ctx.searchProvider) {
         const provider = ctx.searchProvider;
-        if (!provider) {
-          // Defensive — the flag above guarantees this, keep TS happy.
-          return {
-            status: 'error',
-            content: 'Web fetch is not configured. Set `webTools.apiKey` in amodal.json.',
-          };
-        }
         try {
           text = await fetchViaSearchProvider(provider, url, prompt, ctx.signal);
           // Empty response from Gemini → try local
@@ -365,6 +368,25 @@ When NOT to use:
               context: {primaryError: primaryErr instanceof Error ? primaryErr.message : String(primaryErr)},
             });
           }
+        }
+      } else {
+        // Private network or no searchProvider configured — local only.
+        try {
+          text = await fetchLocally(url, ctx.signal);
+          usedFallback = true;
+        } catch (err) {
+          log.error('fetch_url_failed', {
+            session: ctx.sessionId,
+            hostname: parsed.hostname,
+            duration_ms: Date.now() - started,
+            path: 'local',
+            error: err instanceof Error ? err.message : String(err),
+          });
+          throw new ToolExecutionError('fetch_url failed (local fetch)', {
+            toolName: FETCH_URL_TOOL_NAME,
+            callId: ctx.sessionId,
+            cause: err,
+          });
         }
       }
 
