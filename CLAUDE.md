@@ -95,6 +95,7 @@ These rules apply to ALL code in this repo. They are non-negotiable.
 ### Async Discipline
 
 - **No floating promises.** Every async call is `await`ed or explicitly `void`ed with `.catch()`. Enable ESLint `@typescript-eslint/no-floating-promises`.
+- **Handle sibling promises from shared-source async results.** When a function returns an object with multiple promises backed by one underlying operation (e.g. `StreamTextResult` with `fullStream` + `text` + `usage` all tied to a single fetch, or deferred promise pairs that resolve/reject together), iterating or awaiting one before the siblings means a mid-iteration throw leaves the siblings unhandled. Attach passive `.catch(() => {})` to every sibling promise BEFORE entering the for-await. ESLint's `no-floating-promises` does NOT catch this — it sees the eventual `await siblings` line and assumes all paths reach it.
 - **Timeouts on all external operations.** Every provider call, MCP call, tool execution, and store operation gets `AbortSignal.timeout()`. No hanging forever on a broken external system.
 - **Exhaustive switch on discriminated unions.** Use the `never` trick in `default:` so adding a new variant causes a compile error, not a silent fallthrough.
 
