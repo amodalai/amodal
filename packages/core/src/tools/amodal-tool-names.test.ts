@@ -11,6 +11,8 @@ import {
   PRESENT_TOOL_NAME,
   REQUEST_TOOL_NAME,
   DISPATCH_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+  FETCH_URL_TOOL_NAME,
 } from './amodal-tool-names.js';
 
 describe('amodal-tool-names', () => {
@@ -20,6 +22,8 @@ describe('amodal-tool-names', () => {
     expect(PRESENT_TOOL_NAME).toBe('present');
     expect(REQUEST_TOOL_NAME).toBe('request');
     expect(DISPATCH_TOOL_NAME).toBe('dispatch');
+    expect(WEB_SEARCH_TOOL_NAME).toBe('web_search');
+    expect(FETCH_URL_TOOL_NAME).toBe('fetch_url');
   });
 
 });

@@ -126,6 +126,16 @@ export const AmodalConfigSchema = z.object({
     .optional(),
   /** Installed packages — maps "type/name" to semver range (like package.json dependencies) */
   dependencies: z.record(z.string(), z.string()).optional(),
+  webTools: z
+    .object({
+      /** Search/fetch provider. Only 'google' (Gemini grounding) is supported today. */
+      provider: z.literal('google'),
+      /** API key (supports env: refs, resolved by resolveEnvValues above). */
+      apiKey: z.string().min(1),
+      /** Gemini model to use for search + urlContext. Default: 'gemini-2.5-flash'. */
+      model: z.string().min(1).optional(),
+    })
+    .optional(),
   mcp: z
     .object({
       /** MCP servers to connect to as a client */

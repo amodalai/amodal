@@ -97,6 +97,7 @@ export type {
 export type {
   ModelConfig,
   AmodalConfig,
+  WebToolsConfig,
 } from './config-types.js';
 
 // Repo types

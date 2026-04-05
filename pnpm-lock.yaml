@@ -275,6 +275,9 @@ importers:
       "@electric-sql/pglite":
         specifier: ^0.3.15
         version: 0.3.16
+      "@mozilla/readability":
+        specifier: ^0.6.0
+        version: 0.6.0
       ai:
         specifier: ^6.0.145
         version: 6.0.145(zod@3.25.76)
@@ -296,6 +299,9 @@ importers:
       jose:
         specifier: ^6.0.0
         version: 6.2.2
+      linkedom:
+        specifier: ^0.18.12
+        version: 0.18.12
       node-cron:
         specifier: ^3.0.3
         version: 3.0.3
@@ -2229,6 +2235,13 @@ packages:
     peerDependenciesMeta:
       "@cfworker/json-schema":
         optional: true
+
+  "@mozilla/readability@0.6.0":
+    resolution:
+      {
+        integrity: sha512-juG5VWh4qAivzTAeMzvY9xs9HY5rAcr2E4I7tiSSCokRFi7XIZCAu92ZkSTsIj1OPceCifL3cpfteP3pDT9/QQ==,
+      }
+    engines: { node: ">=14.0.0" }
 
   "@mswjs/interceptors@0.41.3":
     resolution:
@@ -6135,6 +6148,12 @@ packages:
       }
     engines: { node: ">= 8" }
 
+  css-select@5.2.2:
+    resolution:
+      {
+        integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==,
+      }
+
   css-selector-parser@3.3.0:
     resolution:
       {
@@ -6161,6 +6180,12 @@ packages:
       }
     engines: { node: ">=4" }
     hasBin: true
+
+  cssom@0.5.0:
+    resolution:
+      {
+        integrity: sha512-iKuQcq+NdHqlAcwUY0o/HL69XQrUaQdMjmStJ8JFmUaiiQErlhrmuigkg/CU4E2J0IyUKUrMAgl36TvN67MqTw==,
+      }
 
   cssstyle@4.6.0:
     resolution:
@@ -6750,10 +6775,35 @@ packages:
         integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==,
       }
 
+  dom-serializer@2.0.0:
+    resolution:
+      {
+        integrity: sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==,
+      }
+
+  domelementtype@2.3.0:
+    resolution:
+      {
+        integrity: sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw==,
+      }
+
+  domhandler@5.0.3:
+    resolution:
+      {
+        integrity: sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==,
+      }
+    engines: { node: ">= 4" }
+
   dompurify@3.3.3:
     resolution:
       {
         integrity: sha512-Oj6pzI2+RqBfFG+qOaOLbFXLQ90ARpcGG6UePL82bJLtdsa6CYJD7nmiU8MW9nQNOtCHV3lZ/Bzq1X0QYbBZCA==,
+      }
+
+  domutils@3.2.2:
+    resolution:
+      {
+        integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==,
       }
 
   dotenv@8.6.0:
@@ -6939,6 +6989,13 @@ packages:
         integrity: sha512-rRqJg/6gd538VHvR3PSrdRBb/1Vy2YfzHqzvbhGIQpDRKIa4FgV/54b5Q1xYSxOOwKvjXweS26E0Q+nAMwp2pQ==,
       }
     engines: { node: ">=8.6" }
+
+  entities@4.5.0:
+    resolution:
+      {
+        integrity: sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==,
+      }
+    engines: { node: ">=0.12" }
 
   entities@6.0.1:
     resolution:
@@ -8082,6 +8139,12 @@ packages:
         integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==,
       }
 
+  html-escaper@3.0.3:
+    resolution:
+      {
+        integrity: sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ==,
+      }
+
   html-url-attributes@3.0.1:
     resolution:
       {
@@ -8092,6 +8155,12 @@ packages:
     resolution:
       {
         integrity: sha512-bEqo66MRXsUGxWHV5IP0PUiAWwoEjba4VCzg0LjFJBpchPaTfyfCKTG6bc5F8ucKec3q5y6qOdGyYTSBEvhCrg==,
+      }
+
+  htmlparser2@10.1.0:
+    resolution:
+      {
+        integrity: sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==,
       }
 
   http-errors@2.0.1:
@@ -9160,6 +9229,18 @@ packages:
       {
         integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==,
       }
+
+  linkedom@0.18.12:
+    resolution:
+      {
+        integrity: sha512-jalJsOwIKuQJSeTvsgzPe9iJzyfVaEJiEXl+25EkKevsULHvMJzpNqwvj1jOESWdmgKDiXObyjOYwlUqG7wo1Q==,
+      }
+    engines: { node: ">=16" }
+    peerDependencies:
+      canvas: ">= 2"
+    peerDependenciesMeta:
+      canvas:
+        optional: true
 
   lint-staged@15.5.2:
     resolution:
@@ -12364,6 +12445,12 @@ packages:
         integrity: sha512-yDJTmhydvl5lJzBmy/hyOAA0d+aqCBuwl818haVdYCRrWV84o7YyeVm4QlVHStqNrrJSTb6jKuFAVqAFsr+K3Q==,
       }
 
+  uhyphen@0.2.0:
+    resolution:
+      {
+        integrity: sha512-qz3o9CHXmJJPGBdqzab7qAYuW8kQGKNEuoHFYrBwV6hWIMcpAmxDLXojcHfFr9US1Pe6zUswEIJIbLI610fuqA==,
+      }
+
   unbox-primitive@1.1.0:
     resolution:
       {
@@ -14610,6 +14697,8 @@ snapshots:
       zod-to-json-schema: 3.25.1(zod@3.25.76)
     transitivePeerDependencies:
       - supports-color
+
+  "@mozilla/readability@0.6.0": {}
 
   "@mswjs/interceptors@0.41.3":
     dependencies:
@@ -17422,6 +17511,14 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
+  css-select@5.2.2:
+    dependencies:
+      boolbase: 1.0.0
+      css-what: 6.2.2
+      domhandler: 5.0.3
+      domutils: 3.2.2
+      nth-check: 2.1.1
+
   css-selector-parser@3.3.0: {}
 
   css-what@6.2.2: {}
@@ -17429,6 +17526,8 @@ snapshots:
   css.escape@1.5.1: {}
 
   cssesc@3.0.0: {}
+
+  cssom@0.5.0: {}
 
   cssstyle@4.6.0:
     dependencies:
@@ -17755,9 +17854,27 @@ snapshots:
 
   dom-accessibility-api@0.6.3: {}
 
+  dom-serializer@2.0.0:
+    dependencies:
+      domelementtype: 2.3.0
+      domhandler: 5.0.3
+      entities: 4.5.0
+
+  domelementtype@2.3.0: {}
+
+  domhandler@5.0.3:
+    dependencies:
+      domelementtype: 2.3.0
+
   dompurify@3.3.3:
     optionalDependencies:
       "@types/trusted-types": 2.0.7
+
+  domutils@3.2.2:
+    dependencies:
+      dom-serializer: 2.0.0
+      domelementtype: 2.3.0
+      domhandler: 5.0.3
 
   dotenv@8.6.0: {}
 
@@ -17806,6 +17923,8 @@ snapshots:
     dependencies:
       ansi-colors: 4.1.3
       strip-ansi: 6.0.1
+
+  entities@4.5.0: {}
 
   entities@6.0.1: {}
 
@@ -18811,9 +18930,18 @@ snapshots:
 
   html-escaper@2.0.2: {}
 
+  html-escaper@3.0.3: {}
+
   html-url-attributes@3.0.1: {}
 
   html-void-elements@3.0.0: {}
+
+  htmlparser2@10.1.0:
+    dependencies:
+      domelementtype: 2.3.0
+      domhandler: 5.0.3
+      domutils: 3.2.2
+      entities: 7.0.1
 
   http-errors@2.0.1:
     dependencies:
@@ -19394,6 +19522,14 @@ snapshots:
   lilconfig@3.1.3: {}
 
   lines-and-columns@1.2.4: {}
+
+  linkedom@0.18.12:
+    dependencies:
+      css-select: 5.2.2
+      cssom: 0.5.0
+      html-escaper: 3.0.3
+      htmlparser2: 10.1.0
+      uhyphen: 0.2.0
 
   lint-staged@15.5.2:
     dependencies:
@@ -21793,6 +21929,8 @@ snapshots:
   ua-parser-js@1.0.41: {}
 
   ufo@1.6.3: {}
+
+  uhyphen@0.2.0: {}
 
   unbox-primitive@1.1.0:
     dependencies:

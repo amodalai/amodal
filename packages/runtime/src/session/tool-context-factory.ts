@@ -19,6 +19,7 @@
 import type {LoadedStore, StoreBackend} from '@amodalai/types';
 import type {FieldScrubber} from '@amodalai/core';
 import type {ConnectionsMap} from '../tools/request-tool.js';
+import type {SearchProvider} from '../providers/search-provider.js';
 import type {ToolContext} from '../tools/types.js';
 import type {Logger} from '../logger.js';
 import {ConnectionError, StoreError} from '../errors.js';
@@ -48,6 +49,8 @@ export interface ToolContextFactoryOptions {
   user: {roles: string[]; [key: string]: unknown};
   /** Session ID for correlation */
   sessionId: string;
+  /** Grounded search provider for web_search/fetch_url (optional). */
+  searchProvider?: SearchProvider;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +267,7 @@ export function createToolContextFactory(
       user: opts.user,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       sessionId: opts.sessionId,
+      ...(opts.searchProvider ? {searchProvider: opts.searchProvider} : {}),
     };
     return ctx;
   };
