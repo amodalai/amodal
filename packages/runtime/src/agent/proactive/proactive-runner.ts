@@ -347,12 +347,14 @@ export class ProactiveRunner {
       if (session && this.config.onSessionComplete) {
         this.config.onSessionComplete(session, automation.name);
       }
+      const durationMs = Date.now() - startedAt;
       this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'error', error: msg, sessionId: session?.id});
-      this.config.logger.error('automation_run_error', {name: automation.name, error: msg});
+      this.config.logger.error('automation_run_error', {name: automation.name, error: msg, durationMs});
       this.config.eventBus?.emit({
         type: 'automation_failed',
         name: automation.name,
         error: msg,
+        durationMs,
       });
       // Fire failure alert (respects threshold + cooldown)
       await this.deliveryRouter.onFailure(automation.name, msg, automation.failureAlert);

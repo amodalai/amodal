@@ -200,7 +200,9 @@ export class DeliveryRouter {
           // (e.g., 'email') will fail to compile here until a case is
           // added, preventing silent "nothing delivered" regressions.
           const _exhaustive: never = target;
-          throw new Error(`Unhandled delivery target: ${String((_exhaustive as {type: string}).type)}`);
+          throw new DeliveryConfigError(
+            `Unhandled delivery target: ${String((_exhaustive as {type: string}).type)}`,
+          );
         }
       }
     } catch (err) {
@@ -340,6 +342,13 @@ export class DeliveryRouter {
     }
 
     return rendered;
+  }
+}
+
+class DeliveryConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DeliveryConfigError';
   }
 }
 

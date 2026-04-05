@@ -84,6 +84,7 @@ export interface AutomationFailedEvent extends RuntimeEventBase {
   type: 'automation_failed';
   name: string;
   error: string;
+  durationMs: number;
 }
 
 export interface AutomationStartedEvent extends RuntimeEventBase {
