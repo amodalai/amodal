@@ -200,11 +200,11 @@ Requires a Google API key (`GOOGLE_API_KEY`). The grounding free tier is 5K quer
 
 **Behavior when unconfigured or misconfigured:**
 
-| Situation                                                           | Result                                                                                                                                                         |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `webTools` block absent from `amodal.json`                          | Tools not registered. Agents don't see them in their tool list. Startup log: `web_tools_not_configured`.                                                       |
-| `webTools` present, `apiKey: "env:GOOGLE_API_KEY"`, env var not set | Boot fails fast with `ConfigError: Environment variable "GOOGLE_API_KEY" is not set`.                                                                          |
-| Key is set but invalid/expired/quota-exhausted                      | Tools register; each call throws `ProviderError` at runtime → the agent sees `{status: 'error', content: 'Tool execution failed: …'}` and can recover in-loop. |
+| Situation                                                           | Result                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `webTools` block absent from `amodal.json`                          | Tools not registered. Agents don't see them in their tool list. Startup log: `web_tools_not_configured`.                                                                                                                                                              |
+| `webTools` present, `apiKey: "env:GOOGLE_API_KEY"`, env var not set | Boot fails fast with `ConfigError: Environment variable "GOOGLE_API_KEY" is not set`.                                                                                                                                                                                 |
+| Key is set but invalid/expired/quota-exhausted                      | Tools register; at call time `web_search` returns a structured `{status: 'error', content: ..., retryable: bool}` with specific guidance (e.g. "DO NOT retry, check GOOGLE_API_KEY" on 400/401/403, "may retry once" on 5xx) so the agent knows whether to try again. |
 
 ## Developing from Source
 
