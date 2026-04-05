@@ -81,6 +81,16 @@ export const GREP_FILE_SIZE_LIMIT = 5_000_000; // 5 MB
 export const READ_MANY_MAX_FILES = 20;
 /** Max bytes per file returned by `read_many_repo_files` before truncation. */
 export const READ_MANY_MAX_BYTES = 50_000;
+/**
+ * Default number of lines `read_repo_file` returns when no `limit` is passed.
+ * Matches the conventions of Claude Code's Read tool and gemini-cli's
+ * read_file — long files are truncated by default and the agent paginates
+ * only when it needs to. Prevents single reads from blowing the context
+ * window on large config/lockfile/log inputs.
+ */
+export const READ_FILE_DEFAULT_LINES = 2000;
+/** Hard upper bound on `limit` — even explicit requests cannot exceed this. */
+export const READ_FILE_MAX_LINES = 10_000;
 
 /** Top-level directory entry of the allowlist, without the trailing slash. */
 const ALLOWED_TOP_LEVEL_NAMES = ALLOWED_REPO_DIRS.map((d) => d.replace(/\/$/, ''));
@@ -100,6 +110,15 @@ function isExpectedFsSkipError(err: unknown): boolean {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by instanceof + 'code' in err
   const code = (err as NodeJS.ErrnoException).code;
   return code !== undefined && EXPECTED_FS_SKIP_CODES.has(code);
+}
+
+/**
+ * Count lines in a string. A trailing empty line from a terminal \n is NOT
+ * counted — a file whose content is "a\nb\n" is "2 lines" to humans, not 3.
+ */
+function countLines(text: string): number {
+  const parts = text.split(/\r?\n/);
+  return (parts.length > 0 && parts[parts.length - 1] === '') ? parts.length - 1 : parts.length;
 }
 
 /** @internal Exported for testing */
@@ -249,27 +268,58 @@ async function walkFiles(
 
 export function createReadRepoFileTool(repoRoot: string): ToolDefinition {
   return {
-    description: 'Read a file from the agent repo. Path is relative to repo root. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.',
+    description: `Read a file from the agent repo. By default returns the first ${String(READ_FILE_DEFAULT_LINES)} lines — for longer files, the response sets truncated: true and includes total_lines so you know how much more there is. Use offset + limit to paginate through the rest. Path is relative to repo root. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.`,
     parameters: z.object({
       path: z.string().min(1).describe('File path relative to repo root (e.g. "knowledge/formatting-rules.md")'),
+      offset: z.number().int().min(1).optional().describe(`Line number to start reading from (1-indexed, default 1). Use with limit to paginate long files — call again with offset: line_end + 1 to read the next chunk.`),
+      limit: z.number().int().min(1).max(READ_FILE_MAX_LINES).optional().describe(`Max lines to return (default ${String(READ_FILE_DEFAULT_LINES)}, max ${String(READ_FILE_MAX_LINES)})`),
     }),
     readOnly: true,
     metadata: {category: 'admin'},
 
-    async execute(params: {path: string}, _ctx: ToolContext): Promise<unknown> {
+    async execute(
+      params: {path: string; offset?: number; limit?: number},
+      _ctx: ToolContext,
+    ): Promise<unknown> {
       const validation = validatePath(repoRoot, params.path);
       if ('error' in validation) {
         return {error: validation.error};
       }
+
+      let buf: Buffer;
       try {
-        const content = await readFile(validation.resolved, 'utf-8');
-        return {content, path: validation.relative};
+        buf = await readFile(validation.resolved);
       } catch (err) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by instanceof + 'code' in err
         const isNotFound = err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT';
         const msg = isNotFound ? `File not found: ${validation.relative}` : (err instanceof Error ? err.message : String(err));
         return {error: msg};
       }
+
+      if (isLikelyBinary(buf)) {
+        return {error: `Binary file: ${validation.relative} (read_repo_file returns text only)`};
+      }
+
+      const text = buf.toString('utf-8');
+      const lines = text.split(/\r?\n/);
+      const totalLines = countLines(text);
+
+      const offset = Math.max(1, params.offset ?? 1);
+      const limit = Math.max(1, Math.min(params.limit ?? READ_FILE_DEFAULT_LINES, READ_FILE_MAX_LINES));
+
+      // offset is 1-indexed; slice is 0-indexed.
+      const startIdx = offset - 1;
+      const endIdx = Math.min(startIdx + limit, totalLines);
+      const slice = lines.slice(startIdx, endIdx);
+
+      return {
+        content: slice.join('\n'),
+        path: validation.relative,
+        line_start: offset,
+        line_end: endIdx, // 1-indexed, inclusive
+        total_lines: totalLines,
+        ...(endIdx < totalLines ? {truncated: true} : {}),
+      };
     },
   };
 }
@@ -650,6 +700,7 @@ export function createReadManyRepoFilesTool(repoRoot: string): ToolDefinition {
       const files: Array<{
         path: string;
         content?: string;
+        total_lines?: number;
         truncated?: boolean;
         error?: string;
       }> = [];
@@ -676,15 +727,23 @@ export function createReadManyRepoFilesTool(repoRoot: string): ToolDefinition {
           files.push({path: validation.relative, error: 'Binary file — not returned'});
           continue;
         }
-        if (buf.length > READ_MANY_MAX_BYTES) {
-          files.push({
-            path: validation.relative,
-            content: buf.subarray(0, READ_MANY_MAX_BYTES).toString('utf-8'),
-            truncated: true,
-          });
-        } else {
-          files.push({path: validation.relative, content: buf.toString('utf-8')});
-        }
+        // Count lines in the ORIGINAL file (not the truncated content) so
+        // the agent knows how much more there is when content is truncated.
+        // READ_MANY_MAX_BYTES is a byte budget, so slice bytes then decode
+        // (may emit U+FFFD on a mid-multibyte cut — acceptable, matches
+        // previous behavior).
+        const fullText = buf.toString('utf-8');
+        const totalLines = countLines(fullText);
+        const truncated = buf.length > READ_MANY_MAX_BYTES;
+        const content = truncated
+          ? buf.subarray(0, READ_MANY_MAX_BYTES).toString('utf-8')
+          : fullText;
+        files.push({
+          path: validation.relative,
+          content,
+          total_lines: totalLines,
+          ...(truncated ? {truncated: true} : {}),
+        });
       }
 
       return {files, ...(excess > 0 ? {truncated: true, dropped: excess} : {})};
