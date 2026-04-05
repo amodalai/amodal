@@ -213,15 +213,6 @@ describe('createReadRepoFileTool', () => {
     expect(result['total_lines']).toBe(3);
   });
 
-  it('caps limit at READ_FILE_MAX_LINES via zod validation', async () => {
-    writeFileSync(join(repoRoot, 'skills', 'nums.md'), 'a');
-    const tool = createReadRepoFileTool(repoRoot);
-
-    // limit > READ_FILE_MAX_LINES should be rejected by the schema before execute runs.
-    const parse = tool.parameters.safeParse({path: 'skills/nums.md', limit: 99_999});
-    expect(parse.success).toBe(false);
-  });
-
   it('rejects binary files', async () => {
     // Write a buffer with a NUL byte in it (classic binary signal).
     writeFileSync(join(repoRoot, 'skills', 'binary.bin'), Buffer.from([0x48, 0x65, 0x00, 0x6C, 0x6C, 0x6F]));

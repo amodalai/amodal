@@ -485,6 +485,71 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     }
   }, TIMEOUT * 2);
 
+  // Pagination end-to-end: drop a 3000-line file with a sentinel on line
+  // 2800, ask the admin agent to report what's there verbatim. The default
+  // read cap is 2000 lines, so the agent MUST either paginate via offset
+  // or use grep. Verifies the new line_start/line_end/total_lines/
+  // truncated response shape is actually usable by a real LLM.
+  it('admin agent paginates a long file to reach content past the default cap', async () => {
+    const bigFilePath = resolve(AGENT_DIR, 'knowledge', 'big-file.md');
+    // Sentinel must be distinct enough that the agent can quote it back.
+    const SENTINEL = 'TARGET:CONTENT:ABCD1234:the-answer-is-42';
+    const TARGET_LINE = 2800;
+    const TOTAL_LINES = 3000;
+    const body = Array.from({length: TOTAL_LINES}, (_, i) => {
+      const n = i + 1;
+      return n === TARGET_LINE ? `line ${String(n)}: ${SENTINEL}` : `line ${String(n)}: filler`;
+    }).join('\n');
+    writeFileSync(bigFilePath, body);
+
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          message:
+            `I just added a long file at knowledge/big-file.md. Tell me exactly what's on line ${String(TARGET_LINE)} — report the full line content verbatim. Just give me the line, no summary.`,
+        }),
+        signal: AbortSignal.timeout(TIMEOUT * 2),
+      });
+
+      const text = await res.text();
+      const events = parseSSE(text);
+      const toolStarts = findEvents(events, 'tool_call_start');
+      const toolNames = toolStarts.map((e) => String(e['tool_name']));
+
+      // The agent needs to touch the file — either read_repo_file or
+      // grep_repo_files would work to find the target line.
+      const touchedFile = toolNames.some(
+        (n) => n === 'read_repo_file' || n === 'grep_repo_files',
+      );
+      expect(touchedFile).toBe(true);
+
+      // If the agent used read_repo_file, at least one call must have
+      // specified an offset/limit that covers line 2800 (the default
+      // 2000-line window doesn't reach it, so the agent HAS to adapt).
+      const readCalls = toolStarts.filter((e) => e['tool_name'] === 'read_repo_file');
+      if (readCalls.length > 0) {
+        const usedPagination = readCalls.some((e) => {
+          const params = e['parameters'] as Record<string, unknown> | undefined;
+          if (!params) return false;
+          const offset = typeof params['offset'] === 'number' ? params['offset'] : 1;
+          const limit = typeof params['limit'] === 'number' ? params['limit'] : 2000;
+          // Covers line TARGET_LINE if offset <= TARGET_LINE AND
+          // offset + limit - 1 >= TARGET_LINE.
+          return offset <= TARGET_LINE && offset + limit - 1 >= TARGET_LINE;
+        });
+        expect(usedPagination).toBe(true);
+      }
+
+      // Hard assertion: the response contains the sentinel verbatim.
+      const responseText = allText(events);
+      expect(responseText).toContain(SENTINEL);
+    } finally {
+      rmSync(bigFilePath, {force: true});
+    }
+  }, TIMEOUT * 2);
+
   // -------------------------------------------------------------------------
   // 10. Write intent enforcement (G8)
   // -------------------------------------------------------------------------
