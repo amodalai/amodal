@@ -36,3 +36,11 @@ Also:
   response, so when byte-based truncation fires the agent knows whether
   to switch to the paginated `read_repo_file` for the full content.
 - New exported constants: `READ_FILE_DEFAULT_LINES`, `READ_FILE_MAX_LINES`.
+- **Loop detector now skips pagination variants.** Previously the detector
+  counted calls as "similar" when ≥50% of their values matched — which
+  flagged legitimate multi-chunk pagination (same tool, same path, three
+  different `offset` values: 67% matching) as a loop after 3 calls. The
+  heuristic now treats known iteration keys (`offset`, `limit`, `page`,
+  `cursor`, `start_line`/`end_line`, `after`/`before`, etc.) as
+  pagination, not loop-defining — two calls that differ ONLY in those
+  keys no longer count toward loop detection.

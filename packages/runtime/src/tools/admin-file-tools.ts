@@ -268,10 +268,10 @@ async function walkFiles(
 
 export function createReadRepoFileTool(repoRoot: string): ToolDefinition {
   return {
-    description: `Read a file from the agent repo. By default returns the first ${String(READ_FILE_DEFAULT_LINES)} lines — for longer files, the response sets truncated: true and includes total_lines so you know how much more there is. Use offset + limit to paginate through the rest. Path is relative to repo root. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.`,
+    description: `Read a file from the agent repo. Returns up to ${String(READ_FILE_DEFAULT_LINES)} lines by default; if truncated: true, paginate with offset + limit. Path is relative to repo root (e.g. "knowledge/formatting-rules.md").`,
     parameters: z.object({
       path: z.string().min(1).describe('File path relative to repo root (e.g. "knowledge/formatting-rules.md")'),
-      offset: z.number().int().min(1).optional().describe(`Line number to start reading from (1-indexed, default 1). Use with limit to paginate long files — call again with offset: line_end + 1 to read the next chunk.`),
+      offset: z.number().int().min(1).optional().describe(`Line number to start reading from (1-indexed, default 1). To continue after a truncated response, call again with offset: line_end + 1.`),
       limit: z.number().int().min(1).max(READ_FILE_MAX_LINES).optional().describe(`Max lines to return (default ${String(READ_FILE_DEFAULT_LINES)}, max ${String(READ_FILE_MAX_LINES)})`),
     }),
     readOnly: true,
@@ -304,21 +304,27 @@ export function createReadRepoFileTool(repoRoot: string): ToolDefinition {
       const lines = text.split(/\r?\n/);
       const totalLines = countLines(text);
 
-      const offset = Math.max(1, params.offset ?? 1);
-      const limit = Math.max(1, Math.min(params.limit ?? READ_FILE_DEFAULT_LINES, READ_FILE_MAX_LINES));
+      const offset = params.offset ?? 1;
+      const limit = params.limit ?? READ_FILE_DEFAULT_LINES;
 
       // offset is 1-indexed; slice is 0-indexed.
       const startIdx = offset - 1;
-      const endIdx = Math.min(startIdx + limit, totalLines);
-      const slice = lines.slice(startIdx, endIdx);
+      const slice = startIdx >= 0 && startIdx < totalLines
+        ? lines.slice(startIdx, Math.min(startIdx + limit, totalLines))
+        : [];
+      const linesReturned = slice.length;
+      // line_end = last line returned (1-indexed). Empty range → line_end = line_start - 1
+      // so the agent can detect "nothing returned" from line_end < line_start.
+      const lineEnd = offset + linesReturned - 1;
+      const hasMore = linesReturned > 0 && lineEnd < totalLines;
 
       return {
         content: slice.join('\n'),
         path: validation.relative,
         line_start: offset,
-        line_end: endIdx, // 1-indexed, inclusive
+        line_end: lineEnd,
         total_lines: totalLines,
-        ...(endIdx < totalLines ? {truncated: true} : {}),
+        ...(hasMore ? {truncated: true} : {}),
       };
     },
   };

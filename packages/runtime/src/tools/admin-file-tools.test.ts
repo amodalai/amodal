@@ -201,7 +201,7 @@ describe('createReadRepoFileTool', () => {
     expect(result['truncated']).toBe(true); // line_end(5) < total_lines(7)
   });
 
-  it('returns empty content when offset is past end of file', async () => {
+  it('returns empty content with line_end = offset - 1 when offset is past EOF', async () => {
     writeFileSync(join(repoRoot, 'skills', 'nums.md'), 'a\nb\nc');
     const tool = createReadRepoFileTool(repoRoot);
 
@@ -209,8 +209,58 @@ describe('createReadRepoFileTool', () => {
 
     expect(result['content']).toBe('');
     expect(result['line_start']).toBe(100);
-    expect(result['line_end']).toBe(3);
+    // line_end < line_start signals "empty range — caller asked past EOF"
+    expect(result['line_end']).toBe(99);
     expect(result['total_lines']).toBe(3);
+    // Not truncated: there's nothing more to give.
+    expect(result['truncated']).toBeUndefined();
+  });
+
+  // -------------------------------------------------------------------------
+  // Pagination fencepost cases
+  // -------------------------------------------------------------------------
+
+  it('does NOT mark truncated when file is exactly at the default cap', async () => {
+    const body = Array.from({length: READ_FILE_DEFAULT_LINES}, (_, i) => `x${String(i)}`).join('\n');
+    writeFileSync(join(repoRoot, 'skills', 'exact.md'), body);
+    const tool = createReadRepoFileTool(repoRoot);
+
+    const result = await tool.execute({path: 'skills/exact.md'}, mockCtx) as Record<string, unknown>;
+    expect(result['total_lines']).toBe(READ_FILE_DEFAULT_LINES);
+    expect(result['line_end']).toBe(READ_FILE_DEFAULT_LINES);
+    expect(result['truncated']).toBeUndefined();
+  });
+
+  it('marks truncated when file is exactly one line over the default cap', async () => {
+    const body = Array.from({length: READ_FILE_DEFAULT_LINES + 1}, (_, i) => `x${String(i)}`).join('\n');
+    writeFileSync(join(repoRoot, 'skills', 'over.md'), body);
+    const tool = createReadRepoFileTool(repoRoot);
+
+    const result = await tool.execute({path: 'skills/over.md'}, mockCtx) as Record<string, unknown>;
+    expect(result['total_lines']).toBe(READ_FILE_DEFAULT_LINES + 1);
+    expect(result['line_end']).toBe(READ_FILE_DEFAULT_LINES);
+    expect(result['truncated']).toBe(true);
+  });
+
+  it('handles an empty file', async () => {
+    writeFileSync(join(repoRoot, 'skills', 'empty.md'), '');
+    const tool = createReadRepoFileTool(repoRoot);
+
+    const result = await tool.execute({path: 'skills/empty.md'}, mockCtx) as Record<string, unknown>;
+    expect(result['content']).toBe('');
+    expect(result['total_lines']).toBe(0);
+    expect(result['line_start']).toBe(1);
+    expect(result['line_end']).toBe(0); // empty range
+    expect(result['truncated']).toBeUndefined();
+  });
+
+  it('counts CRLF line endings correctly', async () => {
+    writeFileSync(join(repoRoot, 'skills', 'crlf.md'), 'a\r\nb\r\nc\r\n');
+    const tool = createReadRepoFileTool(repoRoot);
+
+    const result = await tool.execute({path: 'skills/crlf.md'}, mockCtx) as Record<string, unknown>;
+    expect(result['total_lines']).toBe(3);
+    expect(result['content']).toBe('a\nb\nc');
   });
 
   it('rejects binary files', async () => {
