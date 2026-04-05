@@ -20,8 +20,6 @@ import type {StoreDocumentMeta} from '@amodalai/types';
 
 export const agentSessions = pgTable('agent_sessions', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').notNull(),
-  userId: text('user_id').notNull(),
   messages: jsonb('messages').notNull().$type<unknown[]>(),
   tokenUsage: jsonb('token_usage').notNull().$type<{
     inputTokens: number;

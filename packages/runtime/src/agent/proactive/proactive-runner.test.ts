@@ -57,8 +57,6 @@ function makeRepo(automations: LoadedAutomation[]): AgentBundle {
 // Mock session and session manager
 const mockSession: Session = {
   id: 'test-session',
-  tenantId: 'local',
-  userId: 'automation',
   provider: {} as Session['provider'],
   toolRegistry: {register: vi.fn(), get: vi.fn(), getTools: vi.fn(), names: vi.fn(() => []), subset: vi.fn(), size: 0},
   permissionChecker: {check: vi.fn()},

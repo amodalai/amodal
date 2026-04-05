@@ -145,11 +145,11 @@ export class DrizzleSessionStore implements SessionStore {
     }
   }
 
-  async list(tenantId: string, opts?: SessionListOptions): Promise<SessionListResult> {
+  async list(opts?: SessionListOptions): Promise<SessionListResult> {
     this.ensureOpen('list');
 
     const limit = opts?.limit ?? DEFAULT_LIST_LIMIT;
-    const where = buildListConditions(this.backendName, tenantId, opts, this.table);
+    const where = buildListConditions(this.backendName, opts, this.table);
 
     try {
       const rows = await this.db
@@ -174,7 +174,6 @@ export class DrizzleSessionStore implements SessionStore {
         backend: this.backendName,
         operation: 'list',
         cause,
-        context: {tenantId},
       });
     }
   }

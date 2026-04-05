@@ -229,9 +229,6 @@ export interface AgentContext {
   /** Session ID for correlation */
   sessionId: string;
 
-  /** Tenant ID for multi-tenant isolation */
-  tenantId: string;
-
   /** Current user info */
   user: {roles: string[]; [key: string]: unknown};
 

@@ -104,8 +104,6 @@ export function createAdminChatRouter(options: AdminChatRouterOptions): Router {
         });
 
         session = options.sessionManager.create({
-          tenantId: 'local',
-          userId: 'admin',
           provider: components.provider,
           toolRegistry: components.toolRegistry,
           permissionChecker: components.permissionChecker,

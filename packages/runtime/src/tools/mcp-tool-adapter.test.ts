@@ -46,7 +46,6 @@ function makeMockContext(overrides?: Partial<ToolContext>): ToolContext {
     user: {roles: []},
     signal: AbortSignal.timeout(10000),
     sessionId: 'test-session',
-    tenantId: 'test-tenant',
     ...overrides,
   };
 }

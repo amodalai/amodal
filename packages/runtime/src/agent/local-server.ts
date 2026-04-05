@@ -291,8 +291,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       sessionType: 'automation',
     });
     const session = sessionManager.create({
-      tenantId: 'local',
-      userId: 'automation',
       provider: components.provider,
       toolRegistry: components.toolRegistry,
       permissionChecker: components.permissionChecker,

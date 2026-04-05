@@ -159,8 +159,6 @@ describe.skipIf(activeTargets.length === 0)('e2e', () => {
     // the model chooses to be.
     const MAX_TOKENS = 200;
     const session = mgr.create({
-      tenantId: 'e2e-tenant',
-      userId: 'e2e-user',
       provider,
       toolRegistry: buildRegistry(),
       permissionChecker: allowAll,
@@ -224,8 +222,6 @@ describe.skipIf(activeTargets.length === 0)('e2e', () => {
     }
 
     const session = mgr.create({
-      tenantId: 'e2e-tenant',
-      userId: 'e2e-user',
       provider,
       toolRegistry: buildRegistry(),
       permissionChecker: allowAll,

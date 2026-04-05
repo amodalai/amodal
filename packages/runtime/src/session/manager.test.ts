@@ -85,8 +85,6 @@ function stubPermissionChecker(): PermissionChecker {
 
 function makeCreateOpts(overrides: Partial<CreateSessionOptions> = {}): CreateSessionOptions {
   return {
-    tenantId: 'tenant-1',
-    userId: 'user-1',
     provider: stubProvider(),
     toolRegistry: createToolRegistry(),
     permissionChecker: stubPermissionChecker(),
@@ -116,8 +114,6 @@ describe('StandaloneSessionManager', () => {
       const session = mgr.create(makeCreateOpts());
 
       expect(session.id).toBeTruthy();
-      expect(session.tenantId).toBe('tenant-1');
-      expect(session.userId).toBe('user-1');
       expect(session.model).toBe('test-model');
       expect(session.providerName).toBe('test-provider');
       expect(session.messages).toEqual([]);
@@ -234,20 +230,20 @@ describe('StandaloneSessionManager', () => {
   });
 
   describe('list persisted', () => {
-    it('lists sessions filtered by tenant', async () => {
-      const tenantId = `tenant-list-mgr-${Date.now()}`;
+    it('lists persisted sessions newest first', async () => {
       const mgr = new StandaloneSessionManager({logger, store});
 
-      const s1 = mgr.create(makeCreateOpts({tenantId}));
-      const s2 = mgr.create(makeCreateOpts({tenantId}));
-      mgr.create(makeCreateOpts({tenantId: 'other-tenant'}));
+      const s1 = mgr.create(makeCreateOpts());
+      const s2 = mgr.create(makeCreateOpts());
 
       await mgr.persist(s1);
       await mgr.persist(s2);
 
-      const list = await mgr.listPersisted(tenantId);
-      expect(list.length).toBeGreaterThanOrEqual(2);
-      expect(list.every((s) => s.tenantId === tenantId)).toBe(true);
+      const list = await mgr.listPersisted();
+      // Should include at least the two we just persisted
+      const ids = list.map((s) => s.id);
+      expect(ids).toContain(s1.id);
+      expect(ids).toContain(s2.id);
     });
   });
 
