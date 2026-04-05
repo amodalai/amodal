@@ -192,77 +192,20 @@ export async function handleExecuting(
     };
   }
 
-  // 5. Execute the tool
-  effects.push({
-    type: SSEEventType.ToolCallStart,
-    tool_name: current.toolName,
-    tool_id: current.toolCallId,
-    parameters: sanitizeParams(current.args),
-    timestamp,
-  });
-
-  const startedAt = Date.now();
-  let result: ToolResult;
-
-  try {
-    // Check pre-execution cache first (read-only tools started during streaming)
-    const cached = ctx.preExecutionCache.get(current.toolCallId);
-    const output = cached
-      ? await cached
-      : await executeTool(current, toolDef, ctx);
-
-    const content = typeof output === 'string' ? output : JSON.stringify(output);
-
-    // Detect error-as-result pattern: tool returned {error: "..."} without throwing.
-    // This happens when tool internals catch errors and return them as data.
-    // Treat these as failures so the SSE event shows status: 'error'.
-    const isErrorResult = typeof output === 'object' && output !== null
-      && 'error' in output && typeof (output as Record<string, unknown>)['error'] === 'string'
-      && Object.keys(output as Record<string, unknown>).length === 1;
-
-    result = {
-      callId: current.toolCallId,
-      toolName: current.toolName,
-      status: isErrorResult ? 'error' : 'success',
-      content,
-    };
-
-    if (isErrorResult) {
-      ctx.logger.warn('tool_returned_error', {
-        tool: current.toolName,
-        callId: current.toolCallId,
-        error: (output as Record<string, unknown>)['error'],
-        session: ctx.sessionId,
-        duration: Date.now() - startedAt,
-      });
-    }
-  } catch (err) {
-    // Tool execution failed — don't crash the loop, tell the model what happened
-    result = {
-      callId: current.toolCallId,
-      toolName: current.toolName,
-      status: 'error',
-      content: `Tool execution failed: ${err instanceof Error ? err.message : String(err)}`,
-    };
-    ctx.logger.error('tool_execution_error', {
-      tool: current.toolName,
-      callId: current.toolCallId,
-      error: err instanceof Error ? err.message : String(err),
-      session: ctx.sessionId,
-      duration: Date.now() - startedAt,
-    });
+  // 5. Decide: can we batch this call with leading read-only calls from the
+  //    queue? Batching lets independent read-only tools run concurrently
+  //    instead of taking one EXECUTING transition per call. Non-batchable
+  //    calls (writes, confirmation-required, connection ACL, dispatch) still
+  //    flow through the single-call path for correctness.
+  const batch = collectBatch(current, toolDef, queue, ctx);
+  if (batch.calls.length > 1) {
+    return executeBatch(state, batch, effects, ctx);
   }
 
-  const duration = Date.now() - startedAt;
-  effects.push({
-    type: SSEEventType.ToolCallResult,
-    tool_id: current.toolCallId,
-    status: result.status,
-    duration_ms: duration,
-    ...(result.status === 'error' ? {error: result.content} : {}),
-    timestamp: new Date().toISOString(),
-  });
-
+  // Single-call path: execute the current tool, emit events, advance state.
+  effects.push(buildToolCallStartEvent(current, timestamp));
+  const {result, duration} = await runToolCall(current, toolDef, ctx);
+  effects.push(buildToolCallResultEvent(current, result, duration));
   ctx.logger.info('tool_call', {
     tool: current.toolName,
     callId: current.toolCallId,
@@ -272,6 +215,216 @@ export async function handleExecuting(
   });
 
   return nextAfterToolResult(state, result, effects, ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Batching
+// ---------------------------------------------------------------------------
+
+interface BatchItem {
+  call: ToolCall;
+  toolDef: ToolDefinition;
+}
+
+interface Batch {
+  calls: BatchItem[];
+  /** Queue remainder after batched items were drained from its head. */
+  remainingQueue: ToolCall[];
+}
+
+/**
+ * A call is batchable when it has no per-call gates that the state machine
+ * needs to route through. Anything that could transition to CONFIRMING,
+ * DISPATCHING, or that runs a connection ACL check must go through the
+ * single-call path.
+ */
+function isBatchable(toolDef: ToolDefinition): boolean {
+  return (
+    toolDef.readOnly === true &&
+    !toolDef.requiresConfirmation &&
+    toolDef.metadata?.category !== 'connection'
+  );
+}
+
+/**
+ * Collect the current call plus the leading contiguous run of batchable
+ * calls from the queue. Stops at the first non-batchable call so writes
+ * and gated calls stay sequential.
+ */
+function collectBatch(
+  current: ToolCall,
+  currentToolDef: ToolDefinition,
+  queue: ToolCall[],
+  ctx: AgentContext,
+): Batch {
+  if (!isBatchable(currentToolDef)) {
+    return {calls: [{call: current, toolDef: currentToolDef}], remainingQueue: queue};
+  }
+
+  const calls: BatchItem[] = [{call: current, toolDef: currentToolDef}];
+  let i = 0;
+  for (; i < queue.length; i++) {
+    const peek = queue[i];
+    const peekDef = ctx.toolRegistry.get(peek.toolName);
+    if (!peekDef || !isBatchable(peekDef)) break;
+    calls.push({call: peek, toolDef: peekDef});
+  }
+  return {calls, remainingQueue: queue.slice(i)};
+}
+
+/**
+ * Run a batch of read-only tool calls concurrently. Emits per-call
+ * ToolCallStart events first (so UIs can render N in-flight cards at once),
+ * awaits all results via Promise.all, then emits per-call ToolCallResult
+ * events in the original call order. A failure in one call does not block
+ * the others — each produces its own result message for the model.
+ */
+async function executeBatch(
+  state: ExecutingState,
+  batch: Batch,
+  priorEffects: SSEEvent[],
+  ctx: AgentContext,
+): Promise<TransitionResult> {
+  const effects: SSEEvent[] = [...priorEffects];
+  const startTimestamp = new Date().toISOString();
+
+  // Fire all start events before kicking off the work
+  for (const {call} of batch.calls) {
+    effects.push(buildToolCallStartEvent(call, startTimestamp));
+  }
+
+  // Run all calls concurrently (pre-exec cache is used per-call inside runToolCall)
+  const runs = await Promise.all(
+    batch.calls.map(({call, toolDef}) => runToolCall(call, toolDef, ctx)),
+  );
+
+  // Emit result events + structured logs in the original order
+  for (let i = 0; i < batch.calls.length; i++) {
+    const {call} = batch.calls[i];
+    const {result, duration} = runs[i];
+    effects.push(buildToolCallResultEvent(call, result, duration));
+    ctx.logger.info('tool_call', {
+      tool: call.toolName,
+      callId: call.toolCallId,
+      status: result.status,
+      session: ctx.sessionId,
+      duration,
+    });
+  }
+
+  // Apply smart-snipping per result and append each as a tool message in
+  // call order, then advance the state. Batched results never individually
+  // transition — they collectively advance the state once.
+  const snippedResults = runs.map(({result}) => snipIfOversized(result, ctx));
+  for (const result of snippedResults) {
+    ctx.messages = [...ctx.messages, buildToolResultMessage(result)];
+  }
+  const allResults = [...state.results, ...snippedResults];
+
+  // More calls pending? Continue in EXECUTING with the next one.
+  if (batch.remainingQueue.length > 0) {
+    const [next, ...rest] = batch.remainingQueue;
+    return {
+      next: {type: 'executing', queue: rest, current: next, results: allResults},
+      effects,
+    };
+  }
+
+  // Batch cleared the queue — transition to COMPACTING or THINKING.
+  return transitionAfterQueueEmpty(ctx, effects);
+}
+
+// ---------------------------------------------------------------------------
+// Per-call execution helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Execute one tool call (using the pre-exec cache when present), capture
+ * duration, and build a ToolResult. Never throws — tool failures become
+ * error results the model can observe.
+ */
+async function runToolCall(
+  call: ToolCall,
+  toolDef: ToolDefinition,
+  ctx: AgentContext,
+): Promise<{result: ToolResult; duration: number}> {
+  const startedAt = Date.now();
+  try {
+    // Check pre-execution cache first (read-only tools started during streaming)
+    const cached = ctx.preExecutionCache.get(call.toolCallId);
+    const output = cached ? await cached : await executeTool(call, toolDef, ctx);
+
+    const content = typeof output === 'string' ? output : JSON.stringify(output);
+
+    // Detect error-as-result pattern: tool returned {error: "..."} without throwing.
+    // This happens when tool internals catch errors and return them as data.
+    // Treat these as failures so the SSE event shows status: 'error'.
+    const isErrorResult =
+      typeof output === 'object' &&
+      output !== null &&
+      'error' in output &&
+      typeof (output as Record<string, unknown>)['error'] === 'string' &&
+      Object.keys(output as Record<string, unknown>).length === 1;
+
+    const duration = Date.now() - startedAt;
+    if (isErrorResult) {
+      ctx.logger.warn('tool_returned_error', {
+        tool: call.toolName,
+        callId: call.toolCallId,
+        error: (output as Record<string, unknown>)['error'],
+        session: ctx.sessionId,
+        duration,
+      });
+    }
+    return {
+      result: {
+        callId: call.toolCallId,
+        toolName: call.toolName,
+        status: isErrorResult ? 'error' : 'success',
+        content,
+      },
+      duration,
+    };
+  } catch (err) {
+    const duration = Date.now() - startedAt;
+    ctx.logger.error('tool_execution_error', {
+      tool: call.toolName,
+      callId: call.toolCallId,
+      error: err instanceof Error ? err.message : String(err),
+      session: ctx.sessionId,
+      duration,
+    });
+    return {
+      result: {
+        callId: call.toolCallId,
+        toolName: call.toolName,
+        status: 'error',
+        content: `Tool execution failed: ${err instanceof Error ? err.message : String(err)}`,
+      },
+      duration,
+    };
+  }
+}
+
+function buildToolCallStartEvent(call: ToolCall, timestamp: string): SSEEvent {
+  return {
+    type: SSEEventType.ToolCallStart,
+    tool_name: call.toolName,
+    tool_id: call.toolCallId,
+    parameters: sanitizeParams(call.args),
+    timestamp,
+  };
+}
+
+function buildToolCallResultEvent(call: ToolCall, result: ToolResult, duration: number): SSEEvent {
+  return {
+    type: SSEEventType.ToolCallResult,
+    tool_id: call.toolCallId,
+    status: result.status,
+    duration_ms: duration,
+    ...(result.status === 'error' ? {error: result.content} : {}),
+    timestamp: new Date().toISOString(),
+  };
 }
 
 /**
@@ -304,33 +457,13 @@ export function nextAfterToolResult(
   effects: SSEEvent[],
   ctx: AgentContext,
 ): TransitionResult {
-  // Smart snipping: if a tool result exceeds maxResultSize, keep the first
-  // and last 2K chars with a [snipped] marker in between. This preserves
-  // the beginning (usually headers/structure) and end (usually the answer)
-  // while cutting the middle bulk.
-  if (result.content.length > ctx.config.maxResultSize) {
-    const originalSize = result.content.length;
-    const keepChars = 2_000;
-    const head = result.content.slice(0, keepChars);
-    const tail = result.content.slice(-keepChars);
-    result = {
-      ...result,
-      content: `${head}\n\n[... snipped ${originalSize - keepChars * 2} chars — full output was ${originalSize} chars ...]\n\n${tail}`,
-    };
-    ctx.logger.info('tool_result_snipped', {
-      callId: result.callId,
-      tool: result.toolName,
-      originalSize,
-      snippedTo: keepChars * 2,
-      session: ctx.sessionId,
-    });
-  }
+  const snipped = snipIfOversized(result, ctx);
 
   // Append tool result message
-  const resultMessage = buildToolResultMessage(result);
+  const resultMessage = buildToolResultMessage(snipped);
   ctx.messages = [...ctx.messages, resultMessage];
 
-  const allResults = [...state.results, result];
+  const allResults = [...state.results, snipped];
 
   // More tool calls in the queue?
   if (state.queue.length > 0) {
@@ -346,7 +479,39 @@ export function nextAfterToolResult(
     };
   }
 
-  // All tool calls done — check if context is heavy enough to compact
+  return transitionAfterQueueEmpty(ctx, effects);
+}
+
+/**
+ * Smart snipping: if a tool result exceeds maxResultSize, keep the first
+ * and last 2K chars with a [snipped] marker in between. This preserves the
+ * beginning (usually headers/structure) and end (usually the answer) while
+ * cutting the middle bulk.
+ */
+function snipIfOversized(result: ToolResult, ctx: AgentContext): ToolResult {
+  if (result.content.length <= ctx.config.maxResultSize) return result;
+  const originalSize = result.content.length;
+  const keepChars = 2_000;
+  const head = result.content.slice(0, keepChars);
+  const tail = result.content.slice(-keepChars);
+  ctx.logger.info('tool_result_snipped', {
+    callId: result.callId,
+    tool: result.toolName,
+    originalSize,
+    snippedTo: keepChars * 2,
+    session: ctx.sessionId,
+  });
+  return {
+    ...result,
+    content: `${head}\n\n[... snipped ${String(originalSize - keepChars * 2)} chars — full output was ${String(originalSize)} chars ...]\n\n${tail}`,
+  };
+}
+
+/**
+ * Transition after the tool-call queue is drained — either COMPACTING if
+ * context is heavy, or THINKING for the next LLM turn.
+ */
+function transitionAfterQueueEmpty(ctx: AgentContext, effects: SSEEvent[]): TransitionResult {
   const estimatedTokens = estimateTokenCount(ctx.messages, ctx.provider);
   if (estimatedTokens > ctx.maxContextTokens * ctx.config.compactThreshold) {
     ctx.logger.info('context_compaction_triggered', {
@@ -360,8 +525,6 @@ export function nextAfterToolResult(
       effects,
     };
   }
-
-  // Context OK — back to THINKING for the next LLM turn
   return {
     next: {type: 'thinking', messages: ctx.messages},
     effects,

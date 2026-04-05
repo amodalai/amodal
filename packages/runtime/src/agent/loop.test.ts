@@ -981,6 +981,188 @@ describe('handleExecuting (via transition)', () => {
     // The cached result should be used — tool.execute should NOT be called again
     expect(readTool.execute).not.toHaveBeenCalled();
   });
+
+  // -------------------------------------------------------------------------
+  // Parallel tool calls: batch contiguous read-only calls
+  // -------------------------------------------------------------------------
+
+  it('batches contiguous read-only calls and runs them concurrently', async () => {
+    // Two read-only tools. Each sleeps before resolving. If batched in
+    // parallel, total wall time ≈ max(sleep). If sequential, ≈ sum(sleep).
+    const sleep = (ms: number) => new Promise<string>((r) => setTimeout(() => r('ok'), ms));
+    const readA = makeMockToolDef({
+      readOnly: true,
+      execute: vi.fn(() => sleep(50)),
+    });
+    const readB = makeMockToolDef({
+      readOnly: true,
+      execute: vi.fn(() => sleep(50)),
+    });
+    const registry = makeMockRegistry({read_a: readA, read_b: readB});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [{toolCallId: 'call-b', toolName: 'read_b', args: {}}],
+      current: {toolCallId: 'call-a', toolName: 'read_a', args: {}},
+      results: [],
+    };
+
+    const startedAt = Date.now();
+    const result = await transition(state, ctx);
+    const elapsed = Date.now() - startedAt;
+
+    // Both executed
+    expect(readA.execute).toHaveBeenCalledTimes(1);
+    expect(readB.execute).toHaveBeenCalledTimes(1);
+    // Parallel: should finish in roughly one sleep, well under the sum
+    expect(elapsed).toBeLessThan(90);
+    // Batch drained the queue and transitioned to thinking in one step
+    expect(result.next.type).toBe('thinking');
+    // Both results appended to messages
+    const toolMessages = ctx.messages.filter((m) => m.role === 'tool');
+    expect(toolMessages).toHaveLength(2);
+    // Per-call SSE events emitted (2 start + 2 result)
+    const starts = result.effects.filter((e) => e.type === SSEEventType.ToolCallStart);
+    const results = result.effects.filter((e) => e.type === SSEEventType.ToolCallResult);
+    expect(starts).toHaveLength(2);
+    expect(results).toHaveLength(2);
+  });
+
+  it('stops batching at the first write (non-readOnly) tool', async () => {
+    const readTool = makeMockToolDef({readOnly: true, execute: vi.fn().mockResolvedValue('r')});
+    const writeTool = makeMockToolDef({readOnly: false, execute: vi.fn().mockResolvedValue('w')});
+    const registry = makeMockRegistry({read: readTool, write: writeTool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [
+        {toolCallId: 'call-read-2', toolName: 'read', args: {}},
+        {toolCallId: 'call-write', toolName: 'write', args: {}},
+        {toolCallId: 'call-read-3', toolName: 'read', args: {}},
+      ],
+      current: {toolCallId: 'call-read-1', toolName: 'read', args: {}},
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // Batched the two leading reads; the write stopped the batch
+    expect(readTool.execute).toHaveBeenCalledTimes(2);
+    expect(writeTool.execute).not.toHaveBeenCalled();
+    // Next state should process the write sequentially
+    expect(result.next.type).toBe('executing');
+    if (result.next.type === 'executing') {
+      expect(result.next.current.toolCallId).toBe('call-write');
+      expect(result.next.queue).toHaveLength(1);
+      expect(result.next.queue[0].toolCallId).toBe('call-read-3');
+    }
+  });
+
+  it('does not batch when the current call is a write', async () => {
+    const writeTool = makeMockToolDef({readOnly: false, execute: vi.fn().mockResolvedValue('w')});
+    const readTool = makeMockToolDef({readOnly: true, execute: vi.fn().mockResolvedValue('r')});
+    const registry = makeMockRegistry({write: writeTool, read: readTool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [{toolCallId: 'call-read', toolName: 'read', args: {}}],
+      current: {toolCallId: 'call-write', toolName: 'write', args: {}},
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // Only write executes; read stays in queue for the next transition
+    expect(writeTool.execute).toHaveBeenCalledTimes(1);
+    expect(readTool.execute).not.toHaveBeenCalled();
+    expect(result.next.type).toBe('executing');
+    if (result.next.type === 'executing') {
+      expect(result.next.current.toolCallId).toBe('call-read');
+    }
+  });
+
+  it('does not batch connection tools (ACL gate must run per-call)', async () => {
+    const connRead = makeMockToolDef({
+      readOnly: true,
+      execute: vi.fn().mockResolvedValue('x'),
+      metadata: {category: 'connection', connection: 'github'},
+    });
+    const registry = makeMockRegistry({request: connRead});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [{toolCallId: 'call-2', toolName: 'request', args: {method: 'GET', endpoint: '/x'}}],
+      current: {toolCallId: 'call-1', toolName: 'request', args: {method: 'GET', endpoint: '/y'}},
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // Only the first ran; the second stays queued for its own ACL check
+    expect(connRead.execute).toHaveBeenCalledTimes(1);
+    expect(result.next.type).toBe('executing');
+  });
+
+  it('does not batch read-only tools that require confirmation', async () => {
+    const gated = makeMockToolDef({
+      readOnly: true,
+      requiresConfirmation: true,
+      execute: vi.fn().mockResolvedValue('x'),
+    });
+    const registry = makeMockRegistry({gated});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [{toolCallId: 'call-2', toolName: 'gated', args: {}}],
+      current: {toolCallId: 'call-1', toolName: 'gated', args: {}},
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // Routes to CONFIRMING, no execution yet
+    expect(result.next.type).toBe('confirming');
+    expect(gated.execute).not.toHaveBeenCalled();
+  });
+
+  it('a failure in one batched call does not block the others', async () => {
+    const good = makeMockToolDef({readOnly: true, execute: vi.fn().mockResolvedValue('ok')});
+    const bad = makeMockToolDef({
+      readOnly: true,
+      execute: vi.fn().mockRejectedValue(new Error('boom')),
+    });
+    const registry = makeMockRegistry({good, bad});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    const state: ExecutingState = {
+      type: 'executing',
+      queue: [
+        {toolCallId: 'call-bad', toolName: 'bad', args: {}},
+        {toolCallId: 'call-good-2', toolName: 'good', args: {}},
+      ],
+      current: {toolCallId: 'call-good-1', toolName: 'good', args: {}},
+      results: [],
+    };
+
+    const result = await transition(state, ctx);
+
+    // All three tried, failure surfaced as an error tool-result for the bad one
+    expect(good.execute).toHaveBeenCalledTimes(2);
+    expect(bad.execute).toHaveBeenCalledTimes(1);
+    expect(result.next.type).toBe('thinking');
+    const toolMessages = ctx.messages.filter((m) => m.role === 'tool');
+    expect(toolMessages).toHaveLength(3);
+    // Error result is present in the SSE stream
+    const errorEvents = result.effects.filter(
+      (e) => e.type === SSEEventType.ToolCallResult && e.status === 'error',
+    );
+    expect(errorEvents).toHaveLength(1);
+  });
 });
 
 describe('handleConfirming (via transition)', () => {
