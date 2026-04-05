@@ -40,11 +40,26 @@ describe('selectSessionStore', () => {
     expect(store).toBeInstanceOf(PGLiteSessionStore);
   });
 
-  it('falls back to PGLite when env: var is not set', async () => {
-    delete process.env['DEFINITELY_NOT_SET_VAR'];
+  it('falls back to PGLite when postgresUrl is an empty string', async () => {
+    // Caller is responsible for resolving env: refs; empty string is
+    // what they pass when `env:VAR` was unset.
     const store = await selectSessionStore({
       backend: 'postgres',
-      postgresUrl: 'env:DEFINITELY_NOT_SET_VAR',
+      postgresUrl: '',
+      logger,
+    });
+    created.push(store);
+    expect(store).toBeInstanceOf(PGLiteSessionStore);
+  });
+
+  it('falls back to PGLite when Postgres connection fails to initialize', async () => {
+    // Unreachable host + very short connect timeout → init throws →
+    // selector logs error and falls back to PGLite. This is the
+    // "runtime must boot even on misconfigured Postgres" path.
+    const store = await selectSessionStore({
+      backend: 'postgres',
+      // Port 1 is reserved and connection will be refused fast
+      postgresUrl: 'postgres://nobody:nothing@127.0.0.1:1/missing?connect_timeout=1',
       logger,
     });
     created.push(store);
@@ -62,20 +77,5 @@ describe('selectSessionStore', () => {
     });
     created.push(store);
     expect(store).toBeInstanceOf(PostgresSessionStore);
-  });
-
-  itPg('resolves env: prefix and uses PostgresSessionStore', async () => {
-    process.env['TEST_SELECTOR_PG_URL'] = pgUrl;
-    try {
-      const store = await selectSessionStore({
-        backend: 'postgres',
-        postgresUrl: 'env:TEST_SELECTOR_PG_URL',
-        logger,
-      });
-      created.push(store);
-      expect(store).toBeInstanceOf(PostgresSessionStore);
-    } finally {
-      delete process.env['TEST_SELECTOR_PG_URL'];
-    }
   });
 });

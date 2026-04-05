@@ -15,14 +15,14 @@
  * the shared query helpers defined below via `runSessionQueries()`.
  */
 
-import {and, eq, lt, gte, lte, desc, sql} from 'drizzle-orm';
+import {and, eq, lt, or, gte, lte, desc, sql} from 'drizzle-orm';
 import {drizzle} from 'drizzle-orm/pglite';
 import {agentSessions} from '../stores/schema.js';
 import type {PersistedSession, SessionMetadata} from './types.js';
 import type {TokenUsage} from '../providers/types.js';
 import type {ModelMessage} from 'ai';
 import type {Logger} from '../logger.js';
-import {ConfigError, SessionStoreError} from '../errors.js';
+import {SessionStoreError} from '../errors.js';
 
 // ---------------------------------------------------------------------------
 // List options, hooks, and cursor type
@@ -231,12 +231,16 @@ export function buildListConditions(
   const conditions = [eq(table.tenantId, tenantId)];
 
   if (opts?.cursor) {
-    const {updatedAt: cursorTs} = decodeCursor(backend, opts.cursor);
-    // Strictly-older-than cursor keeps pagination stable as long as no
-    // two rows share updated_at. On ties we'd need a compound cursor on
-    // (updated_at, id); `lt` alone is fine for the conservative case
-    // and matches how we encode.
-    conditions.push(lt(table.updatedAt, cursorTs));
+    const {updatedAt: cursorTs, id: cursorId} = decodeCursor(backend, opts.cursor);
+    // Compound (updated_at, id) comparison makes pagination stable even
+    // when multiple rows share the same `updated_at` (batch inserts in
+    // the same ms, clock-skewed sources). Matches the secondary sort
+    // key on `id` used by list() so every row is visited exactly once.
+    const cursorCondition = or(
+      lt(table.updatedAt, cursorTs),
+      and(eq(table.updatedAt, cursorTs), lt(table.id, cursorId)),
+    );
+    if (cursorCondition) conditions.push(cursorCondition);
   }
 
   if (opts?.updatedAfter) conditions.push(gte(table.updatedAt, opts.updatedAfter));
@@ -324,69 +328,107 @@ export class PGLiteSessionStore implements SessionStore {
   }
 
   async save(session: PersistedSession): Promise<void> {
-    this.ensureDb();
+    this.ensureDb('save');
     const values = sessionToRow(session);
 
-    await this.db!
-      .insert(agentSessions)
-      .values(values)
-      .onConflictDoUpdate({
-        target: agentSessions.id,
-        set: {
-          messages: values.messages,
-          tokenUsage: values.tokenUsage,
-          metadata: values.metadata,
-          updatedAt: values.updatedAt,
-        },
+    try {
+      await this.db!
+        .insert(agentSessions)
+        .values(values)
+        .onConflictDoUpdate({
+          target: agentSessions.id,
+          set: {
+            messages: values.messages,
+            tokenUsage: values.tokenUsage,
+            metadata: values.metadata,
+            updatedAt: values.updatedAt,
+          },
+        });
+    } catch (cause) {
+      throw new SessionStoreError('Failed to save session', {
+        backend: BACKEND_NAME_PGLITE,
+        operation: 'save',
+        cause,
+        context: {sessionId: session.id},
       });
+    }
 
     if (this.hooks.onAfterSave) await this.hooks.onAfterSave(session);
   }
 
   async load(sessionId: string): Promise<PersistedSession | null> {
-    this.ensureDb();
+    this.ensureDb('load');
 
-    const rows = await this.db!
-      .select()
-      .from(agentSessions)
-      .where(eq(agentSessions.id, sessionId))
-      .limit(1);
+    try {
+      const rows = await this.db!
+        .select()
+        .from(agentSessions)
+        .where(eq(agentSessions.id, sessionId))
+        .limit(1);
 
-    if (rows.length === 0) return null;
-    return rowToPersistedSession(rows[0]);
+      if (rows.length === 0) return null;
+      return rowToPersistedSession(rows[0]);
+    } catch (cause) {
+      throw new SessionStoreError('Failed to load session', {
+        backend: BACKEND_NAME_PGLITE,
+        operation: 'load',
+        cause,
+        context: {sessionId},
+      });
+    }
   }
 
   async list(tenantId: string, opts?: SessionListOptions): Promise<SessionListResult> {
-    this.ensureDb();
+    this.ensureDb('list');
 
     const limit = opts?.limit ?? DEFAULT_LIST_LIMIT;
     const where = buildListConditions(BACKEND_NAME_PGLITE, tenantId, opts, agentSessions);
 
-    const rows = await this.db!
-      .select()
-      .from(agentSessions)
-      .where(where)
-      .orderBy(desc(agentSessions.updatedAt))
-      .limit(limit + 1); // +1 to detect "is there a next page"
+    try {
+      const rows = await this.db!
+        .select()
+        .from(agentSessions)
+        .where(where)
+        .orderBy(desc(agentSessions.updatedAt), desc(agentSessions.id))
+        .limit(limit + 1); // +1 to detect "is there a next page"
 
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
-    const sessions = page.map(rowToPersistedSession);
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const sessions = page.map(rowToPersistedSession);
 
-    const nextCursor = hasMore
-      ? encodeCursor(page[page.length - 1].updatedAt, page[page.length - 1].id)
-      : null;
+      const nextCursor = hasMore
+        ? encodeCursor(page[page.length - 1].updatedAt, page[page.length - 1].id)
+        : null;
 
-    return {sessions, nextCursor};
+      return {sessions, nextCursor};
+    } catch (cause) {
+      if (cause instanceof SessionStoreError) throw cause;
+      throw new SessionStoreError('Failed to list sessions', {
+        backend: BACKEND_NAME_PGLITE,
+        operation: 'list',
+        cause,
+        context: {tenantId},
+      });
+    }
   }
 
   async delete(sessionId: string): Promise<boolean> {
-    this.ensureDb();
+    this.ensureDb('delete');
 
-    const result = await this.db!
-      .delete(agentSessions)
-      .where(eq(agentSessions.id, sessionId))
-      .returning({id: agentSessions.id});
+    let result: Array<{id: string}>;
+    try {
+      result = await this.db!
+        .delete(agentSessions)
+        .where(eq(agentSessions.id, sessionId))
+        .returning({id: agentSessions.id});
+    } catch (cause) {
+      throw new SessionStoreError('Failed to delete session', {
+        backend: BACKEND_NAME_PGLITE,
+        operation: 'delete',
+        cause,
+        context: {sessionId},
+      });
+    }
 
     const deleted = result.length > 0;
     if (deleted && this.hooks.onAfterDelete) {
@@ -396,15 +438,28 @@ export class PGLiteSessionStore implements SessionStore {
   }
 
   async cleanup(before: Date): Promise<number> {
-    this.ensureDb();
+    this.ensureDb('cleanup');
 
-    const result = await this.db!
-      .delete(agentSessions)
-      .where(lt(agentSessions.updatedAt, before))
-      .returning({id: agentSessions.id});
+    let result: Array<{id: string}>;
+    try {
+      result = await this.db!
+        .delete(agentSessions)
+        .where(lt(agentSessions.updatedAt, before))
+        .returning({id: agentSessions.id});
+    } catch (cause) {
+      throw new SessionStoreError('Failed to cleanup sessions', {
+        backend: BACKEND_NAME_PGLITE,
+        operation: 'cleanup',
+        cause,
+        context: {before: before.toISOString()},
+      });
+    }
 
     if (result.length > 0) {
-      this.logger.info('session_store_cleanup', {deleted: result.length});
+      this.logger.info('session_store_cleanup', {
+        backend: 'pglite',
+        deleted: result.length,
+      });
     }
 
     if (this.hooks.onAfterCleanup) {
@@ -415,18 +470,27 @@ export class PGLiteSessionStore implements SessionStore {
 
   async close(): Promise<void> {
     if (this.pglite) {
-      await this.pglite.close();
+      const pglite = this.pglite;
       this.pglite = null;
       this.db = null;
+      try {
+        await pglite.close();
+      } catch (cause) {
+        throw new SessionStoreError('Failed to close PGLite instance', {
+          backend: BACKEND_NAME_PGLITE,
+          operation: 'close',
+          cause,
+        });
+      }
     }
   }
 
-  private ensureDb(): void {
+  private ensureDb(operation: string): void {
     if (!this.db) {
-      throw new ConfigError('PGLiteSessionStore not initialized — call initialize() first', {
-        key: 'sessionStore',
-        suggestion: 'Call initialize() before using the session store',
-      });
+      throw new SessionStoreError(
+        'PGLiteSessionStore not initialized — call initialize() first',
+        {backend: BACKEND_NAME_PGLITE, operation},
+      );
     }
   }
 }

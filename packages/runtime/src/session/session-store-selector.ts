@@ -16,9 +16,13 @@ import type {SessionStore} from './store.js';
 import {PGLiteSessionStore} from './store.js';
 
 export interface SessionStoreSelectorOptions {
-  /** From amodal.json stores.backend. `pglite` if unset. */
+  /** From amodal.json `stores.backend`. Defaults to `pglite` if unset. */
   backend?: 'pglite' | 'postgres';
-  /** From amodal.json stores.postgresUrl. May be an `env:VAR_NAME` reference. */
+  /**
+   * Already-resolved Postgres connection string. Callers must resolve
+   * any `env:VAR` reference upstream (see `resolveEnvRef` in
+   * `../env-ref.ts`) — this function does not read `process.env`.
+   */
   postgresUrl?: string;
   /** Logger for init and fallback events. */
   logger: Logger;
@@ -30,16 +34,22 @@ export interface SessionStoreSelectorOptions {
  * Select, construct, and initialize a `SessionStore`.
  *
  * Decision:
- *   1. If `backend === 'postgres'` and a resolved URL is available →
+ *   1. If `backend === 'postgres'` and `postgresUrl` is set →
  *      `PostgresSessionStore`.
- *   2. If `backend === 'postgres'` but URL is missing or fails to
- *      connect → log and fall back to PGLite. The session store must
- *      always be available; a missing URL shouldn't crash the runtime.
+ *   2. If `backend === 'postgres'` but the URL is missing, **or the
+ *      Postgres connection fails to initialize for any reason** → log
+ *      the failure at `error` level and fall back to
+ *      `PGLiteSessionStore`. The session store must always be
+ *      available; a misconfigured Postgres URL should not crash the
+ *      runtime on boot.
  *   3. Otherwise → `PGLiteSessionStore` (default).
  *
- * Resolving `env:VAR_NAME` is intentionally mirrored from
- * `local-server.ts`'s store-backend selection so behavior is consistent
- * across both backends.
+ * **Fallback trade-off:** step 2 swallows init errors deliberately.
+ * Programmer errors (invalid `tableName`, unknown driver flag) will be
+ * logged and hidden behind the fallback — operators must watch the
+ * `session_store_postgres_init_failed` log line to detect them. This
+ * is the product decision ("runtime must boot") taking precedence over
+ * strict fail-fast semantics.
  */
 export async function selectSessionStore(
   opts: SessionStoreSelectorOptions,
@@ -47,23 +57,20 @@ export async function selectSessionStore(
   const {backend = 'pglite', postgresUrl, logger, dataDir} = opts;
 
   if (backend === 'postgres') {
-    const url = resolveUrl(postgresUrl);
-    if (!url) {
-      logger.warn('session_store_postgres_url_missing', {
-        configured: postgresUrl,
-        fallback: 'pglite',
-      });
+    if (!postgresUrl) {
+      logger.warn('session_store_postgres_url_missing', {fallback: 'pglite'});
     } else {
       try {
         // Dynamic import so `pg` stays optional for PGLite-only users.
         const mod = await import('./postgres-store.js');
         const store = new mod.PostgresSessionStore({
-          connectionString: url,
+          connectionString: postgresUrl,
           logger,
         });
         await store.initialize();
         return store;
       } catch (err) {
+        // Intentional fallback — see "Fallback trade-off" above.
         logger.error('session_store_postgres_init_failed', {
           error: err instanceof Error ? err.message : String(err),
           fallback: 'pglite',
@@ -75,13 +82,4 @@ export async function selectSessionStore(
   const store = new PGLiteSessionStore({logger, dataDir});
   await store.initialize();
   return store;
-}
-
-function resolveUrl(raw: string | undefined): string | undefined {
-  if (!raw) return undefined;
-  if (raw.startsWith('env:')) {
-    const varName = raw.slice(4);
-    return process.env[varName];
-  }
-  return raw;
 }

@@ -188,6 +188,33 @@ function runSuite(makeBackend: BackendFactory): void {
         store.list('tenant-1', {cursor: 'not-base64-at-all!!!'}),
       ).rejects.toBeInstanceOf(SessionStoreError);
     });
+
+    it('paginates correctly when multiple rows share the same updated_at', async () => {
+      // Compound (updated_at, id) cursor must visit every row exactly
+      // once even when rows tie on updated_at (batch inserts, sources
+      // with millisecond-precision clocks).
+      const tenantId = `tenant-tied-${Date.now()}`;
+      const sameTs = new Date('2026-05-15T12:00:00.000Z');
+      // Use explicit ids so ordering is deterministic across backends
+      for (let i = 0; i < 4; i++) {
+        await store.save(makeSession({
+          id: `tied-${String.fromCharCode(97 + i)}`, // tied-a .. tied-d
+          tenantId,
+          updatedAt: sameTs,
+        }));
+      }
+
+      const page1 = await store.list(tenantId, {limit: 2});
+      expect(page1.sessions).toHaveLength(2);
+      expect(page1.nextCursor).not.toBeNull();
+
+      const page2 = await store.list(tenantId, {limit: 2, cursor: page1.nextCursor!});
+      expect(page2.sessions).toHaveLength(2);
+
+      const allIds = [...page1.sessions, ...page2.sessions].map((s) => s.id);
+      expect(new Set(allIds).size).toBe(4);
+      expect(allIds.sort()).toEqual(['tied-a', 'tied-b', 'tied-c', 'tied-d']);
+    });
   });
 
   describe('list — metadata filters', () => {

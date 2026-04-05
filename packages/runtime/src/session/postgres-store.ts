@@ -288,7 +288,7 @@ export class PostgresSessionStore implements SessionStore {
         .select()
         .from(this.table)
         .where(where)
-        .orderBy(desc(this.table.updatedAt))
+        .orderBy(desc(this.table.updatedAt), desc(this.table.id))
         .limit(limit + 1);
 
       const hasMore = rows.length > limit;
@@ -371,16 +371,19 @@ export class PostgresSessionStore implements SessionStore {
     if (this.closed) return;
     this.closed = true;
     this.db = null;
-    if (this.pool && this.ownsPool) {
+    const pool = this.pool;
+    this.pool = null;
+    if (pool && this.ownsPool) {
       try {
-        await this.pool.end();
-      } catch (err) {
-        this.logger.warn('session_store_pool_end_failed', {
-          error: err instanceof Error ? err.message : String(err),
+        await pool.end();
+      } catch (cause) {
+        throw new SessionStoreError('Failed to end Postgres pool', {
+          backend: BACKEND_NAME,
+          operation: 'close',
+          cause,
         });
       }
     }
-    this.pool = null;
   }
 
   private ensureDb(operation: string): void {
