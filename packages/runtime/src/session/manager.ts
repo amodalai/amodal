@@ -323,7 +323,7 @@ export class StandaloneSessionManager {
       });
     }
 
-    const persisted = await this.store.load(sessionId);
+    const persisted = await this.store.load(opts.tenantId, sessionId);
     if (!persisted) return null;
 
     // Create a fresh session seeded with persisted state
@@ -366,7 +366,8 @@ export class StandaloneSessionManager {
   /** List sessions for a tenant from the backing store. */
   async listPersisted(tenantId: string, opts?: {limit?: number}): Promise<PersistedSession[]> {
     if (!this.store) return [];
-    return this.store.list(tenantId, opts);
+    const result = await this.store.list(tenantId, opts);
+    return result.sessions;
   }
 
   /** Number of active in-memory sessions. */
@@ -388,7 +389,7 @@ export class StandaloneSessionManager {
     this.sessions.delete(sessionId);
 
     if (opts?.deleteFromStore && this.store) {
-      await this.store.delete(sessionId);
+      await this.store.delete(session.tenantId, sessionId);
     }
 
     this.logger.info('session_destroyed', {
