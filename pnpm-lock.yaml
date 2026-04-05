@@ -155,19 +155,6 @@ importers:
       zod:
         specifier: ^3.25.76
         version: 3.25.76
-    optionalDependencies:
-      "@anthropic-ai/sdk":
-        specifier: ^0.39.0
-        version: 0.39.0
-      "@aws-sdk/client-bedrock-runtime":
-        specifier: ^3.700.0
-        version: 3.1018.0
-      "@google/genai":
-        specifier: 1.30.0
-        version: 1.30.0(@modelcontextprotocol/sdk@1.28.0(zod@3.25.76))
-      openai:
-        specifier: ^4.80.0
-        version: 4.104.0(ws@8.20.0)(zod@3.25.76)
     devDependencies:
       "@amodalai/test-utils":
         specifier: workspace:*
@@ -187,6 +174,19 @@ importers:
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.13)(@types/node@20.19.37)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.12.14(@types/node@20.19.37)(typescript@5.9.3))(yaml@2.8.3)
+    optionalDependencies:
+      "@anthropic-ai/sdk":
+        specifier: ^0.39.0
+        version: 0.39.0
+      "@aws-sdk/client-bedrock-runtime":
+        specifier: ^3.700.0
+        version: 3.1018.0
+      "@google/genai":
+        specifier: 1.30.0
+        version: 1.30.0(@modelcontextprotocol/sdk@1.28.0(zod@3.25.76))
+      openai:
+        specifier: ^4.80.0
+        version: 4.104.0(ws@8.20.0)(zod@3.25.76)
 
   packages/docs:
     dependencies:
@@ -336,6 +336,9 @@ importers:
       "@amodalai/react":
         specifier: workspace:*
         version: link:../react
+      "@amodalai/types":
+        specifier: workspace:*
+        version: link:../types
       "@codemirror/autocomplete":
         specifier: ^6.20.1
         version: 6.20.1
@@ -3318,6 +3321,7 @@ packages:
     engines: { node: ^20.19.0 || >=22.12.0 }
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   "@rolldown/binding-linux-arm64-musl@1.0.0-rc.12":
     resolution:
@@ -3327,6 +3331,7 @@ packages:
     engines: { node: ^20.19.0 || >=22.12.0 }
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   "@rolldown/binding-linux-ppc64-gnu@1.0.0-rc.12":
     resolution:
@@ -3336,6 +3341,7 @@ packages:
     engines: { node: ^20.19.0 || >=22.12.0 }
     cpu: [ppc64]
     os: [linux]
+    libc: [glibc]
 
   "@rolldown/binding-linux-s390x-gnu@1.0.0-rc.12":
     resolution:
@@ -3345,6 +3351,7 @@ packages:
     engines: { node: ^20.19.0 || >=22.12.0 }
     cpu: [s390x]
     os: [linux]
+    libc: [glibc]
 
   "@rolldown/binding-linux-x64-gnu@1.0.0-rc.12":
     resolution:
@@ -3354,6 +3361,7 @@ packages:
     engines: { node: ^20.19.0 || >=22.12.0 }
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   "@rolldown/binding-linux-x64-musl@1.0.0-rc.12":
     resolution:
@@ -3363,6 +3371,7 @@ packages:
     engines: { node: ^20.19.0 || >=22.12.0 }
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   "@rolldown/binding-openharmony-arm64@1.0.0-rc.12":
     resolution:
@@ -3484,6 +3493,7 @@ packages:
       }
     cpu: [arm]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-arm-musleabihf@4.60.0":
     resolution:
@@ -3492,6 +3502,7 @@ packages:
       }
     cpu: [arm]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-arm64-gnu@4.60.0":
     resolution:
@@ -3500,6 +3511,7 @@ packages:
       }
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-arm64-musl@4.60.0":
     resolution:
@@ -3508,6 +3520,7 @@ packages:
       }
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-loong64-gnu@4.60.0":
     resolution:
@@ -3516,6 +3529,7 @@ packages:
       }
     cpu: [loong64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-loong64-musl@4.60.0":
     resolution:
@@ -3524,6 +3538,7 @@ packages:
       }
     cpu: [loong64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-ppc64-gnu@4.60.0":
     resolution:
@@ -3532,6 +3547,7 @@ packages:
       }
     cpu: [ppc64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-ppc64-musl@4.60.0":
     resolution:
@@ -3540,6 +3556,7 @@ packages:
       }
     cpu: [ppc64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-riscv64-gnu@4.60.0":
     resolution:
@@ -3548,6 +3565,7 @@ packages:
       }
     cpu: [riscv64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-riscv64-musl@4.60.0":
     resolution:
@@ -3556,6 +3574,7 @@ packages:
       }
     cpu: [riscv64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-linux-s390x-gnu@4.60.0":
     resolution:
@@ -3564,6 +3583,7 @@ packages:
       }
     cpu: [s390x]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-x64-gnu@4.60.0":
     resolution:
@@ -3572,6 +3592,7 @@ packages:
       }
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   "@rollup/rollup-linux-x64-musl@4.60.0":
     resolution:
@@ -3580,6 +3601,7 @@ packages:
       }
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   "@rollup/rollup-openbsd-x64@4.60.0":
     resolution:
@@ -4160,6 +4182,7 @@ packages:
     engines: { node: ">= 10" }
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   "@tailwindcss/oxide-linux-arm64-musl@4.1.15":
     resolution:
@@ -4169,6 +4192,7 @@ packages:
     engines: { node: ">= 10" }
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   "@tailwindcss/oxide-linux-x64-gnu@4.1.15":
     resolution:
@@ -4178,6 +4202,7 @@ packages:
     engines: { node: ">= 10" }
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   "@tailwindcss/oxide-linux-x64-musl@4.1.15":
     resolution:
@@ -4187,6 +4212,7 @@ packages:
     engines: { node: ">= 10" }
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   "@tailwindcss/oxide-wasm32-wasi@4.1.15":
     resolution:
@@ -8997,6 +9023,7 @@ packages:
     engines: { node: ">= 12.0.0" }
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   lightningcss-linux-arm64-gnu@1.32.0:
     resolution:
@@ -9006,6 +9033,7 @@ packages:
     engines: { node: ">= 12.0.0" }
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   lightningcss-linux-arm64-musl@1.30.2:
     resolution:
@@ -9015,6 +9043,7 @@ packages:
     engines: { node: ">= 12.0.0" }
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   lightningcss-linux-arm64-musl@1.32.0:
     resolution:
@@ -9024,6 +9053,7 @@ packages:
     engines: { node: ">= 12.0.0" }
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   lightningcss-linux-x64-gnu@1.30.2:
     resolution:
@@ -9033,6 +9063,7 @@ packages:
     engines: { node: ">= 12.0.0" }
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   lightningcss-linux-x64-gnu@1.32.0:
     resolution:
@@ -9042,6 +9073,7 @@ packages:
     engines: { node: ">= 12.0.0" }
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   lightningcss-linux-x64-musl@1.30.2:
     resolution:
@@ -9051,6 +9083,7 @@ packages:
     engines: { node: ">= 12.0.0" }
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   lightningcss-linux-x64-musl@1.32.0:
     resolution:
@@ -9060,6 +9093,7 @@ packages:
     engines: { node: ">= 12.0.0" }
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   lightningcss-win32-arm64-msvc@1.30.2:
     resolution:

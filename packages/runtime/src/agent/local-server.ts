@@ -28,6 +28,9 @@ import type {SharedResources} from '../routes/session-resolver.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
 import {buildMcpConfigs} from './mcp-config.js';
 import {ConfigWatcher} from './config-watcher.js';
+import {RuntimeEventBus} from '../events/event-bus.js';
+import {createEventsRouter} from '../events/events-route.js';
+import {wrapStoreBackendWithEvents} from '../events/store-event-wrapper.js';
 import {ProactiveRunner} from './proactive/proactive-runner.js';
 import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createChatRouter} from '../routes/chat.js';
@@ -202,6 +205,27 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   }
 
   // -------------------------------------------------------------------------
+  // Runtime event bus (powers /api/events SSE for live UI updates)
+  // -------------------------------------------------------------------------
+
+  const eventBus = new RuntimeEventBus({
+    onListenerError: (err, event) => {
+      log.warn('event_bus_listener_error', {
+        seq: event.seq,
+        type: event.type,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
+
+  // Wrap the store backend so every write emits store_updated events.
+  // Covers every write path through one seam: tools, REST routes, admin
+  // file tools, task execution — they all go through this backend.
+  if (storeBackend) {
+    storeBackend = wrapStoreBackendWithEvents(storeBackend, eventBus);
+  }
+
+  // -------------------------------------------------------------------------
   // Session manager (new standalone stack)
   // -------------------------------------------------------------------------
 
@@ -213,6 +237,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     logger: sessionLogger,
     store: sessionStore,
     ttlMs: config.sessionTtlMs,
+    eventBus,
   });
   sessionManager.start();
 
@@ -292,6 +317,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     onSessionComplete: (session) => {
       void sessionManager.persist(session);
     },
+    eventBus,
   });
 
   // -------------------------------------------------------------------------
@@ -445,6 +471,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       res.status(404).json({error: 'Session not found'});
       return;
     }
+    // Emit session_updated so the sidebar picks up the new title live.
+    // appId isn't tracked in the legacy store PATCH path; LOCAL_APP_ID is
+    // the only app in single-tenant dev mode.
+    eventBus.emit({type: 'session_updated', sessionId, appId: LOCAL_APP_ID, title});
     res.json({ok: true});
   });
 
@@ -456,11 +486,15 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       res.status(404).json({error: 'Session not found'});
       return;
     }
+    eventBus.emit({type: 'session_deleted', sessionId});
     res.json({ok: true});
   });
 
   // File browser/editor
   app.use(createFilesRouter({repoPath: config.repoPath}));
+
+  // Event bus SSE stream (live UI updates)
+  app.use(createEventsRouter({bus: eventBus, logger: log}));
 
   // Evals
   const evalStore = new EvalStore(config.repoPath);
@@ -592,6 +626,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           // Shared resources and session components will pick up the new
           // bundle on next session creation via getBundle().
           log.info('config_reloaded', {name: newBundle.config.name});
+          eventBus.emit({type: 'manifest_changed'});
+          eventBus.emit({type: 'files_changed'});
         });
         watcher.start();
       }

@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronRight, File, FolderOpen, Folder, Save, Package, Loader2, RefreshCw } from 'lucide-react';
 import { CodeEditor } from '@/components/CodeEditor';
+import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
 import { cn } from '@/lib/utils';
 
 interface FileTreeEntry {
@@ -123,28 +124,28 @@ export function ConfigFilesPage() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
-  // Fetch file tree (and refresh every 5s to pick up changes from admin agent or hot reload)
-  useEffect(() => {
-    let lastJson = '';
-    const fetchTree = () => {
-      fetch('/api/files')
-        .then((res) => res.json())
-        .then((data: unknown) => {
-          const json = JSON.stringify(data);
-          if (json !== lastJson) {
-            lastJson = json;
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-            const body = data as { tree: FileTreeEntry[] };
-            setTree(body.tree);
-          }
-        })
-        .catch(() => {})
-        .finally(() => { setLoading(false); });
-    };
-    fetchTree();
-    const interval = setInterval(fetchTree, 5000);
-    return () => clearInterval(interval);
+  // Fetch file tree (initial + refresh when the runtime signals file changes)
+  const lastJsonRef = useRef('');
+  const fetchTree = useCallback(() => {
+    fetch('/api/files')
+      .then((res) => res.json())
+      .then((data: unknown) => {
+        const json = JSON.stringify(data);
+        if (json !== lastJsonRef.current) {
+          lastJsonRef.current = json;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+          const body = data as { tree: FileTreeEntry[] };
+          setTree(body.tree);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { setLoading(false); });
   }, []);
+
+  useEffect(() => { fetchTree(); }, [fetchTree]);
+  useRuntimeEvents(['files_changed', 'manifest_changed'], () => {
+    fetchTree();
+  });
 
   // Auto-open file from ?open= query param (e.g. from prompt page links)
   useEffect(() => {
