@@ -379,6 +379,11 @@ async function clearOldToolResults(
  * input order in the returned results. Functionally equivalent to
  * `Promise.all(items.map(task))` but bounded so we don't fan out into
  * provider rate limits.
+ *
+ * `task` MUST NOT throw — a throwing task rejects Promise.all and leaves
+ * `undefined` holes in `results` for items after the failure point.
+ * Wrap fallible work in try/catch inside the task itself (as
+ * `summarizeOrFallback` does).
  */
 async function runWithConcurrency<T, R>(
   items: T[],

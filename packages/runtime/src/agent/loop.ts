@@ -154,7 +154,7 @@ export async function* runAgent(
       ctx.usage.totalTokens >= ctx.maxSessionTokens &&
       result.next.type !== 'done'
     ) {
-      ctx.logger.warn('agent_loop_budget_exceeded', {
+      ctx.logger.info('agent_loop_budget_exceeded', {
         session: ctx.sessionId,
         turnCount: ctx.turnCount,
         totalTokens: ctx.usage.totalTokens,
