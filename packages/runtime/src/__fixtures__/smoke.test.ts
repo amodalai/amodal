@@ -175,7 +175,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   beforeAll(async () => {
     // 0. Nuke prior state — clean slate for every run
     rmSync(resolve(AGENT_DIR, '.amodal/store-data'), {recursive: true, force: true});
-    rmSync(resolve(AGENT_DIR, '.amodal/sessions'), {recursive: true, force: true});
 
     // 1. Rewrite amodal.json with the selected provider/model.
     //    smokeTarget is guaranteed defined here — skipReason above gates

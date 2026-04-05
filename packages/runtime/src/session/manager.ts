@@ -136,6 +136,11 @@ export class StandaloneSessionManager {
     const id = randomUUID();
     const now = Date.now();
 
+    const appId = opts.appId ?? 'local';
+    // Persist appId into metadata so SessionStore.list() can filter by it
+    // (e.g. exclude eval-runner / admin sessions from the chat history UI).
+    const metadata = {...(opts.metadata ?? {}), appId};
+
     const session: Session = {
       id,
       tenantId: opts.tenantId,
@@ -150,8 +155,8 @@ export class StandaloneSessionManager {
       model: opts.provider.model,
       providerName: opts.provider.provider,
       userRoles: opts.userRoles ?? [],
-      appId: opts.appId ?? 'local',
-      metadata: opts.metadata ?? {},
+      appId,
+      metadata,
       createdAt: now,
       lastAccessedAt: now,
       maxTurns: opts.maxTurns ?? this.defaultMaxTurns,
@@ -167,6 +172,7 @@ export class StandaloneSessionManager {
       tenant: opts.tenantId,
       model: session.model,
       provider: session.providerName,
+      appId: session.appId,
       toolCount: opts.toolRegistry.size,
     });
 
