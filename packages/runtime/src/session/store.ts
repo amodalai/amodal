@@ -112,28 +112,22 @@ export interface SessionStore {
    */
   save(session: PersistedSession): Promise<void>;
 
-  /**
-   * Load a session by (tenantId, sessionId). Returns null if not found
-   * OR if the session exists but belongs to a different tenant. The
-   * tenant check is enforced in SQL (`WHERE tenant_id = $tenantId`),
-   * so a caller passing the wrong tenantId cannot read another
-   * tenant's data.
-   */
-  load(tenantId: string, sessionId: string): Promise<PersistedSession | null>;
+  /** Load a session by id. Returns null if not found. */
+  load(sessionId: string): Promise<PersistedSession | null>;
 
   /**
    * List sessions for a tenant, newest first.
    *
-   * Returns sessions + a pagination cursor.
+   * Returns sessions + a pagination cursor. The `tenantId` parameter
+   * filters by the `tenant_id` column — it's an ordinary filter, not
+   * a security boundary. Callers that need multi-tenant isolation
+   * should namespace their session IDs directly (e.g.
+   * `tenant-a:session-123`).
    */
   list(tenantId: string, opts?: SessionListOptions): Promise<SessionListResult>;
 
-  /**
-   * Delete a session by (tenantId, sessionId). Returns true if a row
-   * was deleted. Tenant-scoped in SQL — a caller with the wrong
-   * tenantId cannot delete another tenant's session.
-   */
-  delete(tenantId: string, sessionId: string): Promise<boolean>;
+  /** Delete a session by id. Returns true if a row was deleted. */
+  delete(sessionId: string): Promise<boolean>;
 
   /** Delete sessions not updated since `before`. Returns count deleted. */
   cleanup(before: Date): Promise<number>;

@@ -199,7 +199,7 @@ describe('StandaloneSessionManager', () => {
       const session = mgr.create(makeCreateOpts());
       await mgr.persist(session);
 
-      const persisted = await store.load(session.tenantId, session.id);
+      const persisted = await store.load(session.id);
       expect(persisted!.version).toBe(1);
     });
 
@@ -268,7 +268,7 @@ describe('StandaloneSessionManager', () => {
 
       await mgr.destroy(session.id, {deleteFromStore: true});
 
-      const loaded = await store.load(session.tenantId, session.id);
+      const loaded = await store.load(session.id);
       expect(loaded).toBeNull();
     });
   });
@@ -343,7 +343,7 @@ describe('StandaloneSessionManager', () => {
       }
 
       // Session should be persisted
-      const persisted = await store.load(session.tenantId, session.id);
+      const persisted = await store.load(session.id);
       expect(persisted).not.toBeNull();
       expect(persisted!.messages.length).toBeGreaterThan(0);
     });
