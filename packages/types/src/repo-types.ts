@@ -6,6 +6,7 @@
 
 import type {AmodalConfig} from './config-types.js';
 import type {LoadedConnection} from './connection-types.js';
+import type {DeliveryConfig, FailureAlertConfig} from './delivery-types.js';
 import type {LoadedStore} from './store-types.js';
 import type {LoadedTool} from './tool-types.js';
 
@@ -51,6 +52,10 @@ export interface LoadedAutomation {
   trigger: 'cron' | 'webhook' | 'manual';
   prompt: string;
   location: string;
+  /** Where to deliver the result when this automation completes. */
+  delivery?: DeliveryConfig;
+  /** Where to alert when this automation fails N times in a row. */
+  failureAlert?: FailureAlertConfig;
 }
 
 /**

@@ -14,7 +14,7 @@
 
 import type {AgentBundle, RuntimeEventPayload} from '@amodalai/types';
 import {bridgeAutomations, type RunnableAutomation} from '../automation-bridge.js';
-import {deliverResult} from './delivery.js';
+import {DeliveryRouter, type AutomationResultCallback} from './delivery-router.js';
 import type {StandaloneSessionManager} from '../../session/manager.js';
 import type {Session} from '../../session/types.js';
 import type {ToolContext} from '../../tools/types.js';
@@ -49,6 +49,11 @@ export interface ProactiveRunnerConfig {
   }) => Promise<string>;
   /** Optional event bus for emitting automation lifecycle events */
   eventBus?: {emit: (payload: RuntimeEventPayload) => unknown};
+  /**
+   * ISV callback invoked when an automation's delivery config includes
+   * a `callback` target. Receives the full delivery payload.
+   */
+  onAutomationResult?: AutomationResultCallback;
 }
 
 interface CronJob {
@@ -82,9 +87,16 @@ export class ProactiveRunner {
   private readonly automations: Map<string, RunnableAutomation> = new Map();
   private readonly cronJobs: Map<string, CronJob> = new Map();
   private readonly runHistory: Map<string, {timestamp: string; status: 'success' | 'error'; error?: string; sessionId?: string}> = new Map();
+  private readonly deliveryRouter: DeliveryRouter;
 
   constructor(repo: AgentBundle, config: ProactiveRunnerConfig) {
     this.config = config;
+    this.deliveryRouter = new DeliveryRouter({
+      logger: config.logger,
+      webhookSecret: config.webhookSecret,
+      onResult: config.onAutomationResult,
+      eventBus: config.eventBus,
+    });
     const bridged = bridgeAutomations(repo.automations);
     for (const a of bridged) {
       this.automations.set(a.name, a);
@@ -334,16 +346,8 @@ export class ProactiveRunner {
         }
       }
 
-      // Deliver result
-      await deliverResult(
-        {
-          automation: automation.name,
-          response: responseText,
-          timestamp: new Date().toISOString(),
-        },
-        undefined,
-        this.config.webhookSecret,
-      );
+      // Deliver result to configured targets (webhooks + callbacks)
+      await this.deliveryRouter.onSuccess(automation.name, responseText, automation.delivery);
 
       if (this.config.onSessionComplete) {
         this.config.onSessionComplete(session, automation.name);
@@ -360,13 +364,17 @@ export class ProactiveRunner {
       if (session && this.config.onSessionComplete) {
         this.config.onSessionComplete(session, automation.name);
       }
+      const durationMs = Date.now() - startedAt;
       this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'error', error: msg, sessionId: session?.id});
-      this.config.logger.error('automation_run_error', {name: automation.name, error: msg});
+      this.config.logger.error('automation_run_error', {name: automation.name, error: msg, durationMs});
       this.config.eventBus?.emit({
         type: 'automation_failed',
         name: automation.name,
         error: msg,
+        durationMs,
       });
+      // Fire failure alert (respects threshold + cooldown)
+      await this.deliveryRouter.onFailure(automation.name, msg, automation.failureAlert);
       throw err;
     } finally {
       if (session) {

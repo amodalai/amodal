@@ -112,6 +112,14 @@ export type {
   RepoLoadOptions,
 } from './repo-types.js';
 
+// Delivery routing types
+export type {
+  DeliveryTarget,
+  DeliveryConfig,
+  FailureAlertConfig,
+  DeliveryPayload,
+} from './delivery-types.js';
+
 // Runtime event bus types
 export {RUNTIME_EVENT_TYPES} from './runtime-event-types.js';
 export type {
@@ -127,6 +135,8 @@ export type {
   AutomationFailedEvent,
   AutomationStartedEvent,
   AutomationStoppedEvent,
+  DeliverySucceededEvent,
+  DeliveryFailedEvent,
   StoreUpdatedEvent,
   ManifestChangedEvent,
   FilesChangedEvent,

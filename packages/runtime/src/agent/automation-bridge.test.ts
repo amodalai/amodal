@@ -55,6 +55,72 @@ describe('bridgeAutomation', () => {
   });
 });
 
+describe('bridgeAutomation env:NAME resolution', () => {
+  it('resolves env:NAME refs in delivery webhook URLs', () => {
+    process.env['TEST_WEBHOOK_URL'] = 'https://hooks.example.com/abc123';
+    try {
+      const result = bridgeAutomation(makeAutomation({
+        delivery: {
+          targets: [{type: 'webhook', url: 'env:TEST_WEBHOOK_URL'}],
+        },
+      }));
+      expect(result.delivery?.targets[0]).toEqual({
+        type: 'webhook',
+        url: 'https://hooks.example.com/abc123',
+      });
+    } finally {
+      delete process.env['TEST_WEBHOOK_URL'];
+    }
+  });
+
+  it('resolves env:NAME refs in failureAlert webhook URLs', () => {
+    process.env['TEST_ALERT_URL'] = 'https://alerts.example.com/oncall';
+    try {
+      const result = bridgeAutomation(makeAutomation({
+        failureAlert: {
+          targets: [{type: 'webhook', url: 'env:TEST_ALERT_URL'}],
+        },
+      }));
+      expect(result.failureAlert?.targets[0]).toEqual({
+        type: 'webhook',
+        url: 'https://alerts.example.com/oncall',
+      });
+    } finally {
+      delete process.env['TEST_ALERT_URL'];
+    }
+  });
+
+  it('leaves callback targets unchanged', () => {
+    const result = bridgeAutomation(makeAutomation({
+      delivery: {
+        targets: [{type: 'callback', name: 'my-handler'}],
+      },
+    }));
+    expect(result.delivery?.targets[0]).toEqual({type: 'callback', name: 'my-handler'});
+  });
+
+  it('leaves literal http URLs unchanged', () => {
+    const result = bridgeAutomation(makeAutomation({
+      delivery: {
+        targets: [{type: 'webhook', url: 'https://hooks.example.com/fixed'}],
+      },
+    }));
+    expect(result.delivery?.targets[0]).toEqual({
+      type: 'webhook',
+      url: 'https://hooks.example.com/fixed',
+    });
+  });
+
+  it('throws at bridge time if env var is missing (fail fast at boot)', () => {
+    delete process.env['NONEXISTENT_WEBHOOK'];
+    expect(() => bridgeAutomation(makeAutomation({
+      delivery: {
+        targets: [{type: 'webhook', url: 'env:NONEXISTENT_WEBHOOK'}],
+      },
+    }))).toThrow(/NONEXISTENT_WEBHOOK/);
+  });
+});
+
 describe('bridgeAutomations', () => {
   it('converts an array of automations', () => {
     const automations = [
