@@ -24,8 +24,6 @@
  */
 
 import {describe, it, expect, beforeAll, afterAll} from 'vitest';
-import {resolve} from 'node:path';
-import {readFileSync} from 'node:fs';
 import {z} from 'zod';
 import type {ModelMessage} from 'ai';
 import {StandaloneSessionManager} from '../session/manager.js';
@@ -39,20 +37,11 @@ import type {SSEEvent} from '../types.js';
 import type {PermissionChecker} from '../security/permission-checker.js';
 import type {ToolRegistry, ToolDefinition} from '../tools/types.js';
 
-// Load API keys from repo root .env.test if not already set.
-try {
-  const envPath = resolve(__dirname, '../../../../.env.test');
-  const envContent = readFileSync(envPath, 'utf-8');
-  for (const line of envContent.split('\n')) {
-    const match = line.match(/^([^#=]+)=(.*)$/);
-    if (match) {
-      const [, key, value] = match;
-      if (key && value && !process.env[key.trim()]) {
-        process.env[key.trim()] = value.trim();
-      }
-    }
-  }
-} catch { /* no .env.test — tests will skip */ }
+import {loadTestEnv, defaultTargetName} from './test-env.js';
+
+// Pull API keys out of <repo-root>/.env.test (gitignored) so targets
+// whose keys are set can run; others auto-skip.
+loadTestEnv();
 
 const logger = createLogger({component: 'test:e2e'});
 
@@ -73,20 +62,10 @@ const TARGETS: Record<string, E2ETarget> = {
   groq: {provider: 'groq', model: 'llama-3.3-70b-versatile', apiKeyEnv: 'GROQ_API_KEY'},
 };
 
-// If E2E_TARGETS is unset, fall through a preference chain and pick the
-// first target whose API key is configured. Cheap/fast providers first.
-const TARGET_PREFERENCE: readonly string[] = ['google', 'anthropic', 'openai', 'groq'];
-
-function defaultSelection(): string {
-  for (const name of TARGET_PREFERENCE) {
-    const cfg = TARGETS[name];
-    if (cfg && process.env[cfg.apiKeyEnv]) return name;
-  }
-  // No keys at all — return head of chain so the warning names a concrete target.
-  return TARGET_PREFERENCE[0];
-}
-
-const selected = (process.env['E2E_TARGETS'] ?? defaultSelection())
+// If E2E_TARGETS is unset, fall through the shared preference chain
+// (google → anthropic → openai → groq) and pick the first target whose
+// API key is configured.
+const selected = (process.env['E2E_TARGETS'] ?? defaultTargetName(TARGETS))
   .split(',')
   .map((s) => s.trim())
   .filter((s) => s.length > 0);

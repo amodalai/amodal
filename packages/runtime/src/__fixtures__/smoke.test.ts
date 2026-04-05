@@ -18,25 +18,11 @@ import {resolve} from 'node:path';
 import {readFileSync, writeFileSync, rmSync, readdirSync} from 'node:fs';
 import type {ServerInstance} from '../server.js';
 import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
+import {loadTestEnv, defaultTargetName} from './test-env.js';
 
-// Load API keys from repo root .env.test if not already set.
-// To run smoke tests: create .env.test at the repo root with ANTHROPIC_API_KEY=sk-ant-...
-// This file is gitignored — never commit API keys.
-if (!process.env['ANTHROPIC_API_KEY']) {
-  try {
-    const envPath = resolve(__dirname, '../../../../.env.test');
-    const envContent = readFileSync(envPath, 'utf-8');
-    for (const line of envContent.split('\n')) {
-      const match = line.match(/^([^#=]+)=(.*)$/);
-      if (match) {
-        const [, key, value] = match;
-        if (key && value && !process.env[key.trim()]) {
-          process.env[key.trim()] = value.trim();
-        }
-      }
-    }
-  } catch { /* no .env.test — tests will skip */ }
-}
+// Pull API keys out of <repo-root>/.env.test (gitignored). Missing keys
+// cause the describe block below to skip with a reason.
+loadTestEnv();
 
 // ---------------------------------------------------------------------------
 // Config
@@ -63,23 +49,10 @@ const SMOKE_TARGETS: Record<string, SmokeTarget> = {
   openai: {provider: 'openai', model: 'gpt-4o-mini', apiKeyEnv: 'OPENAI_API_KEY'},
   groq: {provider: 'groq', model: 'llama-3.3-70b-versatile', apiKeyEnv: 'GROQ_API_KEY'},
 };
-/** Auto-select order when SMOKE_TARGET is not set. Cheap/fast first. */
-const SMOKE_TARGET_PREFERENCE: readonly string[] = ['google', 'anthropic', 'openai', 'groq'];
-
 function pickSmokeTarget(): {name: string; target: SmokeTarget | undefined} {
   const override = process.env['SMOKE_TARGET'];
-  if (override) {
-    return {name: override, target: SMOKE_TARGETS[override]};
-  }
-  for (const name of SMOKE_TARGET_PREFERENCE) {
-    const candidate = SMOKE_TARGETS[name];
-    if (candidate && process.env[candidate.apiKeyEnv]) {
-      return {name, target: candidate};
-    }
-  }
-  // No keys configured — return the head of the preference chain so the
-  // skipReason message names a concrete target to the user.
-  return {name: SMOKE_TARGET_PREFERENCE[0], target: SMOKE_TARGETS[SMOKE_TARGET_PREFERENCE[0]]};
+  const name = override ?? defaultTargetName(SMOKE_TARGETS);
+  return {name, target: SMOKE_TARGETS[name]};
 }
 
 const {name: smokeTargetName, target: smokeTarget} = pickSmokeTarget();
