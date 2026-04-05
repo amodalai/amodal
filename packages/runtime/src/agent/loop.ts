@@ -47,7 +47,6 @@ export async function transition(
 ): Promise<TransitionResult> {
   switch (state.type) {
     case 'thinking':
-      // handleThinking is synchronous (it starts the stream, doesn't await it)
       return handleThinking(state, ctx);
 
     case 'streaming':
@@ -147,6 +146,24 @@ export async function* runAgent(
       continue;
     }
 
+    // Check token budget — closes the silent-cost-runaway hole where a long-
+    // running automation could burn through a large budget in a tight retry
+    // loop. Undefined maxSessionTokens means no cap (existing behavior).
+    if (
+      ctx.maxSessionTokens !== undefined &&
+      ctx.usage.totalTokens >= ctx.maxSessionTokens &&
+      result.next.type !== 'done'
+    ) {
+      ctx.logger.info('agent_loop_budget_exceeded', {
+        session: ctx.sessionId,
+        turnCount: ctx.turnCount,
+        totalTokens: ctx.usage.totalTokens,
+        maxSessionTokens: ctx.maxSessionTokens,
+      });
+      state = {type: 'done', usage: {...ctx.usage}, reason: 'budget_exceeded'};
+      continue;
+    }
+
     state = result.next;
   }
 
@@ -162,6 +179,7 @@ export async function* runAgent(
   yield {
     type: SSEEventType.Done,
     timestamp: new Date().toISOString(),
+    reason: state.reason,
     usage: {
       input_tokens: ctx.usage.inputTokens,
       output_tokens: ctx.usage.outputTokens,

@@ -52,6 +52,17 @@ export interface LocalServerConfig {
     payload: DeliveryPayload,
     target: {name?: string},
   ) => void | Promise<void>;
+  /**
+   * Optional hook that produces a 1-2 sentence summary of a tool result
+   * being cleared from context. Wired into every `runMessage` call the
+   * server makes. Useful for tests and for embedders that want richer
+   * summaries than the static `[Tool result cleared]` marker.
+   */
+  summarizeToolResult?: (opts: {
+    toolName: string;
+    content: string;
+    signal: AbortSignal;
+  }) => Promise<string>;
 }
 
 // ---------------------------------------------------------------------------

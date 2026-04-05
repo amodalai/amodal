@@ -263,6 +263,39 @@ export class SessionError extends AmodalError {
 }
 
 // ---------------------------------------------------------------------------
+// Session store errors
+// ---------------------------------------------------------------------------
+
+/**
+ * Error from a session store backend operation (PGLite, Postgres, etc.).
+ * Wraps at the module boundary so callers see a typed error regardless
+ * of the underlying backend.
+ */
+export class SessionStoreError extends AmodalError {
+  readonly backend: string;
+  readonly operation: string;
+
+  constructor(
+    message: string,
+    options: {
+      backend: string;
+      operation: string;
+      cause?: unknown;
+      context?: Record<string, unknown>;
+    },
+  ) {
+    super('SESSION_STORE_ERROR', message, {
+      backend: options.backend,
+      operation: options.operation,
+      ...options.context,
+    }, options.cause);
+    this.name = 'SessionStoreError';
+    this.backend = options.backend;
+    this.operation = options.operation;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Compaction errors
 // ---------------------------------------------------------------------------
 

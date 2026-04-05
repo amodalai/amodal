@@ -179,6 +179,8 @@ export interface Session {
   maxTurns: number;
   /** Max context tokens (provider limit) */
   maxContextTokens: number;
+  /** Optional total-token budget; loop stops with reason `budget_exceeded` */
+  maxSessionTokens?: number;
 
   /** Tool context factory cached from session creation (avoids rebuilding per request) */
   toolContextFactory?: (callId: string) => ToolContext;
@@ -200,6 +202,8 @@ export interface SessionManagerOptions {
   defaultMaxTurns?: number;
   /** Default max context tokens (default: 200_000) */
   defaultMaxContextTokens?: number;
+  /** Default token budget per session (default: undefined, no cap) */
+  defaultMaxSessionTokens?: number;
   /** Optional event bus for emitting session lifecycle events */
   eventBus?: SessionEventBus;
 }
@@ -216,6 +220,8 @@ export interface CreateSessionOptions {
   metadata?: SessionMetadata;
   maxTurns?: number;
   maxContextTokens?: number;
+  /** Optional total-token budget; loop stops with `budget_exceeded` when reached */
+  maxSessionTokens?: number;
   /** Optional: seed messages for resuming */
   messages?: ModelMessage[];
   /** Optional: seed token usage for resuming */

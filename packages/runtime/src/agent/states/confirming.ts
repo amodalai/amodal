@@ -52,6 +52,10 @@ export async function handleConfirming(
       session: ctx.sessionId,
     });
 
+    // Mark this call as confirmed so EXECUTING does not re-route it back
+    // to CONFIRMING on the next pass (infinite-loop guard).
+    ctx.confirmedCallIds.add(state.call.toolCallId);
+
     effects.push({
       type: SSEEventType.Approved,
       resource_type: 'tool_call',

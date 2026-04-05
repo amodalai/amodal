@@ -105,6 +105,20 @@ export interface ToolDefinition<TParams = unknown> {
    */
   readOnly: boolean;
 
+  /**
+   * Whether every call to this tool must be approved by the user.
+   *
+   * When `true`, the agent loop routes each invocation through the
+   * `CONFIRMING` state before executing. Approved calls are tracked per
+   * session by `toolCallId`, so a tool does not re-prompt after approval.
+   *
+   * Connection tools have their own ACL-based confirmation flow via
+   * `PermissionChecker` and should leave this undefined. Use this flag on
+   * store, admin, or custom tools that need a generic "destructive operation"
+   * gate without defining ACL rules.
+   */
+  requiresConfirmation?: boolean;
+
   /** Optional metadata for permission, routing, and UI */
   metadata?: ToolMetadata;
 }

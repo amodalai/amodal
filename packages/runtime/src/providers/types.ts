@@ -112,6 +112,15 @@ export interface LLMProvider {
 
   /** The underlying AI SDK LanguageModel instance (for advanced use) */
   readonly languageModel: LanguageModel;
+
+  /**
+   * Optional provider-native token counter. When implemented, the runtime
+   * uses this to decide when to compact context (more accurate than the
+   * default 4-chars-per-token heuristic). Implementations should be cheap
+   * and synchronous — return an estimate based on a local tokenizer, not
+   * an API call.
+   */
+  countTokens?(messages: ModelMessage[]): number;
 }
 
 // ---------------------------------------------------------------------------

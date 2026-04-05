@@ -1,4 +1,4 @@
-Run a benchmark against the current build to measure agent performance. Results go in `benchmarks/` for comparison across phases.
+Run a benchmark against the current build to measure agent performance. Results go in `benchmarks/` for comparison across commits.
 
 ## Measurements
 
@@ -47,7 +47,7 @@ Save results to `benchmarks/results-$(date +%Y%m%d-%H%M).json` with:
 {
   "timestamp": "ISO date",
   "gitRef": "commit hash",
-  "phase": "current phase label",
+  "label": "free-form label for this run",
   "ttft_ms": number,
   "turn_time_ms": number,
   "tokens": { "input": number, "output": number, "cache": number },

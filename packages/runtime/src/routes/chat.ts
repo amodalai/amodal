@@ -33,6 +33,12 @@ export interface ChatRouterOptions {
   shared: SharedResources;
   /** Factory that builds per-request stream hooks from the auth context */
   createStreamHooks?: (auth?: AuthContext) => StreamHooks;
+  /** Server-side summarizer hook passed into every runMessage call. */
+  summarizeToolResult?: (opts: {
+    toolName: string;
+    content: string;
+    signal: AbortSignal;
+  }) => Promise<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +62,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         sessionType: body.session_type,
         deployId: body.deploy_id,
         auth,
+        maxSessionTokens: body.max_session_tokens,
       });
 
       const controller = new AbortController();
@@ -70,6 +77,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
           signal: controller.signal,
           buildToolContext: toolContextFactory,
           onUsage: adaptOnUsage(hooks, session),
+          summarizeToolResult: options.summarizeToolResult,
         },
       );
 

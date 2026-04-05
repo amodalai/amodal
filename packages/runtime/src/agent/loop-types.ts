@@ -151,6 +151,20 @@ export interface AgentLoopConfig {
   maxLoopIterations: number;
   /** Repeated tool call count that triggers a warning injection. Default 3. */
   loopWarningThreshold: number;
+  /**
+   * Repeated tool call count that escalates: stronger warning + the looping
+   * tool is temporarily removed from the tool set passed to the model, so
+   * it is forced to try a different approach. Default 5 (between
+   * loopWarningThreshold=3 and maxLoopIterations=8).
+   */
+  loopEscalationThreshold: number;
+  /**
+   * Number of turns the looping tool stays disabled after an escalation
+   * fires. Without this cooldown the agent could re-call the tool next
+   * turn, drop the loop count, and re-trigger escalation forever. Default
+   * 3 (covers the turns between escalation and hard-stop).
+   */
+  loopEscalationCooldownTurns: number;
   /** Max output tokens per LLM call. */
   maxOutputTokens: number;
   /** Timeout for individual tool execution in milliseconds. Default 30_000. */
@@ -163,6 +177,18 @@ export interface AgentLoopConfig {
   maxSummaryTokens: number;
   /** Consecutive compaction failures before circuit breaker trips. Default 3. */
   compactionCircuitBreaker: number;
+  /**
+   * Timeout for each `summarizeToolResult` callback call, in milliseconds.
+   * Tool results can be sizeable so small models still need breathing room.
+   * Default 5_000. Exceeding timeout falls back to the static cleared marker.
+   */
+  summarizerTimeoutMs: number;
+  /**
+   * Max concurrent `summarizeToolResult` calls during one clearing pass.
+   * Context clearing can evict 10+ results at once; unlimited fan-out can
+   * hit provider rate limits (esp. Anthropic). Default 4.
+   */
+  summarizerConcurrency: number;
 }
 
 export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
@@ -172,12 +198,16 @@ export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
   clearThreshold: 15,
   maxLoopIterations: 8,
   loopWarningThreshold: 3,
+  loopEscalationThreshold: 5,
+  loopEscalationCooldownTurns: 3,
   maxOutputTokens: 16_384,
   toolTimeoutMs: 30_000,
   confirmationTimeoutMs: 300_000,
   keepRecentTurns: 6,
   maxSummaryTokens: 4_000,
   compactionCircuitBreaker: 3,
+  summarizerTimeoutMs: 5_000,
+  summarizerConcurrency: 4,
 };
 
 export interface AgentContext {
@@ -223,6 +253,26 @@ export interface AgentContext {
   /** Max context tokens (provider's limit) */
   maxContextTokens: number;
 
+  /**
+   * Optional **token** budget for the session (not dollars — token cost
+   * varies by model). When `ctx.usage.totalTokens` reaches this value, the
+   * loop transitions to `done` with reason `budget_exceeded`. Undefined
+   * means no budget cap — the session runs until another terminal condition
+   * (`max_turns`, `loop_detected`, `model_stop`, etc.) fires.
+   *
+   * Counts input + output tokens across ALL turns in the session (cumulative).
+   *
+   * This is a **soft ceiling**, not a hard cap. The check runs between state
+   * transitions, so the in-flight turn completes first. Practical overshoot
+   * on a single turn can be up to `maxOutputTokens` + the total size of tool
+   * results that turn produced. Size the cap with that headroom in mind —
+   * e.g., set it ~20% below your hard limit.
+   *
+   * For dollar-denominated budgets, use the `onUsage` callback to convert
+   * tokens to cost via your own provider pricing table.
+   */
+  maxSessionTokens?: number;
+
   /** Loop config */
   config: AgentLoopConfig;
 
@@ -231,6 +281,28 @@ export interface AgentContext {
 
   /** Cache for pre-executed read-only tool results (populated during STREAMING) */
   preExecutionCache: Map<string, Promise<unknown>>;
+
+  /**
+   * Map of tool names temporarily disabled after a loop-escalation event,
+   * to the turn count at which they may return. Checked in THINKING when
+   * building the tool set for streamText. Prevents the "escalation ->
+   * re-call same tool next turn -> loop count drops -> escalation fires
+   * again" oscillation.
+   */
+  disabledToolsUntilTurn: Map<string, number>;
+
+  /**
+   * Set of tool-call IDs the user has already approved via `CONFIRMING`.
+   * Consulted by EXECUTING before routing a confirmation-gated tool call
+   * to CONFIRMING — prevents an infinite EXECUTING → CONFIRMING → EXECUTING
+   * loop after the user approves.
+   *
+   * Note: this set is **not persisted** when the session is persisted and
+   * resumed. If a client disconnects mid-confirmation and reconnects, any
+   * previously approved tool call will re-prompt. Acceptable trade-off —
+   * resume should re-confirm anyway, since the user state may have shifted.
+   */
+  confirmedCallIds: Set<string>;
 
   /**
    * Wait for user confirmation on a tool call.
@@ -250,6 +322,23 @@ export interface AgentContext {
    * Default is no-op. Roadmap 6.3 (Stripe billing) plugs into this.
    */
   onUsage?: (usage: TurnUsage) => void;
+
+  /**
+   * Optional hook that produces a 1-2 sentence summary of a tool result
+   * that is being cleared from context. When set, the agent loop calls
+   * this for each tool result body it evicts, so the assistant retains a
+   * short signal of "what happened" instead of a generic marker.
+   *
+   * If unset, cleared messages fall back to a static marker. The hook
+   * should be cheap (e.g. a Haiku call) — callers are welcome to short-
+   * circuit or cache. Summarization failures are swallowed by the loop
+   * and fall back to the marker.
+   */
+  summarizeToolResult?: (opts: {
+    toolName: string;
+    content: string;
+    signal: AbortSignal;
+  }) => Promise<string>;
 }
 
 // ---------------------------------------------------------------------------

@@ -22,7 +22,8 @@ import path from 'node:path';
 import {loadRepo} from '@amodalai/core';
 import type {AgentBundle} from '@amodalai/types';
 import {StandaloneSessionManager} from '../session/manager.js';
-import {PGLiteSessionStore} from '../session/store.js';
+import {selectSessionStore} from '../session/session-store-selector.js';
+import {resolveEnvRef} from '../env-ref.js';
 import {buildSessionComponents} from '../session/session-builder.js';
 import type {SharedResources} from '../routes/session-resolver.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
@@ -145,9 +146,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     const backend = storeConfig?.backend ?? 'pglite';
 
     if (backend === 'postgres' && storeConfig?.postgresUrl) {
-      const connUrl = storeConfig.postgresUrl.startsWith('env:')
-        ? process.env[storeConfig.postgresUrl.slice(4)] ?? ''
-        : storeConfig.postgresUrl;
+      const connUrl = resolveEnvRef(storeConfig.postgresUrl) ?? '';
       if (!connUrl) {
         log.error('store_postgres_url_missing', {configured: storeConfig.postgresUrl});
       } else {
@@ -230,8 +229,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // -------------------------------------------------------------------------
 
   const sessionLogger = createLogger({component: 'session-manager'});
-  const sessionStore = new PGLiteSessionStore({logger: sessionLogger});
-  await sessionStore.initialize();
+  const sessionStore = await selectSessionStore({
+    backend: bundle.config.stores?.backend,
+    postgresUrl: resolveEnvRef(bundle.config.stores?.postgresUrl),
+    logger: sessionLogger,
+  });
 
   const sessionManager = new StandaloneSessionManager({
     logger: sessionLogger,
@@ -314,6 +316,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     createSessionComponents: createAutomationSessionComponents,
     logger: log,
     webhookSecret: config.webhookSecret,
+    summarizeToolResult: config.summarizeToolResult,
     onSessionComplete: (session) => {
       void sessionManager.persist(session);
     },
@@ -510,6 +513,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     sessionManager,
     bundleResolver: {staticBundle: bundle},
     shared,
+    summarizeToolResult: config.summarizeToolResult,
     createStreamHooks: () => ({
       onSessionPersist: (sessionId) => {
         const session = sessionManager.get(sessionId);
@@ -545,6 +549,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     sessionManager,
     bundleResolver: {staticBundle: bundle},
     shared,
+    summarizeToolResult: config.summarizeToolResult,
   }));
 
   // Task runner
