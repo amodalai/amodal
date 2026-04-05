@@ -211,8 +211,6 @@ describe('admin-chat route — client-disconnect abort handling', () => {
     const logger = createLogger({component: 'test:admin-chat-abort'});
     const sm = new StandaloneSessionManager({logger, ttlMs: 60_000});
     const session = sm.create({
-      tenantId: 'local',
-      userId: 'admin',
       provider: abortAwareStreamingProvider(),
       toolRegistry: createToolRegistry(),
       permissionChecker: {check: () => ({allowed: true as const})},
