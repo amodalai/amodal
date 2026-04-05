@@ -30,9 +30,9 @@ export const agentSessions = pgTable('agent_sessions', {
   }>(),
   metadata: jsonb('metadata').default({}).$type<Record<string, unknown>>(),
   version: integer('version').notNull().default(1),
-  // TIMESTAMPTZ matches the DDL in store.ts (PGLite) and
-  // postgres-store.ts — without `withTimezone: true` the Drizzle type
-  // is TIMESTAMP WITHOUT TIME ZONE and drizzle-kit would try to
+  // TIMESTAMPTZ matches the DDL in pglite-session-store.ts and
+  // postgres-session-store.ts — without `withTimezone: true` the Drizzle
+  // type is TIMESTAMP WITHOUT TIME ZONE and drizzle-kit would try to
   // "correct" the column on any future migration.
   createdAt: timestamp('created_at', {withTimezone: true}).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', {withTimezone: true}).defaultNow().notNull(),

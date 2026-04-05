@@ -84,8 +84,9 @@ export interface SessionStoreHooks {
 /**
  * Interface for session persistence backends.
  *
- * Implementations: PGLiteSessionStore (local dev), PostgresSessionStore
- * (hosted runtime / ISV production). Both share the `agentSessions`
+ * One concrete implementation (`DrizzleSessionStore`) with two factories:
+ * `createPGLiteSessionStore` for local dev, `createPostgresSessionStore`
+ * for hosted runtime / ISV production. Both share the `agentSessions`
  * Drizzle schema and the query helpers in this module.
  */
 export interface SessionStore {
