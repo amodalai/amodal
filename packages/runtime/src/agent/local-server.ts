@@ -30,6 +30,7 @@ import {buildMcpConfigs} from './mcp-config.js';
 import {ConfigWatcher} from './config-watcher.js';
 import {RuntimeEventBus} from '../events/event-bus.js';
 import {createEventsRouter} from '../events/events-route.js';
+import {wrapStoreBackendWithEvents} from '../events/store-event-wrapper.js';
 import {ProactiveRunner} from './proactive/proactive-runner.js';
 import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createChatRouter} from '../routes/chat.js';
@@ -216,6 +217,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       });
     },
   });
+
+  // Wrap the store backend so every write emits store_updated events.
+  // Covers every write path through one seam: tools, REST routes, admin
+  // file tools, task execution — they all go through this backend.
+  if (storeBackend) {
+    storeBackend = wrapStoreBackendWithEvents(storeBackend, eventBus);
+  }
 
   // -------------------------------------------------------------------------
   // Session manager (new standalone stack)
@@ -463,6 +471,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       res.status(404).json({error: 'Session not found'});
       return;
     }
+    // Emit session_updated so the sidebar picks up the new title live.
+    // appId isn't tracked in the legacy store PATCH path; LOCAL_APP_ID is
+    // the only app in single-tenant dev mode.
+    eventBus.emit({type: 'session_updated', sessionId, appId: LOCAL_APP_ID, title});
     res.json({ok: true});
   });
 

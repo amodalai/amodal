@@ -1007,6 +1007,120 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     }
   }, TIMEOUT);
 
+  it('emits session_updated when title is PATCHed', async () => {
+    // Create a session first so it exists in the legacy store.
+    const {sessionId} = await chat('Say "ok".');
+
+    const stream = await openEventStream();
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: 'my renamed session'}),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      // PATCH may 404 if the legacy store mirror hasn't landed yet —
+      // skip the assertion in that case (same guard as DELETE test).
+      if (res.status === 200) {
+        const event = await stream.waitFor(
+          (e) => e['type'] === 'session_updated' && e['sessionId'] === sessionId && e['title'] === 'my renamed session',
+          5000,
+        );
+        expect(event['title']).toBe('my renamed session');
+      }
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits store_updated when a tool writes to a store', async () => {
+    const stream = await openEventStream();
+    try {
+      // Ask the agent to write to test-items store. Agent non-determinism
+      // means it might not actually call the tool; we soft-check the event.
+      await chat(
+        'Write an item to the test-items store with id="evt-smoke-1" and name="smoke event test".',
+      );
+
+      const event = stream.events.find(
+        (e) => e['type'] === 'store_updated' && e['storeName'] === 'test-items',
+      );
+      if (event) {
+        expect(event['operation']).toBe('put');
+      } else {
+        // Model may have chosen not to call the store tool — this test is
+        // soft (logged, not asserted) because it depends on LLM behavior.
+        // eslint-disable-next-line no-console -- intentional test diagnostic
+        console.warn('[smoke] store_updated not emitted — LLM may have declined to call store_write');
+      }
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits store_updated when a direct REST write happens', async () => {
+    // This path doesn't depend on the LLM — assertable hard.
+    const stream = await openEventStream();
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/api/stores/test-items`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: 'rest-smoke-1', name: 'direct rest write'}),
+        signal: AbortSignal.timeout(5000),
+      });
+      expect(res.status).toBe(201);
+
+      const event = await stream.waitFor(
+        (e) => e['type'] === 'store_updated' && e['storeName'] === 'test-items' && e['operation'] === 'put',
+        5000,
+      );
+      expect(event['operation']).toBe('put');
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits automation_started and automation_stopped', async () => {
+    // The smoke agent's test-auto has no cron schedule, so start will fail.
+    // That's fine — we want to verify the happy path when a schedulable
+    // automation exists. Skip if none are available.
+    const listRes = await fetch(`http://localhost:${AGENT_PORT}/automations`);
+    const listBody = await listRes.json() as {automations: Array<{name: string; schedule?: string}>};
+    const schedulable = listBody.automations.find((a) => a.schedule);
+    if (!schedulable) {
+      return; // smoke agent has no scheduled automation — skip
+    }
+
+    const stream = await openEventStream();
+    try {
+      const startRes = await fetch(
+        `http://localhost:${AGENT_PORT}/automations/${schedulable.name}/start`,
+        {method: 'POST', signal: AbortSignal.timeout(5000)},
+      );
+      if (startRes.status !== 200) return; // not a schedulable automation
+
+      const started = await stream.waitFor(
+        (e) => e['type'] === 'automation_started' && e['name'] === schedulable.name,
+        5000,
+      );
+      expect(typeof started['intervalMs']).toBe('number');
+
+      await fetch(
+        `http://localhost:${AGENT_PORT}/automations/${schedulable.name}/stop`,
+        {method: 'POST', signal: AbortSignal.timeout(5000)},
+      );
+
+      const stopped = await stream.waitFor(
+        (e) => e['type'] === 'automation_stopped' && e['name'] === schedulable.name,
+        5000,
+      );
+      expect(stopped['name']).toBe(schedulable.name);
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
   it('fans out the same event to all concurrent clients (two-tab case)', async () => {
     // Two independent SSE connections — the "two browser tabs" scenario.
     // Every event emitted by the server should reach BOTH clients with

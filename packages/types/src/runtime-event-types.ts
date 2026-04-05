@@ -30,6 +30,8 @@ export const RUNTIME_EVENT_TYPES = [
   'automation_triggered',
   'automation_completed',
   'automation_failed',
+  'automation_started',
+  'automation_stopped',
   'store_updated',
   'manifest_changed',
   'files_changed',
@@ -82,6 +84,17 @@ export interface AutomationFailedEvent extends RuntimeEventBase {
   error: string;
 }
 
+export interface AutomationStartedEvent extends RuntimeEventBase {
+  type: 'automation_started';
+  name: string;
+  intervalMs: number;
+}
+
+export interface AutomationStoppedEvent extends RuntimeEventBase {
+  type: 'automation_stopped';
+  name: string;
+}
+
 export interface StoreUpdatedEvent extends RuntimeEventBase {
   type: 'store_updated';
   storeName: string;
@@ -108,6 +121,8 @@ export type RuntimeEvent =
   | AutomationTriggeredEvent
   | AutomationCompletedEvent
   | AutomationFailedEvent
+  | AutomationStartedEvent
+  | AutomationStoppedEvent
   | StoreUpdatedEvent
   | ManifestChangedEvent
   | FilesChangedEvent;

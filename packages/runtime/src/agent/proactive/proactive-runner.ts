@@ -112,6 +112,7 @@ export class ProactiveRunner {
     }, intervalMs);
     this.cronJobs.set(name, {name, timer});
     this.config.logger.info('automation_started', {name, intervalMs});
+    this.config.eventBus?.emit({type: 'automation_started', name, intervalMs});
     return {success: true};
   }
 
@@ -127,6 +128,7 @@ export class ProactiveRunner {
     clearInterval(job.timer);
     this.cronJobs.delete(name);
     this.config.logger.info('automation_stopped', {name});
+    this.config.eventBus?.emit({type: 'automation_stopped', name});
     return {success: true};
   }
 
