@@ -1006,6 +1006,35 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
       replayStream.close();
     }
   }, TIMEOUT);
+
+  it('fans out the same event to all concurrent clients (two-tab case)', async () => {
+    // Two independent SSE connections — the "two browser tabs" scenario.
+    // Every event emitted by the server should reach BOTH clients with
+    // the same seq number.
+    const [s1, s2] = await Promise.all([openEventStream(), openEventStream()]);
+    try {
+      const chatResult = await chat('Say "ok".');
+
+      const [e1, e2] = await Promise.all([
+        s1.waitFor(
+          (e) => e['type'] === 'session_created' && e['sessionId'] === chatResult.sessionId,
+          TIMEOUT,
+        ),
+        s2.waitFor(
+          (e) => e['type'] === 'session_created' && e['sessionId'] === chatResult.sessionId,
+          TIMEOUT,
+        ),
+      ]);
+
+      // Same logical event reached both clients
+      expect(e1['seq']).toBe(e2['seq']);
+      expect(e1['timestamp']).toBe(e2['timestamp']);
+      expect(e1['sessionId']).toBe(e2['sessionId']);
+    } finally {
+      s1.close();
+      s2.close();
+    }
+  }, TIMEOUT);
 });
 
 // ---------------------------------------------------------------------------
