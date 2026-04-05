@@ -28,6 +28,8 @@ import {buildConnectionsMap, buildAccessConfigs} from '@amodalai/core';
 
 import {createProvider} from '../providers/create-provider.js';
 import type {LLMProvider, ProviderConfig} from '../providers/types.js';
+import {createSearchProvider} from '../providers/search-provider.js';
+import type {SearchProvider} from '../providers/search-provider.js';
 import {createToolRegistry} from '../tools/registry.js';
 import type {ToolRegistry, ToolDefinition, ToolContext} from '../tools/types.js';
 import {registerStoreTools} from '../tools/store-tools.js';
@@ -47,6 +49,8 @@ import type {ToolContextFactoryOptions} from './tool-context-factory.js';
 import {LOCAL_APP_ID} from '../constants.js';
 import {StoreError} from '../errors.js';
 import {createDispatchTool, DISPATCH_TOOL_NAME} from '../tools/dispatch-tool.js';
+import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-tool.js';
+import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
 import type {Logger} from '../logger.js';
 
 // ---------------------------------------------------------------------------
@@ -376,6 +380,24 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   registry.register(DISPATCH_TOOL_NAME, createDispatchTool());
 
   // -------------------------------------------------------------------------
+  // 10a. Build search provider + register web tools (if webTools configured)
+  // -------------------------------------------------------------------------
+
+  let searchProvider: SearchProvider | undefined;
+  const webToolsConfig = bundle.config.webTools;
+  if (webToolsConfig) {
+    searchProvider = createSearchProvider(webToolsConfig);
+    registry.register(WEB_SEARCH_TOOL_NAME, createWebSearchTool());
+    registry.register(FETCH_URL_TOOL_NAME, createFetchUrlTool());
+    logger.info('web_tools_enabled', {
+      provider: webToolsConfig.provider,
+      model: searchProvider.model,
+    });
+  } else {
+    logger.info('web_tools_not_configured', {});
+  }
+
+  // -------------------------------------------------------------------------
   // 11. Build permission checker (session-level)
   // -------------------------------------------------------------------------
 
@@ -452,6 +474,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     fieldScrubber,
     sessionId,
     user: {roles: userRoles},
+    ...(searchProvider ? {searchProvider} : {}),
   };
 
   const toolContextFactory = createToolContextFactory(factoryOpts);

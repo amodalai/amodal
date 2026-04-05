@@ -61,6 +61,7 @@ pnpm build
 - **Stores** — persistent key-value state (PGlite or PostgreSQL) that agents read and write across conversations
 - **Pages** — custom UI surfaces beyond chat, defined in config and rendered by the runtime
 - **Tool system** — HTTP tools, chain tools, function tools, and MCP server support
+- **Web search & fetch** — optional `web_search` and `fetch_url` built-in tools backed by Gemini grounding, work with any main model (see below)
 - **Secure by default** — audit logging, role-based access, credential scrubbing, sandbox execution
 - **Embeddable** — React components and a drop-in chat widget for any web app
 - **Evals** — test agent behavior with structured evaluation cases
@@ -175,6 +176,35 @@ Amodal supports multiple LLM providers. Configure in `amodal.json`:
 ```
 
 Supported: **Anthropic** (default), **OpenAI**, **Google Gemini**, **AWS Bedrock**, **Azure OpenAI**, and any **OpenAI-compatible** endpoint.
+
+## Web search & fetch
+
+Enable the built-in `web_search` and `fetch_url` tools by adding a `webTools` block to `amodal.json`:
+
+```json
+{
+  "webTools": {
+    "provider": "google",
+    "apiKey": "env:GOOGLE_API_KEY",
+    "model": "gemini-3-flash-preview"
+  }
+}
+```
+
+When present, both tools are registered automatically on every session. They route through a dedicated Gemini Flash instance with Google Search + `urlContext` grounding, so the agent gets synthesized answers with cited source URLs — **regardless of what the main model is**. An Anthropic- or OpenAI-backed agent will still use the Gemini backend for search and URL fetch.
+
+- `web_search(query, max_results?)` — grounded search, returns answer + cited URLs
+- `fetch_url(url, prompt?)` — fetches a URL via Gemini `urlContext`; falls back to local HTTP + Mozilla Readability for private-network URLs (localhost, RFC1918)
+
+Requires a Google API key (`GOOGLE_API_KEY`). The grounding free tier is 5K queries/month on Gemini 2.5+ models. `model` defaults to `gemini-3-flash-preview`; swap to `gemini-2.5-flash` or `gemini-3.1-flash-lite-preview` as your cost/quality trade-off dictates.
+
+**Behavior when unconfigured or misconfigured:**
+
+| Situation                                                           | Result                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `webTools` block absent from `amodal.json`                          | Tools not registered. Agents don't see them in their tool list. Startup log: `web_tools_not_configured`.                                                                                                                                                              |
+| `webTools` present, `apiKey: "env:GOOGLE_API_KEY"`, env var not set | Boot fails fast with `ConfigError: Environment variable "GOOGLE_API_KEY" is not set`.                                                                                                                                                                                 |
+| Key is set but invalid/expired/quota-exhausted                      | Tools register; at call time `web_search` returns a structured `{status: 'error', content: ..., retryable: bool}` with specific guidance (e.g. "DO NOT retry, check GOOGLE_API_KEY" on 400/401/403, "may retry once" on 5xx) so the agent knows whether to try again. |
 
 ## Developing from Source
 

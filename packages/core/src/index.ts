@@ -11,6 +11,8 @@ export {
   PRESENT_TOOL_NAME,
   REQUEST_TOOL_NAME,
   DISPATCH_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+  FETCH_URL_TOOL_NAME,
 } from './tools/amodal-tool-names.js';
 
 // Tool definition types

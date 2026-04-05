@@ -79,6 +79,10 @@ smoke-mcp-server.mjs   — MCP stdio server with search/lookup/count tools
 
 The test `beforeAll` starts the mock REST server and `createLocalServer()` programmatically on port 9900. Tests call `POST /chat` and parse SSE events from the response.
 
+## Web tools (`web_search`, `fetch_url`)
+
+When `GOOGLE_API_KEY` is set in `.env.test`, `beforeAll` adds a `webTools` block to `amodal.json` so the agent registers the web tools alongside the existing ones. One additional test fires a real `web_search` call through whichever main provider `SMOKE_TARGET` selects — this exercises the cross-provider case (e.g. Anthropic main + Google-backed search). The web-tool test skips automatically when `GOOGLE_API_KEY` is absent.
+
 ## LLM non-determinism
 
 Some tests depend on the model calling specific tools. When the model chooses not to (despite explicit instruction), the test skips gracefully with a console warning rather than failing. This prevents flaky CI from LLM variability while still catching real code bugs.

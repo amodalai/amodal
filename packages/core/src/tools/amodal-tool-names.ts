@@ -14,3 +14,5 @@ export const LOAD_KNOWLEDGE_TOOL_NAME = 'load_knowledge';
 export const PRESENT_TOOL_NAME = 'present';
 export const REQUEST_TOOL_NAME = 'request';
 export const DISPATCH_TOOL_NAME = 'dispatch';
+export const WEB_SEARCH_TOOL_NAME = 'web_search';
+export const FETCH_URL_TOOL_NAME = 'fetch_url';
