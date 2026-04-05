@@ -16,7 +16,7 @@
  * Design decisions documented in `cloud/docs/session-store-design.md`.
  */
 
-import {eq, lt, desc} from 'drizzle-orm';
+import {and, eq, lt, desc} from 'drizzle-orm';
 import {pgTable, text, integer, jsonb, timestamp} from 'drizzle-orm/pg-core';
 import {drizzle} from 'drizzle-orm/node-postgres';
 import type {Pool} from 'pg';
@@ -252,24 +252,25 @@ export class PostgresSessionStore implements SessionStore {
     if (this.hooks.onAfterSave) await this.hooks.onAfterSave(session);
   }
 
-  async load(sessionId: string): Promise<PersistedSession | null> {
+  async load(tenantId: string, sessionId: string): Promise<PersistedSession | null> {
     this.ensureDb('load');
 
     try {
       const rows = await this.db!
         .select()
         .from(this.table)
-        .where(eq(this.table.id, sessionId))
+        .where(and(eq(this.table.id, sessionId), eq(this.table.tenantId, tenantId)))
         .limit(1);
 
       if (rows.length === 0) return null;
-      return rowToPersistedSession(rows[0]);
+      return rowToPersistedSession(BACKEND_NAME, rows[0]);
     } catch (cause) {
+      if (cause instanceof SessionStoreError) throw cause;
       throw new SessionStoreError('Failed to load session', {
         backend: BACKEND_NAME,
         operation: 'load',
         cause,
-        context: {sessionId},
+        context: {sessionId, tenantId},
       });
     }
   }
@@ -278,10 +279,9 @@ export class PostgresSessionStore implements SessionStore {
     this.ensureDb('list');
 
     const limit = opts?.limit ?? DEFAULT_LIST_LIMIT;
-    // buildListConditions uses the passed-in table's column names —
-    // works with our dynamic table because columns are identical.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic table has identical column shape as the `agentSessions` schema; only the SQL table name differs
-    const where = buildListConditions(BACKEND_NAME, tenantId, opts, this.table as unknown as Parameters<typeof buildListConditions>[3]);
+    // Structural typing — `this.table` has the same column shape as
+    // `agentSessions`; only the SQL table name differs.
+    const where = buildListConditions(BACKEND_NAME, tenantId, opts, this.table);
 
     try {
       const rows = await this.db!
@@ -293,7 +293,7 @@ export class PostgresSessionStore implements SessionStore {
 
       const hasMore = rows.length > limit;
       const page = hasMore ? rows.slice(0, limit) : rows;
-      const sessions = page.map(rowToPersistedSession);
+      const sessions = page.map((r) => rowToPersistedSession(BACKEND_NAME, r));
       const nextCursor = hasMore
         ? encodeCursor(page[page.length - 1].updatedAt, page[page.length - 1].id)
         : null;
@@ -311,21 +311,21 @@ export class PostgresSessionStore implements SessionStore {
     }
   }
 
-  async delete(sessionId: string): Promise<boolean> {
+  async delete(tenantId: string, sessionId: string): Promise<boolean> {
     this.ensureDb('delete');
 
     let result: Array<{id: string}>;
     try {
       result = await this.db!
         .delete(this.table)
-        .where(eq(this.table.id, sessionId))
+        .where(and(eq(this.table.id, sessionId), eq(this.table.tenantId, tenantId)))
         .returning({id: this.table.id});
     } catch (cause) {
       throw new SessionStoreError('Failed to delete session', {
         backend: BACKEND_NAME,
         operation: 'delete',
         cause,
-        context: {sessionId},
+        context: {sessionId, tenantId},
       });
     }
 

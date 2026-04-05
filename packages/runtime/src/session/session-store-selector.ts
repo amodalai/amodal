@@ -12,6 +12,7 @@
  */
 
 import type {Logger} from '../logger.js';
+import {SessionStoreError} from '../errors.js';
 import type {SessionStore} from './store.js';
 import {PGLiteSessionStore} from './store.js';
 
@@ -37,19 +38,19 @@ export interface SessionStoreSelectorOptions {
  *   1. If `backend === 'postgres'` and `postgresUrl` is set →
  *      `PostgresSessionStore`.
  *   2. If `backend === 'postgres'` but the URL is missing, **or the
- *      Postgres connection fails to initialize for any reason** → log
- *      the failure at `error` level and fall back to
- *      `PGLiteSessionStore`. The session store must always be
- *      available; a misconfigured Postgres URL should not crash the
- *      runtime on boot.
- *   3. Otherwise → `PGLiteSessionStore` (default).
+ *      Postgres connection fails to initialize** → log the failure at
+ *      `error` level and fall back to `PGLiteSessionStore`. The
+ *      session store must always be available; a missing URL or dead
+ *      DB should not crash the runtime on boot.
+ *   3. If the Postgres backend rejects config at construct time
+ *      (invalid `tableName`, missing options, etc.) → **rethrow**.
+ *      Config typos in `amodal.json` are programmer errors that must
+ *      fail fast — if they fell through to PGLite silently, every
+ *      session would evaporate on restart with no visible signal.
+ *   4. Otherwise → `PGLiteSessionStore` (default).
  *
- * **Fallback trade-off:** step 2 swallows init errors deliberately.
- * Programmer errors (invalid `tableName`, unknown driver flag) will be
- * logged and hidden behind the fallback — operators must watch the
- * `session_store_postgres_init_failed` log line to detect them. This
- * is the product decision ("runtime must boot") taking precedence over
- * strict fail-fast semantics.
+ * **Fallback scope:** only connection-class failures (network, auth,
+ * DDL) trigger the fallback. Construct-time validation is fatal.
  */
 export async function selectSessionStore(
   opts: SessionStoreSelectorOptions,
@@ -70,7 +71,12 @@ export async function selectSessionStore(
         await store.initialize();
         return store;
       } catch (err) {
-        // Intentional fallback — see "Fallback trade-off" above.
+        // Construct-time validation errors are programmer errors —
+        // fail fast so operators notice the amodal.json typo.
+        if (err instanceof SessionStoreError && err.operation === 'construct') {
+          throw err;
+        }
+        // Connection-class failure — log and fall back to PGLite.
         logger.error('session_store_postgres_init_failed', {
           error: err instanceof Error ? err.message : String(err),
           fallback: 'pglite',

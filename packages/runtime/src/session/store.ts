@@ -16,6 +16,7 @@
  */
 
 import {and, eq, lt, or, gte, lte, desc, sql} from 'drizzle-orm';
+import type {AnyPgColumn} from 'drizzle-orm/pg-core';
 import {drizzle} from 'drizzle-orm/pglite';
 import {agentSessions} from '../stores/schema.js';
 import type {PersistedSession, SessionMetadata} from './types.js';
@@ -89,22 +90,47 @@ export interface SessionStore {
   /** Initialize the backing store (create tables, run migrations). */
   initialize(): Promise<void>;
 
-  /** Save or update a session. */
+  /**
+   * Save or update a session.
+   *
+   * **Semantics: last-write-wins.** The implementation does an
+   * unconditional `onConflictDoUpdate` — no optimistic-concurrency
+   * version check. If two concurrent `save()` calls target the same
+   * session ID, the later write silently overwrites the earlier one,
+   * including any messages the earlier caller added.
+   *
+   * **Callers must serialize per-session writes.** The built-in
+   * `StandaloneSessionManager` does this by routing all writes for a
+   * session through a single in-memory object. External callers that
+   * share a session across workers must either (a) use a single
+   * writer per session, or (b) wrap `save()` with their own advisory
+   * locking. The `version` column is persisted and surfaced on read
+   * but is currently informational only — reserved for future OCC.
+   */
   save(session: PersistedSession): Promise<void>;
 
-  /** Load a session by ID. Returns null if not found. */
-  load(sessionId: string): Promise<PersistedSession | null>;
+  /**
+   * Load a session by (tenantId, sessionId). Returns null if not found
+   * OR if the session exists but belongs to a different tenant. The
+   * tenant check is enforced in SQL (`WHERE tenant_id = $tenantId`),
+   * so a caller passing the wrong tenantId cannot read another
+   * tenant's data.
+   */
+  load(tenantId: string, sessionId: string): Promise<PersistedSession | null>;
 
   /**
    * List sessions for a tenant, newest first.
    *
-   * Returns sessions + a pagination cursor. Existing callers that pass
-   * only `{limit}` still work — they just ignore `nextCursor`.
+   * Returns sessions + a pagination cursor.
    */
   list(tenantId: string, opts?: SessionListOptions): Promise<SessionListResult>;
 
-  /** Delete a session by ID. Returns true if deleted. */
-  delete(sessionId: string): Promise<boolean>;
+  /**
+   * Delete a session by (tenantId, sessionId). Returns true if a row
+   * was deleted. Tenant-scoped in SQL — a caller with the wrong
+   * tenantId cannot delete another tenant's session.
+   */
+  delete(tenantId: string, sessionId: string): Promise<boolean>;
 
   /** Delete sessions not updated since `before`. Returns count deleted. */
   cleanup(before: Date): Promise<number>;
@@ -197,14 +223,43 @@ export function sessionToRow(session: PersistedSession): {
   };
 }
 
-/** Inverse of `sessionToRow`. */
-export function rowToPersistedSession(row: typeof agentSessions.$inferSelect): PersistedSession {
+/**
+ * Inverse of `sessionToRow`.
+ *
+ * Validates at the JSONB boundary: rejects rows with an unknown
+ * `version` (future schema migration signal) or a non-array `messages`
+ * payload (would indicate a malformed write from an older runtime or
+ * manual DB edit). Throws `SessionStoreError` with context when a row
+ * fails validation rather than returning a quietly-broken session
+ * that crashes deep in the agent loop.
+ */
+export function rowToPersistedSession(
+  backend: string,
+  row: typeof agentSessions.$inferSelect,
+): PersistedSession {
+  if (row.version !== 1) {
+    throw new SessionStoreError(
+      `Unsupported persisted session version: ${row.version}`,
+      {
+        backend,
+        operation: 'load',
+        context: {sessionId: row.id, version: row.version, supported: 1},
+      },
+    );
+  }
+  if (!Array.isArray(row.messages)) {
+    throw new SessionStoreError('Persisted session has non-array messages payload', {
+      backend,
+      operation: 'load',
+      context: {sessionId: row.id, messagesType: typeof row.messages},
+    });
+  }
   return {
     version: 1,
     id: row.id,
     tenantId: row.tenantId,
     userId: row.userId,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: we wrote these values
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: array-shape checked above; element shape is not validated
     messages: row.messages as ModelMessage[],
 
     tokenUsage: row.tokenUsage as TokenUsage,
@@ -216,17 +271,29 @@ export function rowToPersistedSession(row: typeof agentSessions.$inferSelect): P
 }
 
 /**
- * Build the where-clause fragments for `list()`. Backends pass in their
- * own table binding since drizzle's Postgres vs. PGLite adapters return
- * slightly different table types, but the SQL is identical.
+ * Structural shape the `buildListConditions` helper needs. Any
+ * `agent_sessions`-compatible Drizzle pgTable (default name or a
+ * consumer-supplied one) satisfies this — both backends use the same
+ * column names, only the table name differs.
+ */
+export interface AgentSessionsColumns {
+  tenantId: AnyPgColumn;
+  updatedAt: AnyPgColumn;
+  id: AnyPgColumn;
+  metadata: AnyPgColumn;
+}
+
+/**
+ * Build the where-clause fragments for `list()`. Generic over the
+ * table's column bindings so both PGLite (static `agentSessions`) and
+ * Postgres (dynamic `makeAgentSessionsTable(name)`) pass their own
+ * tables without a cast.
  */
 export function buildListConditions(
   backend: string,
   tenantId: string,
   opts: SessionListOptions | undefined,
-  // Using loose typing here: buildListConditions accepts any agentSessions-shaped
-  // table so both PGLite and Postgres adapters share it.
-  table: typeof agentSessions,
+  table: AgentSessionsColumns,
 ): ReturnType<typeof and> {
   const conditions = [eq(table.tenantId, tenantId)];
 
@@ -356,24 +423,25 @@ export class PGLiteSessionStore implements SessionStore {
     if (this.hooks.onAfterSave) await this.hooks.onAfterSave(session);
   }
 
-  async load(sessionId: string): Promise<PersistedSession | null> {
+  async load(tenantId: string, sessionId: string): Promise<PersistedSession | null> {
     this.ensureDb('load');
 
     try {
       const rows = await this.db!
         .select()
         .from(agentSessions)
-        .where(eq(agentSessions.id, sessionId))
+        .where(and(eq(agentSessions.id, sessionId), eq(agentSessions.tenantId, tenantId)))
         .limit(1);
 
       if (rows.length === 0) return null;
-      return rowToPersistedSession(rows[0]);
+      return rowToPersistedSession(BACKEND_NAME_PGLITE, rows[0]);
     } catch (cause) {
+      if (cause instanceof SessionStoreError) throw cause;
       throw new SessionStoreError('Failed to load session', {
         backend: BACKEND_NAME_PGLITE,
         operation: 'load',
         cause,
-        context: {sessionId},
+        context: {sessionId, tenantId},
       });
     }
   }
@@ -394,7 +462,7 @@ export class PGLiteSessionStore implements SessionStore {
 
       const hasMore = rows.length > limit;
       const page = hasMore ? rows.slice(0, limit) : rows;
-      const sessions = page.map(rowToPersistedSession);
+      const sessions = page.map((r) => rowToPersistedSession(BACKEND_NAME_PGLITE, r));
 
       const nextCursor = hasMore
         ? encodeCursor(page[page.length - 1].updatedAt, page[page.length - 1].id)
@@ -412,21 +480,21 @@ export class PGLiteSessionStore implements SessionStore {
     }
   }
 
-  async delete(sessionId: string): Promise<boolean> {
+  async delete(tenantId: string, sessionId: string): Promise<boolean> {
     this.ensureDb('delete');
 
     let result: Array<{id: string}>;
     try {
       result = await this.db!
         .delete(agentSessions)
-        .where(eq(agentSessions.id, sessionId))
+        .where(and(eq(agentSessions.id, sessionId), eq(agentSessions.tenantId, tenantId)))
         .returning({id: agentSessions.id});
     } catch (cause) {
       throw new SessionStoreError('Failed to delete session', {
         backend: BACKEND_NAME_PGLITE,
         operation: 'delete',
         cause,
-        context: {sessionId},
+        context: {sessionId, tenantId},
       });
     }
 

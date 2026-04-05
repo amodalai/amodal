@@ -82,7 +82,7 @@ function runSuite(makeBackend: BackendFactory): void {
       });
       await store.save(session);
 
-      const loaded = await store.load(session.id);
+      const loaded = await store.load(session.tenantId, session.id);
       expect(loaded).not.toBeNull();
       expect(loaded!.id).toBe(session.id);
       expect(loaded!.tenantId).toBe(session.tenantId);
@@ -94,7 +94,7 @@ function runSuite(makeBackend: BackendFactory): void {
     });
 
     it('returns null for a missing session', async () => {
-      expect(await store.load('nonexistent')).toBeNull();
+      expect(await store.load('tenant-1', 'nonexistent')).toBeNull();
     });
 
     it('save updates an existing session (upsert) and refreshes fields', async () => {
@@ -106,7 +106,7 @@ function runSuite(makeBackend: BackendFactory): void {
       session.updatedAt = new Date(Date.now() + 1000);
       await store.save(session);
 
-      const loaded = await store.load(session.id);
+      const loaded = await store.load(session.tenantId, session.id);
       expect(loaded!.messages).toHaveLength(2);
       expect(loaded!.tokenUsage.totalTokens).toBe(300);
     });
@@ -123,7 +123,7 @@ function runSuite(makeBackend: BackendFactory): void {
         },
       });
       await store.save(session);
-      const loaded = await store.load(session.id);
+      const loaded = await store.load(session.tenantId, session.id);
       expect(loaded!.metadata).toEqual(session.metadata);
     });
   });
@@ -141,6 +141,35 @@ function runSuite(makeBackend: BackendFactory): void {
       expect(sessionsA).toHaveLength(2);
       expect(sessionsB).toHaveLength(1);
       expect(sessionsA.every((s) => s.tenantId === a)).toBe(true);
+    });
+
+    it('load returns null when tenantId does not match the row', async () => {
+      // SQL-level enforcement: a caller with the wrong tenant cannot
+      // read another tenant's session, even with the correct sessionId.
+      const session = makeSession({tenantId: 'tenant-owner'});
+      await store.save(session);
+
+      // Correct tenant → found
+      const asOwner = await store.load('tenant-owner', session.id);
+      expect(asOwner).not.toBeNull();
+
+      // Wrong tenant → null
+      const asOther = await store.load('tenant-intruder', session.id);
+      expect(asOther).toBeNull();
+    });
+
+    it('delete is a no-op when tenantId does not match', async () => {
+      const session = makeSession({tenantId: 'tenant-owner'});
+      await store.save(session);
+
+      // Wrong tenant → delete returns false and leaves the row intact
+      const deletedByIntruder = await store.delete('tenant-intruder', session.id);
+      expect(deletedByIntruder).toBe(false);
+      expect(await store.load('tenant-owner', session.id)).not.toBeNull();
+
+      // Correct tenant → delete succeeds
+      const deletedByOwner = await store.delete('tenant-owner', session.id);
+      expect(deletedByOwner).toBe(true);
     });
   });
 
@@ -266,12 +295,12 @@ function runSuite(makeBackend: BackendFactory): void {
     it('removes a session and returns true', async () => {
       const session = makeSession();
       await store.save(session);
-      expect(await store.delete(session.id)).toBe(true);
-      expect(await store.load(session.id)).toBeNull();
+      expect(await store.delete(session.tenantId, session.id)).toBe(true);
+      expect(await store.load(session.tenantId, session.id)).toBeNull();
     });
 
     it('returns false for a missing session', async () => {
-      expect(await store.delete('nonexistent')).toBe(false);
+      expect(await store.delete('tenant-1', 'nonexistent')).toBe(false);
     });
   });
 
@@ -285,8 +314,8 @@ function runSuite(makeBackend: BackendFactory): void {
 
       const cleaned = await store.cleanup(new Date('2025-01-01'));
       expect(cleaned).toBeGreaterThanOrEqual(1);
-      expect(await store.load(old.id)).toBeNull();
-      expect(await store.load(recent.id)).not.toBeNull();
+      expect(await store.load(tenantId, old.id)).toBeNull();
+      expect(await store.load(tenantId, recent.id)).not.toBeNull();
     });
   });
 
@@ -313,8 +342,8 @@ function runSuite(makeBackend: BackendFactory): void {
       try {
         const session = makeSession();
         await hooked.store.save(session);
-        await hooked.store.delete('nonexistent');
-        await hooked.store.delete(session.id);
+        await hooked.store.delete(session.tenantId, 'nonexistent');
+        await hooked.store.delete(session.tenantId, session.id);
         expect(events).toEqual([`del:${session.id}`]);
       } finally {
         await hooked.cleanup();
@@ -462,7 +491,7 @@ pgDescribe('PostgresSessionStore (via TEST_POSTGRES_URL)', () => {
       await store.close();
       await store.close();
       await expect(store.save(makeSession())).rejects.toBeInstanceOf(SessionStoreError);
-      await expect(store.load('x')).rejects.toBeInstanceOf(SessionStoreError);
+      await expect(store.load('tenant-1', 'x')).rejects.toBeInstanceOf(SessionStoreError);
       await dropTable(localTable);
     });
 
@@ -501,7 +530,7 @@ pgDescribe('PostgresSessionStore (via TEST_POSTGRES_URL)', () => {
           })),
         );
         await Promise.all(saves);
-        const loaded = await store.load(id);
+        const loaded = await store.load('t', id);
         expect(loaded).not.toBeNull();
         expect(loaded!.tokenUsage.totalTokens).toBeGreaterThanOrEqual(0);
         expect(loaded!.tokenUsage.totalTokens).toBeLessThanOrEqual(9);

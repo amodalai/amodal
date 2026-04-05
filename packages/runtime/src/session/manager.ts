@@ -308,7 +308,7 @@ export class StandaloneSessionManager {
       });
     }
 
-    const persisted = await this.store.load(sessionId);
+    const persisted = await this.store.load(opts.tenantId, sessionId);
     if (!persisted) return null;
 
     // Create a fresh session seeded with persisted state
@@ -374,7 +374,7 @@ export class StandaloneSessionManager {
     this.sessions.delete(sessionId);
 
     if (opts?.deleteFromStore && this.store) {
-      await this.store.delete(sessionId);
+      await this.store.delete(session.tenantId, sessionId);
     }
 
     this.logger.info('session_destroyed', {
