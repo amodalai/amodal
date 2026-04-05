@@ -5,7 +5,7 @@
  */
 
 /**
- * Picks the right `SessionStore` implementation given repo config.
+ * Picks the right session-store factory given repo config.
  *
  * Extracted from `local-server.ts` so the selection logic is
  * unit-testable without spinning up the full server.
@@ -14,7 +14,7 @@
 import type {Logger} from '../logger.js';
 import {SessionStoreError} from '../errors.js';
 import type {SessionStore} from './store.js';
-import {PGLiteSessionStore} from './store.js';
+import {createPGLiteSessionStore} from './pglite-session-store.js';
 
 export interface SessionStoreSelectorOptions {
   /** From amodal.json `stores.backend`. Defaults to `pglite` if unset. */
@@ -36,10 +36,10 @@ export interface SessionStoreSelectorOptions {
  *
  * Decision:
  *   1. If `backend === 'postgres'` and `postgresUrl` is set →
- *      `PostgresSessionStore`.
+ *      `createPostgresSessionStore`.
  *   2. If `backend === 'postgres'` but the URL is missing, **or the
  *      Postgres connection fails to initialize** → log the failure at
- *      `error` level and fall back to `PGLiteSessionStore`. The
+ *      `error` level and fall back to `createPGLiteSessionStore`. The
  *      session store must always be available; a missing URL or dead
  *      DB should not crash the runtime on boot.
  *   3. If the Postgres backend rejects config at construct time
@@ -47,7 +47,7 @@ export interface SessionStoreSelectorOptions {
  *      Config typos in `amodal.json` are programmer errors that must
  *      fail fast — if they fell through to PGLite silently, every
  *      session would evaporate on restart with no visible signal.
- *   4. Otherwise → `PGLiteSessionStore` (default).
+ *   4. Otherwise → PGLite (default).
  *
  * **Fallback scope:** only connection-class failures (network, auth,
  * DDL) trigger the fallback. Construct-time validation is fatal.
@@ -63,13 +63,11 @@ export async function selectSessionStore(
     } else {
       try {
         // Dynamic import so `pg` stays optional for PGLite-only users.
-        const mod = await import('./postgres-store.js');
-        const store = new mod.PostgresSessionStore({
+        const mod = await import('./postgres-session-store.js');
+        return await mod.createPostgresSessionStore({
           connectionString: postgresUrl,
           logger,
         });
-        await store.initialize();
-        return store;
       } catch (err) {
         // Construct-time validation errors are programmer errors —
         // fail fast so operators notice the amodal.json typo.
@@ -85,7 +83,5 @@ export async function selectSessionStore(
     }
   }
 
-  const store = new PGLiteSessionStore({logger, dataDir});
-  await store.initialize();
-  return store;
+  return createPGLiteSessionStore({logger, dataDir});
 }

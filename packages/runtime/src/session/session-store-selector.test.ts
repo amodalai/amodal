@@ -6,11 +6,20 @@
 
 import {describe, it, expect, afterEach} from 'vitest';
 import {selectSessionStore} from './session-store-selector.js';
-import {PGLiteSessionStore} from './store.js';
-import {PostgresSessionStore} from './postgres-store.js';
+import {DrizzleSessionStore} from './drizzle-session-store.js';
 import {createLogger} from '../logger.js';
 
 const logger = createLogger({component: 'test:selector'});
+
+/**
+ * Both backends return `DrizzleSessionStore` today; we assert on the
+ * `backendName` tag to tell them apart in tests. If that instance type
+ * ever changes, this narrow cast is the one place to update.
+ */
+function asDrizzle(store: unknown): DrizzleSessionStore {
+  expect(store).toBeInstanceOf(DrizzleSessionStore);
+  return store as DrizzleSessionStore;
+}
 
 describe('selectSessionStore', () => {
   const created: Array<{close: () => Promise<void>}> = [];
@@ -25,19 +34,19 @@ describe('selectSessionStore', () => {
   it('defaults to PGLite when no backend specified', async () => {
     const store = await selectSessionStore({logger});
     created.push(store);
-    expect(store).toBeInstanceOf(PGLiteSessionStore);
+    expect(asDrizzle(store).backendName).toBe('pglite');
   });
 
   it('uses PGLite when backend is explicitly pglite', async () => {
     const store = await selectSessionStore({backend: 'pglite', logger});
     created.push(store);
-    expect(store).toBeInstanceOf(PGLiteSessionStore);
+    expect(asDrizzle(store).backendName).toBe('pglite');
   });
 
   it('falls back to PGLite when backend=postgres but no URL is set', async () => {
     const store = await selectSessionStore({backend: 'postgres', logger});
     created.push(store);
-    expect(store).toBeInstanceOf(PGLiteSessionStore);
+    expect(asDrizzle(store).backendName).toBe('pglite');
   });
 
   it('falls back to PGLite when postgresUrl is an empty string', async () => {
@@ -49,7 +58,7 @@ describe('selectSessionStore', () => {
       logger,
     });
     created.push(store);
-    expect(store).toBeInstanceOf(PGLiteSessionStore);
+    expect(asDrizzle(store).backendName).toBe('pglite');
   });
 
   it('falls back to PGLite when Postgres connection fails to initialize', async () => {
@@ -63,19 +72,19 @@ describe('selectSessionStore', () => {
       logger,
     });
     created.push(store);
-    expect(store).toBeInstanceOf(PGLiteSessionStore);
+    expect(asDrizzle(store).backendName).toBe('pglite');
   });
 
   const pgUrl = process.env['TEST_POSTGRES_URL'] ?? '';
   const itPg = pgUrl ? it : it.skip;
 
-  itPg('uses PostgresSessionStore when backend=postgres and URL is set', async () => {
+  itPg('uses Postgres backend when backend=postgres and URL is set', async () => {
     const store = await selectSessionStore({
       backend: 'postgres',
       postgresUrl: pgUrl,
       logger,
     });
     created.push(store);
-    expect(store).toBeInstanceOf(PostgresSessionStore);
+    expect(asDrizzle(store).backendName).toBe('postgres');
   });
 });
