@@ -485,6 +485,140 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     }
   }, TIMEOUT * 2);
 
+  // Pagination end-to-end: drop a 3000-line file with a sentinel on line
+  // 2800, ask the admin agent to report what's there verbatim. The default
+  // read cap is 2000 lines, so the agent MUST either paginate via offset
+  // or use grep. Verifies the new line_start/line_end/total_lines/
+  // truncated response shape is actually usable by a real LLM.
+  it('admin agent paginates a long file to reach content past the default cap', async () => {
+    const bigFilePath = resolve(AGENT_DIR, 'knowledge', 'big-file.md');
+    // Sentinel must be distinct enough that the agent can quote it back.
+    const SENTINEL = 'TARGET:CONTENT:ABCD1234:the-answer-is-42';
+    const TARGET_LINE = 2800;
+    const TOTAL_LINES = 3000;
+    const body = Array.from({length: TOTAL_LINES}, (_, i) => {
+      const n = i + 1;
+      return n === TARGET_LINE ? `line ${String(n)}: ${SENTINEL}` : `line ${String(n)}: filler`;
+    }).join('\n');
+    writeFileSync(bigFilePath, body);
+
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          message:
+            `I just added a long file at knowledge/big-file.md. Tell me exactly what's on line ${String(TARGET_LINE)} — report the full line content verbatim. Just give me the line, no summary.`,
+        }),
+        signal: AbortSignal.timeout(TIMEOUT * 2),
+      });
+
+      const text = await res.text();
+      const events = parseSSE(text);
+      const toolStarts = findEvents(events, 'tool_call_start');
+      const toolNames = toolStarts.map((e) => String(e['tool_name']));
+
+      // The agent needs to touch the file — either read_repo_file or
+      // grep_repo_files would work to find the target line.
+      const touchedFile = toolNames.some(
+        (n) => n === 'read_repo_file' || n === 'grep_repo_files',
+      );
+      expect(touchedFile).toBe(true);
+
+      // If the agent used read_repo_file, at least one call must have
+      // specified an offset/limit that covers line 2800 (the default
+      // 2000-line window doesn't reach it, so the agent HAS to adapt).
+      const readCalls = toolStarts.filter((e) => e['tool_name'] === 'read_repo_file');
+      if (readCalls.length > 0) {
+        const usedPagination = readCalls.some((e) => {
+          const params = e['parameters'] as Record<string, unknown> | undefined;
+          if (!params) return false;
+          const offset = typeof params['offset'] === 'number' ? params['offset'] : 1;
+          const limit = typeof params['limit'] === 'number' ? params['limit'] : 2000;
+          // Covers line TARGET_LINE if offset <= TARGET_LINE AND
+          // offset + limit - 1 >= TARGET_LINE.
+          return offset <= TARGET_LINE && offset + limit - 1 >= TARGET_LINE;
+        });
+        expect(usedPagination).toBe(true);
+      }
+
+      // Hard assertion: the response contains the sentinel verbatim.
+      const responseText = allText(events);
+      expect(responseText).toContain(SENTINEL);
+    } finally {
+      rmSync(bigFilePath, {force: true});
+    }
+  }, TIMEOUT * 2);
+
+  // Multi-chunk pagination: sentinels spread across a 5000-line file so no
+  // single default read (2000 lines) can cover all of them. Verifies the
+  // agent either (a) chains multiple reads following the truncated: true
+  // signal, or (b) uses grep. Either is acceptable — what matters is that
+  // the agent finds content past the default window.
+  it('admin agent finds content scattered across a long file via pagination or grep', async () => {
+    const bigFilePath = resolve(AGENT_DIR, 'knowledge', 'scatter.md');
+    const MARKER = 'MARKER-ZXCV9876';
+    const MARKER_LINES = [500, 2500, 4500];
+    const TOTAL_LINES = 5000;
+    const body = Array.from({length: TOTAL_LINES}, (_, i) => {
+      const n = i + 1;
+      return MARKER_LINES.includes(n) ? `line ${String(n)}: ${MARKER}` : `line ${String(n)}: filler`;
+    }).join('\n');
+    writeFileSync(bigFilePath, body);
+
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          message:
+            `Read knowledge/scatter.md and quote the exact content of line 500, line 2500, and line 4500 verbatim. Report each line's full text.`,
+        }),
+        signal: AbortSignal.timeout(TIMEOUT * 2),
+      });
+
+      const text = await res.text();
+      const events = parseSSE(text);
+      const toolStarts = findEvents(events, 'tool_call_start');
+      const toolNames = toolStarts.map((e) => String(e['tool_name']));
+
+      // Agent must have touched the file.
+      const touchedFile = toolNames.some(
+        (n) => n === 'read_repo_file' || n === 'grep_repo_files',
+      );
+      expect(touchedFile).toBe(true);
+
+      // If the agent committed to read-only discovery (no grep), verify at
+      // least one read_repo_file call reached past the default 2000-line
+      // cap — otherwise it couldn't have seen markers at lines 2500 or
+      // 4500. When grep is used first, pagination isn't required because
+      // the agent may have used read_repo_file only to confirm a line it
+      // already found via grep.
+      const usedGrep = toolNames.includes('grep_repo_files');
+      const readCalls = toolStarts.filter((e) => e['tool_name'] === 'read_repo_file');
+      if (readCalls.length > 0 && !usedGrep) {
+        const reachedPastCap = readCalls.some((e) => {
+          const params = e['parameters'] as Record<string, unknown> | undefined;
+          if (!params) return false;
+          const offset = typeof params['offset'] === 'number' ? params['offset'] : 1;
+          const limit = typeof params['limit'] === 'number' ? params['limit'] : 2000;
+          // A single read covers up to line_end = offset + limit - 1.
+          return offset + limit - 1 > 2000;
+        });
+        expect(reachedPastCap).toBe(true);
+      }
+
+      // Hard assertion: final response identifies all three marker line
+      // numbers. LLMs paraphrase, so search the response for each number.
+      const responseText = allText(events);
+      for (const n of MARKER_LINES) {
+        expect(responseText).toContain(String(n));
+      }
+    } finally {
+      rmSync(bigFilePath, {force: true});
+    }
+  }, TIMEOUT * 2);
+
   // -------------------------------------------------------------------------
   // 10. Write intent enforcement (G8)
   // -------------------------------------------------------------------------
