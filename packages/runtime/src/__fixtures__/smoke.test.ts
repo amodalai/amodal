@@ -184,6 +184,15 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     amodalConfig['models'] = {
       main: {provider: smokeTarget.provider, model: smokeTarget.model},
     };
+    // Enable web_search + fetch_url tools when a Google API key is available.
+    // Key resolution happens in the core config parser via env: prefix.
+    if (process.env['GOOGLE_API_KEY']) {
+      amodalConfig['webTools'] = {
+        provider: 'google',
+        apiKey: 'env:GOOGLE_API_KEY',
+        model: 'gemini-3-flash-preview',
+      };
+    }
     writeFileSync(amodalPath, JSON.stringify(amodalConfig, null, 2));
 
     // 2. Write MCP server spec with absolute path (loadRepo reads this as-is).
@@ -1560,6 +1569,38 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
       s1.close();
       s2.close();
     }
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // Web tools (web_search, fetch_url) — gated on GOOGLE_API_KEY.
+  //
+  // When the smoke target is Anthropic/OpenAI but GOOGLE_API_KEY is set,
+  // these tests exercise the cross-provider case: the main agent runs on
+  // one provider, but web_search routes through the dedicated Gemini
+  // backend. beforeAll injects the webTools config when the key is set.
+  // -------------------------------------------------------------------------
+  const hasGoogleKey = !!process.env['GOOGLE_API_KEY'];
+
+  it.skipIf(!hasGoogleKey)('web_search tool is invoked for a current-information question', async () => {
+    const {events} = await chat(
+      'Use the web_search tool to find an authoritative source for the current stable version of Node.js. Reply with just the version number.',
+    );
+
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const toolResults = findEvents(events, 'tool_call_result');
+    const webSearchStart = toolStarts.find((e) => e['tool_name'] === 'web_search');
+    expect(webSearchStart).toBeDefined();
+
+    // The matching result for that tool_id should be a success.
+    const toolId = webSearchStart?.['tool_id'];
+    const webSearchResult = toolResults.find((e) => e['tool_id'] === toolId);
+    expect(webSearchResult).toBeDefined();
+    expect(webSearchResult?.['status']).toBe('success');
+
+    // The session should finish normally with text output.
+    const done = findEvent(events, 'done');
+    expect(done?.['reason']).toBe('model_stop');
+    expect(allText(events).length).toBeGreaterThan(0);
   }, TIMEOUT);
 });
 

@@ -79,21 +79,9 @@ smoke-mcp-server.mjs   — MCP stdio server with search/lookup/count tools
 
 The test `beforeAll` starts the mock REST server and `createLocalServer()` programmatically on port 9900. Tests call `POST /chat` and parse SSE events from the response.
 
-## Web-tool smoke scripts (opt-in, repo-root `scripts/`)
+## Web tools (`web_search`, `fetch_url`)
 
-Two manual scripts exercise `web_search` + `fetch_url` against the real Google API — gated on `GOOGLE_API_KEY` being in `.env.test`:
-
-```bash
-# Direct — calls SearchProvider + both tool executors in isolation
-node scripts/smoke-web-tools.mjs
-
-# End-to-end — starts amodal dev with Anthropic main + Google webTools,
-# sends a chat message, asserts the agent invoked web_search with a
-# non-error result
-node scripts/smoke-web-tools-e2e.mjs
-```
-
-The E2E script temporarily rewrites `smoke-agent/amodal.json` to add the `webTools` block (and restores it on exit). Both require `GOOGLE_API_KEY` in `.env.test`; the E2E script additionally needs `ANTHROPIC_API_KEY`.
+When `GOOGLE_API_KEY` is set in `.env.test`, `beforeAll` adds a `webTools` block to `amodal.json` so the agent registers the web tools alongside the existing ones. One additional test fires a real `web_search` call through whichever main provider `SMOKE_TARGET` selects — this exercises the cross-provider case (e.g. Anthropic main + Google-backed search). The web-tool test skips automatically when `GOOGLE_API_KEY` is absent.
 
 ## LLM non-determinism
 
