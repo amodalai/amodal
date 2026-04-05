@@ -37,6 +37,21 @@ export async function handleStreaming(
   const effects: SSEEvent[] = [];
   const toolCalls: ToolCall[] = [...state.pendingToolCalls];
 
+  // Attach passive error handlers to the derived promises BEFORE iterating
+  // fullStream. The AI SDK's StreamTextResult exposes fullStream + text +
+  // usage as separate promises that share an underlying provider fetch.
+  // When ctx.signal aborts, the fetch rejects, fullStream's .next() throws,
+  // and this for-await propagates that throw — which means we may exit
+  // before `await state.stream.text` (line ~137) ever runs. Without these
+  // handlers, the unawaited text/usage rejections escape as unhandled
+  // promise rejections and crash the process.
+  // These handlers are intentionally silent: the real error is surfaced
+  // either via a 'error' event on fullStream (caught below) or via the
+  // thrown stream error that propagates up the for-await to runAgent's
+  // caller's try/catch.
+  Promise.resolve(state.stream.text).catch(() => {});
+  Promise.resolve(state.stream.usage).catch(() => {});
+
   // Consume the full stream
   for await (const event of state.stream.fullStream) {
     if (ctx.signal.aborted) break;
