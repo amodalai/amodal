@@ -786,9 +786,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   // -------------------------------------------------------------------------
 
   it('sessions endpoint returns a sessions array', async () => {
-    // Chat sessions in local dev don't auto-populate the legacy session store
-    // used by /sessions (only automation runs do), so we just verify the
-    // endpoint returns the expected shape.
     const res = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
     const body = await res.json() as {sessions: Array<Record<string, unknown>>};
 
@@ -800,6 +797,60 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const res = await fetch(`http://localhost:${AGENT_PORT}/session/nonexistent-id`, {signal: AbortSignal.timeout(5000)});
     expect(res.status).toBe(404);
   });
+
+  it('persists chat session through full list/get/patch/delete lifecycle', async () => {
+    // Full dev-UI session history loop, all served from DrizzleSessionStore.
+    const {sessionId} = await chat('Say "ok" in one word.');
+    expect(sessionId).toBeTruthy();
+
+    // 1. Session appears in /sessions with the UI response shape
+    const listRes = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
+    const listBody = await listRes.json() as {sessions: Array<Record<string, unknown>>};
+    expect(listRes.status).toBe(200);
+    const found = listBody.sessions.find((s) => s['id'] === sessionId);
+    expect(found).toBeDefined();
+    if (!found) throw new Error('unreachable');
+    expect(found['appId']).toBe('local');
+    expect(typeof found['summary']).toBe('string');
+    expect(String(found['summary']).length).toBeGreaterThan(0);
+    expect(typeof found['createdAt']).toBe('number');
+    expect(typeof found['lastAccessedAt']).toBe('number');
+    expect(found['automationName']).toBeUndefined();
+
+    // 2. /session/:id returns the conversation history
+    const getRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {signal: AbortSignal.timeout(5000)});
+    const getBody = await getRes.json() as {session_id: string; messages: Array<{role: string; text: string}>};
+    expect(getRes.status).toBe(200);
+    expect(getBody.session_id).toBe(sessionId);
+    expect(getBody.messages.length).toBeGreaterThan(0);
+    expect(getBody.messages[0].role).toBe('user');
+    expect(getBody.messages[0].text).toContain('Say "ok"');
+
+    // 3. PATCH title updates metadata and is visible on subsequent list
+    const patchRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title: 'smoke renamed'}),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(patchRes.status).toBe(200);
+
+    const list2Res = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
+    const list2Body = await list2Res.json() as {sessions: Array<Record<string, unknown>>};
+    const renamed = list2Body.sessions.find((s) => s['id'] === sessionId);
+    expect(renamed?.['title']).toBe('smoke renamed');
+    expect(renamed?.['summary']).toBe('smoke renamed');
+
+    // 4. DELETE removes the session, subsequent GET 404s
+    const delRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(delRes.status).toBe(200);
+
+    const getAfterDelRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {signal: AbortSignal.timeout(5000)});
+    expect(getAfterDelRes.status).toBe(404);
+  }, TIMEOUT);
 
   // -------------------------------------------------------------------------
   // 24. Files — browser and editor
@@ -1009,8 +1060,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   }, TIMEOUT * 2);
 
   it('emits session_deleted when a session is DELETEd', async () => {
-    // First ensure the session is saved to the legacy store — DELETE only
-    // succeeds if legacySessionStore.delete() finds the session.
     const {sessionId} = await chat('Say "ok".');
 
     const stream = await openEventStream();
@@ -1019,17 +1068,13 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
         method: 'DELETE',
         signal: AbortSignal.timeout(5000),
       });
-      // The legacy store mirror may be async, so a 404 is possible if the
-      // mirror write hasn't landed yet. Either outcome is fine for the
-      // event test — if the DELETE succeeds, the event should fire.
-      if (res.status === 200) {
-        const event = await stream.waitFor(
-          (e) => e['type'] === 'session_deleted' && e['sessionId'] === sessionId,
-          5000,
-        );
-        expect(event['type']).toBe('session_deleted');
-        expect(event['sessionId']).toBe(sessionId);
-      }
+      expect(res.status).toBe(200);
+      const event = await stream.waitFor(
+        (e) => e['type'] === 'session_deleted' && e['sessionId'] === sessionId,
+        5000,
+      );
+      expect(event['type']).toBe('session_deleted');
+      expect(event['sessionId']).toBe(sessionId);
     } finally {
       stream.close();
     }
@@ -1132,7 +1177,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   }, TIMEOUT);
 
   it('emits session_updated when title is PATCHed', async () => {
-    // Create a session first so it exists in the legacy store.
     const {sessionId} = await chat('Say "ok".');
 
     const stream = await openEventStream();
@@ -1143,16 +1187,13 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
         body: JSON.stringify({title: 'my renamed session'}),
         signal: AbortSignal.timeout(5000),
       });
+      expect(res.status).toBe(200);
 
-      // PATCH may 404 if the legacy store mirror hasn't landed yet —
-      // skip the assertion in that case (same guard as DELETE test).
-      if (res.status === 200) {
-        const event = await stream.waitFor(
-          (e) => e['type'] === 'session_updated' && e['sessionId'] === sessionId && e['title'] === 'my renamed session',
-          5000,
-        );
-        expect(event['title']).toBe('my renamed session');
-      }
+      const event = await stream.waitFor(
+        (e) => e['type'] === 'session_updated' && e['sessionId'] === sessionId && e['title'] === 'my renamed session',
+        5000,
+      );
+      expect(event['title']).toBe('my renamed session');
     } finally {
       stream.close();
     }
