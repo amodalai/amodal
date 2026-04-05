@@ -62,7 +62,6 @@ export class RuntimeEventBus {
       ...payload,
       seq: this.seq,
       timestamp: new Date().toISOString(),
-       
     } as RuntimeEvent;
 
     // Append to ring buffer

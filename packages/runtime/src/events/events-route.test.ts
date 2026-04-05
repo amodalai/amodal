@@ -64,7 +64,6 @@ async function collectEvents(
         const dataLine = frame.split('\n').find((l) => l.startsWith('data:'));
         if (dataLine) {
           const json = dataLine.slice(5).trim();
-           
           collected.push(JSON.parse(json) as Record<string, unknown>);
           if (collected.length >= expected) break;
         }
