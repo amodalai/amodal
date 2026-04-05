@@ -249,7 +249,6 @@ export async function handleExecuting(
       callId: current.toolCallId,
       error: err instanceof Error ? err.message : String(err),
       session: ctx.sessionId,
-      tenant: ctx.tenantId,
       duration: Date.now() - startedAt,
     });
   }
@@ -269,7 +268,6 @@ export async function handleExecuting(
     callId: current.toolCallId,
     status: result.status,
     session: ctx.sessionId,
-    tenant: ctx.tenantId,
     duration,
   });
 

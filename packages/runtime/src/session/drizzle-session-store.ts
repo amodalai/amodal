@@ -19,7 +19,7 @@
  * (session manager, routes) are responsible for handling.
  */
 
-import {and, eq, lt, desc} from 'drizzle-orm';
+import {eq, lt, desc} from 'drizzle-orm';
 import type {PgDatabase, PgQueryResultHKT} from 'drizzle-orm/pg-core';
 
 import {SessionStoreError} from '../errors.js';
@@ -122,14 +122,14 @@ export class DrizzleSessionStore implements SessionStore {
     if (this.hooks.onAfterSave) await this.hooks.onAfterSave(session);
   }
 
-  async load(tenantId: string, sessionId: string): Promise<PersistedSession | null> {
+  async load(sessionId: string): Promise<PersistedSession | null> {
     this.ensureOpen('load');
 
     try {
       const rows = await this.db
         .select()
         .from(this.table)
-        .where(and(eq(this.table.id, sessionId), eq(this.table.tenantId, tenantId)))
+        .where(eq(this.table.id, sessionId))
         .limit(1);
 
       if (rows.length === 0) return null;
@@ -140,16 +140,16 @@ export class DrizzleSessionStore implements SessionStore {
         backend: this.backendName,
         operation: 'load',
         cause,
-        context: {sessionId, tenantId},
+        context: {sessionId},
       });
     }
   }
 
-  async list(tenantId: string, opts?: SessionListOptions): Promise<SessionListResult> {
+  async list(opts?: SessionListOptions): Promise<SessionListResult> {
     this.ensureOpen('list');
 
     const limit = opts?.limit ?? DEFAULT_LIST_LIMIT;
-    const where = buildListConditions(this.backendName, tenantId, opts, this.table);
+    const where = buildListConditions(this.backendName, opts, this.table);
 
     try {
       const rows = await this.db
@@ -174,26 +174,25 @@ export class DrizzleSessionStore implements SessionStore {
         backend: this.backendName,
         operation: 'list',
         cause,
-        context: {tenantId},
       });
     }
   }
 
-  async delete(tenantId: string, sessionId: string): Promise<boolean> {
+  async delete(sessionId: string): Promise<boolean> {
     this.ensureOpen('delete');
 
     let result: Array<{id: string}>;
     try {
       result = await this.db
         .delete(this.table)
-        .where(and(eq(this.table.id, sessionId), eq(this.table.tenantId, tenantId)))
+        .where(eq(this.table.id, sessionId))
         .returning({id: this.table.id});
     } catch (cause) {
       throw new SessionStoreError('Failed to delete session', {
         backend: this.backendName,
         operation: 'delete',
         cause,
-        context: {sessionId, tenantId},
+        context: {sessionId},
       });
     }
 

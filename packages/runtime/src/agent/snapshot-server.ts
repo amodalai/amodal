@@ -82,8 +82,6 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
       toolExecutor,
     });
     const session = sessionManager.create({
-      tenantId: 'snapshot',
-      userId: 'snapshot',
       provider: components.provider,
       toolRegistry: components.toolRegistry,
       permissionChecker: components.permissionChecker,

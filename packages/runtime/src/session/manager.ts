@@ -143,8 +143,6 @@ export class StandaloneSessionManager {
 
     const session: Session = {
       id,
-      tenantId: opts.tenantId,
-      userId: opts.userId,
       provider: opts.provider,
       toolRegistry: opts.toolRegistry,
       permissionChecker: opts.permissionChecker,
@@ -169,7 +167,6 @@ export class StandaloneSessionManager {
 
     this.logger.info('session_created', {
       session: id,
-      tenant: opts.tenantId,
       model: session.model,
       provider: session.providerName,
       appId: session.appId,
@@ -223,7 +220,6 @@ export class StandaloneSessionManager {
       logger: session.logger,
       signal: opts?.signal ?? AbortSignal.timeout(600_000),
       sessionId: session.id,
-      tenantId: session.tenantId,
       user: {roles: session.userRoles},
       systemPrompt: session.systemPrompt,
       messages: session.messages,
@@ -282,8 +278,6 @@ export class StandaloneSessionManager {
     const persisted: PersistedSession = {
       version: 1,
       id: session.id,
-      tenantId: session.tenantId,
-      userId: session.userId,
       messages: session.messages,
       tokenUsage: session.usage,
       metadata: session.metadata,
@@ -345,7 +339,7 @@ export class StandaloneSessionManager {
       });
     }
 
-    const persisted = await this.store.load(opts.tenantId, sessionId);
+    const persisted = await this.store.load(sessionId);
     if (!persisted) return null;
 
     // Create a fresh session seeded with persisted state
@@ -363,7 +357,6 @@ export class StandaloneSessionManager {
 
     this.logger.info('session_resumed', {
       session: sessionId,
-      tenant: opts.tenantId,
       messageCount: persisted.messages.length,
       version: persisted.version,
     });
@@ -385,10 +378,10 @@ export class StandaloneSessionManager {
     return this.sessions.has(sessionId);
   }
 
-  /** List sessions for a tenant from the backing store. */
-  async listPersisted(tenantId: string, opts?: {limit?: number}): Promise<PersistedSession[]> {
+  /** List persisted sessions from the backing store, newest first. */
+  async listPersisted(opts?: {limit?: number}): Promise<PersistedSession[]> {
     if (!this.store) return [];
-    const result = await this.store.list(tenantId, opts);
+    const result = await this.store.list(opts);
     return result.sessions;
   }
 
@@ -411,12 +404,11 @@ export class StandaloneSessionManager {
     this.sessions.delete(sessionId);
 
     if (opts?.deleteFromStore && this.store) {
-      await this.store.delete(session.tenantId, sessionId);
+      await this.store.delete(sessionId);
     }
 
     this.logger.info('session_destroyed', {
       session: sessionId,
-      tenant: session.tenantId,
     });
 
     if (opts?.deleteFromStore) {
@@ -487,6 +479,5 @@ function makeNoOpToolContext(session: Session): (callId: string) => ToolContext 
     user: {roles: session.userRoles},
     signal: AbortSignal.timeout(30_000),
     sessionId: session.id,
-    tenantId: session.tenantId,
   });
 }

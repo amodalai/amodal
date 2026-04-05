@@ -48,8 +48,6 @@ export interface ToolContextFactoryOptions {
   user: {roles: string[]; [key: string]: unknown};
   /** Session ID for correlation */
   sessionId: string;
-  /** Tenant ID for multi-tenant isolation */
-  tenantId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,14 +258,12 @@ export function createToolContextFactory(
           callId,
           message,
           session: opts.sessionId,
-          tenant: opts.tenantId,
         });
       },
 
       user: opts.user,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       sessionId: opts.sessionId,
-      tenantId: opts.tenantId,
     };
     return ctx;
   };

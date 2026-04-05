@@ -31,7 +31,6 @@ import {buildMcpConfigs} from '../agent/mcp-config.js';
 import {createPGLiteStoreBackend} from '../stores/pglite-store-backend.js';
 import {createLogger} from '../logger.js';
 import {SessionError} from '../errors.js';
-import {LOCAL_APP_ID} from '../constants.js';
 import type {Agent, AgentConfig, AgentSession} from './types.js';
 import type {SSEEvent} from '../types.js';
 
@@ -108,8 +107,6 @@ export async function createAgent(config: AgentConfig): Promise<Agent> {
   return {
     createSession(opts) {
       const session = sessionManager.create({
-        tenantId: opts?.tenantId ?? LOCAL_APP_ID,
-        userId: opts?.userId ?? 'api',
         provider: components.provider,
         toolRegistry: components.toolRegistry,
         permissionChecker: components.permissionChecker,

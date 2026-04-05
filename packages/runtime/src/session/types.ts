@@ -106,8 +106,6 @@ export interface AutomationResult {
 export interface PersistedSession {
   version: 1;
   id: string;
-  tenantId: string;
-  userId: string;
   messages: ModelMessage[];
   tokenUsage: TokenUsage;
   metadata: SessionMetadata;
@@ -138,8 +136,6 @@ export interface SessionMetadata {
  */
 export interface Session {
   id: string;
-  tenantId: string;
-  userId: string;
 
   /** LLM provider for this session (pinned at creation) */
   provider: LLMProvider;
@@ -210,8 +206,6 @@ export interface SessionManagerOptions {
 
 /** Options for creating a new session. */
 export interface CreateSessionOptions {
-  tenantId: string;
-  userId: string;
   provider: LLMProvider;
   toolRegistry: ToolRegistry;
   permissionChecker: PermissionChecker;

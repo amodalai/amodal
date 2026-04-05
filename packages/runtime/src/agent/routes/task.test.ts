@@ -16,8 +16,6 @@ const logger = createLogger({component: 'test:task'});
 
 const mockSession = {
   id: 'task-session-1',
-  tenantId: 'local',
-  userId: 'task',
   provider: {},
   toolRegistry: {register: vi.fn(), get: vi.fn(), getTools: vi.fn(), names: vi.fn(() => []), subset: vi.fn(), size: 0},
   permissionChecker: {check: vi.fn()},

@@ -10,7 +10,7 @@ import { MessageSquare, Clock, ChevronRight } from 'lucide-react';
 
 interface SessionSummary {
   id: string;
-  tenantId: string;
+  appId: string;
   createdAt: number;
   lastAccessedAt: number;
 }
@@ -83,7 +83,7 @@ export function SessionsPage() {
                     <span className="text-sm font-medium text-zinc-300 truncate font-mono">
                       {session.id.slice(0, 8)}
                     </span>
-                    <span className="text-xs text-zinc-600">{session.tenantId}</span>
+                    <span className="text-xs text-zinc-600">{session.appId}</span>
                   </div>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="flex items-center gap-1 text-xs text-zinc-500">
