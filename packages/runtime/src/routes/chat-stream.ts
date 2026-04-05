@@ -69,7 +69,7 @@ export function createChatStreamRouter(
           sessionType: body.session_type,
           deployId: body.deploy_id,
           auth,
-          maxTokens: body.max_tokens,
+          maxSessionTokens: body.max_session_tokens,
         });
 
         // Set up SSE headers (use setHeader to preserve CORS headers from middleware)

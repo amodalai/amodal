@@ -36,6 +36,17 @@ export interface ProactiveRunnerConfig {
   webhookSecret?: string;
   /** Called before session is destroyed — use to persist session history */
   onSessionComplete?: (session: Session, automationName: string) => void;
+  /**
+   * Optional summarizer hook for evicted tool results. Automations are
+   * the primary use case for context clearing — long-running, tool-heavy
+   * runs hit the clearThreshold regularly — so this hook matters most
+   * here. Passed through to every runMessage call.
+   */
+  summarizeToolResult?: (opts: {
+    toolName: string;
+    content: string;
+    signal: AbortSignal;
+  }) => Promise<string>;
 }
 
 interface CronJob {
@@ -237,7 +248,10 @@ export class ProactiveRunner {
       for await (const event of this.config.sessionManager.runMessage(
         session.id,
         automation.prompt,
-        {buildToolContext: toolContextFactory},
+        {
+          buildToolContext: toolContextFactory,
+          summarizeToolResult: this.config.summarizeToolResult,
+        },
       )) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SSE event from agent runner
         yield event as unknown as Record<string, unknown>;
@@ -292,7 +306,10 @@ export class ProactiveRunner {
       for await (const event of this.config.sessionManager.runMessage(
         session.id,
         prompt,
-        {buildToolContext: created.toolContextFactory},
+        {
+          buildToolContext: created.toolContextFactory,
+          summarizeToolResult: this.config.summarizeToolResult,
+        },
       )) {
         if (event.type === SSEEventType.Error && 'message' in event) {
           throw new ToolExecutionError(

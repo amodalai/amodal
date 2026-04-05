@@ -65,7 +65,7 @@ export class StandaloneSessionManager {
   private readonly cleanupIntervalMs: number;
   private readonly defaultMaxTurns: number;
   private readonly defaultMaxContextTokens: number;
-  private readonly defaultMaxTokens: number | undefined;
+  private readonly defaultMaxSessionTokens: number | undefined;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(opts: SessionManagerOptions & {store?: SessionStore}) {
@@ -75,7 +75,7 @@ export class StandaloneSessionManager {
     this.cleanupIntervalMs = opts.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS;
     this.defaultMaxTurns = opts.defaultMaxTurns ?? DEFAULT_MAX_TURNS;
     this.defaultMaxContextTokens = opts.defaultMaxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
-    this.defaultMaxTokens = opts.defaultMaxTokens;
+    this.defaultMaxSessionTokens = opts.defaultMaxSessionTokens;
   }
 
   // -------------------------------------------------------------------------
@@ -154,7 +154,7 @@ export class StandaloneSessionManager {
       lastAccessedAt: now,
       maxTurns: opts.maxTurns ?? this.defaultMaxTurns,
       maxContextTokens: opts.maxContextTokens ?? this.defaultMaxContextTokens,
-      maxTokens: opts.maxTokens ?? this.defaultMaxTokens,
+      maxSessionTokens: opts.maxSessionTokens ?? this.defaultMaxSessionTokens,
       toolContextFactory: opts.toolContextFactory,
     };
 
@@ -217,11 +217,12 @@ export class StandaloneSessionManager {
       turnCount: 0,
       maxTurns: session.maxTurns,
       maxContextTokens: session.maxContextTokens,
-      maxTokens: session.maxTokens,
+      maxSessionTokens: session.maxSessionTokens,
       config: {...DEFAULT_LOOP_CONFIG, ...opts?.loopConfig},
       compactionFailures: 0,
       preExecutionCache: new Map(),
       confirmedCallIds: new Set(),
+      disabledToolsUntilTurn: new Map(),
       waitForConfirmation: opts?.waitForConfirmation ?? (() => Promise.resolve(true)),
       buildToolContext: opts?.buildToolContext ?? makeNoOpToolContext(session),
       onUsage: opts?.onUsage,

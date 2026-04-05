@@ -103,11 +103,11 @@ async function waitForServer(port: number, maxMs = 15_000): Promise<void> {
 async function chat(
   message: string,
   sessionId?: string,
-  opts?: {maxTokens?: number},
+  opts?: {maxSessionTokens?: number},
 ): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
   const body: Record<string, unknown> = {message};
   if (sessionId) body['session_id'] = sessionId;
-  if (opts?.maxTokens !== undefined) body['max_tokens'] = opts.maxTokens;
+  if (opts?.maxSessionTokens !== undefined) body['max_session_tokens'] = opts.maxSessionTokens;
 
   const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
     method: 'POST',
@@ -955,13 +955,13 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     expectDoneReason(events, 'model_stop');
   });
 
-  it('max_tokens budget terminates the loop with reason=budget_exceeded', async () => {
+  it('max_session_tokens budget terminates the loop with reason=budget_exceeded', async () => {
     // 200 tokens is well below what any single-turn + tool-call response
     // will consume, so the budget check fires after the first turn.
     const {events} = await chat(
       'Echo these strings one at a time, calling echo_tool for each: alpha, bravo, charlie, delta, echo, foxtrot.',
       undefined,
-      {maxTokens: 200},
+      {maxSessionTokens: 200},
     );
     expectDoneReason(events, 'budget_exceeded');
     expectTotalTokens(events, {atLeast: 200});

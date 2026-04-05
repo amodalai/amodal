@@ -31,8 +31,13 @@ const CLEARED_TOOL_RESULT_TEXT = '[Tool result cleared to save context space]';
 /** Prefix used on every cleared/summarized marker — lets us detect
  *  already-cleared messages idempotently. */
 const CLEARED_TEXT_PREFIXES = ['[Tool result cleared', '[Summary of '] as const;
-/** Max time a summarizer callback can take before we fall back to the marker. */
-const SUMMARIZER_TIMEOUT_MS = 5_000;
+/**
+ * Max length (chars) at which a summary-prefix match counts as
+ * "already cleared." A short marker is almost certainly one of ours;
+ * a long payload that happens to start with "[Summary of " is more
+ * likely legit tool output, so we re-summarize it rather than assume.
+ */
+const CLEARED_MARKER_MAX_LEN = 500;
 
 /**
  * Handle the THINKING state.
@@ -74,21 +79,31 @@ export async function handleThinking(
   // are local-to-this-turn and should not persist.
   ctx.messages = await clearOldToolResults(state.messages, ctx);
   let messages = ctx.messages;
-  /** Tool names to exclude from this turn's tool set (escalation tier). */
-  const excludedTools = new Set<string>();
+
+  // Purge any disabled-tool entries whose cooldown has expired, so a tool
+  // re-entering the tool set is available to the model again.
+  for (const [name, untilTurn] of ctx.disabledToolsUntilTurn) {
+    if (ctx.turnCount >= untilTurn) ctx.disabledToolsUntilTurn.delete(name);
+  }
 
   if (loop && loop.count >= ctx.config.loopEscalationThreshold) {
-    // Escalation tier: strongly nudge the model AND remove the looping
-    // tool from this turn's tool set, forcing a different approach.
+    // Escalation tier: strongly nudge the model AND disable the looping
+    // tool for a cooldown window. Without the cooldown, the agent could
+    // immediately re-call the tool next turn, drop the loop count below
+    // threshold, and keep oscillating.
+    const cooldown = ctx.config.loopEscalationCooldownTurns;
+    const untilTurn = ctx.turnCount + cooldown;
+    ctx.disabledToolsUntilTurn.set(loop.toolName, untilTurn);
     ctx.logger.warn('agent_loop_escalation', {
       session: ctx.sessionId,
       tool: loop.toolName,
       count: loop.count,
+      cooldownTurns: cooldown,
+      disabledUntilTurn: untilTurn,
     });
-    excludedTools.add(loop.toolName);
     const escalationMessage: ModelMessage = {
       role: 'system',
-      content: `[Escalation] You have called ${loop.toolName} ${loop.count} times with similar parameters and are not making progress. The ${loop.toolName} tool has been temporarily disabled for this turn — use a different tool or ask the user for help.`,
+      content: `[Escalation] You have called ${loop.toolName} ${loop.count} times with similar parameters and are not making progress. The ${loop.toolName} tool has been temporarily disabled for the next ${cooldown} turns — use a different tool or ask the user for help.`,
     };
     messages = [...messages, escalationMessage];
   } else if (loop && loop.count >= ctx.config.loopWarningThreshold) {
@@ -110,7 +125,9 @@ export async function handleThinking(
   const allTools = ctx.toolRegistry.getTools();
   const tools: Record<string, Tool> = {};
   for (const [name, def] of Object.entries(allTools)) {
-    if (excludedTools.has(name)) continue;
+    // Skip tools that escalation has disabled for a cooldown window.
+    const disabledUntil = ctx.disabledToolsUntilTurn.get(name);
+    if (disabledUntil !== undefined && ctx.turnCount < disabledUntil) continue;
     // ToolDefinition.parameters is either a Zod schema or FlexibleSchema —
     // both are accepted by AI SDK as inputSchema.
 
@@ -305,26 +322,23 @@ async function clearOldToolResults(
   // Keep the last `keepRecent` tool results full, clear the rest
   const indicesToClear = toolResultIndices.slice(0, -keepRecent);
 
-  // Partition: skip already-cleared (idempotent), summarize the rest.
-  const summaryPromises = indicesToClear.map(async (idx): Promise<{
-    idx: number;
-    cleared: ModelMessage;
-  }> => {
+  // Build one task per index — skip already-cleared (idempotent), summarize
+  // the rest. Tasks run through a bounded worker pool so we don't fan out
+  // 10+ concurrent summarizer calls into provider rate limits.
+  const clearOne = async (idx: number): Promise<{idx: number; cleared: ModelMessage}> => {
     const existing = messages[idx];
+    // Already-cleared messages: keep the existing marker unchanged
+    if (isAlreadyCleared(existing)) return {idx, cleared: existing};
+
     const toolCallId = extractToolCallId(existing);
     const toolName = extractToolName(existing);
     const body = extractToolResultText(existing);
-
-    // Already-cleared messages: keep the existing marker unchanged
-    if (isAlreadyCleared(existing)) {
-      return {idx, cleared: existing};
-    }
-
     const markerText = await summarizeOrFallback(
       toolName,
       body,
       ctx.summarizeToolResult,
       ctx.signal,
+      ctx.config.summarizerTimeoutMs,
       ctx.logger,
       ctx.sessionId,
     );
@@ -345,15 +359,48 @@ async function clearOldToolResults(
         }],
       },
     };
-  });
+  };
 
-  const resolved = await Promise.all(summaryPromises);
+  const resolved = await runWithConcurrency(
+    indicesToClear,
+    clearOne,
+    ctx.config.summarizerConcurrency,
+  );
 
   const result = [...messages];
   for (const {idx, cleared} of resolved) {
     result[idx] = cleared;
   }
   return result;
+}
+
+/**
+ * Execute `task(item)` for each item with a concurrency cap. Preserves
+ * input order in the returned results. Functionally equivalent to
+ * `Promise.all(items.map(task))` but bounded so we don't fan out into
+ * provider rate limits.
+ */
+async function runWithConcurrency<T, R>(
+  items: T[],
+  task: (item: T) => Promise<R>,
+  concurrency: number,
+): Promise<R[]> {
+  const max = Math.max(1, concurrency);
+  const results: R[] = new Array<R>(items.length);
+  let nextIndex = 0;
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const i = nextIndex++;
+      if (i >= items.length) return;
+      results[i] = await task(items[i]);
+    }
+  };
+  const workers: Array<Promise<void>> = [];
+  for (let w = 0; w < Math.min(max, items.length); w++) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
+  return results;
 }
 
 /** Extract the assistant-visible text from a tool-result message. */
@@ -390,15 +437,19 @@ function extractToolCallId(msg: ModelMessage): string {
   return 'unknown';
 }
 
-/** True if this message has already been replaced with the cleared marker.
- *  Detected by content prefix since we no longer overwrite toolCallId. */
+/**
+ * True if this message has already been replaced with a cleared marker.
+ * Detected by content prefix (we no longer overwrite toolCallId) with a
+ * length cap so a legit tool result that happens to start with "[Summary
+ * of " doesn't get silently skipped from summarization.
+ */
 function isAlreadyCleared(msg: ModelMessage): boolean {
   if (msg.role !== 'tool' || !Array.isArray(msg.content)) return false;
   for (const part of msg.content) {
     if ('output' in part && part.output && typeof part.output === 'object' && 'value' in part.output) {
       const value = part.output.value;
-      if (typeof value === 'string' && CLEARED_TEXT_PREFIXES.some((p) => value.startsWith(p))) {
-        return true;
+      if (typeof value === 'string' && value.length <= CLEARED_MARKER_MAX_LEN) {
+        if (CLEARED_TEXT_PREFIXES.some((p) => value.startsWith(p))) return true;
       }
     }
   }
@@ -414,13 +465,14 @@ async function summarizeOrFallback(
   content: string,
   summarize: AgentContext['summarizeToolResult'],
   signal: AbortSignal,
+  timeoutMs: number,
   logger: AgentContext['logger'],
   sessionId: string,
 ): Promise<string> {
   if (!summarize || content.length === 0) return CLEARED_TOOL_RESULT_TEXT;
   // Bound the callback so a hung summarizer can never block the main loop.
   // The session signal is ANDed in so a parent abort still tears this down.
-  const timeoutSignal = AbortSignal.any([signal, AbortSignal.timeout(SUMMARIZER_TIMEOUT_MS)]);
+  const timeoutSignal = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
   try {
     const summary = await summarize({toolName, content, signal: timeoutSignal});
     const trimmed = summary.trim();

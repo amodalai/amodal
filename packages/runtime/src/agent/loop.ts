@@ -148,17 +148,17 @@ export async function* runAgent(
 
     // Check token budget — closes the silent-cost-runaway hole where a long-
     // running automation could burn through a large budget in a tight retry
-    // loop. Undefined maxTokens means no cap (existing behavior).
+    // loop. Undefined maxSessionTokens means no cap (existing behavior).
     if (
-      ctx.maxTokens !== undefined &&
-      ctx.usage.totalTokens >= ctx.maxTokens &&
+      ctx.maxSessionTokens !== undefined &&
+      ctx.usage.totalTokens >= ctx.maxSessionTokens &&
       result.next.type !== 'done'
     ) {
       ctx.logger.warn('agent_loop_budget_exceeded', {
         session: ctx.sessionId,
         turnCount: ctx.turnCount,
         totalTokens: ctx.usage.totalTokens,
-        maxTokens: ctx.maxTokens,
+        maxSessionTokens: ctx.maxSessionTokens,
       });
       state = {type: 'done', usage: {...ctx.usage}, reason: 'budget_exceeded'};
       continue;

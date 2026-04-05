@@ -69,6 +69,45 @@ export async function handleDispatching(
     parentToolCallId: toolCallId,
   });
 
+  // Short-circuit: if the parent is already out of budget, don't bother
+  // spinning up a child only to have it run one doomed turn. The child
+  // would inherit maxSessionTokens=0, burn through its first streaming
+  // call, and stop on budget_exceeded anyway. Surface a clean error
+  // result to the parent instead.
+  if (
+    ctx.maxSessionTokens !== undefined &&
+    ctx.usage.totalTokens >= ctx.maxSessionTokens
+  ) {
+    ctx.logger.warn('dispatch_skipped_budget_exhausted', {
+      session: ctx.sessionId,
+      agent: task.agentName,
+      totalTokens: ctx.usage.totalTokens,
+      maxSessionTokens: ctx.maxSessionTokens,
+      parentToolCallId: toolCallId,
+    });
+    const result: ToolResult = {
+      callId: toolCallId,
+      toolName: DISPATCH_TOOL_NAME,
+      status: 'error',
+      content: `Sub-agent dispatch skipped: session token budget (${ctx.maxSessionTokens}) already reached.`,
+    };
+    effects.push({
+      type: SSEEventType.ToolCallResult,
+      tool_id: toolCallId,
+      status: result.status,
+      duration_ms: Date.now() - startedAt,
+      error: result.content,
+      timestamp: new Date().toISOString(),
+    });
+    const executingState = {
+      type: 'executing' as const,
+      current: {toolCallId, toolName: DISPATCH_TOOL_NAME, args: {}},
+      queue: state.queue,
+      results: state.results,
+    };
+    return nextAfterToolResult(executingState, result, effects, ctx);
+  }
+
   // Build child tool registry from the parent's subset
   const childRegistry = createToolRegistry();
   const subsetTools = ctx.toolRegistry.subset(task.toolSubset);
@@ -107,13 +146,14 @@ export async function handleDispatching(
     // more than the parent had left. Child usage merges back into parent after
     // the child completes, so the parent's next budget check catches any
     // overshoot on subsequent turns regardless.
-    maxTokens: ctx.maxTokens !== undefined
-      ? Math.max(0, ctx.maxTokens - ctx.usage.totalTokens)
+    maxSessionTokens: ctx.maxSessionTokens !== undefined
+      ? Math.max(0, ctx.maxSessionTokens - ctx.usage.totalTokens)
       : undefined,
     config: {...DEFAULT_LOOP_CONFIG},
     compactionFailures: 0,
     preExecutionCache: new Map(),
     confirmedCallIds: new Set(),
+    disabledToolsUntilTurn: new Map(),
     waitForConfirmation: ctx.waitForConfirmation,
     buildToolContext: ctx.buildToolContext,
   };

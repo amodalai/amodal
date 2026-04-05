@@ -9,7 +9,7 @@
  * Exercises:
  *
  *   - Token budget enforcement — the loop terminates with
- *     DoneReason='budget_exceeded' when cumulative tokens hit maxTokens.
+ *     DoneReason='budget_exceeded' when cumulative tokens hit maxSessionTokens.
  *   - Summarizer hook — context eviction invokes summarizeToolResult
  *     and the generated summary flows into subsequent prompts.
  *
@@ -145,7 +145,7 @@ describe.skipIf(activeTargets.length === 0)('e2e', () => {
   });
 
   describe.each(activeTargets)('[%s]', (_name, target) => {
-  it('terminates with budget_exceeded when maxTokens cap is hit', async () => {
+  it('terminates with budget_exceeded when maxSessionTokens cap is hit', async () => {
     const provider = createProvider({
       provider: target.provider,
       model: target.model,
@@ -166,7 +166,7 @@ describe.skipIf(activeTargets.length === 0)('e2e', () => {
       permissionChecker: allowAll,
       systemPrompt: 'You are a terse assistant. Use the echo_tool when asked.',
       maxTurns: 10,
-      maxTokens: MAX_TOKENS,
+      maxSessionTokens: MAX_TOKENS,
     });
 
     const events: SSEEvent[] = [];

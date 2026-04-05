@@ -49,8 +49,13 @@ export const AIStreamRequestSchema = z.object({
   session_id: z.string().optional(),
   role: z.string().optional(),
   deploy_id: z.string().optional(),
-  /** Optional total-token budget cap applied when this request creates a new session. */
-  max_tokens: z.number().int().positive().optional(),
+  /**
+   * Optional session-wide **token** budget cap (cumulative across all
+   * turns; soft ceiling — single turns can overshoot by maxOutputTokens
+   * + tool result sizes). Applied only when this request creates a new
+   * session. Distinct from the LLM-API per-call max_tokens.
+   */
+  max_session_tokens: z.number().int().positive().optional(),
 });
 
 export type AIStreamRequest = z.infer<typeof AIStreamRequestSchema>;
@@ -445,7 +450,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
           role: body.role,
           deployId: body.deploy_id,
           auth,
-          maxTokens: body.max_tokens,
+          maxSessionTokens: body.max_session_tokens,
         });
 
         // Set up SSE headers with Vercel AI SDK protocol marker

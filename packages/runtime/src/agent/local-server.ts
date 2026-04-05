@@ -289,6 +289,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     createSessionComponents: createAutomationSessionComponents,
     logger: log,
     webhookSecret: config.webhookSecret,
+    summarizeToolResult: config.summarizeToolResult,
     onSessionComplete: (session) => {
       void sessionManager.persist(session);
     },

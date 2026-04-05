@@ -133,6 +133,7 @@ function makeMockContext(overrides?: Partial<AgentContext>): AgentContext {
     compactionFailures: 0,
     preExecutionCache: new Map(),
     confirmedCallIds: new Set(),
+    disabledToolsUntilTurn: new Map(),
     waitForConfirmation: vi.fn().mockResolvedValue(true),
     buildToolContext: vi.fn().mockReturnValue({
       request: vi.fn(),
@@ -407,6 +408,52 @@ describe('handleThinking (via transition)', () => {
       expect(lastMsg.content).toContain('temporarily disabled');
       expect(lastMsg.content).toContain('stuck_api');
     }
+
+    // The looping tool should be registered in the cooldown map, not just
+    // filtered once-off — so subsequent turns also skip it.
+    expect(ctx.disabledToolsUntilTurn.has('stuck_api')).toBe(true);
+  });
+
+  it('escalation cooldown keeps tool disabled across subsequent turns', async () => {
+    // Simulate a session where escalation fires at turn 5 with default
+    // cooldown of 3, then the agent moves on. The looping tool should be
+    // excluded from turns 5-7 and return at turn 8.
+    const stuckTool = makeMockToolDef({description: 'Stuck tool'});
+    const otherTool = makeMockToolDef({description: 'Other tool'});
+    const registry = makeMockRegistry({stuck_api: stuckTool, other_tool: otherTool});
+    const ctx = makeMockContext({toolRegistry: registry});
+
+    // Pre-populate the cooldown as if escalation fired at turn 5
+    ctx.turnCount = 4; // next turn will be 5
+    ctx.disabledToolsUntilTurn.set('stuck_api', 8); // disable until turn 8
+
+    // Turn 5: tool still disabled
+    await transition({type: 'thinking', messages: []}, ctx);
+    let streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[0][0];
+    let passedTools = streamTextCall.tools as Record<string, unknown>;
+    expect(passedTools['stuck_api']).toBeUndefined();
+    expect(passedTools['other_tool']).toBeDefined();
+
+    // Turn 6: still disabled
+    await transition({type: 'thinking', messages: []}, ctx);
+    streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[1][0];
+    passedTools = streamTextCall.tools as Record<string, unknown>;
+    expect(passedTools['stuck_api']).toBeUndefined();
+
+    // Turn 7: still disabled (turnCount=7, untilTurn=8)
+    await transition({type: 'thinking', messages: []}, ctx);
+    streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[2][0];
+    passedTools = streamTextCall.tools as Record<string, unknown>;
+    expect(passedTools['stuck_api']).toBeUndefined();
+
+    // Turn 8: cooldown expired — tool back in the set
+    await transition({type: 'thinking', messages: []}, ctx);
+    streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[3][0];
+    passedTools = streamTextCall.tools as Record<string, unknown>;
+    expect(passedTools['stuck_api']).toBeDefined();
+
+    // Map should be cleaned up after expiry
+    expect(ctx.disabledToolsUntilTurn.has('stuck_api')).toBe(false);
   });
 
   it('injects warning when tool called 3+ times', async () => {
@@ -1307,7 +1354,7 @@ describe('handleDispatching (via transition)', () => {
     // and stops with budget_exceeded. Parent usage reflects the child's
     // consumed tokens once the child merges back.
     const parentCtx = makeMockContext({
-      maxTokens: 100,
+      maxSessionTokens: 100,
       usage: {inputTokens: 60, outputTokens: 30, totalTokens: 90},
     });
 
@@ -1331,10 +1378,10 @@ describe('handleDispatching (via transition)', () => {
   });
 
   it('child inherits unlimited budget when parent has no cap', async () => {
-    // No maxTokens on parent → child should also have no cap (undefined).
+    // No maxSessionTokens on parent → child should also have no cap (undefined).
     // The child runs through normal termination (model_stop), not budget.
     const parentCtx = makeMockContext({
-      // maxTokens intentionally omitted
+      // maxSessionTokens intentionally omitted
       usage: {inputTokens: 500, outputTokens: 500, totalTokens: 1000},
     });
 
@@ -1521,7 +1568,7 @@ describe('runAgent', () => {
     const tool = makeMockToolDef();
     const registry = makeMockRegistry({loop_tool: tool});
 
-    // Each turn yields 15 tokens (10 in + 5 out). With maxTokens=30, the loop
+    // Each turn yields 15 tokens (10 in + 5 out). With maxSessionTokens=30, the loop
     // should stop after the 2nd turn pushes cumulative usage past the cap.
     const provider = {
       model: 'test-model',
@@ -1540,7 +1587,7 @@ describe('runAgent', () => {
       provider,
       toolRegistry: registry,
       maxTurns: 100,
-      maxTokens: 30,
+      maxSessionTokens: 30,
     });
 
     const events: SSEEvent[] = [];
@@ -1558,9 +1605,9 @@ describe('runAgent', () => {
     expect(ctx.usage.totalTokens).toBeGreaterThanOrEqual(30);
   });
 
-  it('undefined maxTokens means no budget cap', async () => {
+  it('undefined maxSessionTokens means no budget cap', async () => {
     // Same infinite-tool-call provider as max_turns test, but with no
-    // maxTokens set and a small maxTurns to bound the test. Verifies that
+    // maxSessionTokens set and a small maxTurns to bound the test. Verifies that
     // undefined budget doesn't accidentally trip the check.
     const tool = makeMockToolDef();
     const registry = makeMockRegistry({loop_tool: tool});
@@ -1581,7 +1628,7 @@ describe('runAgent', () => {
       provider,
       toolRegistry: registry,
       maxTurns: 2,
-      // maxTokens intentionally omitted
+      // maxSessionTokens intentionally omitted
     });
 
     const events: SSEEvent[] = [];
