@@ -17,6 +17,7 @@ import {fork, type ChildProcess} from 'node:child_process';
 import {resolve} from 'node:path';
 import {readFileSync, writeFileSync, rmSync} from 'node:fs';
 import type {ServerInstance} from '../server.js';
+import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
 
 // Load API keys from repo root .env.test if not already set.
 // To run smoke tests: create .env.test at the repo root with ANTHROPIC_API_KEY=sk-ant-...
@@ -48,6 +49,41 @@ const REST_SERVER = resolve(__dirname, 'smoke-rest-server.mjs');
 const MCP_SERVER = resolve(__dirname, 'smoke-mcp-server.mjs');
 const TIMEOUT = 45_000; // per-test timeout for LLM calls
 
+// Provider selection — override via SMOKE_TARGET env var.
+// If unset, falls through a preference chain using whichever API key
+// happens to be configured: google -> anthropic -> openai -> groq.
+interface SmokeTarget {
+  provider: string;
+  model: string;
+  apiKeyEnv: string;
+}
+const SMOKE_TARGETS: Record<string, SmokeTarget> = {
+  anthropic: {provider: 'anthropic', model: 'claude-sonnet-4-20250514', apiKeyEnv: 'ANTHROPIC_API_KEY'},
+  google: {provider: 'google', model: 'gemini-2.5-flash', apiKeyEnv: 'GOOGLE_API_KEY'},
+  openai: {provider: 'openai', model: 'gpt-4o-mini', apiKeyEnv: 'OPENAI_API_KEY'},
+  groq: {provider: 'groq', model: 'llama-3.3-70b-versatile', apiKeyEnv: 'GROQ_API_KEY'},
+};
+/** Auto-select order when SMOKE_TARGET is not set. Cheap/fast first. */
+const SMOKE_TARGET_PREFERENCE: readonly string[] = ['google', 'anthropic', 'openai', 'groq'];
+
+function pickSmokeTarget(): {name: string; target: SmokeTarget | undefined} {
+  const override = process.env['SMOKE_TARGET'];
+  if (override) {
+    return {name: override, target: SMOKE_TARGETS[override]};
+  }
+  for (const name of SMOKE_TARGET_PREFERENCE) {
+    const candidate = SMOKE_TARGETS[name];
+    if (candidate && process.env[candidate.apiKeyEnv]) {
+      return {name, target: candidate};
+    }
+  }
+  // No keys configured — return the head of the preference chain so the
+  // skipReason message names a concrete target to the user.
+  return {name: SMOKE_TARGET_PREFERENCE[0], target: SMOKE_TARGETS[SMOKE_TARGET_PREFERENCE[0]]};
+}
+
+const {name: smokeTargetName, target: smokeTarget} = pickSmokeTarget();
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -64,9 +100,14 @@ async function waitForServer(port: number, maxMs = 15_000): Promise<void> {
   throw new Error(`Server on port ${port} did not start within ${maxMs}ms`);
 }
 
-async function chat(message: string, sessionId?: string): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
+async function chat(
+  message: string,
+  sessionId?: string,
+  opts?: {maxSessionTokens?: number},
+): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
   const body: Record<string, unknown> = {message};
   if (sessionId) body['session_id'] = sessionId;
+  if (opts?.maxSessionTokens !== undefined) body['max_session_tokens'] = opts.maxSessionTokens;
 
   const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
     method: 'POST',
@@ -115,17 +156,39 @@ function allText(events: Array<Record<string, unknown>>): string {
 let restServer: ChildProcess | null = null;
 let agentServer: ServerInstance | null = null;
 
-const skipReason = process.env['ANTHROPIC_API_KEY'] ? '' : 'ANTHROPIC_API_KEY not set';
+const skipReason = !smokeTarget
+  ? `unknown SMOKE_TARGET "${smokeTargetName}"; known: ${Object.keys(SMOKE_TARGETS).join(', ')}`
+  : process.env[smokeTarget.apiKeyEnv]
+    ? ''
+    : `${smokeTarget.apiKeyEnv} not set`;
 
-describe.skipIf(!!skipReason)('smoke tests', () => {
+describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
+  // Stash fixture files so afterAll can restore them; otherwise the
+  // per-run rewrites (provider + absolute MCP path) leak into the repo.
+  const amodalPath = resolve(AGENT_DIR, 'amodal.json');
+  const mcpSpecPath = resolve(AGENT_DIR, 'connections/mock-mcp/spec.json');
+  const originalAmodalJson = readFileSync(amodalPath, 'utf-8');
+  const originalMcpSpec = readFileSync(mcpSpecPath, 'utf-8');
+
   beforeAll(async () => {
     // 0. Nuke prior state — clean slate for every run
     rmSync(resolve(AGENT_DIR, '.amodal/store-data'), {recursive: true, force: true});
     rmSync(resolve(AGENT_DIR, '.amodal/sessions'), {recursive: true, force: true});
 
-    // 2. Write MCP server spec with absolute path (loadRepo reads this as-is)
+    // 1. Rewrite amodal.json with the selected provider/model.
+    //    smokeTarget is guaranteed defined here — skipReason above gates
+    //    the describe block when it's undefined or missing a key.
+    if (!smokeTarget) throw new Error('unreachable: smokeTarget is undefined under skipReason guard');
+    const amodalConfig = JSON.parse(originalAmodalJson) as Record<string, unknown>;
+    amodalConfig['models'] = {
+      main: {provider: smokeTarget.provider, model: smokeTarget.model},
+    };
+    writeFileSync(amodalPath, JSON.stringify(amodalConfig, null, 2));
+
+    // 2. Write MCP server spec with absolute path (loadRepo reads this as-is).
+    //    Restored in afterAll so the env-specific path doesn't leak into git.
     writeFileSync(
-      resolve(AGENT_DIR, 'connections/mock-mcp/spec.json'),
+      mcpSpecPath,
       JSON.stringify({protocol: 'mcp', transport: 'stdio', command: 'node', args: [MCP_SERVER]}, null, 2),
     );
 
@@ -154,6 +217,10 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
     if (restServer) {
       restServer.kill('SIGTERM');
     }
+    // Restore fixture files so the per-run rewrites stay test-local and
+    // don't show up in git status afterwards.
+    writeFileSync(amodalPath, originalAmodalJson);
+    writeFileSync(mcpSpecPath, originalMcpSpec);
   });
 
   // -------------------------------------------------------------------------
@@ -877,6 +944,27 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
       signal: AbortSignal.timeout(5000),
     });
     expect(res.status).toBe(400);
+  });
+
+  // -------------------------------------------------------------------------
+  // Agent loop safety features (budget, done reason)
+  // -------------------------------------------------------------------------
+
+  it('done event carries reason=model_stop on normal completion', async () => {
+    const {events} = await chat('Reply with just the word "ok".');
+    expectDoneReason(events, 'model_stop');
+  });
+
+  it('max_session_tokens budget terminates the loop with reason=budget_exceeded', async () => {
+    // 200 tokens is well below what any single-turn + tool-call response
+    // will consume, so the budget check fires after the first turn.
+    const {events} = await chat(
+      'Echo these strings one at a time, calling echo_tool for each: alpha, bravo, charlie, delta, echo, foxtrot.',
+      undefined,
+      {maxSessionTokens: 200},
+    );
+    expectDoneReason(events, 'budget_exceeded');
+    expectTotalTokens(events, {atLeast: 200});
   });
 
   // -------------------------------------------------------------------------

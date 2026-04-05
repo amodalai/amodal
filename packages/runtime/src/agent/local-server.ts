@@ -316,6 +316,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     createSessionComponents: createAutomationSessionComponents,
     logger: log,
     webhookSecret: config.webhookSecret,
+    summarizeToolResult: config.summarizeToolResult,
     onSessionComplete: (session) => {
       void sessionManager.persist(session);
     },
@@ -511,6 +512,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     sessionManager,
     bundleResolver: {staticBundle: bundle},
     shared,
+    summarizeToolResult: config.summarizeToolResult,
     createStreamHooks: () => ({
       onSessionPersist: (sessionId) => {
         const session = sessionManager.get(sessionId);
@@ -546,6 +548,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     sessionManager,
     bundleResolver: {staticBundle: bundle},
     shared,
+    summarizeToolResult: config.summarizeToolResult,
   }));
 
   // Task runner

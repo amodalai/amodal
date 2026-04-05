@@ -81,12 +81,35 @@ export async function handleExecuting(
     }
   }
 
-  // 3. Check permissions
-  //    Currently scoped to connection tools only — they have access.json ACLs
-  //    with endpoint-level allow/deny/confirm rules. Store tools and admin tools
-  //    have their own guards (read-only paths, blocked filenames, schema validation).
-  //    TODO: generalize to any tool via a requiresConfirmation metadata flag on
-  //    ToolDefinition so store/custom/admin tools can opt into the same gate.
+  // 3a. Tool-level confirmation gate — applies to any tool that sets
+  //     `requiresConfirmation: true`. Routes through CONFIRMING on the first
+  //     call; subsequent passes (after user approval) are tracked in
+  //     `ctx.confirmedCallIds` to avoid an infinite EXECUTING → CONFIRMING
+  //     loop. Connection tools handle confirmation via their ACL path below
+  //     and should leave this flag undefined.
+  if (toolDef.requiresConfirmation && !ctx.confirmedCallIds.has(current.toolCallId)) {
+    ctx.logger.info('tool_confirmation_required', {
+      tool: current.toolName,
+      callId: current.toolCallId,
+      session: ctx.sessionId,
+      reason: 'tool_flagged_requires_confirmation',
+    });
+    return {
+      next: {type: 'confirming', call: current, remainingQueue: queue},
+      effects: [...effects, {
+        type: SSEEventType.ConfirmationRequired,
+        endpoint: current.toolName,
+        method: 'EXECUTE',
+        reason: `Tool "${current.toolName}" requires user confirmation`,
+        escalated: false,
+        timestamp,
+      }],
+    };
+  }
+
+  // 3b. Connection-tool ACL check — access.json rules with endpoint-level
+  //     allow/deny/confirm tiers. Store/admin tools have their own guards
+  //     (read-only paths, blocked filenames, schema validation).
   if (toolDef.metadata?.category === 'connection' && toolDef.metadata.connection) {
     const method = typeof current.args['method'] === 'string' ? current.args['method'] : 'GET';
     const endpoint = typeof current.args['endpoint'] === 'string' ? current.args['endpoint'] : '/';
@@ -117,7 +140,11 @@ export async function handleExecuting(
       return nextAfterToolResult(state, result, effects, ctx);
     }
 
-    if (permResult.allowed && permResult.requiresConfirmation) {
+    if (
+      permResult.allowed &&
+      permResult.requiresConfirmation &&
+      !ctx.confirmedCallIds.has(current.toolCallId)
+    ) {
       return {
         next: {type: 'confirming', call: current, remainingQueue: queue},
         effects: [...effects, {
@@ -322,7 +349,7 @@ export function nextAfterToolResult(
   }
 
   // All tool calls done — check if context is heavy enough to compact
-  const estimatedTokens = estimateTokenCount(ctx.messages);
+  const estimatedTokens = estimateTokenCount(ctx.messages, ctx.provider);
   if (estimatedTokens > ctx.maxContextTokens * ctx.config.compactThreshold) {
     ctx.logger.info('context_compaction_triggered', {
       session: ctx.sessionId,

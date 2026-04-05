@@ -67,6 +67,11 @@ export interface ResolveSessionOptions {
   sessionType?: SessionType;
   deployId?: string;
   auth?: AuthContext;
+  /**
+   * Optional total-token budget cap. Applied only when this call creates
+   * a new session; resumed sessions keep the budget set at creation.
+   */
+  maxSessionTokens?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +209,7 @@ export async function resolveSession(
     systemPrompt: components.systemPrompt,
     userRoles: components.userRoles,
     toolContextFactory: components.toolContextFactory,
+    maxSessionTokens: opts.maxSessionTokens,
   });
 
   return {session, toolContextFactory: components.toolContextFactory};

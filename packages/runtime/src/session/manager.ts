@@ -12,7 +12,7 @@
  * - Agent loop (3.1) for message execution
  * - Context compiler (3.2) for system prompt building
  * - Tool registry for tool management
- * - PGLite session store (this phase) for persistence
+ * - PGLite session store for persistence
  *
  * The old `session-manager.ts` remains for the upstream code path
  * until the full migration is complete.
@@ -65,6 +65,7 @@ export class StandaloneSessionManager {
   private readonly cleanupIntervalMs: number;
   private readonly defaultMaxTurns: number;
   private readonly defaultMaxContextTokens: number;
+  private readonly defaultMaxSessionTokens: number | undefined;
   private readonly eventBus: SessionManagerOptions['eventBus'];
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -75,6 +76,7 @@ export class StandaloneSessionManager {
     this.cleanupIntervalMs = opts.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS;
     this.defaultMaxTurns = opts.defaultMaxTurns ?? DEFAULT_MAX_TURNS;
     this.defaultMaxContextTokens = opts.defaultMaxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
+    this.defaultMaxSessionTokens = opts.defaultMaxSessionTokens;
     this.eventBus = opts.eventBus;
   }
 
@@ -154,6 +156,7 @@ export class StandaloneSessionManager {
       lastAccessedAt: now,
       maxTurns: opts.maxTurns ?? this.defaultMaxTurns,
       maxContextTokens: opts.maxContextTokens ?? this.defaultMaxContextTokens,
+      maxSessionTokens: opts.maxSessionTokens ?? this.defaultMaxSessionTokens,
       toolContextFactory: opts.toolContextFactory,
     };
 
@@ -196,6 +199,7 @@ export class StandaloneSessionManager {
       onAutomationResult?: (result: AutomationResult) => void;
       waitForConfirmation?: (callId: string) => Promise<boolean>;
       buildToolContext?: (callId: string) => ToolContext;
+      summarizeToolResult?: AgentContext['summarizeToolResult'];
     },
   ): AsyncGenerator<SSEEvent> {
     const session = this.getOrThrow(sessionId);
@@ -221,12 +225,16 @@ export class StandaloneSessionManager {
       turnCount: 0,
       maxTurns: session.maxTurns,
       maxContextTokens: session.maxContextTokens,
+      maxSessionTokens: session.maxSessionTokens,
       config: {...DEFAULT_LOOP_CONFIG, ...opts?.loopConfig},
       compactionFailures: 0,
       preExecutionCache: new Map(),
+      confirmedCallIds: new Set(),
+      disabledToolsUntilTurn: new Map(),
       waitForConfirmation: opts?.waitForConfirmation ?? (() => Promise.resolve(true)),
       buildToolContext: opts?.buildToolContext ?? makeNoOpToolContext(session),
       onUsage: opts?.onUsage,
+      summarizeToolResult: opts?.summarizeToolResult,
     };
 
     // Run the agent loop.

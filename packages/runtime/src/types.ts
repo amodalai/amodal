@@ -22,6 +22,19 @@ export const ChatRequestSchema = z.object({
   session_type: z.enum(['chat', 'admin', 'automation']).optional(),
   /** Optional deployment ID — load a specific snapshot instead of the active one */
   deploy_id: z.string().optional(),
+  /**
+   * Optional session-wide **token** budget cap (not dollars; cost varies
+   * by model). When cumulative usage reaches this value the loop
+   * terminates with `reason: 'budget_exceeded'`. Absent = no cap.
+   *
+   * This is a **soft ceiling** — the check runs after each turn, so a
+   * single in-flight turn can overshoot by up to `maxOutputTokens` +
+   * tool result sizes. Size the cap ~20% below your hard limit.
+   *
+   * Distinct from the LLM-API `max_tokens` (per-call output cap) —
+   * this is a session-wide cumulative total across all turns.
+   */
+  max_session_tokens: z.number().int().positive().optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
@@ -181,6 +194,17 @@ export interface SSEApprovedEvent {
 export interface SSEDoneEvent {
   type: SSEEventType.Done;
   timestamp: string;
+  /**
+   * Why the loop stopped. Consumers use this to distinguish normal
+   * termination from enforced caps (budget, turns, loop detection).
+   */
+  reason?:
+    | 'model_stop'
+    | 'max_turns'
+    | 'user_abort'
+    | 'error'
+    | 'budget_exceeded'
+    | 'loop_detected';
   usage?: {
     input_tokens: number;
     output_tokens: number;

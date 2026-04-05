@@ -46,6 +46,12 @@ export interface CreateServerOptions {
   additionalRouters?: express.Router[];
   /** Factory that builds per-request stream hooks from the auth context */
   createStreamHooks?: (auth?: AuthContext) => StreamHooks;
+  /** Summarizer hook for evicted tool results (passed through to runMessage). */
+  summarizeToolResult?: (opts: {
+    toolName: string;
+    content: string;
+    signal: AbortSignal;
+  }) => Promise<string>;
   /** Shutdown callback for hosting layer cleanup (e.g., drain audit batches) */
   onShutdown?: () => Promise<void>;
   /** Async callback that resolves an AgentBundle from a deploy ID (used by hosted runtime) */
@@ -119,12 +125,14 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     bundleResolver: {bundleProvider: options.bundleProvider},
     shared,
     createStreamHooks: options.createStreamHooks,
+    summarizeToolResult: options.summarizeToolResult,
   }));
   app.use(createAIStreamRouter({
     sessionManager,
     bundleResolver: {bundleProvider: options.bundleProvider},
     shared,
     createStreamHooks: options.createStreamHooks,
+    summarizeToolResult: options.summarizeToolResult,
   }));
 
   // Additional routers (e.g., session history proxy from hosting layer)
