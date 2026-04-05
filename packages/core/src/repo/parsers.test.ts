@@ -305,6 +305,85 @@ Run the legacy check.
     expect(auto.trigger).toBe('cron');
     expect(auto.prompt).toContain('Run the legacy check');
   });
+
+  it('parses delivery config with multiple targets and template', () => {
+    const content = JSON.stringify({
+      title: 'Scan Trending',
+      schedule: '0 */4 * * *',
+      prompt: 'Scan for trending AI content.',
+      delivery: {
+        targets: [
+          {type: 'webhook', url: 'https://hooks.example.com/slack'},
+          {type: 'callback', name: 'my-handler'},
+        ],
+        includeResult: true,
+        template: 'Found {{count}} articles',
+      },
+    });
+    const auto = parseAutomation(content, 'scan', '/automations/scan.json');
+    expect(auto.delivery).toBeDefined();
+    expect(auto.delivery?.targets).toHaveLength(2);
+    expect(auto.delivery?.targets[0]).toEqual({type: 'webhook', url: 'https://hooks.example.com/slack'});
+    expect(auto.delivery?.targets[1]).toEqual({type: 'callback', name: 'my-handler'});
+    expect(auto.delivery?.template).toBe('Found {{count}} articles');
+    expect(auto.delivery?.includeResult).toBe(true);
+  });
+
+  it('parses failureAlert with threshold and cooldown', () => {
+    const content = JSON.stringify({
+      title: 'Critical Scan',
+      schedule: '0 */1 * * *',
+      prompt: 'Scan critical.',
+      failureAlert: {
+        after: 3,
+        targets: [{type: 'webhook', url: 'https://alerts.example.com/oncall'}],
+        cooldownMinutes: 30,
+      },
+    });
+    const auto = parseAutomation(content, 'scan', '/automations/scan.json');
+    expect(auto.failureAlert).toBeDefined();
+    expect(auto.failureAlert?.after).toBe(3);
+    expect(auto.failureAlert?.cooldownMinutes).toBe(30);
+    expect(auto.failureAlert?.targets).toHaveLength(1);
+  });
+
+  it('leaves delivery/failureAlert undefined when not configured', () => {
+    const content = JSON.stringify({
+      title: 'Simple',
+      schedule: '0 9 * * *',
+      prompt: 'Do stuff.',
+    });
+    const auto = parseAutomation(content, 'simple', '/automations/simple.json');
+    expect(auto.delivery).toBeUndefined();
+    expect(auto.failureAlert).toBeUndefined();
+  });
+
+  it('rejects webhook target missing url', () => {
+    const content = JSON.stringify({
+      title: 'Bad',
+      prompt: 'Bad.',
+      delivery: {targets: [{type: 'webhook'}]},
+    });
+    expect(() => parseAutomation(content, 'bad', '/automations/bad.json')).toThrow(/url/);
+  });
+
+  it('rejects delivery with empty targets array', () => {
+    const content = JSON.stringify({
+      title: 'Bad',
+      prompt: 'Bad.',
+      delivery: {targets: []},
+    });
+    expect(() => parseAutomation(content, 'bad', '/automations/bad.json')).toThrow(/non-empty/);
+  });
+
+  it('rejects unknown delivery target type', () => {
+    const content = JSON.stringify({
+      title: 'Bad',
+      prompt: 'Bad.',
+      delivery: {targets: [{type: 'email', to: 'a@b.com'}]},
+    });
+    expect(() => parseAutomation(content, 'bad', '/automations/bad.json')).toThrow(/unknown type/);
+  });
 });
 
 describe('parseEval', () => {

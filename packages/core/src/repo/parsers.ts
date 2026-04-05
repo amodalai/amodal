@@ -15,6 +15,11 @@ import {
   RepoError,
 } from './repo-types.js';
 import type {
+  DeliveryConfig,
+  DeliveryTarget,
+  FailureAlertConfig,
+} from '@amodalai/types';
+import type {
   LoadedAgent,
   LoadedAutomation,
   LoadedEval,
@@ -249,7 +254,100 @@ export function parseAutomation(
     trigger = 'manual';
   }
 
-  return {name, title, schedule, trigger, prompt, location};
+  const delivery = parseDeliveryConfig(obj['delivery'], name);
+  const failureAlert = parseFailureAlertConfig(obj['failureAlert'], name);
+
+  return {name, title, schedule, trigger, prompt, location, delivery, failureAlert};
+}
+
+/**
+ * Parse and validate a DeliveryTarget from unknown JSON.
+ * Returns undefined for invalid entries (caller logs / skips).
+ */
+function parseDeliveryTarget(raw: unknown, automationName: string): DeliveryTarget | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- object narrowed above
+  const obj = raw as Record<string, unknown>;
+  const type = obj['type'];
+  if (type === 'webhook') {
+    const url = obj['url'];
+    if (typeof url !== 'string' || url.length === 0) {
+      throw new RepoError(
+        'CONFIG_VALIDATION_FAILED',
+        `Automation "${automationName}" delivery target: webhook requires a non-empty "url"`,
+      );
+    }
+    return {type: 'webhook', url};
+  }
+  if (type === 'callback') {
+    const name = typeof obj['name'] === 'string' ? obj['name'] : undefined;
+    return {type: 'callback', name};
+  }
+  throw new RepoError(
+    'CONFIG_VALIDATION_FAILED',
+    `Automation "${automationName}" delivery target: unknown type "${String(type)}". Supported: webhook, callback`,
+  );
+}
+
+/** Parse delivery config from automation JSON. Returns undefined if absent. */
+function parseDeliveryConfig(raw: unknown, automationName: string): DeliveryConfig | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'object') {
+    throw new RepoError(
+      'CONFIG_VALIDATION_FAILED',
+      `Automation "${automationName}" delivery: expected an object`,
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- object narrowed above
+  const obj = raw as Record<string, unknown>;
+  const targetsRaw = obj['targets'];
+  if (!Array.isArray(targetsRaw) || targetsRaw.length === 0) {
+    throw new RepoError(
+      'CONFIG_VALIDATION_FAILED',
+      `Automation "${automationName}" delivery.targets: expected a non-empty array`,
+    );
+  }
+  const targets: DeliveryTarget[] = [];
+  for (const t of targetsRaw) {
+    const target = parseDeliveryTarget(t, automationName);
+    if (target) targets.push(target);
+  }
+  return {
+    targets,
+    includeResult: typeof obj['includeResult'] === 'boolean' ? obj['includeResult'] : undefined,
+    template: typeof obj['template'] === 'string' ? obj['template'] : undefined,
+  };
+}
+
+/** Parse failureAlert config from automation JSON. Returns undefined if absent. */
+function parseFailureAlertConfig(raw: unknown, automationName: string): FailureAlertConfig | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'object') {
+    throw new RepoError(
+      'CONFIG_VALIDATION_FAILED',
+      `Automation "${automationName}" failureAlert: expected an object`,
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- object narrowed above
+  const obj = raw as Record<string, unknown>;
+  const targetsRaw = obj['targets'];
+  if (!Array.isArray(targetsRaw) || targetsRaw.length === 0) {
+    throw new RepoError(
+      'CONFIG_VALIDATION_FAILED',
+      `Automation "${automationName}" failureAlert.targets: expected a non-empty array`,
+    );
+  }
+  const targets: DeliveryTarget[] = [];
+  for (const t of targetsRaw) {
+    const target = parseDeliveryTarget(t, automationName);
+    if (target) targets.push(target);
+  }
+  return {
+    targets,
+    after: typeof obj['after'] === 'number' && obj['after'] > 0 ? obj['after'] : undefined,
+    cooldownMinutes:
+      typeof obj['cooldownMinutes'] === 'number' && obj['cooldownMinutes'] >= 0 ? obj['cooldownMinutes'] : undefined,
+  };
 }
 
 /**

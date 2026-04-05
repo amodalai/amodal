@@ -5,6 +5,7 @@
  */
 
 import type {LoadedAutomation} from '@amodalai/core';
+import type {DeliveryConfig, FailureAlertConfig} from '@amodalai/types';
 
 /**
  * Parsed automation config ready for the proactive runner.
@@ -15,6 +16,8 @@ export interface RunnableAutomation {
   prompt: string;
   schedule?: string;
   isWebhookTriggered: boolean;
+  delivery?: DeliveryConfig;
+  failureAlert?: FailureAlertConfig;
 }
 
 /**
@@ -27,6 +30,8 @@ export function bridgeAutomation(automation: LoadedAutomation): RunnableAutomati
     prompt: automation.prompt,
     schedule: automation.schedule,
     isWebhookTriggered: automation.trigger === 'webhook',
+    delivery: automation.delivery,
+    failureAlert: automation.failureAlert,
   };
 }
 

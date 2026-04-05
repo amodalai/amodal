@@ -8,6 +8,7 @@ import {z} from 'zod';
 import type {SessionRuntime, LLMMessage} from '@amodalai/core';
 import type {PlanModeManager, ExploreConfig} from '@amodalai/core';
 import type {CustomToolExecutor, CustomShellExecutor, StoreBackend, McpManager} from '@amodalai/core';
+import type {DeliveryPayload} from '@amodalai/types';
 
 // ---------------------------------------------------------------------------
 // Request schema
@@ -40,6 +41,13 @@ export interface LocalServerConfig {
   staticAppDir?: string;
   /** Session ID to auto-resume on startup. */
   resumeSessionId?: string;
+  /**
+   * ISV callback fired when an automation's delivery config includes a
+   * `callback` target. Receives the full delivery payload (status, result,
+   * parsed data, rendered template message). Invoked via `await`, so
+   * returning a promise will hold up subsequent deliveries to this target.
+   */
+  onAutomationResult?: (payload: DeliveryPayload) => void | Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
