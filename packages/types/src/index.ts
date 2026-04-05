@@ -135,6 +135,8 @@ export type {
   AutomationFailedEvent,
   AutomationStartedEvent,
   AutomationStoppedEvent,
+  DeliverySucceededEvent,
+  DeliveryFailedEvent,
   StoreUpdatedEvent,
   ManifestChangedEvent,
   FilesChangedEvent,

@@ -384,6 +384,44 @@ Run the legacy check.
     });
     expect(() => parseAutomation(content, 'bad', '/automations/bad.json')).toThrow(/unknown type/);
   });
+
+  it('rejects webhook URL with file:// scheme', () => {
+    const content = JSON.stringify({
+      title: 'Bad',
+      prompt: 'Bad.',
+      delivery: {targets: [{type: 'webhook', url: 'file:///etc/passwd'}]},
+    });
+    expect(() => parseAutomation(content, 'bad', '/automations/bad.json')).toThrow(/http/);
+  });
+
+  it('rejects webhook URL with javascript: scheme', () => {
+    const content = JSON.stringify({
+      title: 'Bad',
+      prompt: 'Bad.',
+      delivery: {targets: [{type: 'webhook', url: 'javascript:alert(1)'}]},
+    });
+    expect(() => parseAutomation(content, 'bad', '/automations/bad.json')).toThrow(/http/);
+  });
+
+  it('accepts env:NAME webhook URL (resolved at bundle-load time)', () => {
+    const content = JSON.stringify({
+      title: 'Envy',
+      prompt: 'Do stuff.',
+      delivery: {targets: [{type: 'webhook', url: 'env:MY_WEBHOOK_URL'}]},
+    });
+    const auto = parseAutomation(content, 'envy', '/automations/envy.json');
+    expect(auto.delivery?.targets[0]).toEqual({type: 'webhook', url: 'env:MY_WEBHOOK_URL'});
+  });
+
+  it('accepts https:// webhook URL', () => {
+    const content = JSON.stringify({
+      title: 'OK',
+      prompt: 'Do stuff.',
+      delivery: {targets: [{type: 'webhook', url: 'https://hooks.slack.com/abc'}]},
+    });
+    const auto = parseAutomation(content, 'ok', '/automations/ok.json');
+    expect(auto.delivery?.targets[0]).toEqual({type: 'webhook', url: 'https://hooks.slack.com/abc'});
+  });
 });
 
 describe('parseEval', () => {

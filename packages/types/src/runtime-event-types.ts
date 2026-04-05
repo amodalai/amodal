@@ -32,6 +32,8 @@ export const RUNTIME_EVENT_TYPES = [
   'automation_failed',
   'automation_started',
   'automation_stopped',
+  'delivery_succeeded',
+  'delivery_failed',
   'store_updated',
   'manifest_changed',
   'files_changed',
@@ -95,6 +97,32 @@ export interface AutomationStoppedEvent extends RuntimeEventBase {
   name: string;
 }
 
+export interface DeliverySucceededEvent extends RuntimeEventBase {
+  type: 'delivery_succeeded';
+  automation: string;
+  /** 'webhook' or 'callback' */
+  targetType: string;
+  /** Webhook URL (present only for webhook targets) */
+  targetUrl?: string;
+  /** HTTP status code (present only for webhook targets) */
+  httpStatus?: number;
+  durationMs: number;
+}
+
+export interface DeliveryFailedEvent extends RuntimeEventBase {
+  type: 'delivery_failed';
+  automation: string;
+  /** 'webhook' or 'callback' */
+  targetType: string;
+  /** Webhook URL (present only for webhook targets) */
+  targetUrl?: string;
+  /** HTTP status code if the server responded with an error */
+  httpStatus?: number;
+  error: string;
+  /** Number of attempts made (1 = no retry, 2 = one retry fired). */
+  attempts: number;
+}
+
 export interface StoreUpdatedEvent extends RuntimeEventBase {
   type: 'store_updated';
   storeName: string;
@@ -123,6 +151,8 @@ export type RuntimeEvent =
   | AutomationFailedEvent
   | AutomationStartedEvent
   | AutomationStoppedEvent
+  | DeliverySucceededEvent
+  | DeliveryFailedEvent
   | StoreUpdatedEvent
   | ManifestChangedEvent
   | FilesChangedEvent;

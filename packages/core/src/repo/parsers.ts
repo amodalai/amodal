@@ -277,6 +277,16 @@ function parseDeliveryTarget(raw: unknown, automationName: string): DeliveryTarg
         `Automation "${automationName}" delivery target: webhook requires a non-empty "url"`,
       );
     }
+    // Accept either http(s):// URLs OR `env:NAME` refs that will be
+    // resolved at bundle-load time (expected to resolve to http(s)://).
+    // Reject file://, javascript:, and other unsafe schemes at parse
+    // time so the operator sees the error at repo load, not at delivery.
+    if (!url.startsWith('env:') && !/^https?:\/\//i.test(url)) {
+      throw new RepoError(
+        'CONFIG_VALIDATION_FAILED',
+        `Automation "${automationName}" delivery target: webhook url must start with "http://" or "https://" (or "env:" for env-resolved URLs). Got: "${url.slice(0, 60)}"`,
+      );
+    }
     return {type: 'webhook', url};
   }
   if (type === 'callback') {

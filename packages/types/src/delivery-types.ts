@@ -18,12 +18,19 @@
 export type DeliveryTarget =
   | {
       type: 'webhook';
-      /** URL to POST to. Supports `env:NAME` substitution at load time. */
+      /**
+       * HTTP(S) URL to POST to. Must start with `http://` or `https://`.
+       * Supports `env:NAME` substitution — resolved at bundle-load time.
+       */
       url: string;
     }
   | {
       type: 'callback';
-      /** Optional tag identifying which callback invocation this is. */
+      /**
+       * Optional tag identifying which callback invocation this is.
+       * Passed to `onAutomationResult(payload, target)` so ISVs with
+       * multiple callback targets can distinguish them.
+       */
       name?: string;
     };
 
@@ -63,15 +70,20 @@ export interface DeliveryPayload {
   automation: string;
   status: 'success' | 'failure';
   timestamp: string;
-  /** Raw text output from the automation run. */
+  /** Raw text output from the automation run (truncated at 16KB). */
   result?: string;
+  /**
+   * True if `result` was truncated at the delivery payload size cap.
+   * Full text remains in the automation session's message history.
+   */
+  truncated?: boolean;
   /** Rendered template, if a template was configured. */
   message?: string;
   /** Error message, only present when status === 'failure'. */
   error?: string;
   /**
    * Parsed JSON result, if the last assistant message was valid JSON.
-   * Used for template variable substitution.
+   * Used for template variable substitution. Not truncated.
    */
   data?: Record<string, unknown>;
 }

@@ -143,11 +143,11 @@ describe('DeliveryRouter', () => {
       expect(calls.map((c) => c.url).sort()).toEqual(['http://a.test/hook', 'http://b.test/hook']);
     });
 
-    it('fires ISV callback target', async () => {
+    it('fires ISV callback target with target metadata', async () => {
       const onResult = vi.fn();
       const router = new DeliveryRouter({logger: makeLogger(), onResult});
       const delivery: DeliveryConfig = {
-        targets: [{type: 'callback'}],
+        targets: [{type: 'callback', name: 'primary-handler'}],
       };
       await router.onSuccess('scan', 'done', delivery);
 
@@ -157,6 +157,33 @@ describe('DeliveryRouter', () => {
         status: 'success',
         result: 'done',
       });
+      // Second arg carries target metadata so multi-target setups can
+      // distinguish which callback is firing.
+      expect(onResult.mock.calls[0]?.[1]).toEqual({name: 'primary-handler'});
+    });
+
+    it('passes undefined target name when not specified', async () => {
+      const onResult = vi.fn();
+      const router = new DeliveryRouter({logger: makeLogger(), onResult});
+      const delivery: DeliveryConfig = {targets: [{type: 'callback'}]};
+      await router.onSuccess('scan', 'done', delivery);
+      expect(onResult.mock.calls[0]?.[1]).toEqual({name: undefined});
+    });
+
+    it('distinguishes multiple callback targets by name', async () => {
+      const calls_: Array<{name?: string}> = [];
+      const onResult = (_: unknown, target: {name?: string}): void => {
+        calls_.push(target);
+      };
+      const router = new DeliveryRouter({logger: makeLogger(), onResult});
+      const delivery: DeliveryConfig = {
+        targets: [
+          {type: 'callback', name: 'analytics'},
+          {type: 'callback', name: 'audit-log'},
+        ],
+      };
+      await router.onSuccess('scan', 'done', delivery);
+      expect(calls_.map((c) => c.name).sort()).toEqual(['analytics', 'audit-log']);
     });
 
     it('warns and skips callback target when onResult is not configured', async () => {
@@ -183,13 +210,57 @@ describe('DeliveryRouter', () => {
       expect(calls[0]?.headers['X-Amodal-Signature']).toMatch(/^sha256=[0-9a-f]{64}$/);
     });
 
-    it('does not throw when a webhook returns 500', async () => {
+    it('does not throw when a webhook returns 500 (and retries once)', async () => {
       mockImpl = () => Promise.resolve(new Response(null, {status: 500}));
       const router = new DeliveryRouter({logger: makeLogger()});
       const delivery: DeliveryConfig = {
         targets: [{type: 'webhook', url: 'http://example.test/hook'}],
       };
       await expect(router.onSuccess('scan', 'done', delivery)).resolves.toBeUndefined();
+      // 5xx is retryable: should have fired twice (initial + 1 retry)
+      expect(calls).toHaveLength(2);
+    });
+
+    it('retries on 5xx and succeeds on second attempt', async () => {
+      let attempt = 0;
+      mockImpl = () => {
+        attempt++;
+        return Promise.resolve(
+          new Response(null, {status: attempt === 1 ? 503 : 200}),
+        );
+      };
+      const router = new DeliveryRouter({logger: makeLogger()});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+      };
+      await router.onSuccess('scan', 'done', delivery);
+      expect(attempt).toBe(2);
+    });
+
+    it('does NOT retry on 4xx client errors', async () => {
+      mockImpl = () => Promise.resolve(new Response(null, {status: 400}));
+      const router = new DeliveryRouter({logger: makeLogger()});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+      };
+      await router.onSuccess('scan', 'done', delivery);
+      // 400 is not retryable: single attempt
+      expect(calls).toHaveLength(1);
+    });
+
+    it('retries on network error and throws WebhookFailure after second attempt', async () => {
+      mockImpl = () => Promise.reject(new TypeError('fetch failed'));
+      const logger = makeLogger();
+      const router = new DeliveryRouter({logger});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+      };
+      await router.onSuccess('scan', 'done', delivery);
+      // attempts=2 logged on failure
+      expect(logger.warn).toHaveBeenCalledWith(
+        'delivery_failed',
+        expect.objectContaining({attempts: 2, error: expect.stringContaining('fetch failed')}),
+      );
     });
 
     it('does nothing when delivery is undefined', async () => {
@@ -206,6 +277,170 @@ describe('DeliveryRouter', () => {
 
       await router.onSuccess('scan', 'ok', undefined);
       expect(router.getFailureCount('scan')).toBe(0);
+    });
+  });
+
+  describe('template missing-var warning', () => {
+    it('warns once per automation+template+missing-keys combo', async () => {
+      const logger = makeLogger();
+      const router = new DeliveryRouter({logger});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+        template: 'Found {{count}} items matching {{query}}',
+      };
+      // Only `count` present; `query` missing. Warn fires once.
+      await router.onSuccess('scan', '{"count": 5}', delivery);
+      await router.onSuccess('scan', '{"count": 5}', delivery);
+      await router.onSuccess('scan', '{"count": 5}', delivery);
+
+      const warnCalls = logger.warn.mock.calls.filter(
+        (c) => c[0] === 'delivery_template_missing_var',
+      );
+      expect(warnCalls).toHaveLength(1);
+      expect(warnCalls[0]?.[1]).toMatchObject({
+        automation: 'scan',
+        missing: ['query'],
+      });
+    });
+
+    it('warns again if a different variable goes missing', async () => {
+      const logger = makeLogger();
+      const router = new DeliveryRouter({logger});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+        template: '{{count}} / {{total}}',
+      };
+      await router.onSuccess('scan', '{"count": 5}', delivery);  // missing total
+      await router.onSuccess('scan', '{"total": 10}', delivery); // missing count
+      const warnCalls = logger.warn.mock.calls.filter(
+        (c) => c[0] === 'delivery_template_missing_var',
+      );
+      expect(warnCalls).toHaveLength(2);
+    });
+
+    it('does not warn when all variables resolve', async () => {
+      const logger = makeLogger();
+      const router = new DeliveryRouter({logger});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+        template: '{{count}} items',
+      };
+      await router.onSuccess('scan', '{"count": 5}', delivery);
+      const warnCalls = logger.warn.mock.calls.filter(
+        (c) => c[0] === 'delivery_template_missing_var',
+      );
+      expect(warnCalls).toHaveLength(0);
+    });
+  });
+
+  describe('truncation', () => {
+    it('truncates result over 16KB with truncated:true flag', async () => {
+      const router = new DeliveryRouter({logger: makeLogger()});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+      };
+      const huge = 'A'.repeat(20_000);
+      await router.onSuccess('scan', huge, delivery);
+
+      const body = calls[0]?.body as Record<string, unknown>;
+      expect(body['truncated']).toBe(true);
+      const result = body['result'] as string;
+      expect(result.length).toBeLessThan(17_000);
+      expect(result).toContain('truncated');
+    });
+
+    it('does not truncate result under 16KB and omits the flag', async () => {
+      const router = new DeliveryRouter({logger: makeLogger()});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+      };
+      await router.onSuccess('scan', 'short output', delivery);
+      const body = calls[0]?.body as Record<string, unknown>;
+      expect(body['truncated']).toBeUndefined();
+      expect(body['result']).toBe('short output');
+    });
+
+    it('template still receives full untruncated result via {{result}}', async () => {
+      const router = new DeliveryRouter({logger: makeLogger()});
+      const huge = 'X'.repeat(20_000);
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+        template: 'Length: {{result.length}}',
+        includeResult: false,
+      };
+      // includeResult=false means no `result` in payload but {{result}}
+      // in template still works (uses the raw pre-truncation text).
+      await router.onSuccess('scan', huge, delivery);
+      const body = calls[0]?.body as Record<string, unknown>;
+      expect(body['result']).toBeUndefined();
+      expect(body['message']).toBeDefined();
+    });
+  });
+
+  describe('event bus emission', () => {
+    it('emits delivery_succeeded on successful webhook', async () => {
+      const emitted: Array<Record<string, unknown>> = [];
+      const eventBus = {emit: (e: Record<string, unknown>): void => { emitted.push(e); }};
+      const router = new DeliveryRouter({logger: makeLogger(), eventBus});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+      };
+      await router.onSuccess('scan', 'done', delivery);
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]).toMatchObject({
+        type: 'delivery_succeeded',
+        automation: 'scan',
+        targetType: 'webhook',
+        targetUrl: 'http://example.test/hook',
+        httpStatus: 200,
+      });
+      expect(typeof emitted[0]?.['durationMs']).toBe('number');
+    });
+
+    it('emits delivery_succeeded on successful callback', async () => {
+      const emitted: Array<Record<string, unknown>> = [];
+      const eventBus = {emit: (e: Record<string, unknown>): void => { emitted.push(e); }};
+      const router = new DeliveryRouter({logger: makeLogger(), onResult: vi.fn(), eventBus});
+      const delivery: DeliveryConfig = {targets: [{type: 'callback'}]};
+      await router.onSuccess('scan', 'done', delivery);
+      expect(emitted[0]).toMatchObject({
+        type: 'delivery_succeeded',
+        automation: 'scan',
+        targetType: 'callback',
+      });
+      expect(emitted[0]?.['targetUrl']).toBeUndefined();
+    });
+
+    it('emits delivery_failed with attempt count and status', async () => {
+      mockImpl = () => Promise.resolve(new Response(null, {status: 500}));
+      const emitted: Array<Record<string, unknown>> = [];
+      const eventBus = {emit: (e: Record<string, unknown>): void => { emitted.push(e); }};
+      const router = new DeliveryRouter({logger: makeLogger(), eventBus});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+      };
+      await router.onSuccess('scan', 'done', delivery);
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]).toMatchObject({
+        type: 'delivery_failed',
+        automation: 'scan',
+        targetType: 'webhook',
+        targetUrl: 'http://example.test/hook',
+        httpStatus: 500,
+        attempts: 2,
+      });
+    });
+
+    it('emits delivery_failed with attempts=1 for 4xx (no retry)', async () => {
+      mockImpl = () => Promise.resolve(new Response(null, {status: 404}));
+      const emitted: Array<Record<string, unknown>> = [];
+      const eventBus = {emit: (e: Record<string, unknown>): void => { emitted.push(e); }};
+      const router = new DeliveryRouter({logger: makeLogger(), eventBus});
+      const delivery: DeliveryConfig = {
+        targets: [{type: 'webhook', url: 'http://example.test/hook'}],
+      };
+      await router.onSuccess('scan', 'done', delivery);
+      expect(emitted[0]).toMatchObject({attempts: 1, httpStatus: 404});
     });
   });
 

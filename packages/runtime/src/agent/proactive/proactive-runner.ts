@@ -84,6 +84,7 @@ export class ProactiveRunner {
       logger: config.logger,
       webhookSecret: config.webhookSecret,
       onResult: config.onAutomationResult,
+      eventBus: config.eventBus,
     });
     const bridged = bridgeAutomations(repo.automations);
     for (const a of bridged) {

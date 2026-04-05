@@ -43,11 +43,15 @@ export interface LocalServerConfig {
   resumeSessionId?: string;
   /**
    * ISV callback fired when an automation's delivery config includes a
-   * `callback` target. Receives the full delivery payload (status, result,
-   * parsed data, rendered template message). Invoked via `await`, so
-   * returning a promise will hold up subsequent deliveries to this target.
+   * `callback` target. Receives the full delivery payload plus metadata
+   * from the callback target (the optional `name` tag) so multi-target
+   * setups can distinguish which callback is firing. Invoked via `await`,
+   * so returning a promise will hold up subsequent deliveries.
    */
-  onAutomationResult?: (payload: DeliveryPayload) => void | Promise<void>;
+  onAutomationResult?: (
+    payload: DeliveryPayload,
+    target: {name?: string},
+  ) => void | Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
