@@ -72,8 +72,20 @@ const TARGETS: Record<string, E2ETarget> = {
   groq: {provider: 'groq', model: 'llama-3.3-70b-versatile', apiKeyEnv: 'GROQ_API_KEY'},
 };
 
-// Default to the "base" model (cheapest, fastest) unless caller overrides.
-const selected = (process.env['E2E_TARGETS'] ?? 'google')
+// If E2E_TARGETS is unset, fall through a preference chain and pick the
+// first target whose API key is configured. Cheap/fast providers first.
+const TARGET_PREFERENCE: readonly string[] = ['google', 'anthropic', 'openai', 'groq'];
+
+function defaultSelection(): string {
+  for (const name of TARGET_PREFERENCE) {
+    const cfg = TARGETS[name];
+    if (cfg && process.env[cfg.apiKeyEnv]) return name;
+  }
+  // No keys at all — return head of chain so the warning names a concrete target.
+  return TARGET_PREFERENCE[0];
+}
+
+const selected = (process.env['E2E_TARGETS'] ?? defaultSelection())
   .split(',')
   .map((s) => s.trim())
   .filter((s) => s.length > 0);

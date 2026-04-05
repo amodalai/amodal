@@ -49,7 +49,8 @@ const MCP_SERVER = resolve(__dirname, 'smoke-mcp-server.mjs');
 const TIMEOUT = 45_000; // per-test timeout for LLM calls
 
 // Provider selection — override via SMOKE_TARGET env var.
-// Defaults to anthropic + claude-sonnet-4 for backward compatibility.
+// If unset, falls through a preference chain using whichever API key
+// happens to be configured: google -> anthropic -> openai -> groq.
 interface SmokeTarget {
   provider: string;
   model: string;
@@ -61,9 +62,26 @@ const SMOKE_TARGETS: Record<string, SmokeTarget> = {
   openai: {provider: 'openai', model: 'gpt-4o-mini', apiKeyEnv: 'OPENAI_API_KEY'},
   groq: {provider: 'groq', model: 'llama-3.3-70b-versatile', apiKeyEnv: 'GROQ_API_KEY'},
 };
-const smokeTargetName = process.env['SMOKE_TARGET'] ?? 'google';
- 
-const smokeTarget = SMOKE_TARGETS[smokeTargetName];
+/** Auto-select order when SMOKE_TARGET is not set. Cheap/fast first. */
+const SMOKE_TARGET_PREFERENCE: readonly string[] = ['google', 'anthropic', 'openai', 'groq'];
+
+function pickSmokeTarget(): {name: string; target: SmokeTarget | undefined} {
+  const override = process.env['SMOKE_TARGET'];
+  if (override) {
+    return {name: override, target: SMOKE_TARGETS[override]};
+  }
+  for (const name of SMOKE_TARGET_PREFERENCE) {
+    const candidate = SMOKE_TARGETS[name];
+    if (candidate && process.env[candidate.apiKeyEnv]) {
+      return {name, target: candidate};
+    }
+  }
+  // No keys configured — return the head of the preference chain so the
+  // skipReason message names a concrete target to the user.
+  return {name: SMOKE_TARGET_PREFERENCE[0], target: SMOKE_TARGETS[SMOKE_TARGET_PREFERENCE[0]]};
+}
+
+const {name: smokeTargetName, target: smokeTarget} = pickSmokeTarget();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -149,7 +167,10 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     rmSync(resolve(AGENT_DIR, '.amodal/store-data'), {recursive: true, force: true});
     rmSync(resolve(AGENT_DIR, '.amodal/sessions'), {recursive: true, force: true});
 
-    // 1. Rewrite amodal.json with the selected provider/model
+    // 1. Rewrite amodal.json with the selected provider/model.
+    //    smokeTarget is guaranteed defined here — skipReason above gates
+    //    the describe block when it's undefined or missing a key.
+    if (!smokeTarget) throw new Error('unreachable: smokeTarget is undefined under skipReason guard');
     const amodalConfig = JSON.parse(originalAmodalJson) as Record<string, unknown>;
     amodalConfig['models'] = {
       main: {provider: smokeTarget.provider, model: smokeTarget.model},
