@@ -333,17 +333,22 @@ describe('handleThinking (via transition)', () => {
   });
 
   it('skips already-cleared messages (idempotent)', async () => {
-    // Messages that were cleared in a prior turn have toolCallId === 'cleared'
+    // Already-cleared messages keep their original toolCallId (otherwise
+    // providers reject "orphaned" assistant tool-calls). Detection is by
+    // output-value prefix: "[Tool result cleared..." or "[Summary of ...".
     const messages: ModelMessage[] = [];
     for (let i = 0; i < 20; i++) {
       messages.push({
         role: 'tool',
         content: [{
           type: 'tool-result' as const,
-          // First 15 are already-cleared; last 5 are fresh
-          toolCallId: i < 15 ? 'cleared' : `c${i}`,
-          toolName: i < 15 ? 'cleared' : 'search_api',
-          output: {type: 'text' as const, value: i < 15 ? '[prior marker]' : `body ${i}`},
+          toolCallId: `c${i}`,
+          toolName: 'search_api',
+          // First 15 are already-cleared (marker prefix); last 5 are fresh
+          output: {
+            type: 'text' as const,
+            value: i < 15 ? '[Tool result cleared to save context space]' : `body ${i}`,
+          },
         }],
       } as ModelMessage);
     }

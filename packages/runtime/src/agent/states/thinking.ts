@@ -24,10 +24,13 @@ import type {
   TransitionResult,
 } from '../loop-types.js';
 
-/** Sentinel values for cleared tool results. */
-const CLEARED_TOOL_CALL_ID = 'cleared';
-const CLEARED_TOOL_NAME = 'cleared';
+/** Content markers for cleared tool results. Original toolCallId and
+ *  toolName are preserved so assistant tool-calls still pair with their
+ *  results (providers reject orphaned tool_use blocks). */
 const CLEARED_TOOL_RESULT_TEXT = '[Tool result cleared to save context space]';
+/** Prefix used on every cleared/summarized marker — lets us detect
+ *  already-cleared messages idempotently. */
+const CLEARED_TEXT_PREFIXES = ['[Tool result cleared', '[Summary of '] as const;
 /** Max time a summarizer callback can take before we fall back to the marker. */
 const SUMMARIZER_TIMEOUT_MS = 5_000;
 
@@ -64,7 +67,13 @@ export async function handleThinking(
     };
   }
 
-  let messages = state.messages;
+  // Clear old tool result bodies and persist back to ctx. Without this
+  // writeback, every subsequent turn re-calls the summarizer hook for the
+  // same messages (expensive). Once a result is cleared, it stays cleared.
+  // Must happen before turn-specific warnings are appended, since warnings
+  // are local-to-this-turn and should not persist.
+  ctx.messages = await clearOldToolResults(state.messages, ctx);
+  let messages = ctx.messages;
   /** Tool names to exclude from this turn's tool set (escalation tier). */
   const excludedTools = new Set<string>();
 
@@ -94,12 +103,6 @@ export async function handleThinking(
     };
     messages = [...messages, warningMessage];
   }
-
-  // 3. Clear old tool result bodies — keep last N full, replace older with summaries
-  //    Prevents unbounded context growth in tool-heavy sessions. If a
-  //    summarizer hook is configured, evicted results get a 1-2 sentence
-  //    summary instead of a generic marker; otherwise a static sentinel.
-  messages = await clearOldToolResults(messages, ctx);
 
   // 4. Build tool schemas for the AI SDK (strip execute functions — we handle
   //    execution ourselves in EXECUTING state with permission checks, SSE events, etc.)
@@ -308,6 +311,7 @@ async function clearOldToolResults(
     cleared: ModelMessage;
   }> => {
     const existing = messages[idx];
+    const toolCallId = extractToolCallId(existing);
     const toolName = extractToolName(existing);
     const body = extractToolResultText(existing);
 
@@ -325,14 +329,18 @@ async function clearOldToolResults(
       ctx.sessionId,
     );
 
+    // CRITICAL: preserve the original toolCallId and toolName. Providers
+    // (Anthropic especially) require every assistant tool-call to have
+    // a matching tool-result with the same toolCallId; rewriting it
+    // breaks the conversation with "tool results are missing" errors.
     return {
       idx,
       cleared: {
         role: 'tool',
         content: [{
           type: 'tool-result' as const,
-          toolCallId: CLEARED_TOOL_CALL_ID,
-          toolName: CLEARED_TOOL_NAME,
+          toolCallId,
+          toolName,
           output: {type: 'text' as const, value: markerText},
         }],
       },
@@ -373,11 +381,26 @@ function extractToolName(msg: ModelMessage): string {
   return 'unknown';
 }
 
-/** True if this message has already been replaced with the cleared marker. */
+/** Extract the original toolCallId from a tool-result message. */
+function extractToolCallId(msg: ModelMessage): string {
+  if (msg.role !== 'tool' || !Array.isArray(msg.content)) return 'unknown';
+  for (const part of msg.content) {
+    if ('toolCallId' in part && typeof part.toolCallId === 'string') return part.toolCallId;
+  }
+  return 'unknown';
+}
+
+/** True if this message has already been replaced with the cleared marker.
+ *  Detected by content prefix since we no longer overwrite toolCallId. */
 function isAlreadyCleared(msg: ModelMessage): boolean {
   if (msg.role !== 'tool' || !Array.isArray(msg.content)) return false;
   for (const part of msg.content) {
-    if ('toolCallId' in part && part.toolCallId === CLEARED_TOOL_CALL_ID) return true;
+    if ('output' in part && part.output && typeof part.output === 'object' && 'value' in part.output) {
+      const value = part.output.value;
+      if (typeof value === 'string' && CLEARED_TEXT_PREFIXES.some((p) => value.startsWith(p))) {
+        return true;
+      }
+    }
   }
   return false;
 }

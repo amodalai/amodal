@@ -191,6 +191,7 @@ export class StandaloneSessionManager {
       onAutomationResult?: (result: AutomationResult) => void;
       waitForConfirmation?: (callId: string) => Promise<boolean>;
       buildToolContext?: (callId: string) => ToolContext;
+      summarizeToolResult?: AgentContext['summarizeToolResult'];
     },
   ): AsyncGenerator<SSEEvent> {
     const session = this.getOrThrow(sessionId);
@@ -224,6 +225,7 @@ export class StandaloneSessionManager {
       waitForConfirmation: opts?.waitForConfirmation ?? (() => Promise.resolve(true)),
       buildToolContext: opts?.buildToolContext ?? makeNoOpToolContext(session),
       onUsage: opts?.onUsage,
+      summarizeToolResult: opts?.summarizeToolResult,
     };
 
     // Run the agent loop.
