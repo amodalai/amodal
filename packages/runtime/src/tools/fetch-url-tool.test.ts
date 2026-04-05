@@ -257,6 +257,54 @@ describe('fetch_url tool', () => {
     });
   });
 
+  describe('DOM-based fallback extraction (Readability fails)', () => {
+    // When Readability returns nothing (pages too sparse/malformed), the
+    // tool falls back to walking the parsed DOM with linkedom. Verify
+    // script/style content does NOT leak into the output.
+    it('strips script and style content from DOM-fallback output', async () => {
+      const hostile = `<!doctype html><html><head>
+        <script>alert("xss-from-head")</script>
+        <style>body { color: red; }</style>
+      </head><body>
+        <script>alert("xss-from-body")</script>
+        <p>visible content</p>
+        <style>.x{display:none}</style>
+      </body></html>`;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(new Response(hostile, {status: 200})),
+      );
+      const ctx = makeCtx();
+      const result = await runTool(ctx, {url: 'https://example.com'});
+      expect(result.status).toBe('ok');
+      expect(result.content).toContain('visible content');
+      // Script/style content should NOT appear
+      expect(result.content).not.toContain('xss-from-head');
+      expect(result.content).not.toContain('xss-from-body');
+      expect(result.content).not.toContain('display:none');
+      expect(result.content).not.toContain('color: red');
+    });
+
+    it('handles malformed script closing tags', async () => {
+      // </script > with trailing space was the CodeQL-flagged regex miss
+      const malformed = `<!doctype html><html><body>
+        <script >alert("evil")</script >
+        <script type="text/plain">alert("sneaky")</script foo="bar">
+        <p>real text</p>
+      </body></html>`;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(new Response(malformed, {status: 200})),
+      );
+      const ctx = makeCtx();
+      const result = await runTool(ctx, {url: 'https://example.com'});
+      expect(result.status).toBe('ok');
+      expect(result.content).not.toContain('alert(');
+      expect(result.content).not.toContain('evil');
+      expect(result.content).not.toContain('sneaky');
+    });
+  });
+
   describe('result truncation', () => {
     it('truncates long provider output', async () => {
       const huge = 'x'.repeat(50_000);

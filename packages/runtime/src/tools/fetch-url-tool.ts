@@ -201,8 +201,6 @@ async function fetchLocally(url: string, signal: AbortSignal): Promise<string> {
 
 function extractWithReadability(html: string, url: string): string {
   const {document} = parseHTML(html);
-  // Readability's Document type is DOM-lib; linkedom's is structurally
-  // compatible but typed independently. Cast at this external boundary.
   // linkedom returns a linkedom-typed `Document`; Readability declares the
   // DOM-lib `Document` type. They are structurally compatible at runtime.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linkedom→DOM boundary for Readability
@@ -213,23 +211,25 @@ function extractWithReadability(html: string, url: string): string {
     return `${title}${article.textContent.trim()}\n\n_Source: ${url}_`;
   }
 
-  // Readability couldn't extract — strip tags as last resort.
-  return `${stripHtml(html)}\n\n_Source: ${url}_`;
-}
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Readability couldn't extract — fall back to walking the parsed DOM.
+  // We use the DOM's own structure (via linkedom) instead of regex-based
+  // tag stripping, which is both safer and simpler: scripts/styles are
+  // removed structurally, entities are already decoded by the parser, and
+  // there is no risk of partial-match reinjection. This path runs only
+  // when Readability returns nothing useful.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linkedom's Document types are loose
+  const doc = document as any;
+  // Remove non-content elements whose textContent would otherwise be
+  // concatenated into the output (scripts, styles, embedded templates).
+  const nonContent: Iterable<{remove(): void}> = doc.querySelectorAll(
+    'script, style, noscript, template',
+  );
+  for (const el of nonContent) {
+    el.remove();
+  }
+  const rawText: string = doc.body?.textContent ?? doc.textContent ?? '';
+  const text = rawText.replace(/\s+/g, ' ').trim();
+  return `${text}\n\n_Source: ${url}_`;
 }
 
 // ---------------------------------------------------------------------------
