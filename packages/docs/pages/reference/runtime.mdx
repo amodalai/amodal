@@ -215,7 +215,7 @@ After compaction (context at 52%):
   [turn 5: current message]                                  ← current
 ```
 
-Compaction is transparent to the user. They do not see it happen. The agent retains the key facts from earlier turns and can reference them — it just loses the exact wording and tool call details of older exchanges. For most conversations, this works well. For very long investigations where exact details from early turns matter, consider loading key findings into the knowledge base (via `propose_knowledge`) so they survive compaction.
+Compaction is transparent to the user. They do not see it happen. The agent retains the key facts from earlier turns and can reference them — it just loses the exact wording and tool call details of older exchanges. For most conversations, this works well. For very long investigations where exact details from early turns matter, write those findings to a [store](/guide/stores) so they survive compaction and can be queried on demand from later turns.
 
 ### Idle and Expiry
 

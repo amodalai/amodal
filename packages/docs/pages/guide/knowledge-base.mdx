@@ -6,7 +6,7 @@ description: Knowledge documents in knowledge/ teach the agent about your domain
 
 The knowledge base is what turns a general-purpose reasoning engine into *your* agent. Without knowledge, the agent is smart but uninformed — it can follow methodologies and call APIs, but it does not know that your payments service spikes every Friday at payroll time, or that the `svc-deploy` service account triggers brute-force alerts every time CI runs, or that your team prefers Slack over email for P1 escalations.
 
-Knowledge documents live in `knowledge/` as Markdown files. They encode everything the agent needs to know about your specific environment, your baselines, your team, and the patterns you have learned from past experience. And because the agent can propose knowledge updates through `propose_knowledge`, the knowledge base grows smarter with every investigation. This is the compounding asset — the flywheel that makes the agent more valuable the longer you use it.
+Knowledge documents live in `knowledge/` as Markdown files. They encode everything the agent needs to know about your specific environment, your baselines, your team, and the patterns you have learned from past experience. Each document is loaded into the agent's system prompt at session start, so everything in `knowledge/` is available on every turn without the agent having to look anything up. You grow the knowledge base by editing files directly — either in your editor or through the [admin agent](/guide/admin-agent), which can search, read, and edit knowledge docs through its file tools.
 
 ```
 knowledge/
@@ -247,150 +247,30 @@ correlates with a pipeline run in GitHub Actions.
 is NOT in the known list, investigate normally.
 ```
 
-## Loading Strategy
+## How Knowledge Enters Context
 
-The agent does not load every knowledge document into context at the start of a session. That would waste context window space on documents that may never be relevant. Instead, the agent uses a two-phase loading strategy.
+All knowledge documents are loaded into the agent's system prompt at session start. No on-demand loading, no tool call, no "which doc should I fetch" decision by the agent — it sees everything in `knowledge/` from turn one. Sub-agents dispatched via `dispatch_task` see the same knowledge: they share the parent's context compiler.
 
-### Phase 1: The KB Index
+This keeps the agent's reasoning simple. A user asks about elevated error rates on payments-api, and the agent already knows the baseline, the deployment windows, the known patterns, and the team directory — no lookup turn, no fetch decision. Straight to reasoning.
 
-At session start, the agent receives a compact index of all available knowledge documents. For a deployment with 20 documents, this index is roughly 400 tokens — a tiny fraction of the context window. The index looks like this:
+### The context budget
 
-```
-Available knowledge documents:
-- environment: Production Environment — service architecture, data stores,
-  infrastructure, external dependencies, deployment windows
-- baselines: Service Baselines — request rates, error rates, latency,
-  resource utilization by service with time-of-day patterns
-- patterns: Known Patterns — deployment-induced spikes, Stripe latency
-  propagation, Monday auth storms, connection pool exhaustion, CI/CD
-  false positives
-- false-positives: Known False Positives — CI/CD service accounts,
-  vulnerability scanner IPs, scheduled maintenance windows
-- team: Team Directory — contacts, on-call rotations, escalation
-  preferences, timezone coverage
-- response-procedures: Incident Response SOPs — severity classification,
-  escalation paths, communication templates, post-mortem process
-```
+Eager loading works because realistic knowledge bases are small. A deployment with 20 moderate-length knowledge docs fits comfortably in a few thousand tokens. At that scale, the simplicity of "everything in context" wins over on-demand loading.
 
-This index gives the agent enough information to know *which* documents to load, without consuming context on the full content.
+If your knowledge base grows past ~50K tokens and starts crowding the context window, the right fix is usually to **split by session type** (separate agent repos or different `userContext` blocks per persona) rather than adding retrieval. Retrieval adds a lookup hop that every investigation has to pay, and that cost compounds across turns.
 
-### Phase 2: On-Demand Loading
+## Growing the Knowledge Base
 
-When the agent needs specific knowledge, it calls `load_knowledge` to pull the full document into context. This happens naturally during investigation:
+Knowledge docs are source files. You grow the knowledge base by **writing to the files**:
 
-1. User asks about elevated error rates on payments-api.
-2. Agent loads `baselines` to understand what "normal" looks like for payments-api.
-3. Baselines show the error rate threshold is 0.05%. Current rate is 0.3% — clearly elevated.
-4. Agent loads `patterns` to check if this matches a known pattern.
-5. The timing correlates with a deploy. Pattern match: "Deployment-Induced Error Spikes."
-6. But the spike has lasted 8 minutes, well beyond the 2-3 minute window for deployment noise. The pattern doc says to escalate to deployment verification.
+1. **In your editor.** Treat knowledge docs like any other source code — version them in git, review them in PRs, roll them back when they're wrong.
+2. **Through the admin agent.** Run `amodal dev` and open the admin chat at `/config/chat`. The admin agent has file tools (`grep_repo_files`, `read_repo_file`, `edit_repo_file`) scoped to `knowledge/` and other config directories. Describe the update in natural language; it finds the right file and edits it. See [Admin Agent](/guide/admin-agent).
 
-The agent loaded 2 out of 6 documents — only the ones it needed. The environment doc, team directory, false positives doc, and response procedures stayed out of context entirely. For a complex investigation, the agent might load 4-5 documents. It almost never needs all of them.
+### Capturing findings mid-investigation
 
-### Task Agent Loading
+If you want the agent to record findings as it goes (new patterns it discovers, baselines it refines, false positives it identifies) — use a [store](/guide/stores). Stores are structured, queryable, and grow indefinitely. Knowledge docs are narrative and opinionated; stores are data. The pattern is:
 
-Task agents load knowledge independently. When the primary agent dispatches a task agent to "check if this matches a known false positive," the task agent loads the `false-positives` document into its own context, does the comparison, and returns a summary. The primary agent never sees the full false positives list — it just gets "this matches the CI/CD service account pattern" or "no match found." This is context isolation in action.
+- **Knowledge doc** — stable guidance, written by humans (or admin agent): "Deployment-Induced Error Spikes last 2–3 min and concentrate on newly-deployed endpoints."
+- **Store** — session-by-session records, written by the agent: a `findings` store with one document per incident, containing the agent's observations and resolutions.
 
-## Learning Flywheel in Practice
-
-The knowledge base is not static. The agent proposes updates through `propose_knowledge`, and those updates go through an approval process before being committed. Over time, the knowledge base grows to reflect the real patterns and context of your environment — things that no one would think to document upfront but that become obvious through daily operations.
-
-Here is a concrete example of the flywheel in action:
-
-### Week 1: Initial Investigation
-
-A user asks the agent to investigate elevated 5xx errors on the auth-service. The agent loads baselines, checks patterns, and finds no match. After dispatching task agents to gather metrics and logs, it determines that the errors are caused by a third-party SSO provider (Okta) experiencing intermittent timeouts. The errors are real but not caused by anything on the company's side.
-
-The agent resolves the investigation and proposes a knowledge update:
-
-```
-propose_knowledge({
-  action: "create",
-  category: "patterns",
-  title: "Okta Timeout Propagation",
-  content: `
-    **What it looks like:** auth-service 5xx error rate increases by 2-5x.
-    Errors are concentrated in the /sso/callback endpoint.
-    **Root cause:** Okta is experiencing elevated latency or intermittent
-    failures. auth-service has a 5-second timeout on Okta calls; when Okta
-    responds slowly, these timeout and return 503 to the client.
-    **How to identify:** Check if the error spike is isolated to SSO-related
-    endpoints. Query Okta status (status.okta.com) or check Okta admin
-    dashboard for system health.
-    **Action:** If Okta has an active incident, no action on our side.
-    Notify the Identity team. Consider temporarily increasing the Okta
-    timeout if the errors are causing user-facing impact.
-  `,
-  reason: "Discovered during investigation on 2026-03-15. Auth-service errors
-    were caused by Okta timeouts. This pattern was not previously documented."
-})
-```
-
-### Week 1: Admin Review
-
-The admin receives the proposal and reviews the content, makes a small edit (adding the specific Okta endpoint that was slow), and approves it. The pattern is now part of the knowledge base.
-
-### Week 3: Faster Resolution
-
-The same pattern recurs — auth-service 5xx errors spike. This time, the agent loads the patterns document and immediately finds the "Okta Timeout Propagation" match. Instead of a 15-minute investigation with multiple task agent dispatches, the agent identifies the pattern in under a minute:
-
-*"The auth-service error spike matches the Okta Timeout Propagation pattern. Errors are concentrated in /sso/callback, consistent with Okta latency issues. Checking Okta status... Okta is reporting degraded performance on their authentication endpoints. No action needed on our side. I've notified the Identity team in #identity-eng."*
-
-What took 15 minutes the first time now takes 60 seconds. That is the flywheel.
-
-## Approval Policies
-
-Not all knowledge updates carry the same risk. A new entry in `working_memory` (the agent's own notes) is low-stakes. A change to `methodology` (how the agent reasons about problems) is high-stakes. Approval policies let you match the review level to the risk.
-
-### Auto-Approve
-
-Categories where the agent should be free to update without human review:
-
-- **working_memory** — The agent's own persistent context. Notes about ongoing investigations, user preferences it has learned, bookmarks for later. Low risk: if the agent writes something wrong, it only affects itself.
-- **incident_history** — Session summaries and resolution records. The agent documents what happened and how it was resolved. Low risk: these are records of fact, not instructions.
-
-### Manual Review
-
-Categories where a human should verify before the update takes effect:
-
-- **patterns** — New patterns affect how the agent classifies future alerts. A bad pattern (e.g., marking a real attack signature as a false positive) could cause the agent to dismiss genuine threats. Medium-high risk.
-- **baselines** — Baseline changes affect the agent's definition of "normal." If the agent incorrectly updates a baseline (e.g., deciding that a 1% error rate is normal when it is actually a slow-burning issue), it will fail to flag real problems. Medium-high risk.
-- **methodology** — Changes to how the agent interprets data or reasons about findings. High risk: a methodology change affects every future investigation.
-- **response_procedures** — SOPs and escalation paths. High risk: a bad change could route incidents to the wrong team or skip critical steps.
-
-### Configuration
-
-Approval policies are configured per deployment. A typical configuration:
-
-```json
-{
-  "approvalPolicies": {
-    "working_memory": "auto",
-    "incident_history": "auto",
-    "false_positives": "review",
-    "patterns": "review",
-    "baselines": "review",
-    "methodology": "review",
-    "response_procedures": "review",
-    "environment": "review",
-    "team": "review"
-  }
-}
-```
-
-When a category is set to `"review"`, proposals enter a review queue. Admins can approve, edit and approve, or reject each proposal. Rejected proposals include a reason that feeds back to the agent so it can learn what kind of updates are and are not appropriate.
-
-## On-Demand Loading
-
-The agent starts each session with a **compact KB index** (~400 tokens for ~20 docs). Full documents are loaded via `load_knowledge` only when needed. Task agents load their own docs independently.
-
-## Learning Flywheel
-
-The agent proposes knowledge updates via `propose_knowledge`:
-
-1. Agent discovers something the KB doesn't know
-2. Proposes an update (new doc or edit)
-3. Goes through approval policy (manual review or auto-approve per category)
-4. Next session starts smarter
-
-Configure approval policies in your deployment configuration.
+Every N weeks, someone (human or admin agent) reviews the store, promotes recurring findings into knowledge docs, and archives the originals. That's the flywheel — no runtime approval queue, just the normal source-control loop.

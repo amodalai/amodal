@@ -30,23 +30,21 @@ The mask operates on a priority system:
 2. Older outputs with summaries already incorporated are candidates for removal
 3. Large raw JSON responses are first to be pruned
 
-## On-Demand Knowledge Loading
+## Eager Knowledge Loading
 
-The agent starts with a **compact KB index** (~400 tokens for ~20 docs) rather than loading all knowledge upfront. Full documents are loaded via `load_knowledge` only when needed.
+All knowledge documents in `knowledge/` are loaded into the system prompt at session start. No on-demand fetch, no "which doc should I load" decision turn — the agent sees everything from turn one. This keeps reasoning simple: a user asks about payments-api and the agent already knows the baseline, the patterns, and the team directory without spending a turn on lookup.
 
 ```
-Prompt: [KB Index — 400 tokens]
-  - system_docs/datadog: "Datadog API endpoints and authentication"
-  - methodology/error-rates: "Error rate interpretation thresholds"
-  - patterns/maintenance-windows: "Known maintenance window schedules"
-  ...
-
-Agent: "I need the Datadog API docs"
-→ load_knowledge("system_docs/datadog")
-→ Full document loaded into context (2K tokens)
+System prompt: [full knowledge docs inline — 3-8K tokens typical]
+  knowledge/environment.md: Production environment...
+  knowledge/baselines.md: Service baselines...
+  knowledge/patterns.md: Known patterns...
+  knowledge/team.md: Team directory...
 ```
 
-Task agents load their own KB docs independently — the primary agent's context is unaffected.
+Sub-agents share the parent's context compiler, so they also start with full knowledge loaded.
+
+This works because realistic knowledge bases are small (~20 docs, a few thousand tokens total). If your knowledge base starts to crowd the context window, split by session type (separate repos or personas) rather than adding retrieval — lookup turns compound across every investigation and the cost outweighs the context savings.
 
 ## Loop Detection
 

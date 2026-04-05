@@ -1,0 +1,114 @@
+---
+description: The runtime event bus — server-level state changes streamed to clients over SSE without polling.
+---
+
+# Runtime Event Bus
+
+The runtime publishes server-level state changes (sessions created/updated, automations triggered/completed, store writes, config reloads) as events. Clients subscribe once to `GET /api/events` via SSE and react in real time — no polling.
+
+This is **separate from the chat SSE stream**. Chat responses use the per-session streaming protocol (`text_delta`, `tool_call_start`, `done`, etc. — see [State Machine](/learn/architecture/state-machine)). Runtime events are cross-session, cross-cutting server state.
+
+## Subscribe
+
+```ts
+const events = new EventSource('/api/events')
+
+events.addEventListener('message', (e) => {
+  const event = JSON.parse(e.data)
+  // { seq: 42, timestamp: "2026-04-05T14:00:00Z", type: "session_created", sessionId: "...", appId: "local" }
+})
+```
+
+A comment-line heartbeat is sent every 15s to prevent proxies (nginx, Cloudflare) from closing the connection during quiet periods.
+
+## Reconnect-and-resume
+
+Every event carries a monotonic `seq` number. The runtime keeps a ring buffer of recent events (default 500) so clients that miss a batch during a reconnect can catch up.
+
+`EventSource` automatically sends `Last-Event-ID` on reconnect with the `seq` of the last event it received. The server replays any buffered events with `seq > Last-Event-ID` before streaming live events. Clients that track this themselves can send the header manually:
+
+```
+GET /api/events HTTP/1.1
+Last-Event-ID: 42
+```
+
+Events older than the buffer's cutoff are dropped — if a client is offline long enough that the buffer wraps, it gets live events only. The runtime logs `events_replay_overrun` when that happens.
+
+## Event catalog
+
+### Session events
+
+| Type | Fields | When |
+|------|--------|------|
+| `session_created` | `sessionId`, `appId` | A new session was created (chat, admin, automation). |
+| `session_updated` | `sessionId`, `appId`, `title?` | A session was persisted — new message, title change, or metadata update. |
+| `session_deleted` | `sessionId` | A session was deleted via the API. |
+
+### Automation events
+
+| Type | Fields | When |
+|------|--------|------|
+| `automation_triggered` | `name`, `source` | Automation run starting. `source` is `"cron"`, `"webhook"`, or `"manual"`. |
+| `automation_completed` | `name`, `durationMs` | Automation finished successfully. |
+| `automation_failed` | `name`, `error`, `durationMs` | Automation threw during the agent loop. |
+| `automation_started` | `name`, `intervalMs` | A cron automation was registered (on startup or via `amodal ops automations resume`). |
+| `automation_stopped` | `name` | A cron automation was paused. |
+
+### Delivery events
+
+| Type | Fields | When |
+|------|--------|------|
+| `delivery_succeeded` | `automation`, `targetType`, `targetUrl?`, `httpStatus?`, `durationMs` | A delivery target accepted the payload. |
+| `delivery_failed` | `automation`, `targetType`, `targetUrl?`, `httpStatus?`, `error`, `attempts` | Delivery failed after retries. |
+
+### Store events
+
+| Type | Fields | When |
+|------|--------|------|
+| `store_updated` | `storeName`, `operation`, `count?` | A document was written, deleted, or batch-written. `operation` is `"put"`, `"delete"`, or `"batch"`. |
+
+### Config events
+
+| Type | Fields | When |
+|------|--------|------|
+| `manifest_changed` | — | The agent manifest (connections, skills, automations) was reloaded from disk. `amodal dev` emits this on file changes. |
+| `files_changed` | `path?` | A file in the agent repo was touched. `amodal dev` watches for these to trigger hot reload. |
+
+## Types
+
+All events carry `seq`, `timestamp`, and `type` fields plus the event-specific payload. The full type union is exported from `@amodalai/types`:
+
+```ts
+import type { RuntimeEvent, RuntimeEventType } from '@amodalai/types'
+
+function handleEvent(event: RuntimeEvent) {
+  switch (event.type) {
+    case 'session_created':
+      // event.sessionId, event.appId
+      break
+    case 'automation_completed':
+      // event.name, event.durationMs
+      break
+    // ...
+    default: {
+      const _exhaustive: never = event
+      throw new Error(`unhandled event: ${String(_exhaustive)}`)
+    }
+  }
+}
+```
+
+## When to use events vs. polling
+
+Use the event bus for **reactive UI updates** — anywhere your UI would otherwise poll every N seconds:
+
+- Session list that updates when a new chat starts
+- Automation status page showing live triggered/completed state
+- Store-backed dashboards that refresh on write
+- Config/manifest hot-reload indicators
+
+Use HTTP requests for **point-in-time queries** — fetching session history, running an ad-hoc automation, reading a store document. The event bus signals that state changed; you still need the REST API to fetch the new state.
+
+## Source
+
+The event bus lives in `packages/runtime/src/events/event-bus.ts`. Internal runtime components emit events (session manager on create/update/delete, proactive runner on automation lifecycle, store backend wrapper on writes, config watcher on file changes). The bus fans events out to all SSE subscribers with sequence numbering and replay buffering.

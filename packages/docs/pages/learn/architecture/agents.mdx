@@ -39,17 +39,18 @@ Task agents can dispatch sub-task agents (depth 2). Depth 3 is rare. Depth 4+ is
 
 ## Task Agent Capabilities
 
-Task agents get a focused set of tools:
+Task agents inherit the parent's tool registry by default but are typically dispatched with a narrowed subset via `dispatch_task({toolSubset: [...]})`:
 
-| Tool | Available |
+| Tool | Available to sub-agents |
 |------|-----------|
 | `request` (read-only) | Yes |
-| `shell_exec` | Yes |
-| `load_knowledge` | Yes |
-| `dispatch` (sub-tasks) | Yes (depth limited) |
-| `present` (widgets) | No |
-| `propose_knowledge` | No |
-| Skills | No |
+| `query_store` | Yes |
+| `write_<store>` | Yes (for automations with `writeEnabled: true`) |
+| `dispatch_task` (nested sub-tasks) | Yes (depth limited) |
+| `present` (widgets) | Usually filtered out — sub-agents return summaries, not widgets |
+| Custom tools | Yes (whichever ones the dispatcher includes in `toolSubset`) |
+| MCP tools | Yes (same rule) |
+| Skills | Not applicable — sub-agents have a task prompt, not an agent loop with skills |
 
 Task agents produce **200-500 token summaries** from 8-15K of processed data. The primary agent reasons about these summaries, not the raw data.
 

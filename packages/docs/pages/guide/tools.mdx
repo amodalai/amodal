@@ -4,9 +4,9 @@ description: Custom tools with handler code — define parameters, confirmation 
 
 # Tools
 
-Tools are how the agent interacts with the world beyond conversation. They make API calls, run scripts, create tickets, send messages, and perform any action your product needs. The tool system has two layers: built-in tools that ship with every Amodal agent, and custom tools that you define for your specific business logic.
+Tools are how the agent interacts with the world beyond conversation. They make API calls, query stores, dispatch sub-agents, create tickets, send messages, and perform any action your product needs. The tool system has two layers: built-in tools that ship with every Amodal agent, and custom tools that you define for your specific business logic.
 
-Built-in tools handle the universal operations — making authenticated HTTP requests, loading knowledge, dispatching task agents, rendering widgets. You never define these; they are always available. Custom tools are where you encode your business-specific actions: creating a Jira ticket with your project's fields, calculating a weighted pipeline score with your formula, triggering a deploy through your CI system. The split is intentional. Built-in tools give the agent its core capabilities. Custom tools give it *your* capabilities.
+Built-in tools handle the universal operations — making authenticated HTTP requests, reading and writing stores, dispatching sub-agents, rendering widgets. You never define these; they are always available. Custom tools are where you encode your business-specific actions: creating a Jira ticket with your project's fields, calculating a weighted pipeline score with your formula, triggering a deploy through your CI system. The split is intentional. Built-in tools give the agent its core capabilities. Custom tools give it *your* capabilities.
 
 ```
 tools/
@@ -19,20 +19,70 @@ tools/
 
 ## Built-in Tools
 
-These are always available — you don't define them:
+These are always available — you don't define them. They appear in the agent's tool list automatically whenever their prerequisites are met (a connection exists, a store is configured, etc.).
 
-| Tool | What It Does |
-|------|-------------|
-| **request** | HTTP calls to connected systems with automatic auth. Declares `intent: 'read' \| 'write'`. |
-| **shell_exec** | Run scripts in the configured sandbox environment. |
-| **load_knowledge** | Pull KB documents into context on demand. |
-| **propose_knowledge** | Propose knowledge base updates. |
-| **present** | Render widgets: entity-card, timeline, data-table, score-breakdown, metric, info-card, etc. |
-| **dispatch** | Delegate work to task agents with isolated context. |
-| **explore** | Query connected systems and gather context. |
-| **store_\*** | Auto-generated from [store definitions](/guide/stores). |
+| Tool | Registered when | What It Does |
+|------|----------------|--------------|
+| **request** | ≥1 connection defined | HTTP calls through a connection with automatic auth. Declares `intent: 'read' \| 'write'` for access control. |
+| **query_store** | ≥1 store defined | Read from any configured store — list, filter, paginate. |
+| **write_\<store\>** | ≥1 store defined | Auto-generated per [store](/guide/stores). Write/upsert a single document. |
+| **\<store\>_batch** | ≥1 store defined | Auto-generated per store. Batch-write multiple documents. |
+| **dispatch_task** | always | Spawn a sub-agent with its own isolated state machine. Shares the parent's tools. See [Sub-Agents](/learn/architecture/agents). |
+| **present** | always | Render a widget (info-card, data-table, metric, etc.) as an SSE event for the client to display inline. |
+| **stop_execution** | always | End the current turn cleanly when the agent is done (useful for automations that shouldn't keep talking). |
+| **web_search** | `webTools` block configured | Grounded web search via Gemini Flash + Google Search. Returns a synthesized answer with cited source URLs. See [Web Tools](#web-tools). |
+| **fetch_url** | `webTools` block configured | Fetch and extract the main content of a URL via Gemini urlContext, with a local fetch + Readability fallback for private networks. See [Web Tools](#web-tools). |
+| **MCP tools** | ≥1 MCP server configured | Auto-discovered from each configured MCP server. Tool names are prefixed with the server name. |
 
-Built-in tools are marked with `isBuiltin: true` and `source: 'built-in'`. They appear in the agent's tool list automatically.
+**Admin-only tools** — registered only for admin sessions (`/config/chat` in `amodal dev`), never for regular user chat or automations. See [Admin Agent](/guide/admin-agent) for the full list.
+
+## Web Tools
+
+`web_search` and `fetch_url` give the agent grounded access to the public web. They're opt-in via a `webTools` block in `amodal.json`:
+
+```json
+{
+  "webTools": {
+    "provider": "google",
+    "apiKey": "env:GOOGLE_API_KEY",
+    "model": "gemini-2.5-flash"
+  }
+}
+```
+
+Both tools route through a dedicated Gemini Flash instance with Google Search + urlContext grounding — this works **regardless of the main model provider**. An agent configured to use Anthropic Claude or OpenAI GPT-4o for reasoning can still use `web_search` / `fetch_url`; the search call is proxied to Gemini under the hood. Only the `google` provider is supported today; more providers may be added later.
+
+### web_search
+
+```
+web_search({query: "kubernetes 1.31 deprecations", max_results: 5})
+```
+
+Returns a synthesized answer (up to 2000 tokens) with cited source URLs. `max_results` defaults to 5, capped at 10. The tool description tells the agent to write specific queries — include dates, names, error messages as relevant — since query quality drives answer quality.
+
+### fetch_url
+
+```
+fetch_url({url: "https://example.com/article", prompt: "Extract the API changes"})
+```
+
+Public URLs go through Gemini's urlContext grounding — the model fetches and summarizes the page directly. Private-network URLs (localhost, RFC1918, `.local`) automatically route through a local fetch path with Mozilla Readability extraction.
+
+- Per-hostname rate limit: 10 requests / 60 seconds
+- Local fetch: 10s timeout, 1MB body cap
+- Falls back to local fetch if Gemini urlContext fails
+
+### Error handling
+
+Provider errors are classified by HTTP status so the agent knows whether to retry:
+
+| Status | Tool tells the agent |
+|--------|---------------------|
+| 400 / 401 / 403 | Auth problem — **don't retry**. Check the `GOOGLE_API_KEY` for `webTools`. |
+| 429 | Rate limit / quota exhausted — **don't retry**. |
+| 5xx | Transient — **may retry once**. |
+
+Unexpected errors bubble as `ToolExecutionError`.
 
 ## An End-to-End Example
 

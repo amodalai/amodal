@@ -1,20 +1,29 @@
 ---
-description: Multi-provider LLM support — Anthropic, OpenAI, Google Gemini with automatic failover.
+description: Multi-provider LLM support — Anthropic, OpenAI, Google, Groq, DeepSeek, xAI, Mistral, and more, with automatic failover.
 ---
 
 # Providers
 
-Amodal supports multiple LLM providers with a unified interface, built on the Vercel AI SDK. Switch providers by changing an environment variable — no code changes needed.
+Amodal supports multiple LLM providers with a unified interface, built on the Vercel AI SDK. Switch providers by changing a field in `amodal.json` — no code changes needed.
 
 ## Supported Providers
 
-| Provider | Models | Auth |
-|----------|--------|------|
-| **Anthropic** | Claude Opus, Sonnet, Haiku | `ANTHROPIC_API_KEY` |
-| **OpenAI** | GPT-4o, GPT-4, o1 | `OPENAI_API_KEY` |
-| **Google** | Gemini Pro, Flash | `GOOGLE_API_KEY` |
+| Provider | Models | Auth env var | Notes |
+|----------|--------|--------------|-------|
+| **Anthropic** | Claude Opus, Sonnet, Haiku | `ANTHROPIC_API_KEY` | Native adapter |
+| **OpenAI** | GPT-4o, GPT-4, o1, o3 | `OPENAI_API_KEY` | Native adapter |
+| **Google** | Gemini 2.5 Flash / Pro | `GOOGLE_API_KEY` | Native adapter |
+| **Groq** | Llama 3.3 70B, Kimi-K2 | `GROQ_API_KEY` | OpenAI-compatible — ultra-low latency |
+| **DeepSeek** | deepseek-chat, deepseek-reasoner | `DEEPSEEK_API_KEY` | OpenAI-compatible |
+| **xAI** | Grok-4, Grok-3 | `XAI_API_KEY` | OpenAI-compatible |
+| **Mistral** | Mistral Large, Small | `MISTRAL_API_KEY` | OpenAI-compatible |
+| **Fireworks** | Open-weight models (Llama, Qwen, etc.) | `FIREWORKS_API_KEY` | OpenAI-compatible hosting |
+| **Together** | Open-weight models | `TOGETHER_API_KEY` | OpenAI-compatible hosting |
+| **Bedrock** | Claude, Titan, Llama (AWS) | AWS credentials | Available for eval judges; agent loop coming |
+| **Azure OpenAI** | GPT-4, GPT-4o on Azure | Azure creds | Available for eval judges; agent loop coming |
+| **Custom** | Any OpenAI-compatible endpoint | per-provider | Set `baseUrl` to point at your own inference server |
 
-Additional providers (Bedrock, Azure, DeepSeek, Groq, Mistral, xAI) can be added by installing the corresponding `@ai-sdk/*` package and wiring it into `createProvider()`. The runtime's provider interface is thin.
+OpenAI-compatible providers (Groq, DeepSeek, xAI, Mistral, Fireworks, Together) reuse the OpenAI adapter with a per-provider `baseUrl`. Any additional OpenAI-compatible endpoint works by setting `baseUrl` explicitly in `amodal.json` — no code changes needed.
 
 ## Configuration
 
@@ -29,12 +38,30 @@ amodal dev   # uses Anthropic automatically
 
 ### Explicit config
 
-Specify in `amodal.json`:
+Specify under `models.main` in `amodal.json`:
 
 ```json
 {
-  "provider": "anthropic",
-  "model": "claude-sonnet-4-20250514"
+  "models": {
+    "main": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514"
+    }
+  }
+}
+```
+
+For OpenAI-compatible providers, set `provider` to the provider name and optionally override `baseUrl`:
+
+```json
+{
+  "models": {
+    "main": {
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "apiKey": "env:GROQ_API_KEY"
+    }
+  }
 }
 ```
 

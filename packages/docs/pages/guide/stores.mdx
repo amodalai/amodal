@@ -130,8 +130,19 @@ Configured in `amodal.json`:
 
 | Backend | Description |
 |---------|-------------|
-| `pglite` | SQLite-compatible, in-memory or file-backed (default) |
-| `postgres` | PostgreSQL via `postgresUrl` |
+| `pglite` | In-process WASM build of Postgres. Runs embedded in the runtime, file-backed at `dataDir` or in-memory. Default for `amodal dev` — zero external dependencies. |
+| `postgres` | Real Postgres server via the `postgresUrl` field (supports `env:DATABASE_URL` substitution). Use for hosted runtimes and ISV production deployments. |
+
+Both backends use [Drizzle ORM](https://orm.drizzle.team) internally against the same schema, so switching between them is a pure config change — no migration scripts, no data-shape differences. Start with `pglite` locally, move to `postgres` when you need durability / shared state across processes.
+
+```json
+{
+  "stores": {
+    "backend": "postgres",
+    "postgresUrl": "env:DATABASE_URL"
+  }
+}
+```
 
 ## History & Tracing
 

@@ -40,7 +40,7 @@ export default defineConfig({
         },
       },
       fontSize: {
-        root: '13px',
+        root: '14px',
       },
       content: {
         horizontalPadding: '48px',
@@ -88,166 +88,71 @@ export default defineConfig({
       ],
     },
     {
+      text: 'Agent Repo',
+      items: [
+        { text: 'amodal.json', link: '/guide/config' },
+        { text: 'Connections', link: '/guide/connections' },
+        { text: 'Skills', link: '/guide/skills' },
+        { text: 'Knowledge Base', link: '/guide/knowledge-base' },
+        { text: 'Stores', link: '/guide/stores' },
+        { text: 'Tools', link: '/guide/tools' },
+        { text: 'MCP Servers', link: '/guide/mcp' },
+        { text: 'Automations', link: '/guide/automations' },
+        { text: 'Pages', link: '/guide/pages' },
+        { text: 'Evals', link: '/guide/evals' },
+      ],
+    },
+    {
+      text: 'Operating',
+      items: [
+        { text: 'Providers', link: '/guide/providers' },
+        { text: 'Admin Agent', link: '/guide/admin-agent' },
+        { text: 'Security & Guardrails', link: '/guide/security' },
+        { text: 'Agents (Prompt Overrides)', link: '/guide/agents' },
+        { text: 'Engineering Standards', link: '/guide/engineering-standards' },
+      ],
+    },
+    {
       text: 'CLI',
       items: [
-        {
-          text: 'Overview',
-          link: '/cli',
-        },
-        {
-          text: 'init',
-          link: '/cli/init',
-        },
-        {
-          text: 'dev',
-          link: '/cli/dev',
-        },
-        {
-          text: 'chat',
-          link: '/cli/chat',
-        },
-        {
-          text: 'eval',
-          link: '/cli/eval',
-        },
-        {
-          text: 'connect & sync',
-          link: '/cli/connect',
-        },
+        { text: 'Overview', link: '/cli' },
+        { text: 'init', link: '/cli/init' },
+        { text: 'dev', link: '/cli/dev' },
+        { text: 'chat', link: '/cli/chat' },
+        { text: 'eval', link: '/cli/eval' },
+        { text: 'connect & sync', link: '/cli/connect' },
       ],
-    },
-    {
-      text: 'Agent Configuration',
-      items: [
-        {
-          text: 'amodal.json',
-          link: '/guide/config',
-        },
-        {
-          text: 'Connections',
-          link: '/guide/connections',
-        },
-        {
-          text: 'Skills',
-          link: '/guide/skills',
-        },
-        {
-          text: 'Tools',
-          link: '/guide/tools',
-        },
-        {
-          text: 'Knowledge Base',
-          link: '/guide/knowledge-base',
-        },
-        {
-          text: 'Stores',
-          link: '/guide/stores',
-        },
-        {
-          text: 'Pages',
-          link: '/guide/pages',
-        },
-        {
-          text: 'Automations',
-          link: '/guide/automations',
-        },
-        {
-          text: 'Evals',
-          link: '/guide/evals',
-        },
-        {
-          text: 'Agents (Prompt Overrides)',
-          link: '/guide/agents',
-        },
-        {
-          text: 'MCP Servers',
-          link: '/guide/mcp',
-        },
-        {
-          text: 'Security & Guardrails',
-          link: '/guide/security',
-        },
-        {
-          text: 'Engineering Standards',
-          link: '/guide/engineering-standards',
-        },
-      ],
-    },
-    {
-      text: 'Providers',
-      link: '/guide/providers',
     },
     {
       text: 'React SDK',
       items: [
-        {
-          text: 'Overview',
-          link: '/sdk',
-        },
-        {
-          text: '@amodalai/react',
-          link: '/sdk/react',
-        },
-        {
-          text: 'Chat Widget',
-          link: '/sdk/chat-widget',
-        },
+        { text: 'Overview', link: '/sdk' },
+        { text: '@amodalai/react', link: '/sdk/react' },
+        { text: 'Chat Widget', link: '/sdk/chat-widget' },
       ],
     },
     {
-      text: 'Learn',
+      text: 'How It Works',
       items: [
-        {
-          text: 'What is an agent?',
-          link: '/learn/what-is-an-agent',
-        },
-        {
-          text: 'FAQ',
-          link: '/learn/faq',
-        },
+        { text: 'What is an agent?', link: '/learn/what-is-an-agent' },
+        { text: 'The Core Loop', link: '/learn/architecture/core-loop' },
+        { text: 'State Machine', link: '/learn/architecture/state-machine' },
+        { text: 'Agent Architecture', link: '/learn/architecture/agents' },
+        { text: 'Context Management', link: '/learn/architecture/context' },
+        { text: 'FAQ', link: '/learn/faq' },
       ],
-    },
-    {
-      text: 'Architecture',
-      items: [
-        {
-          text: 'The Core Loop',
-          link: '/learn/architecture/core-loop',
-        },
-        {
-          text: 'State Machine',
-          link: '/learn/architecture/state-machine',
-        },
-        {
-          text: 'Agent Architecture',
-          link: '/learn/architecture/agents',
-        },
-        {
-          text: 'Context Management',
-          link: '/learn/architecture/context',
-        },
-        {
-          text: 'Architecture Decisions',
-          link: '/learn/architecture/decisions',
-        },
-      ],
-    },
-    {
-      text: 'Use Cases',
-      link: 'https://www.amodalai.com/blog',
     },
     {
       text: 'Reference',
       items: [
-        {
-          text: 'Architecture Overview',
-          link: '/reference/architecture',
-        },
-        {
-          text: 'Runtime Server',
-          link: '/reference/runtime',
-        },
+        { text: 'Architecture Overview', link: '/reference/architecture' },
+        { text: 'Runtime Server', link: '/reference/runtime' },
+        { text: 'Event Bus', link: '/reference/events' },
       ],
+    },
+    {
+      text: 'Use Cases (blog)',
+      link: 'https://www.amodalai.com/blog',
     },
   ],
   redirects: [
