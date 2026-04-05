@@ -104,7 +104,6 @@ export default defineConfig({
     },
     {
       text: 'Operating',
-      collapsed: true,
       items: [
         { text: 'Providers', link: '/guide/providers' },
         { text: 'Admin Agent', link: '/guide/admin-agent' },
@@ -115,7 +114,6 @@ export default defineConfig({
     },
     {
       text: 'CLI',
-      collapsed: true,
       items: [
         { text: 'Overview', link: '/cli' },
         { text: 'init', link: '/cli/init' },
@@ -127,7 +125,6 @@ export default defineConfig({
     },
     {
       text: 'React SDK',
-      collapsed: true,
       items: [
         { text: 'Overview', link: '/sdk' },
         { text: '@amodalai/react', link: '/sdk/react' },
@@ -136,7 +133,6 @@ export default defineConfig({
     },
     {
       text: 'How It Works',
-      collapsed: true,
       items: [
         { text: 'What is an agent?', link: '/learn/what-is-an-agent' },
         { text: 'The Core Loop', link: '/learn/architecture/core-loop' },
@@ -147,26 +143,16 @@ export default defineConfig({
       ],
     },
     {
-      text: 'Use Cases (blog)',
-      link: 'https://www.amodalai.com/blog',
+      text: 'Reference',
+      items: [
+        { text: 'Architecture Overview', link: '/reference/architecture' },
+        { text: 'Runtime Server', link: '/reference/runtime' },
+        { text: 'Event Bus', link: '/reference/events' },
+      ],
     },
     {
-      text: 'Reference',
-      collapsed: true,
-      items: [
-        {
-          text: 'Architecture Overview',
-          link: '/reference/architecture',
-        },
-        {
-          text: 'Runtime Server',
-          link: '/reference/runtime',
-        },
-        {
-          text: 'Event Bus',
-          link: '/reference/events',
-        },
-      ],
+      text: 'Use Cases (blog)',
+      link: 'https://www.amodalai.com/blog',
     },
   ],
   redirects: [
