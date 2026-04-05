@@ -944,10 +944,13 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
   }, TIMEOUT);
 
   it('emits automation_triggered and automation_completed on manual run', async () => {
+    // The automation's registered name is derived from the filename
+    // (automations/test-auto.md → "test-auto"), not the frontmatter.
+    const automationName = 'test-auto';
     const stream = await openEventStream();
     try {
       const runPromise = fetch(
-        `http://localhost:${AGENT_PORT}/automations/test-automation/run`,
+        `http://localhost:${AGENT_PORT}/automations/${automationName}/run`,
         {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -957,7 +960,7 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
       );
 
       const triggered = await stream.waitFor(
-        (e) => e['type'] === 'automation_triggered' && e['name'] === 'test-automation',
+        (e) => e['type'] === 'automation_triggered' && e['name'] === automationName,
         5000,
       );
       expect(triggered['source']).toBeDefined();
@@ -965,7 +968,7 @@ describe.skipIf(!!skipReason)('smoke tests', () => {
       const completed = await stream.waitFor(
         (e) =>
           (e['type'] === 'automation_completed' || e['type'] === 'automation_failed') &&
-          e['name'] === 'test-automation',
+          e['name'] === automationName,
         TIMEOUT,
       );
       expect(completed['type']).toBe('automation_completed');
