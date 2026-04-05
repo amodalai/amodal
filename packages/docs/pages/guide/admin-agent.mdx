@@ -1,0 +1,132 @@
+---
+description: Admin sessions and the file tools the admin agent uses to read, search, and edit agent config files.
+---
+
+# Admin Agent
+
+When you run `amodal dev`, the dev UI exposes a separate **admin chat** at `/config/chat`. Admin chat runs in its own session with its own system prompt — separate from your regular user chat — and has access to a set of file tools that let it read, search, and edit the files in your agent repo. You use it to configure the agent itself: add a connection, write a skill, fix a knowledge doc, delete a stale automation.
+
+Admin sessions are **local-only**. They exist in `amodal dev`, not in hosted runtimes or ISV embeddings. The admin agent's source code lives in the `@amodalai/agent-admin` package and is cached at `~/.amodal/admin-agent/` on first use.
+
+## What makes an admin session different
+
+- **Different system prompt.** The admin agent is an assistant for configuring amodal agents. It knows the file structure (`skills/`, `knowledge/`, `connections/`, etc.), the config schemas, and the common patterns.
+- **File tools.** Nine admin-only tools for navigating and editing the repo. Regular chat sessions never see these.
+- **Path allowlist.** All file operations are scoped to the agent's config directories (`skills/`, `knowledge/`, `connections/`, `stores/`, `pages/`, `automations/`, `evals/`, `agents/`, `tools/`, `amodal_packages/`). Sensitive files (`.env`, `amodal.json`, `package.json`, `pnpm-lock.yaml`, `tsconfig.json`) are blocked.
+- **Read-only packages.** Files under `amodal_packages/` can be read but not written — they're installed from the registry and should be edited by updating the package, not the local copy.
+
+## The nine file tools
+
+The admin agent has tools grouped by purpose: **discovery** (finding what's there), **read/write** (operating on files), and **introspection** (querying the runtime itself).
+
+### Discovery
+
+Use these **before** reading or editing — don't guess paths.
+
+| Tool | When to use |
+|------|-------------|
+| **`grep_repo_files`** | You know a keyword that would appear *inside* the target file. `grep_repo_files({pattern: "emoji"})` is the fastest way to find where formatting rules live. |
+| **`list_repo_files`** | You want to see what exists in a directory (or across all allowlist dirs when `dir` is omitted). Good for "what skills do I have?" style questions. |
+| **`glob_repo_files`** | You want files matching a pattern by name/path structure: `**/SKILL.md`, `connections/*/spec.json`, `knowledge/*.md`. |
+
+**Rule of thumb:** keyword inside the file → grep. File/dir by name → list or glob.
+
+### Read / Write
+
+| Tool | What it does |
+|------|--------------|
+| **`read_repo_file`** | Read a single file. Default returns up to 2000 lines; for longer files set `truncated: true` and include `total_lines` — paginate with `offset` + `limit`. |
+| **`read_many_repo_files`** | Batched read of up to 20 files (50KB each). Good for "review every SKILL.md." |
+| **`edit_repo_file`** | In-place find-and-replace. Default requires exactly one match of `old_string`; set `allow_multiple: true` to replace every occurrence. Use for targeted changes to existing files — preserves everything you don't touch. |
+| **`write_repo_file`** | Create a new file or fully rewrite an existing one. Prefer `edit_repo_file` for targeted changes. |
+| **`delete_repo_file`** | Delete a file. Always confirm with the user first. |
+
+### Introspection
+
+| Tool | What it does |
+|------|--------------|
+| **`internal_api`** | GET any endpoint on the running runtime. Useful for checking eval results (`/api/evals/runs`), connection health (`/inspect/context`), store data, etc. Read-only (GET requests only). |
+
+## The workflow
+
+1. **Discover** — grep for a keyword, or list/glob for structure. Don't guess paths.
+2. **Read** — confirm the file's current content before editing.
+3. **Edit in place** — use `edit_repo_file` for targeted changes. Use `write_repo_file` only for new files or full rewrites.
+4. **Confirm** — tell the user what you changed.
+
+### Example: "Reduce emoji usage in my formatting rules"
+
+```
+# 1. Discover: keyword search beats path-guessing
+grep_repo_files({pattern: "emoji"})
+→ {matches: [{file: "knowledge/formatting-rules.md", line_number: 3, text: "..."}]}
+
+# 2. Read: confirm current content
+read_repo_file({path: "knowledge/formatting-rules.md"})
+→ {content: "# Formatting Rules 🎨\n\nUse emojis liberally...", line_start: 1, line_end: 12, total_lines: 12}
+
+# 3. Edit: in-place substitution, not full rewrite
+edit_repo_file({
+  path: "knowledge/formatting-rules.md",
+  old_string: "Use emojis liberally to make the output more engaging",
+  new_string: "Use clear, concise language",
+})
+→ {edited: "knowledge/formatting-rules.md", occurrences: 1, bytes_before: 417, bytes_after: 289}
+```
+
+Three tool calls, done. Before these tools existed, agents guessed paths like `skills/content-analysis/SKILL.md` (doesn't exist) and spent turns flailing.
+
+## Pagination — reading long files
+
+For large files (`amodal_packages/` specs, long lockfiles, generated docs), `read_repo_file` returns at most 2000 lines by default and sets `truncated: true`. Paginate with `offset`:
+
+```
+# First call — default
+read_repo_file({path: "knowledge/incident-history.md"})
+→ {content: "<lines 1-2000>", line_start: 1, line_end: 2000, total_lines: 5432, truncated: true}
+
+# Continue from where we left off
+read_repo_file({path: "knowledge/incident-history.md", offset: 2001})
+→ {content: "<lines 2001-4000>", line_start: 2001, line_end: 4000, total_lines: 5432, truncated: true}
+
+# Last chunk
+read_repo_file({path: "knowledge/incident-history.md", offset: 4001})
+→ {content: "<lines 4001-5432>", line_start: 4001, line_end: 5432, total_lines: 5432}
+```
+
+For targeted reads (I want just line 2500), set `offset` directly — no need to page through everything first.
+
+| Parameter | Default | Max |
+|---|---|---|
+| `offset` | `1` (start) | — |
+| `limit` | `2000` | `10_000` |
+
+## Caps and limits
+
+| Tool | Cap | Behavior |
+|------|-----|----------|
+| `list_repo_files` | 2000 entries | `truncated: true` if exceeded |
+| `glob_repo_files` | 500 files | `truncated: true` if exceeded |
+| `grep_repo_files` | 100 matches | `truncated: true` if exceeded (matches gemini-cli) |
+| `read_repo_file` | 2000 lines default, 10000 max | `truncated: true` if more remain |
+| `read_many_repo_files` | 20 files × 50KB each | `truncated: true` for files cut at byte budget |
+
+`.git`, `node_modules`, and `.DS_Store` are always skipped across discovery tools.
+
+## Customizing the admin agent
+
+The admin agent's source lives in the `@amodalai/agent-admin` package. Override the cached version with a local path in your `amodal.json`:
+
+```json
+{
+  "adminAgent": "/path/to/my/agent-admin"
+}
+```
+
+This is useful for iterating on the admin agent's prompt, skills, or knowledge without republishing the package. The runtime reads directly from the path on every admin-session start.
+
+## When NOT to use the admin agent
+
+- **Regular user workflows.** Admin sessions are for configuring the agent; user chat is for the agent's actual job.
+- **Production deployments.** Admin is local-dev only. Hosted runtimes don't expose it.
+- **Editing files outside the allowlist.** Files at the repo root (`amodal.json`, `package.json`, `.env`) cannot be modified by admin tools — by design. Use your regular editor for those.

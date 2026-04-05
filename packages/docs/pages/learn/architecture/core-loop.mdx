@@ -26,14 +26,14 @@ Not every question needs the full loop. The runtime matches depth to the questio
 
 ## The Compounding Effect
 
-The loop compounds through the knowledge base. Every execution can feed knowledge back via `propose_knowledge`, so the next explore phase starts smarter.
+The loop compounds through stores and knowledge. Every execution can write findings to a [store](/guide/stores) — patterns identified, false positives flagged, baselines updated — so the next explore phase starts with prior context already loaded in.
 
 ```
 Session 1: Explore → slow, everything is new
            Plan    → generic reasoning
-           Execute → discover false positive, propose KB update
+           Execute → discover false positive, write to findings store
 
-Session 50: Explore → fast, KB has patterns and baselines
+Session 50: Explore → fast, stores and KB have patterns and baselines
             Plan    → informed reasoning with historical context
             Execute → focused on novel signals, skip known patterns
 ```

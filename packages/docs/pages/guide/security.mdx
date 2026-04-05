@@ -72,7 +72,7 @@ Roles filter tools and skills **at the SDK layer** — the LLM never sees tools 
 ```json
 {
   "name": "analyst",
-  "tools": ["request", "load_knowledge", "dispatch"],
+  "tools": ["request", "query_store", "dispatch_task"],
   "skills": ["triage", "deep-dive"],
   "automations": { "can_view": true, "can_create": false },
   "constraints": {}

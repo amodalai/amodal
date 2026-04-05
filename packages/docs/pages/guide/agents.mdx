@@ -43,7 +43,7 @@ Checks regulatory compliance across transactions and flags violations.
 
 ## Config
 
-tools: [shell_exec, load_knowledge, dispatch]
+tools: [request, query_store, dispatch_task]
 maxDepth: 2
 maxToolCalls: 15
 timeout: 60
@@ -70,7 +70,7 @@ You are a compliance specialist. When dispatched:
 ---
 displayName: Vendor Lookup
 description: Enriches vendor profiles from CRM and public data
-tools: [shell_exec, load_knowledge]
+tools: [request, query_store]
 maxDepth: 1
 maxToolCalls: 10
 timeout: 30
@@ -91,7 +91,7 @@ Return a standardized vendor profile with:
 |-------|------|---------|-------------|
 | `displayName` | string | directory name | Human-readable name |
 | `description` | string | displayName | Short description |
-| `tools` | string[] | `[shell_exec, load_knowledge]` | Tools this agent can use |
+| `tools` | string[] | inherits parent's tool set | Subset of tools this sub-agent can use when dispatched. Names must exist in the parent's registered tool set. |
 | `maxDepth` | number (1-4) | `1` | Dispatch depth (1 = no sub-agents) |
 | `maxToolCalls` | number (1-100) | `10` | Max tool calls per execution |
 | `timeout` | number (5-600) | `20` | Timeout in seconds |
@@ -109,11 +109,7 @@ Return a standardized vendor profile with:
 
 ### Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `shell_exec` | Run scripts and commands |
-| `load_knowledge` | Pull KB documents into context |
-| `dispatch` | Delegate to sub-task agents (increases depth) |
+Use any tool name registered on the parent's [tool registry](/guide/tools): `request`, `query_store`, `write_<store>`, `dispatch_task`, `present`, `stop_execution`, plus any custom tools or MCP tools. Knowledge is pre-loaded into the sub-agent's context at dispatch time (no `load_knowledge` tool — knowledge comes in the system prompt, same as the primary agent).
 
 ## How Subagents Are Dispatched
 

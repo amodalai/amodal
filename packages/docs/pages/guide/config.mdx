@@ -138,7 +138,7 @@ MCP (Model Context Protocol) servers extend your agent with additional tools bey
 
 The `sandbox` block controls shell execution. When `shellExec` is `true`, the agent can run arbitrary commands. The `template` field specifies which sandbox image to use (pre-configured with your dependencies), and `maxTimeout` caps how long any single command can run.
 
-The `stores` block configures where session data and agent state persist. PGLite (the default) runs an in-process Postgres — no external database needed for development. For production, switch to a real Postgres instance by setting `backend: "postgres"` and providing a `connectionString`.
+The `stores` block configures the database backend used for **both** agent document stores (see [Stores](/guide/stores)) **and** session persistence (conversation history across reconnects). PGLite (the default) runs an in-process WASM build of Postgres — no external database needed for local dev. For hosted runtimes and ISV production deployments, switch to a real Postgres by setting `backend: "postgres"` and providing `postgresUrl` (typically `env:DATABASE_URL`). Both backends share the same Drizzle schema, so switching is a pure config change.
 
 ## Fields
 
@@ -157,7 +157,7 @@ The `stores` block configures where session data and agent state persist. PGLite
 | `description` | string | Agent description. Shown in CLI output. |
 | `userContext` | string | Injected at the top of every session prompt. Standing instructions, company context, behavioral constraints. |
 | `models.explore` | ModelConfig | Model for explore/gather sub-agents. Should be faster and cheaper than `main`. |
-| `sandbox` | object | Sandbox execution config. Controls whether `shell_exec` is available and how it runs. |
+| `sandbox` | object | Sandbox execution config. Controls whether custom tool handlers can call `ctx.exec()` for shell commands, and how sandboxing is enforced. |
 | `stores` | object | Data store backend config. Defaults to PGLite in the local `.amodal/store-data` directory. |
 | `proactive` | object | Webhook URL for external triggers (automation webhooks, third-party integrations). |
 | `mcp` | object | MCP server connections. Each server exposes additional tools to the agent. |

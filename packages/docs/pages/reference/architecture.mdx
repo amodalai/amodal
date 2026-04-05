@@ -74,13 +74,13 @@ See [State Machine](/learn/architecture/state-machine) for the full architecture
 When the model emits tool calls, the state machine enters `executing`. Each tool call runs through the `ToolRegistry` via the Vercel AI `tool()` interface:
 
 - **request**: Calls a connection endpoint. The `PermissionChecker` resolves the connection's `access.json` — check ACL rules, strip hidden fields, apply rate limits, require confirmation for destructive writes.
-- **store_write / store_batch / query_store**: CRUD against the configured store backend (PGLite or Postgres via Drizzle).
+- **query_store / write_\<store\> / \<store\>_batch**: CRUD against the configured store backend (PGLite or Postgres via Drizzle).
 - **dispatch_task**: Spawns a sub-agent with its own isolated state machine, sharing the parent's tools and stores. Returns a compressed summary to the parent's context.
-- **load_knowledge / propose_knowledge**: Reads a KB document on demand, or proposes an addition for human review.
 - **present**: Emits a widget SSE event with structured data for the client to render inline.
-- **Custom tools**: Compiled from each tool's `handler.ts` via esbuild, then executed with a scoped `ctx` containing `request`, `store`, `log`, and `env`.
+- **stop_execution**: Ends the current turn cleanly — useful for automations that shouldn't keep talking after completing their task.
+- **Custom tools**: Compiled from each tool's `handler.ts` via esbuild, then executed with a scoped `ctx` containing `request`, `store`, `exec`, `log`, and `env`.
 - **MCP tools**: Proxied to the MCP server they were discovered from.
-- **Admin file tools** (in admin sessions): `read_repo_file`, `write_repo_file`, `delete_repo_file` with path validation.
+- **Admin file tools** (in admin sessions only): `read_repo_file`, `write_repo_file`, `edit_repo_file`, `delete_repo_file`, `list_repo_files`, `glob_repo_files`, `grep_repo_files`, `read_many_repo_files`, `internal_api` — all allowlist-scoped to the agent's config directories. See [Admin Agent](/guide/admin-agent).
 
 Tool errors are observations the model reasons about — not exceptions that crash the loop. This is the "continue site" pattern: a tool failure becomes a `tool_call_result` with `status: 'error'`, and the model decides what to do next.
 

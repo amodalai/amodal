@@ -160,6 +160,10 @@ export default defineConfig({
           link: '/guide/agents',
         },
         {
+          text: 'Admin Agent',
+          link: '/guide/admin-agent',
+        },
+        {
           text: 'MCP Servers',
           link: '/guide/mcp',
         },
@@ -246,6 +250,10 @@ export default defineConfig({
         {
           text: 'Runtime Server',
           link: '/reference/runtime',
+        },
+        {
+          text: 'Event Bus',
+          link: '/reference/events',
         },
       ],
     },

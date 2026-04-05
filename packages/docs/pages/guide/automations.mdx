@@ -28,7 +28,8 @@ The simplest automation is a prompt and a schedule:
 | `prompt` | string | The message sent to the agent when the automation runs |
 | `schedule` | string | Cron expression (triggers `cron` mode) |
 | `trigger` | `"cron" \| "webhook" \| "manual"` | Trigger type (auto-inferred from `schedule` if present) |
-| `output` | object | Where results are routed: Slack channel, webhook URL, email |
+| `delivery` | object | Where results are routed on success — webhooks and/or ISV callbacks. See [Delivery routing](#delivery-routing). |
+| `failureAlert` | object | Where failure alerts go, with consecutive-failure threshold + cooldown. |
 | `writeEnabled` | boolean | Explicitly allow write operations (default: `false`) |
 
 ## Trigger Types
@@ -49,15 +50,14 @@ A cron automation that runs every weekday morning, pulls revenue data from Strip
 {
   "title": "Daily Revenue Digest",
   "schedule": "0 9 * * 1-5",
-  "prompt": "Pull yesterday's revenue from Stripe (payments) and QuickBooks (invoices). Break down by region (NA, EMEA, APAC) using the customer metadata tags. Compare each region to its 7-day rolling average. Flag any region where revenue deviated more than 15% from the baseline. Include total MRR and net new revenue. Format for Slack.",
-  "output": {
-    "type": "slack",
-    "channel": "#finance-daily"
+  "prompt": "Pull yesterday's revenue from Stripe (payments) and QuickBooks (invoices). Break down by region (NA, EMEA, APAC) using the customer metadata tags. Compare each region to its 7-day rolling average. Flag any region where revenue deviated more than 15% from the baseline. Include total MRR and net new revenue. Format as a concise Slack message.",
+  "delivery": {
+    "targets": [{ "type": "webhook", "url": "env:SLACK_WEBHOOK_REVENUE" }]
   }
 }
 ```
 
-When this runs, the agent gets a fresh session with the prompt as the initial message. It uses the `request` tool to query Stripe's payment intents and QuickBooks' invoice endpoints, dispatches task agents to process each data source in parallel, compiles the summary, and routes it to the configured Slack channel.
+When this runs, the agent gets a fresh session with the prompt as the initial message. It uses the `request` tool to query Stripe's payment intents and QuickBooks' invoice endpoints, dispatches sub-agents to process each data source in parallel, compiles the summary, and the runtime POSTs the formatted result to the Slack incoming webhook URL configured via `SLACK_WEBHOOK_REVENUE` in `.env`.
 
 ### Example 2: Webhook-Triggered Incident Responder
 
@@ -67,17 +67,21 @@ A webhook automation that fires when PagerDuty sends an incident notification. T
 {
   "title": "Incident Responder",
   "trigger": "webhook",
-  "prompt": "A PagerDuty incident was triggered. The event data is below.\n\nInvestigate this incident:\n1. Check Datadog for related metrics and anomalies in the affected service\n2. Search recent deployments in GitHub for changes to the affected service\n3. Check the knowledge base for known issues matching this pattern\n4. Check Slack #incidents for any related discussion\n\nPost your findings to #incident-response with a severity assessment and recommended next steps.\n\n---\nEvent data:\n{{event}}",
-  "output": {
-    "type": "slack",
-    "channel": "#incident-response"
+  "prompt": "A PagerDuty incident was triggered. The event data is in the <event_data> block of this message.\n\nInvestigate this incident:\n1. Check Datadog for related metrics and anomalies in the affected service\n2. Search recent deployments in GitHub for changes to the affected service\n3. Check the knowledge base for known issues matching this pattern\n4. Check Slack #incidents for any related discussion\n\nReturn your findings with a severity assessment and recommended next steps as a concise Slack message.",
+  "delivery": {
+    "targets": [{ "type": "webhook", "url": "env:SLACK_WEBHOOK_INCIDENTS" }]
+  },
+  "failureAlert": {
+    "after": 2,
+    "cooldownMinutes": 15,
+    "targets": [{ "type": "webhook", "url": "env:SLACK_WEBHOOK_ONCALL" }]
   }
 }
 ```
 
-The `{{event}}` placeholder is replaced with the webhook payload at runtime. When PagerDuty sends a POST to the automation's webhook URL, the runtime parses the payload, injects it into the prompt, and starts a fresh agent session.
+When PagerDuty sends a POST to the automation's webhook URL, the runtime parses the payload, appends it to the prompt inside an `<event_data>` block (marked as untrusted input — the agent is explicitly instructed not to follow instructions from inside it), and starts a fresh agent session.
 
-The agent then runs the full explore-plan-execute loop: dispatches task agents to query Datadog, GitHub, and the knowledge base in parallel, synthesizes the findings, and posts a structured incident summary to Slack. The entire process typically takes 30-60 seconds — faster than a human can even open all the relevant dashboards.
+The agent then runs the full loop: dispatches sub-agents to query Datadog, GitHub, and knowledge docs in parallel, synthesizes the findings, and returns a structured incident summary. The runtime POSTs that summary to the `SLACK_WEBHOOK_INCIDENTS` Slack webhook. If two consecutive runs fail, `failureAlert` POSTs to the oncall webhook — with a 15-minute cooldown so a sustained outage doesn't flood the channel.
 
 ### Example 3: Weekly API Drift Detector
 
@@ -87,15 +91,14 @@ A cron automation that compares current API specifications against stored baseli
 {
   "title": "API Drift Detector",
   "schedule": "0 6 * * 1",
-  "prompt": "Run a drift detection pass across all connected APIs.\n\nFor each connection with a spec.json:\n1. Fetch the current API spec from the live endpoint (if discovery URL is configured)\n2. Compare against the stored spec.json in the connection directory\n3. Flag any new endpoints, removed endpoints, changed request/response schemas, or deprecated fields\n4. For each drift, assess the impact: breaking change, additive change, or cosmetic\n\nIf any breaking changes are detected, post an alert to #api-changes with details. Otherwise, post a clean summary.\n\nAlso propose a knowledge base update with any new patterns or deprecations discovered.",
-  "output": {
-    "type": "slack",
-    "channel": "#api-changes"
+  "prompt": "Run a drift detection pass across all connected APIs.\n\nFor each connection with a spec.json:\n1. Fetch the current API spec from the live endpoint (if discovery URL is configured)\n2. Compare against the stored spec.json in the connection directory\n3. Flag any new endpoints, removed endpoints, changed request/response schemas, or deprecated fields\n4. For each drift, assess the impact: breaking change, additive change, or cosmetic\n\nWrite each drift to the drift_history store (keyed by connection + timestamp). Return a Slack-formatted summary — 'All clean' if nothing changed, or a prioritized list of breaking changes if anything did.",
+  "delivery": {
+    "targets": [{ "type": "webhook", "url": "env:SLACK_WEBHOOK_API_CHANGES" }]
   }
 }
 ```
 
-This automation uses `propose_knowledge` to feed its findings back into the knowledge base. Over time, the agent builds up a history of API changes, deprecation patterns, and known quirks — making each subsequent drift check smarter. This is the learning flywheel in action.
+This automation writes findings to a store. Over time, the agent builds up a queryable history of API changes, deprecation patterns, and known quirks — making each subsequent drift check smarter. Stores persist across sessions; the knowledge base gets loaded into context at session start.
 
 ## Webhook Automations
 
@@ -203,16 +206,73 @@ When `writeEnabled` is `true`, the agent can make write calls — but the runtim
 
 Setting `writeEnabled` is a deliberate decision. It shows up in code review. It is audited. There is no way to accidentally grant write access.
 
-### Output Routing
+## Delivery Routing
 
-The primary way automations communicate results is through **output routing** — sending the formatted output to an external channel. This is distinct from the agent taking direct action:
+When an automation completes successfully, the runtime POSTs its final response text to each configured delivery target. Delivery is out-of-band from the agent's tools — the agent doesn't call a "post to slack" tool, the runtime routes the result after the turn ends. This keeps automations **read-only by default** while still letting results reach Slack, webhooks, email (via webhook), or ISV systems.
 
-- **Slack**: Post a message to a channel
-- **Email**: Send a formatted email to a distribution list
-- **Webhook**: POST the output to a URL (for integration with other systems)
-- **Session log**: Store the output in the session log
+### Targets
 
-Output routing is always allowed, even when writes are disabled. Posting a summary to Slack is not a "write" in the Amodal sense — it is output delivery. The distinction is: routing sends a report about what the agent found; writing changes the state of a connected system.
+Two target types:
+
+| Type | Shape | What it does |
+|------|-------|--------------|
+| `webhook` | `{type: "webhook", url: "..."}` | POST the delivery payload to the URL. Supports `env:VAR_NAME` substitution resolved at bundle-load time. |
+| `callback` | `{type: "callback", name?: "..."}` | Invoke the ISV-provided `onAutomationResult` handler registered with `createAgent({onAutomationResult})`. The optional `name` field lets ISVs route to specific handlers when they register several. |
+
+Slack delivery is just `webhook` pointing at a Slack incoming webhook URL. Email delivery works the same via any transactional email provider's webhook (SendGrid, Mailgun, etc.).
+
+### Payload shape
+
+The runtime POSTs a JSON payload to webhook targets:
+
+```json
+{
+  "automation": "daily-revenue-digest",
+  "status": "success",
+  "timestamp": "2026-04-05T14:00:00Z",
+  "result": "<the agent's final response text, max 16KB>",
+  "truncated": false,
+  "message": "<template-rendered string, if template was configured>",
+  "data": { "mrr": 12.4, "growth": "+3.2%" }
+}
+```
+
+`data` is populated automatically when the agent's last assistant message is valid JSON. That parsed object is available to templates.
+
+### Templates
+
+If `delivery.template` is set, the runtime renders it with variables from `data` plus built-ins (`{{automation}}`, `{{timestamp}}`, `{{result}}`). Useful for shaping output per target:
+
+```json
+{
+  "delivery": {
+    "targets": [{ "type": "webhook", "url": "env:SLACK_WEBHOOK" }],
+    "template": "📊 *{{automation}}* — MRR ${{mrr}} ({{growth}})"
+  }
+}
+```
+
+### Failure alerts
+
+`failureAlert` is separate from `delivery` — it fires on failures, with a consecutive-failure threshold and cooldown:
+
+```json
+{
+  "failureAlert": {
+    "after": 3,
+    "cooldownMinutes": 60,
+    "targets": [{ "type": "webhook", "url": "env:PAGERDUTY_WEBHOOK" }]
+  }
+}
+```
+
+`after: 3` means don't page until 3 runs have failed in a row. `cooldownMinutes: 60` means even during a sustained outage, only alert once per hour. Both defaults (`after: 1`, `cooldownMinutes: 60`) err on the side of earlier alerting.
+
+**State is in-memory.** The consecutive-failure counter and last-alert timestamp live on the runtime process. Restarting the runtime resets the counter — a flapping service mid-cooldown may get re-alerted on restart. For hosted runtimes that cycle around deploys, expect occasional alert repetition at deploy boundaries.
+
+### Why delivery lives outside the tool system
+
+Delivery is always allowed, even for automations without `writeEnabled: true`. Posting a summary to Slack isn't a "write" in the amodal sense — it's the runtime reporting what the agent found to the people who configured it. Writing means the agent itself calls a tool that changes external state. Delivery is just how automation results get where they need to go.
 
 ## Managing Automations
 

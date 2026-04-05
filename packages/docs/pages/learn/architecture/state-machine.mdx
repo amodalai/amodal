@@ -120,8 +120,8 @@ The `done` state always carries `reason: DoneReason` and the final `usage`:
 | `max_turns` | The turn budget was exhausted |
 | `user_abort` | The abort signal fired |
 | `error` | An unrecoverable error occurred inside a state handler |
-| `budget_exceeded` | A session token budget was exceeded (reserved — not yet produced) |
-| `loop_detected` | Loop detection hit the hard-stop threshold |
+| `budget_exceeded` | Cumulative token usage hit the session's `maxSessionTokens` cap |
+| `loop_detected` | Loop detection hit the hard-stop threshold (8+ repeated tool calls with similar, non-pagination parameters) |
 
 The final `done` SSE event is yielded **unconditionally** with the accumulated usage — regardless of which reason triggered it. Downstream (audit log, usage reporting, the client) always sees token costs.
 
