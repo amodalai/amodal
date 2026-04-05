@@ -29,7 +29,8 @@ import {readFileSync} from 'node:fs';
 import {z} from 'zod';
 import type {ModelMessage} from 'ai';
 import {StandaloneSessionManager} from '../session/manager.js';
-import {PGLiteSessionStore} from '../session/store.js';
+import {createPGLiteSessionStore} from '../session/pglite-session-store.js';
+import type {DrizzleSessionStore} from '../session/drizzle-session-store.js';
 import {createProvider} from '../providers/create-provider.js';
 import {createToolRegistry} from '../tools/registry.js';
 import {createLogger} from '../logger.js';
@@ -129,12 +130,11 @@ function buildRegistry(): ToolRegistry {
 }
 
 describe.skipIf(activeTargets.length === 0)('e2e', () => {
-  let store: PGLiteSessionStore;
+  let store: DrizzleSessionStore;
   let mgr: StandaloneSessionManager;
 
   beforeAll(async () => {
-    store = new PGLiteSessionStore({logger});
-    await store.initialize();
+    store = await createPGLiteSessionStore({logger});
     mgr = new StandaloneSessionManager({logger, store});
     mgr.start();
   });

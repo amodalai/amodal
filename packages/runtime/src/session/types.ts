@@ -9,10 +9,16 @@
  */
 
 import type {ModelMessage} from 'ai';
+import type {RuntimeEventPayload} from '@amodalai/types';
 import type {TokenUsage, LLMProvider} from '../providers/types.js';
 import type {ToolRegistry, ToolContext} from '../tools/types.js';
 import type {PermissionChecker} from '../security/permission-checker.js';
 import type {Logger} from '../logger.js';
+
+/** Minimal event bus surface the session manager needs. */
+export interface SessionEventBus {
+  emit: (payload: RuntimeEventPayload) => unknown;
+}
 
 // ---------------------------------------------------------------------------
 // Turn usage (reported via onUsage hook)
@@ -198,6 +204,8 @@ export interface SessionManagerOptions {
   defaultMaxContextTokens?: number;
   /** Default token budget per session (default: undefined, no cap) */
   defaultMaxSessionTokens?: number;
+  /** Optional event bus for emitting session lifecycle events */
+  eventBus?: SessionEventBus;
 }
 
 /** Options for creating a new session. */

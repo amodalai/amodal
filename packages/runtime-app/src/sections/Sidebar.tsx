@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { SquarePen, MessageSquare, Database, Zap, FileText, Plug, Sparkles, BookOpen, ChevronRight, Loader2, Cable, Pencil, Trash2 } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
+import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
 import { cn } from '@/lib/utils';
 import type { PageConfig } from 'virtual:amodal-manifest';
 
@@ -227,50 +228,46 @@ export function Sidebar() {
       });
   }, []);
 
-  // Poll automation running state every 3 seconds
-  useEffect(() => {
-    const poll = () => {
-      fetch('/automations')
-        .then((res) => (res.ok ? res.json() : { automations: [] }))
-        .then((data: unknown) => {
-          if (data && typeof data === 'object' && 'automations' in data) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-            const autos = (data as Record<string, unknown>)['automations'] as Array<{name: string; running: boolean; lastRun?: string}>;
-            const running = new Set(autos.filter((a) => a.lastRun && (Date.now() - new Date(a.lastRun).getTime()) < 5000).map((a) => a.name));
-            setRunningAutomations(running);
-            setActiveAutomations(new Set(autos.filter((a) => a.running).map((a) => a.name)));
-          }
-        })
-        .catch(() => {});
-    };
-    poll();
-    const timer = setInterval(poll, 3000);
-    return () => clearInterval(timer);
+  // Fetch automation state (initial + refresh on bus events)
+  const fetchAutomations = useCallback(() => {
+    fetch('/automations')
+      .then((res) => (res.ok ? res.json() : { automations: [] }))
+      .then((data: unknown) => {
+        if (data && typeof data === 'object' && 'automations' in data) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+          const autos = (data as Record<string, unknown>)['automations'] as Array<{name: string; running: boolean; lastRun?: string}>;
+          const running = new Set(autos.filter((a) => a.lastRun && (Date.now() - new Date(a.lastRun).getTime()) < 5000).map((a) => a.name));
+          setRunningAutomations(running);
+          setActiveAutomations(new Set(autos.filter((a) => a.running).map((a) => a.name)));
+        }
+      })
+      .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    let lastJson = '';
-    const fetchSessions = () => {
-      fetch('/sessions')
-        .then((res) => (res.ok ? res.json() : { sessions: [] }))
-        .then((data: unknown) => {
-          const json = JSON.stringify(data);
-          if (json === lastJson) return;
-          lastJson = json;
-          if (data && typeof data === 'object' && 'sessions' in data && Array.isArray((data as Record<string, unknown>)['sessions'])) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-            const all = (data as Record<string, unknown>)['sessions'] as Array<SessionSummary & {automationName?: string}>;
-            // Filter out automation sessions — those show in the automation detail page
-            const EVAL_APP_IDS = new Set(['eval-runner', 'eval-judge', 'admin']);
-            setSessions(all.filter((s) => !s.automationName && !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
-          }
-        })
-        .catch(() => {});
-    };
-    fetchSessions();
-    const timer = setInterval(fetchSessions, 3000);
-    return () => clearInterval(timer);
+  useEffect(() => { fetchAutomations(); }, [fetchAutomations]);
+  useRuntimeEvents(['automation_triggered', 'automation_completed', 'automation_failed'], () => {
+    fetchAutomations();
+  });
+
+  // Fetch session list (initial + refresh on bus events)
+  const fetchSessions = useCallback(() => {
+    fetch('/sessions')
+      .then((res) => (res.ok ? res.json() : { sessions: [] }))
+      .then((data: unknown) => {
+        if (data && typeof data === 'object' && 'sessions' in data && Array.isArray((data as Record<string, unknown>)['sessions'])) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+          const all = (data as Record<string, unknown>)['sessions'] as Array<SessionSummary & {automationName?: string}>;
+          const EVAL_APP_IDS = new Set(['eval-runner', 'eval-judge', 'admin']);
+          setSessions(all.filter((s) => !s.automationName && !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+  useRuntimeEvents(['session_created', 'session_updated', 'session_deleted'], () => {
+    fetchSessions();
+  });
 
   return (
     <aside className="w-[260px] border-r border-border bg-card flex flex-col shrink-0 overflow-hidden">

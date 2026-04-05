@@ -966,6 +966,277 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     expectDoneReason(events, 'budget_exceeded');
     expectTotalTokens(events, {atLeast: 200});
   });
+
+  // -------------------------------------------------------------------------
+  // 25. Runtime event bus (/api/events SSE stream)
+  // -------------------------------------------------------------------------
+
+  it('emits session_created when a new chat session is created', async () => {
+    const stream = await openEventStream();
+    try {
+      const chatResult = await chat('Say "hi" and nothing else.');
+      const event = await stream.waitFor(
+        (e) => e['type'] === 'session_created' && e['sessionId'] === chatResult.sessionId,
+        TIMEOUT,
+      );
+      expect(event['type']).toBe('session_created');
+      expect(event['sessionId']).toBe(chatResult.sessionId);
+      expect(event['seq']).toBeGreaterThan(0);
+      expect(typeof event['timestamp']).toBe('string');
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits session_updated on follow-up messages in an existing session', async () => {
+    const first = await chat('Remember the number 7.');
+    const stream = await openEventStream();
+    try {
+      await chat('Reply with just "ok".', first.sessionId);
+      const event = await stream.waitFor(
+        (e) => e['type'] === 'session_updated' && e['sessionId'] === first.sessionId,
+        TIMEOUT,
+      );
+      expect(event['type']).toBe('session_updated');
+      expect(event['sessionId']).toBe(first.sessionId);
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT * 2);
+
+  it('emits session_deleted when a session is DELETEd', async () => {
+    // First ensure the session is saved to the legacy store — DELETE only
+    // succeeds if legacySessionStore.delete() finds the session.
+    const {sessionId} = await chat('Say "ok".');
+
+    const stream = await openEventStream();
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+        method: 'DELETE',
+        signal: AbortSignal.timeout(5000),
+      });
+      // The legacy store mirror may be async, so a 404 is possible if the
+      // mirror write hasn't landed yet. Either outcome is fine for the
+      // event test — if the DELETE succeeds, the event should fire.
+      if (res.status === 200) {
+        const event = await stream.waitFor(
+          (e) => e['type'] === 'session_deleted' && e['sessionId'] === sessionId,
+          5000,
+        );
+        expect(event['type']).toBe('session_deleted');
+        expect(event['sessionId']).toBe(sessionId);
+      }
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits automation_triggered and automation_completed on manual run', async () => {
+    // The automation's registered name is derived from the filename
+    // (automations/test-auto.md → "test-auto"), not the frontmatter.
+    const automationName = 'test-auto';
+    const stream = await openEventStream();
+    try {
+      const runPromise = fetch(
+        `http://localhost:${AGENT_PORT}/automations/${automationName}/run`,
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: '{}',
+          signal: AbortSignal.timeout(TIMEOUT),
+        },
+      );
+
+      const triggered = await stream.waitFor(
+        (e) => e['type'] === 'automation_triggered' && e['name'] === automationName,
+        5000,
+      );
+      expect(triggered['source']).toBeDefined();
+
+      const completed = await stream.waitFor(
+        (e) =>
+          (e['type'] === 'automation_completed' || e['type'] === 'automation_failed') &&
+          e['name'] === automationName,
+        TIMEOUT,
+      );
+      expect(completed['type']).toBe('automation_completed');
+      expect(typeof completed['durationMs']).toBe('number');
+
+      const runRes = await runPromise;
+      expect([200, 500]).toContain(runRes.status);
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT + 10_000);
+
+  it('replays buffered events via Last-Event-ID on reconnect', async () => {
+    // Produce at least one event, capture its seq, disconnect, reconnect
+    // with Last-Event-ID set to seq-1, and verify we get the event back.
+    const firstStream = await openEventStream();
+    let capturedSeq = 0;
+    try {
+      await chat('Say "ok".');
+      const event = await firstStream.waitFor((e) => e['type'] === 'session_created', TIMEOUT);
+      capturedSeq = Number(event['seq']);
+      expect(capturedSeq).toBeGreaterThan(0);
+    } finally {
+      firstStream.close();
+    }
+
+    const replayStream = await openEventStream({lastEventId: String(capturedSeq - 1)});
+    try {
+      const replayed = await replayStream.waitFor(
+        (e) => Number(e['seq']) === capturedSeq,
+        5000,
+      );
+      expect(Number(replayed['seq'])).toBe(capturedSeq);
+    } finally {
+      replayStream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits session_updated when title is PATCHed', async () => {
+    // Create a session first so it exists in the legacy store.
+    const {sessionId} = await chat('Say "ok".');
+
+    const stream = await openEventStream();
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: 'my renamed session'}),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      // PATCH may 404 if the legacy store mirror hasn't landed yet —
+      // skip the assertion in that case (same guard as DELETE test).
+      if (res.status === 200) {
+        const event = await stream.waitFor(
+          (e) => e['type'] === 'session_updated' && e['sessionId'] === sessionId && e['title'] === 'my renamed session',
+          5000,
+        );
+        expect(event['title']).toBe('my renamed session');
+      }
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits store_updated when a tool writes to a store', async () => {
+    const stream = await openEventStream();
+    try {
+      // Ask the agent to write to test-items store. Agent non-determinism
+      // means it might not actually call the tool; we soft-check the event.
+      await chat(
+        'Write an item to the test-items store with id="evt-smoke-1" and name="smoke event test".',
+      );
+
+      const event = stream.events.find(
+        (e) => e['type'] === 'store_updated' && e['storeName'] === 'test-items',
+      );
+      if (event) {
+        expect(event['operation']).toBe('put');
+      } else {
+        // Model may have chosen not to call the store tool — this test is
+        // soft (logged, not asserted) because it depends on LLM behavior.
+        // eslint-disable-next-line no-console -- intentional test diagnostic
+        console.warn('[smoke] store_updated not emitted — LLM may have declined to call store_write');
+      }
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits store_updated when a direct REST write happens', async () => {
+    // This path doesn't depend on the LLM — assertable hard.
+    const stream = await openEventStream();
+    try {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/api/stores/test-items`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: 'rest-smoke-1', name: 'direct rest write'}),
+        signal: AbortSignal.timeout(5000),
+      });
+      expect(res.status).toBe(201);
+
+      const event = await stream.waitFor(
+        (e) => e['type'] === 'store_updated' && e['storeName'] === 'test-items' && e['operation'] === 'put',
+        5000,
+      );
+      expect(event['operation']).toBe('put');
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('emits automation_started and automation_stopped', async () => {
+    // The smoke agent's test-auto has no cron schedule, so start will fail.
+    // That's fine — we want to verify the happy path when a schedulable
+    // automation exists. Skip if none are available.
+    const listRes = await fetch(`http://localhost:${AGENT_PORT}/automations`);
+    const listBody = await listRes.json() as {automations: Array<{name: string; schedule?: string}>};
+    const schedulable = listBody.automations.find((a) => a.schedule);
+    if (!schedulable) {
+      return; // smoke agent has no scheduled automation — skip
+    }
+
+    const stream = await openEventStream();
+    try {
+      const startRes = await fetch(
+        `http://localhost:${AGENT_PORT}/automations/${schedulable.name}/start`,
+        {method: 'POST', signal: AbortSignal.timeout(5000)},
+      );
+      if (startRes.status !== 200) return; // not a schedulable automation
+
+      const started = await stream.waitFor(
+        (e) => e['type'] === 'automation_started' && e['name'] === schedulable.name,
+        5000,
+      );
+      expect(typeof started['intervalMs']).toBe('number');
+
+      await fetch(
+        `http://localhost:${AGENT_PORT}/automations/${schedulable.name}/stop`,
+        {method: 'POST', signal: AbortSignal.timeout(5000)},
+      );
+
+      const stopped = await stream.waitFor(
+        (e) => e['type'] === 'automation_stopped' && e['name'] === schedulable.name,
+        5000,
+      );
+      expect(stopped['name']).toBe(schedulable.name);
+    } finally {
+      stream.close();
+    }
+  }, TIMEOUT);
+
+  it('fans out the same event to all concurrent clients (two-tab case)', async () => {
+    // Two independent SSE connections — the "two browser tabs" scenario.
+    // Every event emitted by the server should reach BOTH clients with
+    // the same seq number.
+    const [s1, s2] = await Promise.all([openEventStream(), openEventStream()]);
+    try {
+      const chatResult = await chat('Say "ok".');
+
+      const [e1, e2] = await Promise.all([
+        s1.waitFor(
+          (e) => e['type'] === 'session_created' && e['sessionId'] === chatResult.sessionId,
+          TIMEOUT,
+        ),
+        s2.waitFor(
+          (e) => e['type'] === 'session_created' && e['sessionId'] === chatResult.sessionId,
+          TIMEOUT,
+        ),
+      ]);
+
+      // Same logical event reached both clients
+      expect(e1['seq']).toBe(e2['seq']);
+      expect(e1['timestamp']).toBe(e2['timestamp']);
+      expect(e1['sessionId']).toBe(e2['sessionId']);
+    } finally {
+      s1.close();
+      s2.close();
+    }
+  }, TIMEOUT);
 });
 
 // ---------------------------------------------------------------------------
@@ -979,4 +1250,102 @@ function parseSSE(text: string): Array<Record<string, unknown>> {
     try { events.push(JSON.parse(line.slice(6)) as Record<string, unknown>); } catch { /* skip */ }
   }
   return events;
+}
+
+// ---------------------------------------------------------------------------
+// Runtime event bus helper — opens a streaming fetch to /api/events and
+// exposes waitFor(predicate) for assertion against live events.
+// ---------------------------------------------------------------------------
+
+interface EventStreamHandle {
+  events: Array<Record<string, unknown>>;
+  waitFor: (
+    predicate: (event: Record<string, unknown>) => boolean,
+    timeoutMs?: number,
+  ) => Promise<Record<string, unknown>>;
+  close: () => void;
+}
+
+async function openEventStream(options: {lastEventId?: string} = {}): Promise<EventStreamHandle> {
+  const controller = new AbortController();
+  const headers: Record<string, string> = {Accept: 'text/event-stream'};
+  if (options.lastEventId) headers['Last-Event-ID'] = options.lastEventId;
+
+  const res = await fetch(`http://localhost:${AGENT_PORT}/api/events`, {
+    headers,
+    signal: controller.signal,
+  });
+  if (!res.body) throw new Error('no response body from /api/events');
+
+  const events: Array<Record<string, unknown>> = [];
+  const waiters: Array<{
+    predicate: (event: Record<string, unknown>) => boolean;
+    resolve: (event: Record<string, unknown>) => void;
+  }> = [];
+
+  // Drain the stream in the background, parsing SSE frames. Push each event
+  // to the events array and notify any waiting predicates.
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let draining = true;
+
+  void (async () => {
+    try {
+      while (draining) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream: true});
+        let idx: number;
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          const frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          const dataLine = frame.split('\n').find((l) => l.startsWith('data: '));
+          if (!dataLine) continue;
+          try {
+             
+            const event = JSON.parse(dataLine.slice(6)) as Record<string, unknown>;
+            events.push(event);
+            // Notify any matching waiters (iterate a snapshot; matching
+            // waiters are removed from the queue).
+            for (let i = waiters.length - 1; i >= 0; i--) {
+              const waiter = waiters[i];
+              if (waiter && waiter.predicate(event)) {
+                waiters.splice(i, 1);
+                waiter.resolve(event);
+              }
+            }
+          } catch { /* malformed frame */ }
+        }
+      }
+    } catch { /* aborted or connection closed */ }
+  })();
+
+  return {
+    events,
+    waitFor(predicate, timeoutMs = 5000) {
+      // Check already-buffered events first
+      const already = events.find(predicate);
+      if (already) return Promise.resolve(already);
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          const idx = waiters.findIndex((w) => w.predicate === predicate);
+          if (idx !== -1) waiters.splice(idx, 1);
+          reject(new Error(`waitFor timed out after ${String(timeoutMs)}ms`));
+        }, timeoutMs);
+        waiters.push({
+          predicate,
+          resolve: (event) => {
+            clearTimeout(timer);
+            resolve(event);
+          },
+        });
+      });
+    },
+    close() {
+      draining = false;
+      controller.abort();
+      reader.cancel().catch(() => {});
+    },
+  };
 }

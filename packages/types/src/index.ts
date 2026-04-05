@@ -112,6 +112,26 @@ export type {
   RepoLoadOptions,
 } from './repo-types.js';
 
+// Runtime event bus types
+export {RUNTIME_EVENT_TYPES} from './runtime-event-types.js';
+export type {
+  RuntimeEventType,
+  RuntimeEventBase,
+  RuntimeEvent,
+  RuntimeEventPayload,
+  SessionCreatedEvent,
+  SessionUpdatedEvent,
+  SessionDeletedEvent,
+  AutomationTriggeredEvent,
+  AutomationCompletedEvent,
+  AutomationFailedEvent,
+  AutomationStartedEvent,
+  AutomationStoppedEvent,
+  StoreUpdatedEvent,
+  ManifestChangedEvent,
+  FilesChangedEvent,
+} from './runtime-event-types.js';
+
 // Snapshot types
 export type {
   SnapshotConnection,

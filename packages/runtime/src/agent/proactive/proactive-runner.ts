@@ -12,7 +12,7 @@
  * collects results, delivers them, and destroys the session.
  */
 
-import type {AgentBundle} from '@amodalai/types';
+import type {AgentBundle, RuntimeEventPayload} from '@amodalai/types';
 import {bridgeAutomations, type RunnableAutomation} from '../automation-bridge.js';
 import {deliverResult} from './delivery.js';
 import type {StandaloneSessionManager} from '../../session/manager.js';
@@ -47,6 +47,8 @@ export interface ProactiveRunnerConfig {
     content: string;
     signal: AbortSignal;
   }) => Promise<string>;
+  /** Optional event bus for emitting automation lifecycle events */
+  eventBus?: {emit: (payload: RuntimeEventPayload) => unknown};
 }
 
 interface CronJob {
@@ -121,6 +123,7 @@ export class ProactiveRunner {
     }, intervalMs);
     this.cronJobs.set(name, {name, timer});
     this.config.logger.info('automation_started', {name, intervalMs});
+    this.config.eventBus?.emit({type: 'automation_started', name, intervalMs});
     return {success: true};
   }
 
@@ -136,6 +139,7 @@ export class ProactiveRunner {
     clearInterval(job.timer);
     this.cronJobs.delete(name);
     this.config.logger.info('automation_stopped', {name});
+    this.config.eventBus?.emit({type: 'automation_stopped', name});
     return {success: true};
   }
 
@@ -285,6 +289,14 @@ export class ProactiveRunner {
     payload?: Record<string, unknown>,
   ): Promise<void> {
     this.config.logger.debug('automation_run_start', {name: automation.name});
+    const startedAt = Date.now();
+
+    const source = payload ? 'webhook' : (automation.isWebhookTriggered ? 'manual' : 'cron');
+    this.config.eventBus?.emit({
+      type: 'automation_triggered',
+      name: automation.name,
+      source,
+    });
 
     let session: Session | undefined;
     try {
@@ -338,6 +350,11 @@ export class ProactiveRunner {
       }
       this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'success', sessionId: session.id});
       this.config.logger.debug('automation_run_complete', {name: automation.name, session: session.id});
+      this.config.eventBus?.emit({
+        type: 'automation_completed',
+        name: automation.name,
+        durationMs: Date.now() - startedAt,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (session && this.config.onSessionComplete) {
@@ -345,6 +362,11 @@ export class ProactiveRunner {
       }
       this.runHistory.set(automation.name, {timestamp: new Date().toISOString(), status: 'error', error: msg, sessionId: session?.id});
       this.config.logger.error('automation_run_error', {name: automation.name, error: msg});
+      this.config.eventBus?.emit({
+        type: 'automation_failed',
+        name: automation.name,
+        error: msg,
+      });
       throw err;
     } finally {
       if (session) {
