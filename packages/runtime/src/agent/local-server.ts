@@ -425,6 +425,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   });
 
   // Sessions endpoints — served directly from the DrizzleSessionStore.
+  //
+  // Dev-UI consumers (sidebar Recent list, Sessions page, Automation detail
+  // page) don't paginate — they render what they get and slice the top N.
+  // A 500-session ceiling keeps the response bounded without forcing a
+  // cursor API on the client today. If dev sessions regularly exceed this,
+  // the store already supports cursor pagination via SessionListOptions.
+  const SESSION_LIST_LIMIT = 500;
   app.get('/sessions', asyncHandler(async (req, res) => {
     const automationFilter = typeof req.query?.['automation'] === 'string' ? String(req.query['automation']) : undefined;
     // Automation filter uses metadata.automationName; otherwise restrict
@@ -432,7 +439,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     const filter = automationFilter
       ? {automationName: automationFilter}
       : {appId: LOCAL_APP_ID};
-    const {sessions: rows} = await sessionStore.list(LOCAL_APP_ID, {limit: 200, filter});
+    const {sessions: rows} = await sessionStore.list(LOCAL_APP_ID, {limit: SESSION_LIST_LIMIT, filter});
     const sessions = rows.map((s) => {
       const title = typeof s.metadata['title'] === 'string' ? s.metadata['title'] : undefined;
       const appId = typeof s.metadata['appId'] === 'string' ? s.metadata['appId'] : LOCAL_APP_ID;
@@ -471,8 +478,18 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated above
     const title = (body as Record<string, unknown>)['title'] as string;
 
-    // If the session is live in memory, mutate its metadata so subsequent
-    // persists keep the title. Either way, write through the store.
+    // Live session: mutate metadata on the shared object and persist so
+    // the next /sessions read reflects the new title. A concurrent
+    // runMessage may be mid-turn, but JSON.stringify runs atomically in
+    // JS's single-threaded event loop — no torn writes. The next
+    // end-of-turn persist will overwrite with the completed messages
+    // array; metadata.title stays because it's on the live session.
+    //
+    // Not-live: load → mutate → save. No race possible.
+    //
+    // sessionManager.get() is not tenant-scoped (it reads the in-memory
+    // map by ID only). Safe here because local-server is single-tenant
+    // ('local'); every session in the map belongs to the same tenant.
     const live = sessionManager.get(sessionId);
     if (live) {
       live.metadata.title = title;
@@ -667,12 +684,40 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 // /sessions + /session/:id response helpers
 // ---------------------------------------------------------------------------
 
+/** Max length of the first-user-message excerpt shown in session lists. */
+const SUMMARY_EXCERPT_MAX = 80;
+
+/** Rendered history-message shape consumed by the dev-UI chat page. */
+interface HistoryMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  toolCalls?: Array<{
+    toolId: string;
+    toolName: string;
+    parameters: Record<string, unknown>;
+  }>;
+}
+
 function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null;
 }
 
 function isTextPart(part: unknown): part is {type: 'text'; text: string} {
   return isRecord(part) && part['type'] === 'text' && typeof part['text'] === 'string';
+}
+
+function isToolCallPart(part: unknown): part is {
+  type: 'tool-call';
+  toolCallId: string;
+  toolName: string;
+  input?: unknown;
+} {
+  return (
+    isRecord(part) &&
+    part['type'] === 'tool-call' &&
+    typeof part['toolCallId'] === 'string' &&
+    typeof part['toolName'] === 'string'
+  );
 }
 
 function getMessageRole(raw: unknown): string | null {
@@ -686,27 +731,33 @@ function getMessageContent(raw: unknown): unknown {
   return raw['content'];
 }
 
+/** Truncate with an ellipsis when the source exceeds the excerpt budget. */
+function excerpt(s: string): string {
+  return s.length > SUMMARY_EXCERPT_MAX ? `${s.slice(0, SUMMARY_EXCERPT_MAX)}…` : s;
+}
+
 /** Extract the first user-message text from a persisted message array for list summaries. */
 function extractFirstUserText(messages: readonly unknown[]): string | undefined {
   for (const raw of messages) {
     if (getMessageRole(raw) !== 'user') continue;
     const content = getMessageContent(raw);
-    if (typeof content === 'string') return content.slice(0, 80);
+    if (typeof content === 'string') return excerpt(content);
     if (Array.isArray(content)) {
       const firstText = content.find(isTextPart);
-      if (firstText) return firstText.text.slice(0, 80);
+      if (firstText) return excerpt(firstText.text);
     }
   }
   return undefined;
 }
 
 /**
- * Flatten a persisted `ModelMessage` (ai SDK v6) into the {role, text} shape
- * the web UI's /session/:id consumer expects. Returns null for messages that
- * have no renderable text (e.g. tool-call / tool-result — the history panel
- * shows the conversation, not the raw tool plumbing).
+ * Flatten a persisted `ModelMessage` (ai SDK v6) into the shape the web UI's
+ * /session/:id consumer expects: {role, text, toolCalls?}. Returns null for
+ * tool-result messages and for assistant turns with no renderable content
+ * (the history panel shows conversation + tool-call chips, not raw tool
+ * plumbing).
  */
-function flattenModelMessage(raw: unknown): {role: string; text: string} | null {
+function flattenModelMessage(raw: unknown): HistoryMessage | null {
   const role = getMessageRole(raw);
   if (role !== 'user' && role !== 'assistant') return null;
 
@@ -716,8 +767,15 @@ function flattenModelMessage(raw: unknown): {role: string; text: string} | null 
   }
   if (Array.isArray(content)) {
     const text = content.filter(isTextPart).map((p) => p.text).join('');
-    if (text.length === 0) return null;
-    return {role, text};
+    const toolCalls = role === 'assistant'
+      ? content.filter(isToolCallPart).map((p) => ({
+        toolId: p.toolCallId,
+        toolName: p.toolName,
+        parameters: isRecord(p.input) ? p.input : {},
+      }))
+      : [];
+    if (text.length === 0 && toolCalls.length === 0) return null;
+    return toolCalls.length > 0 ? {role, text, toolCalls} : {role, text};
   }
   return null;
 }

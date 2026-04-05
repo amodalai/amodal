@@ -271,6 +271,14 @@ export class StandaloneSessionManager {
   async persist(session: Session): Promise<void> {
     if (!this.store) return;
 
+    // Bump lastAccessedAt in lockstep with updatedAt. Keeping them
+    // synchronized means the in-memory session's "most recent activity"
+    // timestamp and the DB's `updated_at` column (which drives
+    // list-ordering) can't drift — the list order users see always
+    // matches what the live session would say.
+    const now = Date.now();
+    session.lastAccessedAt = now;
+
     const persisted: PersistedSession = {
       version: 1,
       id: session.id,
@@ -280,7 +288,7 @@ export class StandaloneSessionManager {
       tokenUsage: session.usage,
       metadata: session.metadata,
       createdAt: new Date(session.createdAt),
-      updatedAt: new Date(),
+      updatedAt: new Date(now),
     };
 
     await this.store.save(persisted);

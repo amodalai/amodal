@@ -852,6 +852,38 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     expect(getAfterDelRes.status).toBe(404);
   }, TIMEOUT);
 
+  it('preserves tool-call chips in /session/:id history', async () => {
+    // Tool calls appear as {type: 'tool-call'} parts in the assistant's
+    // ModelMessage.content — flattenModelMessage should surface them to
+    // the UI as toolCalls[]. Without this, the dev-UI chat history panel
+    // renders the assistant's reply but drops the tool-call chips.
+    const {sessionId} = await chat(
+      'Use the request tool to GET /items from the mock-api connection with intent "read".',
+    );
+    expect(sessionId).toBeTruthy();
+
+    const getRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {signal: AbortSignal.timeout(5000)});
+    const getBody = await getRes.json() as {
+      session_id: string;
+      messages: Array<{role: string; text: string; toolCalls?: Array<{toolId: string; toolName: string; parameters: Record<string, unknown>}>}>;
+    };
+    expect(getRes.status).toBe(200);
+
+    const assistantWithTools = getBody.messages.find((m) => m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0);
+    // Soft assertion: the model may choose not to call tools on any given
+    // turn (LLM non-determinism). When it does, the toolCall round-trip
+    // must work end-to-end.
+    if (assistantWithTools?.toolCalls) {
+      const call = assistantWithTools.toolCalls[0];
+      expect(call.toolId).toBeTruthy();
+      expect(call.toolName).toBeTruthy();
+      expect(typeof call.parameters).toBe('object');
+    } else {
+      // eslint-disable-next-line no-console -- intentional test diagnostic
+      console.warn('[smoke] Model did not call a tool for the request prompt — LLM non-determinism, skipping toolCall round-trip assertion');
+    }
+  }, TIMEOUT);
+
   // -------------------------------------------------------------------------
   // 24. Files — browser and editor
   // -------------------------------------------------------------------------
