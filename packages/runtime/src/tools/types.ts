@@ -15,6 +15,7 @@
 
 import type {z} from 'zod';
 import type {FlexibleSchema} from 'ai';
+import type {SearchProvider} from '../providers/search-provider.js';
 
 // ---------------------------------------------------------------------------
 // Tool context (provided to execute functions)
@@ -53,6 +54,13 @@ export interface ToolContext {
 
   /** Session ID for correlation */
   sessionId: string;
+
+  /**
+   * Grounded search provider for `web_search` and `fetch_url` tools.
+   * Undefined when `webTools` is not configured in amodal.json — the
+   * tools return a friendly "not configured" error in that case.
+   */
+  searchProvider?: SearchProvider;
 }
 
 // ---------------------------------------------------------------------------
