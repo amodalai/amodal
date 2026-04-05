@@ -219,12 +219,36 @@ function detectLoop(messages: ModelMessage[]): LoopInfo | null {
 }
 
 /**
+ * Known pagination / iteration parameter names. Calls that differ ONLY
+ * in these keys are legitimate iteration (walking a file in chunks,
+ * paging through a result set) and must NOT count toward loop detection.
+ */
+const PAGINATION_KEYS = new Set<string>([
+  'offset',
+  'limit',
+  'page',
+  'start_line',
+  'end_line',
+  'cursor',
+  'after',
+  'before',
+  'next_page_token',
+  'page_token',
+  'skip',
+]);
+
+/**
  * Count the size of the largest group of similar argument sets.
  *
  * Two arg sets are "similar" if they share the same keys and at least
  * half their values are identical. This catches loops where the agent
  * retries with slightly different parameters (e.g., changing a page number
  * but keeping everything else the same).
+ *
+ * Exception: if two calls differ ONLY in pagination-ish keys (offset,
+ * limit, cursor, page, etc.), they represent legitimate iteration and
+ * are not counted as similar — otherwise read_repo_file pagination trips
+ * the detector after 3 offsets.
  */
 function countSimilarCalls(argsList: string[]): number {
   if (argsList.length <= 2) return argsList.length;
@@ -266,13 +290,19 @@ function countSimilarCalls(argsList: string[]): number {
   for (const group of byKeys.values()) {
     if (group.length < 3) continue;
     // Within a key group, count pairs with >50% identical values
-    // Use first element as reference and count how many are similar to it
+    // Use first element as reference and count how many are similar to it.
+    // Pagination variants (differ only in offset/limit/cursor/etc.) don't
+    // count — they represent legitimate iteration.
     const ref = group[0];
     const keys = Object.keys(ref);
     let similarToRef = 1;
     for (let i = 1; i < group.length; i++) {
-      const matching = keys.filter((k) => JSON.stringify(ref[k]) === JSON.stringify(group[i][k]));
-      if (matching.length >= keys.length / 2) {
+      const differingKeys = keys.filter((k) => JSON.stringify(ref[k]) !== JSON.stringify(group[i][k]));
+      const onlyPaginationDiffers = differingKeys.length > 0 && differingKeys.every((k) => PAGINATION_KEYS.has(k));
+      if (onlyPaginationDiffers) continue;
+
+      const matchingCount = keys.length - differingKeys.length;
+      if (matchingCount >= keys.length / 2) {
         similarToRef++;
       }
     }

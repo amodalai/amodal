@@ -235,12 +235,14 @@ describe('handleThinking (via transition)', () => {
   });
 
   it('detects loops with similar (not identical) parameters', async () => {
-    // Build messages where the same tool is called with slightly different params
+    // Build messages where the same tool is called with slightly different
+    // params. Use a non-pagination key (retry_count) — pagination keys
+    // (offset/limit/page/cursor) are treated as iteration, not loops.
     const messages: ModelMessage[] = [];
     for (let i = 0; i < 8; i++) {
       messages.push({
         role: 'assistant',
-        content: [{type: 'tool-call', toolCallId: `c${i}`, toolName: 'search_api', input: {query: 'test', page: i}}],
+        content: [{type: 'tool-call', toolCallId: `c${i}`, toolName: 'search_api', input: {query: 'test', retry_count: i}}],
       } as ModelMessage);
       messages.push({
         role: 'tool',
@@ -256,6 +258,33 @@ describe('handleThinking (via transition)', () => {
     if (result.next.type === 'done') {
       expect(result.next.reason).toBe('loop_detected');
     }
+  });
+
+  it('does NOT detect pagination as a loop (offset/limit/page variants)', async () => {
+    // Agent walking a long file in chunks is legitimate iteration — same
+    // tool, same path, different offset. Must not trip the loop detector.
+    const messages: ModelMessage[] = [];
+    for (let i = 0; i < 8; i++) {
+      messages.push({
+        role: 'assistant',
+        content: [{
+          type: 'tool-call',
+          toolCallId: `c${i}`,
+          toolName: 'read_repo_file',
+          input: {path: 'knowledge/big.md', offset: 1 + i * 2000, limit: 2000},
+        }],
+      } as ModelMessage);
+      messages.push({
+        role: 'tool',
+        content: [{type: 'tool-result' as const, toolCallId: `c${i}`, toolName: 'read_repo_file', output: {type: 'text' as const, value: 'chunk'}}],
+      } as ModelMessage);
+    }
+
+    const ctx = makeMockContext();
+    const result = await transition({type: 'thinking', messages}, ctx);
+
+    // Should NOT be done — the loop detector should have skipped these.
+    expect(result.next.type).not.toBe('done');
   });
 
   it('replaces old tool results with summarizer output when hook is set', async () => {
