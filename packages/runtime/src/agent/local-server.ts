@@ -22,7 +22,7 @@ import path from 'node:path';
 import {loadRepo} from '@amodalai/core';
 import type {AgentBundle} from '@amodalai/types';
 import {StandaloneSessionManager} from '../session/manager.js';
-import {PGLiteSessionStore} from '../session/store.js';
+import {selectSessionStore} from '../session/session-store-selector.js';
 import {buildSessionComponents} from '../session/session-builder.js';
 import type {SharedResources} from '../routes/session-resolver.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
@@ -206,8 +206,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // -------------------------------------------------------------------------
 
   const sessionLogger = createLogger({component: 'session-manager'});
-  const sessionStore = new PGLiteSessionStore({logger: sessionLogger});
-  await sessionStore.initialize();
+  const sessionStore = await selectSessionStore({
+    backend: bundle.config.stores?.backend,
+    postgresUrl: bundle.config.stores?.postgresUrl,
+    logger: sessionLogger,
+  });
 
   const sessionManager = new StandaloneSessionManager({
     logger: sessionLogger,

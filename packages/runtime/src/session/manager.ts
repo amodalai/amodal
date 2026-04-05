@@ -351,7 +351,8 @@ export class StandaloneSessionManager {
   /** List sessions for a tenant from the backing store. */
   async listPersisted(tenantId: string, opts?: {limit?: number}): Promise<PersistedSession[]> {
     if (!this.store) return [];
-    return this.store.list(tenantId, opts);
+    const result = await this.store.list(tenantId, opts);
+    return result.sessions;
   }
 
   /** Number of active in-memory sessions. */
