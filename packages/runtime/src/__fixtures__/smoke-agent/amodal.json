@@ -4,8 +4,8 @@
   "description": "Self-contained agent for smoke testing the runtime",
   "models": {
     "main": {
-      "provider": "openai",
-      "model": "gpt-4o-mini"
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514"
     }
   }
 }

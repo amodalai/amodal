@@ -61,7 +61,7 @@ const SMOKE_TARGETS: Record<string, SmokeTarget> = {
   openai: {provider: 'openai', model: 'gpt-4o-mini', apiKeyEnv: 'OPENAI_API_KEY'},
   groq: {provider: 'groq', model: 'llama-3.3-70b-versatile', apiKeyEnv: 'GROQ_API_KEY'},
 };
-const smokeTargetName = process.env['SMOKE_TARGET'] ?? 'anthropic';
+const smokeTargetName = process.env['SMOKE_TARGET'] ?? 'google';
  
 const smokeTarget = SMOKE_TARGETS[smokeTargetName];
 
@@ -139,14 +139,18 @@ const skipReason = !smokeTarget
     : `${smokeTarget.apiKeyEnv} not set`;
 
 describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
+  // Stash the committed amodal.json so afterAll can restore it; otherwise
+  // the per-run provider rewrite leaks into the repo.
+  const amodalPath = resolve(AGENT_DIR, 'amodal.json');
+  const originalAmodalJson = readFileSync(amodalPath, 'utf-8');
+
   beforeAll(async () => {
     // 0. Nuke prior state — clean slate for every run
     rmSync(resolve(AGENT_DIR, '.amodal/store-data'), {recursive: true, force: true});
     rmSync(resolve(AGENT_DIR, '.amodal/sessions'), {recursive: true, force: true});
 
     // 1. Rewrite amodal.json with the selected provider/model
-    const amodalPath = resolve(AGENT_DIR, 'amodal.json');
-    const amodalConfig = JSON.parse(readFileSync(amodalPath, 'utf-8')) as Record<string, unknown>;
+    const amodalConfig = JSON.parse(originalAmodalJson) as Record<string, unknown>;
     amodalConfig['models'] = {
       main: {provider: smokeTarget.provider, model: smokeTarget.model},
     };
@@ -183,6 +187,9 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     if (restServer) {
       restServer.kill('SIGTERM');
     }
+    // Restore the committed amodal.json so the provider rewrite stays
+    // test-local and does not show up in git status.
+    writeFileSync(amodalPath, originalAmodalJson);
   });
 
   // -------------------------------------------------------------------------
