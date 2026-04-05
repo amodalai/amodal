@@ -85,6 +85,23 @@ export const READ_MANY_MAX_BYTES = 50_000;
 /** Top-level directory entry of the allowlist, without the trailing slash. */
 const ALLOWED_TOP_LEVEL_NAMES = ALLOWED_REPO_DIRS.map((d) => d.replace(/\/$/, ''));
 
+/**
+ * Filesystem error codes we treat as "skip this entry, keep going" during
+ * best-effort directory walks (list_repo_files, glob_repo_files,
+ * grep_repo_files). These correspond to "the path isn't there / isn't
+ * accessible / isn't the kind of thing we expected" — all of which are
+ * normal during a concurrent walk. Any other error code is unexpected
+ * (ENOMEM, EIO, etc.) and will be re-thrown rather than silently dropped.
+ */
+const EXPECTED_FS_SKIP_CODES = new Set(['ENOENT', 'EACCES', 'ENOTDIR', 'EISDIR', 'EPERM']);
+
+function isExpectedFsSkipError(err: unknown): boolean {
+  if (!(err instanceof Error) || !('code' in err)) return false;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by instanceof + 'code' in err
+  const code = (err as NodeJS.ErrnoException).code;
+  return code !== undefined && EXPECTED_FS_SKIP_CODES.has(code);
+}
+
 /** @internal Exported for testing */
 export function isAllowedRepoPath(relPath: string): boolean {
   const basename = path.basename(relPath);
@@ -196,10 +213,11 @@ async function walkFiles(
     let entries;
     try {
       entries = await readdir(current, {withFileTypes: true});
-    } catch {
-      // Directory missing or unreadable — skip, matches "empty dir" semantics
-      // the caller already handles by returning files.length === 0.
-      continue;
+    } catch (err) {
+      // Path gone / no permissions / not a dir — expected during a
+      // concurrent walk, skip. Unexpected errors (ENOMEM, EIO) bubble.
+      if (isExpectedFsSkipError(err)) continue;
+      throw err;
     }
 
     // Sort for determinism — agents see the same order across identical calls.
@@ -467,7 +485,7 @@ export function createGrepRepoFilesTool(repoRoot: string): ToolDefinition {
       // Compile the regex once — surface a clean error on invalid syntax.
       let re: RegExp;
       try {
-        re = new RegExp(params.pattern, params.case_insensitive ?? true ? 'i' : '');
+        re = new RegExp(params.pattern, (params.case_insensitive ?? true) ? 'i' : '');
       } catch (err) {
         return {error: `Invalid regex pattern: ${err instanceof Error ? err.message : String(err)}`};
       }
@@ -504,16 +522,20 @@ export function createGrepRepoFilesTool(repoRoot: string): ToolDefinition {
           let stats;
           try {
             stats = await stat(absFile);
-          } catch {
-            continue;
+          } catch (err) {
+            // File vanished between glob and stat, or not readable — skip.
+            if (isExpectedFsSkipError(err)) continue;
+            throw err;
           }
           if (stats.size > GREP_FILE_SIZE_LIMIT) continue;
 
           let buf: Buffer;
           try {
             buf = await readFile(absFile);
-          } catch {
-            continue;
+          } catch (err) {
+            // File vanished between stat and read, or not readable — skip.
+            if (isExpectedFsSkipError(err)) continue;
+            throw err;
           }
           if (isLikelyBinary(buf)) continue;
 
