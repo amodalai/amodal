@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Send, Square, Bot, AlertCircle, Loader2 } from 'lucide-react';
+import { Send, Square, Bot, AlertCircle, Loader2, RotateCcw } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { useChatStream, streamSSE } from '@amodalai/react';
 import type { ChatMessage, ContentBlock, SSEEvent } from '@amodalai/react';
@@ -204,6 +204,12 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
     return () => { window.removeEventListener('admin-chat-send', handler); };
   }, [sendText]);
 
+  const handleReset = useCallback(() => {
+    stream.reset();
+    sessionIdRef.current = null;
+    localStorage.removeItem(STORAGE_KEY);
+  }, [stream]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -217,6 +223,19 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Reset button — shown when there are messages */}
+      {stream.messages.length > 0 && !stream.isStreaming && (
+        <div className="flex items-center justify-end px-4 py-1.5 border-b border-border">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <RotateCcw className="h-3 w-3" />
+            New conversation
+          </button>
+        </div>
+      )}
       {/* Messages area */}
       <div className={`flex-1 overflow-y-auto scrollbar-thin ${compact ? 'px-3 py-3' : 'px-6 py-4'}`}>
         {stream.messages.length === 0 && (
