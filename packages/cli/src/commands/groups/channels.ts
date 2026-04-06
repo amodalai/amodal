@@ -6,7 +6,6 @@
 
 import type {CommandModule} from 'yargs';
 import {installChannelCommand} from '../install-channel.js';
-import {setupChannelCommand} from '../setup-channel.js';
 
 export const channelsCommand: CommandModule = {
   command: 'channels <command>',
@@ -14,7 +13,6 @@ export const channelsCommand: CommandModule = {
   builder: (yargs) =>
     yargs
       .command(installChannelCommand)
-      .command(setupChannelCommand)
       .demandCommand(1, 'Specify a subcommand'),
   handler: () => {},
 };
