@@ -158,13 +158,27 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
   // All other tools — compact badge with parameter summary
   const summary = summarizeParams(call.toolName, params);
   return (
-    <div className="flex items-center gap-2 px-3.5 py-2 my-1.5 rounded-lg bg-muted border border-border text-xs font-mono overflow-hidden">
-      <StatusIcon isRunning={isRunning} isError={isError} />
-      <span className="text-primary font-semibold shrink-0">{call.toolName}</span>
-      {summary && (
-        <span className="text-muted-foreground truncate">{summary}</span>
+    <div className="my-1.5 rounded-lg bg-muted border border-border overflow-hidden">
+      <div className="flex items-center gap-2 px-3.5 py-2 text-xs font-mono">
+        <StatusIcon isRunning={isRunning} isError={isError} />
+        <span className="text-primary font-semibold shrink-0">{call.toolName}</span>
+        {summary && (
+          <span className="text-muted-foreground truncate">{summary}</span>
+        )}
+        <Duration ms={call.duration_ms} />
+      </div>
+      {/* Ephemeral tool log — progress from ctx.log() during execution */}
+      {isRunning && call.logMessage && (
+        <div className="px-3.5 pb-1.5 text-[11px] text-muted-foreground italic truncate">
+          {call.logMessage}
+        </div>
       )}
-      <Duration ms={call.duration_ms} />
+      {/* Error detail on failed calls */}
+      {isError && call.error && (
+        <div className="px-3.5 pb-2 text-[11px] text-red-400 truncate">
+          {call.error}
+        </div>
+      )}
     </div>
   );
 }

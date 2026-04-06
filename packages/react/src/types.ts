@@ -26,6 +26,7 @@ export type SSEEventType =
   | 'plan_mode'
   | 'field_scrub'
   | 'confirmation_required'
+  | 'tool_log'
   | 'error'
   | 'done';
 
@@ -156,6 +157,13 @@ export interface SSEConfirmationRequiredEvent {
   timestamp: string;
 }
 
+export interface SSEToolLogEvent {
+  type: 'tool_log';
+  tool_name: string;
+  message: string;
+  timestamp: string;
+}
+
 export interface SSEErrorEvent {
   type: 'error';
   message: string;
@@ -185,6 +193,7 @@ export type SSEEvent =
   | SSEPlanModeEvent
   | SSEFieldScrubEvent
   | SSEConfirmationRequiredEvent
+  | SSEToolLogEvent
   | SSEErrorEvent
   | SSEDoneEvent;
 
@@ -232,6 +241,8 @@ export interface ToolCallInfo {
   duration_ms?: number;
   error?: string;
   subagentEvents?: SubagentEventInfo[];
+  /** Ephemeral progress message from the tool executor (via ctx.log). */
+  logMessage?: string;
 }
 
 export interface ConfirmationInfo {
@@ -284,6 +295,8 @@ export interface AssistantTextMessage {
   widgets: WidgetInfo[];
   contentBlocks: ContentBlock[];
   timestamp: string;
+  /** Per-turn token usage (populated when the turn's done event arrives). */
+  usage?: {inputTokens: number; outputTokens: number};
 }
 
 export interface ErrorMessage {
@@ -392,6 +405,7 @@ export type ChatAction =
   | { type: 'STREAM_CONFIRMATION_REQUIRED'; confirmation: ConfirmationInfo }
   | { type: 'CONFIRMATION_RESPONDED'; correlationId: string; approved: boolean }
   | { type: 'STREAM_ERROR'; message: string }
+  | { type: 'STREAM_TOOL_LOG'; toolName: string; message: string }
   | { type: 'STREAM_DONE'; usage?: {inputTokens: number; outputTokens: number} }
   | { type: 'LOAD_HISTORY'; sessionId: string; messages: ChatMessage[] }
   | { type: 'RESET' };

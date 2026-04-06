@@ -281,11 +281,17 @@ export function AdminChatPanel({ compact }: { compact?: boolean }) {
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // Auto-grow: reset height so scrollHeight recalculates, then clamp.
+              e.target.style.height = 'auto';
+              e.target.style.height = `${String(Math.min(e.target.scrollHeight, 200))}px`;
+            }}
             onKeyDown={handleKeyDown}
             placeholder={compact ? 'Message admin agent...' : 'Ask me to add a connection, write a skill, or validate your config...'}
             rows={1}
             className={`flex-1 resize-none rounded-xl border border-border bg-white dark:bg-white/[0.04] ${compact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm'} text-foreground placeholder-gray-400 dark:placeholder-white/25 focus:outline-none focus:border-primary dark:focus:border-primary/50 transition-colors`}
+            style={{ maxHeight: '200px', overflow: 'auto' }}
             disabled={stream.isStreaming}
           />
           {stream.isStreaming ? (

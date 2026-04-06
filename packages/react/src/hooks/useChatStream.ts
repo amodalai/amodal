@@ -290,6 +290,28 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
+    case 'STREAM_TOOL_LOG': {
+      // Tool logs are ephemeral progress from tool executors. We store
+      // the latest log message per-tool on the active ToolCallInfo so
+      // the UI can show it under the spinning badge. When the tool
+      // completes (STREAM_TOOL_CALL_RESULT), the message is cleared.
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const updateLog = (tc: ToolCallInfo): ToolCallInfo =>
+          tc.toolName === action.toolName && tc.status === 'running'
+            ? { ...tc, logMessage: action.message }
+            : tc;
+        const updatedCalls = last.toolCalls.map(updateLog);
+        const blocks = last.contentBlocks.map((block) =>
+          block.type === 'tool_calls'
+            ? { ...block, calls: block.calls.map(updateLog) }
+            : block,
+        );
+        msgs[msgs.length - 1] = { ...last, toolCalls: updatedCalls, contentBlocks: blocks };
+      }
+      return { ...state, messages: msgs };
+    }
     case 'STREAM_CREDENTIAL_SAVED':
     case 'STREAM_APPROVED':
       // Emitted by the server but not reflected in message state today.
@@ -297,7 +319,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'STREAM_ERROR':
       return { ...state, isStreaming: false, error: action.message, activeToolCalls: [] };
     case 'STREAM_DONE': {
-      // Mark any still-running tool calls as stopped.
+      // Mark any still-running tool calls as stopped + attach per-turn usage.
       const doneMessages = [...state.messages];
       const lastMsg = doneMessages[doneMessages.length - 1];
       if (lastMsg && lastMsg.type === 'assistant_text') {
@@ -313,6 +335,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           ...lastMsg,
           toolCalls: stoppedCalls,
           contentBlocks: stoppedBlocks,
+          ...(action.usage ? { usage: action.usage } : {}),
         };
       }
       const newUsage = action.usage
@@ -701,6 +724,9 @@ function processEvent(
       callbacks.onConfirmation?.(confirmation);
       return;
     }
+    case 'tool_log':
+      dispatch({ type: 'STREAM_TOOL_LOG', toolName: event.tool_name, message: event.message });
+      return;
     case 'error':
       dispatch({ type: 'STREAM_ERROR', message: event.message });
       return;
