@@ -382,6 +382,13 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const readTool = toolStarts.find((e) => e['tool_name'] === 'read_repo_file');
     expect(readTool).toBeDefined();
 
+    // The matching result should be a success — validates the full
+    // tool_call_start → execute → tool_call_result SSE round-trip.
+    const toolResults = findEvents(events, 'tool_call_result');
+    const readResult = toolResults.find((e) => e['tool_id'] === readTool?.['tool_id']);
+    expect(readResult).toBeDefined();
+    expect(readResult?.['status']).toBe('success');
+
     const responseText = allText(events);
     expect(responseText.toLowerCase()).toContain('test');
   }, TIMEOUT);

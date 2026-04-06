@@ -131,9 +131,11 @@ export async function handleCompacting(
   }
 
   // Build the compacted message list: summary + recent turns.
-  // Uses 'system' role — this is context injected by the runtime, not user input.
+  // Uses 'user' role so it's valid for Anthropic (which rejects system
+  // messages after user/assistant turns). The "[Conversation Summary]"
+  // prefix makes the provenance clear to the model.
   const summaryMessage: ModelMessage = {
-    role: 'system',
+    role: 'user',
     content: `${COMPACTION_SUMMARY_PREFIX}\n\n${summaryResult.value.text}`,
   };
   const compactedMessages = [summaryMessage, ...recentMessages];

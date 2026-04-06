@@ -102,8 +102,8 @@ export async function handleThinking(
       disabledUntilTurn: untilTurn,
     });
     const escalationMessage: ModelMessage = {
-      role: 'system',
-      content: `[Escalation] You have called ${loop.toolName} ${loop.count} times with similar parameters and are not making progress. The ${loop.toolName} tool has been temporarily disabled for the next ${cooldown} turns — use a different tool or ask the user for help.`,
+      role: 'user',
+      content: `[System Notice — Escalation] You have called ${loop.toolName} ${loop.count} times with similar parameters and are not making progress. The ${loop.toolName} tool has been temporarily disabled for the next ${cooldown} turns — use a different tool or ask the user for help.`,
     };
     messages = [...messages, escalationMessage];
   } else if (loop && loop.count >= ctx.config.loopWarningThreshold) {
@@ -113,8 +113,8 @@ export async function handleThinking(
       count: loop.count,
     });
     const warningMessage: ModelMessage = {
-      role: 'system',
-      content: `[Warning] You have called ${loop.toolName} ${loop.count} times with similar parameters. Try a different approach.`,
+      role: 'user',
+      content: `[System Notice — Warning] You have called ${loop.toolName} ${loop.count} times with similar parameters. Try a different approach.`,
     };
     messages = [...messages, warningMessage];
   }

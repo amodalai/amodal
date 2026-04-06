@@ -47,6 +47,8 @@ export type { NavigateFn } from './hooks/useNavigate';
 // Hooks — widget-oriented (chat API)
 export { useChat } from './hooks/useChat';
 export type { UseChatOptions, UseChatReturn } from './hooks/useChat';
+export { useChatStream, chatReducer } from './hooks/useChatStream';
+export type { UseChatStreamOptions, UseChatStreamReturn } from './hooks/useChatStream';
 export { useWidgetEvents } from './hooks/useWidgetEvents';
 export type { UseWidgetEventsReturn } from './hooks/useWidgetEvents';
 export { useSessionHistory } from './hooks/useSessionHistory';

@@ -6,12 +6,13 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import type { FormEvent } from 'react';
-import { Send, Square, Loader2, CheckCircle2, XCircle, Wrench, Pencil, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Send, Square, Loader2, Wrench, Pencil, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import { useAmodalChat } from '@amodalai/react';
 import type { ToolCallInfo, ContentBlock, ConfirmationInfo } from '@amodalai/react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
+import { ToolCallCard } from '@/components/ToolCallCard';
 
 function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, model }: {
   messageId: string;
@@ -32,7 +33,8 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({sessionId: sessionId ?? '', messageId, rating: r, comment: c, query, response, toolCalls, model}),
-    }).catch(() => {});
+        // eslint-disable-next-line no-console -- fire-and-forget: log for debugging
+    }).catch((err: unknown) => { console.warn('[feedback] submit failed:', err); });
   };
 
   const clear = () => {
@@ -99,93 +101,6 @@ function ElapsedTimer({ startTime }: { startTime: number }) {
   }, [startTime]);
   if (elapsed < 1) return null;
   return <span className="text-muted-foreground font-mono tabular-nums text-xs">{elapsed}s</span>;
-}
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'text-blue-500',
-  POST: 'text-emerald-500',
-  PUT: 'text-amber-500',
-  PATCH: 'text-amber-500',
-  DELETE: 'text-red-500',
-};
-
-function formatParams(params: Record<string, unknown>): string {
-  // For request tool, skip meta fields and show the interesting ones
-  const skip = new Set(['connection', 'method', 'path', 'intent', 'body']);
-  const entries = Object.entries(params).filter(([k]) => !skip.has(k));
-  if (entries.length === 0 && params['body'] && typeof params['body'] === 'object') {
-    // Show body keys instead
-    const bodyKeys = Object.keys(params['body'] as unknown as Record<string, unknown>).slice(0, 3); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
-    return bodyKeys.map((k) => k).join(', ');
-  }
-  return entries.slice(0, 3).map(([k, v]) => {
-    const val = typeof v === 'string' ? v : JSON.stringify(v);
-    const truncated = val.length > 30 ? val.slice(0, 27) + '...' : val;
-    return `${k}: ${truncated}`;
-  }).join('  ');
-}
-
-function ToolCallCard({ call }: { call: ToolCallInfo }) {
-  const isRunning = call.status === 'running';
-  const isError = call.status === 'error';
-  const params = call.parameters ?? {};
-
-  // Request tool — show connection, method, path
-  const isRequest = call.toolName === 'request' && typeof params['connection'] === 'string';
-  const connection = isRequest ? String(params['connection']) : null;
-  const method = isRequest ? String(params['method'] ?? 'GET').toUpperCase() : null;
-  const path = isRequest ? String(params['path'] ?? '') : null;
-  const paramLine = isRequest ? formatParams(params) : null;
-
-  if (isRequest && connection) {
-    return (
-      <div className="my-1.5 rounded-lg bg-muted border border-border overflow-hidden">
-        <div className="flex items-center gap-2 px-3 py-2">
-          {isRunning ? (
-            <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
-          ) : isError ? (
-            <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-          ) : (
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-          )}
-          <span className="text-[13px] font-semibold text-foreground">{connection}</span>
-          {method && (
-            <span className={`text-[10px] font-mono font-bold ${METHOD_COLORS[method] ?? 'text-gray-500'}`}>
-              {method}
-            </span>
-          )}
-          {path && (
-            <span className="text-[12px] font-mono text-muted-foreground truncate">{path}</span>
-          )}
-          {call.duration_ms != null && (
-            <span className="text-[11px] text-muted-foreground ml-auto tabular-nums shrink-0">{String(call.duration_ms)}ms</span>
-          )}
-        </div>
-        {paramLine && (
-          <div className="px-3 pb-2 text-[11px] text-muted-foreground font-mono truncate">
-            {paramLine}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Generic tool call — compact badge
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 my-1.5 rounded-lg bg-muted border border-border text-xs font-mono">
-      {isRunning ? (
-        <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
-      ) : isError ? (
-        <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-      ) : (
-        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-      )}
-      <span className="text-primary dark:text-primary font-semibold">{call.toolName}</span>
-      {call.duration_ms != null && (
-        <span className="text-zinc-500 ml-auto">{String(call.duration_ms)}ms</span>
-      )}
-    </div>
-  );
 }
 
 function ConfirmationCard({ confirmation, onApprove, onDeny }: {
@@ -294,7 +209,8 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
         const session = sessions.find((s) => s.id === sessionId);
         if (session) setTitle(session.title ?? session.summary);
       })
-      .catch(() => {});
+      // eslint-disable-next-line no-console -- fire-and-forget: log for debugging
+      .catch((err: unknown) => { console.warn('[session] title fetch failed:', err); });
   }, [sessionId]);
 
   if (!sessionId || !title) return null;
@@ -308,7 +224,8 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: trimmed }),
-    }).catch(() => {});
+    // eslint-disable-next-line no-console -- fire-and-forget: log for debugging
+    }).catch((err: unknown) => { console.warn('[session] title save failed:', err); });
   };
 
   if (editing) {
@@ -414,7 +331,8 @@ export function ChatPage() {
           setHistory(msgs.filter((m) => m.role === 'user' || m.role === 'assistant'));
         }
       })
-      .catch(() => {});
+      // eslint-disable-next-line no-console -- fire-and-forget: log for debugging
+      .catch((err: unknown) => { console.warn('[session] history fetch failed:', err); });
   }, [activeResumeId]);
 
   useEffect(() => {
@@ -572,7 +490,7 @@ export function ChatPage() {
               setInput(e.target.value);
               const el = e.target;
               el.style.height = 'auto';
-              el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+              el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
             }}
             onKeyDown={handleKeyDown}
             placeholder="Message..."

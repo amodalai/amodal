@@ -4,8 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {describe, it, expect, vi, beforeEach} from 'vitest';
+import {describe, it, expect, vi, beforeEach, afterAll} from 'vitest';
+import {mkdtempSync, rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 import {createLocalServer} from './local-server.js';
+
+// Use a real temp dir so PGLite session store can create its data files.
+const TEST_REPO = mkdtempSync(join(tmpdir(), 'amodal-server-test-'));
+afterAll(() => { rmSync(TEST_REPO, {recursive: true, force: true}); });
 
 // Use vi.hoisted so mocks survive vi.restoreAllMocks() from global test-setup
 const {mockLoadRepo, mockSetupSession, mockPrepareExploreConfig, mockPlanModeManager} = vi.hoisted(() => ({
@@ -35,7 +42,7 @@ vi.mock('@amodalai/core', async (importOriginal) => {
 
 const MOCK_REPO = {
   source: 'local',
-  origin: '/test',
+  origin: TEST_REPO,
   config: {
     name: 'test',
     version: '1.0.0',
@@ -94,7 +101,7 @@ describe('createLocalServer', () => {
 
   it('should create a server instance', async () => {
     const server = await createLocalServer({
-      repoPath: '/test',
+      repoPath: TEST_REPO,
       port: 0,
     });
 
@@ -106,7 +113,7 @@ describe('createLocalServer', () => {
 
   it('should respond to health checks', async () => {
     const server = await createLocalServer({
-      repoPath: '/test',
+      repoPath: TEST_REPO,
       port: 0,
     });
 
@@ -117,13 +124,13 @@ describe('createLocalServer', () => {
     expect(res.body).toMatchObject({
       status: 'ok',
       mode: 'repo',
-      repo_path: '/test',
+      repo_path: TEST_REPO,
     });
   });
 
   it('should start and stop cleanly', async () => {
     const server = await createLocalServer({
-      repoPath: '/test',
+      repoPath: TEST_REPO,
       port: 0,
       host: '127.0.0.1',
     });
@@ -136,7 +143,7 @@ describe('createLocalServer', () => {
 
   it('should respond to inspect endpoint', async () => {
     const server = await createLocalServer({
-      repoPath: '/test',
+      repoPath: TEST_REPO,
       port: 0,
     });
 
@@ -144,7 +151,7 @@ describe('createLocalServer', () => {
     const res = await request(server.app).get('/inspect/context');
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('repo_path', '/test');
+    expect(res.body).toHaveProperty('repo_path', TEST_REPO);
     expect(res.body).toHaveProperty('connections');
     expect(res.body).toHaveProperty('skills');
     expect(res.body).toHaveProperty('knowledge');
