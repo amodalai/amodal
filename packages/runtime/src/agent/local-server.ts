@@ -682,11 +682,15 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
       if (server) {
         const s = server;
+        // Stop accepting new connections
         await new Promise<void>((resolve, reject) => {
           s.close((err) => {
             if (err) reject(err);
             else resolve();
           });
+          // Force-close existing connections (SSE streams, etc.) so
+          // close() doesn't hang waiting for them to drain.
+          s.closeAllConnections();
         });
         server = null;
       }

@@ -185,6 +185,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
             if (err) reject(err);
             else resolve();
           });
+          s.closeAllConnections();
         });
         server = null;
       }
