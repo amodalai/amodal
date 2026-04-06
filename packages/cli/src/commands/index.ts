@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable import/no-internal-modules -- barrel file re-exports from internal modules */
+ 
 
 import {initCommand} from './init.js';
 import {devCommand} from './dev.js';
@@ -17,7 +17,6 @@ import {pkgCommand} from './groups/pkg.js';
 import {deployGroupCommand} from './groups/deploy.js';
 import {opsCommand} from './groups/ops.js';
 import {authCommand} from './groups/auth.js';
-import {channelsCommand} from './groups/channels.js';
 
 /**
  * All amodal subcommands registered on the root yargs instance.
@@ -39,5 +38,4 @@ export const amodalCommands = [
   deployGroupCommand,
   opsCommand,
   authCommand,
-  channelsCommand,
 ];
