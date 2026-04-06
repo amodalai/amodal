@@ -69,8 +69,14 @@ interface ProviderStatus {
   error?: string;
 }
 
+// Each check must use an endpoint that returns 200 on a valid key and
+// a distinct auth-failure status (typically 401) on a bad key. Do NOT
+// use endpoints with method guards that might return 405 before the
+// auth check — `GET /v1/messages` on Anthropic does exactly that, and
+// makes every key (good or bad) look invalid because Anthropic returns
+// 405 for wrong-method regardless of whether the x-api-key is real.
 const PROVIDER_CHECKS = [
-  {provider: 'anthropic', envVar: 'ANTHROPIC_API_KEY', url: 'https://api.anthropic.com/v1/messages', authHeader: (key: string) => ({'x-api-key': key, 'anthropic-version': '2023-06-01'})},
+  {provider: 'anthropic', envVar: 'ANTHROPIC_API_KEY', url: 'https://api.anthropic.com/v1/models', authHeader: (key: string) => ({'x-api-key': key, 'anthropic-version': '2023-06-01'})},
   {provider: 'openai', envVar: 'OPENAI_API_KEY', url: 'https://api.openai.com/v1/models', authHeader: (key: string) => ({Authorization: `Bearer ${key}`})},
 ];
 
