@@ -134,7 +134,6 @@ export async function handleDispatching(
     logger: ctx.logger,
     signal: childSignal,
     sessionId: ctx.sessionId,
-    user: ctx.user,
     systemPrompt: childSystemPrompt,
     messages: [],
     usage: {inputTokens: 0, outputTokens: 0, totalTokens: 0},

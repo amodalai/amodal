@@ -106,7 +106,6 @@ function makeRepo(overrides?: Partial<AgentBundle>): AgentBundle {
 function makeSession(overrides?: Partial<SessionConfig>): SessionConfig {
   return {
     repo: makeRepo(),
-    userRoles: ['analyst'],
     scopeLabels: {},
     fieldGuidance: '',
     alternativeLookupGuidance: '',

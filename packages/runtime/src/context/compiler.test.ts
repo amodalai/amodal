@@ -10,7 +10,7 @@
  * Covers:
  * 1. Basic compilation — identity, core behavior, error handling
  * 2. Gotcha G9 — system prompt includes ALL context (skills, knowledge, connections)
- * 3. Gotcha G10 — userContext and description both appear in correct places
+ * 3. Description handling
  * 4. Store schemas — rendered as tables in the prompt
  * 5. Field guidance — generated from connection access configs
  * 6. Scope labels — resolved from row scoping rules
@@ -83,13 +83,11 @@ function makeFullInput(): CompilerInput {
   return {
     name: 'Sales Agent',
     description: 'A B2B sales intelligence agent for Acme Corp',
-    userContext: 'Always use a professional tone. Never share competitor pricing.',
     agentOverride: 'You specialize in enterprise sales pipeline analysis.',
     connections: [makeConnection()],
     skills: [makeSkill()],
     knowledge: [makeKnowledge()],
     stores: [makeStore()],
-    userRoles: ['sales_rep'],
   };
 }
 
@@ -168,41 +166,10 @@ describe('compileContext', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 3. Gotcha G10 — userContext vs description
+  // 3. Description handling
   // -------------------------------------------------------------------------
 
-  it('G10: userContext and description both appear and are distinct', () => {
-    const result = compileContext({
-      name: 'Agent',
-      description: 'A content marketing agent for Amodal',
-      userContext: 'Always use casual tone. Never post without scheduling.',
-    });
-    const prompt = result.systemPrompt;
-
-    // Description is in the identity line
-    expect(prompt).toContain('A content marketing agent for Amodal');
-
-    // userContext is a separate section, not in the identity line
-    expect(prompt).toContain('Always use casual tone');
-    expect(prompt).toContain('Never post without scheduling');
-
-    // They appear in different locations
-    const descriptionIndex = prompt.indexOf('A content marketing agent for Amodal');
-    const contextIndex = prompt.indexOf('Always use casual tone');
-    expect(descriptionIndex).toBeLessThan(contextIndex);
-  });
-
-  it('G10: userContext without description works', () => {
-    const result = compileContext({
-      name: 'Agent',
-      userContext: 'Be concise.',
-    });
-
-    expect(result.systemPrompt).toContain('You are Agent.');
-    expect(result.systemPrompt).toContain('Be concise.');
-  });
-
-  it('G10: description without userContext works', () => {
+  it('description appears in the identity line', () => {
     const result = compileContext({
       name: 'Agent',
       description: 'A sales agent',
@@ -371,29 +338,14 @@ describe('compileContext', () => {
           {entity: 'Invoice', field: 'internal_notes', policy: 'role_gated', allowedRoles: ['admin']},
         ],
       })],
-      userRoles: ['sales_rep'],
     });
     const prompt = result.systemPrompt;
 
     expect(prompt).toContain('## Field Access Restrictions');
     expect(prompt).toContain('Do not request: Customer.tax_id (PII)');
     expect(prompt).toContain('Will be redacted: Customer.email');
-    expect(prompt).toContain('Do not request: Invoice.internal_notes (requires role: admin)');
-  });
-
-  it('allows role-gated fields when user has the role', () => {
-    const result = compileContext({
-      name: 'Agent',
-      connections: [makeConnection({
-        fieldRestrictions: [
-          {entity: 'Invoice', field: 'internal_notes', policy: 'role_gated', allowedRoles: ['admin']},
-        ],
-      })],
-      userRoles: ['admin'],
-    });
-
-    // Should NOT include "Do not request" for a field the user has access to
-    expect(result.systemPrompt).not.toContain('Do not request: Invoice.internal_notes');
+    // role_gated fields are always denied in OSS runtime (no role system)
+    expect(prompt).toContain('Do not request: Invoice.internal_notes');
   });
 
   it('omits field guidance section when no restrictions', () => {
@@ -409,7 +361,7 @@ describe('compileContext', () => {
   // 9. Scope labels
   // -------------------------------------------------------------------------
 
-  it('resolves scope labels from row scoping rules', () => {
+  it('omits scope labels in OSS runtime (no role system)', () => {
     const result = compileContext({
       name: 'Agent',
       connections: [makeConnection({
@@ -420,24 +372,9 @@ describe('compileContext', () => {
           },
         },
       })],
-      userRoles: ['sales_rep'],
     });
 
-    expect(result.systemPrompt).toContain('## Data Scope');
-    expect(result.systemPrompt).toContain("Customer: your team's customers");
-  });
-
-  it('omits scope section when no roles match', () => {
-    const result = compileContext({
-      name: 'Agent',
-      connections: [makeConnection({
-        rowScoping: {
-          Customer: {admin: {type: 'all', label: 'all customers'}},
-        },
-      })],
-      userRoles: ['viewer'],
-    });
-
+    // Without a role system, scope labels are never resolved
     expect(result.systemPrompt).not.toContain('## Data Scope');
   });
 

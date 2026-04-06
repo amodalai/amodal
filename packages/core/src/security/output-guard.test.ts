@@ -33,7 +33,6 @@ describe('OutputGuard', () => {
     const guard = new OutputGuard({
       tracker,
       accessConfigs: new Map(),
-      userRoles: [],
     });
 
     const result = guard.guard('Everything looks normal');
@@ -56,8 +55,7 @@ describe('OutputGuard', () => {
       const guard = new OutputGuard({
         tracker,
         accessConfigs: new Map(),
-        userRoles: [],
-      });
+        });
 
       const result = guard.guard('The contact is John Doe');
       expect(result.output).toBe('The contact is [REDACTED]');
@@ -77,8 +75,7 @@ describe('OutputGuard', () => {
       const guard = new OutputGuard({
         tracker,
         accessConfigs: new Map(),
-        userRoles: [],
-      });
+        });
 
       const result = guard.guard('Salary is 150000');
       expect(result.output).toBe('Salary is [REDACTED]');
@@ -90,8 +87,7 @@ describe('OutputGuard', () => {
       const guard = new OutputGuard({
         tracker,
         accessConfigs: new Map(),
-        userRoles: [],
-      });
+        });
 
       const result = guard.guard('SSN: 123-45-6789');
       expect(result.output).toBe('SSN: [REDACTED]');
@@ -105,8 +101,7 @@ describe('OutputGuard', () => {
       const guard = new OutputGuard({
         tracker,
         accessConfigs: new Map(),
-        userRoles: [],
-      });
+        });
 
       const result = guard.guard('Card: 4111111111111111');
       expect(result.output).toContain('[REDACTED]');
@@ -127,8 +122,7 @@ describe('OutputGuard', () => {
       const guard = new OutputGuard({
         tracker,
         accessConfigs: new Map(),
-        userRoles: [],
-      });
+        });
 
       const result = guard.guard('Found: LEAKED-SSN in the record');
       expect(result.output).toContain('[REDACTED]');
@@ -152,8 +146,7 @@ describe('OutputGuard', () => {
       const guard = new OutputGuard({
         tracker,
         accessConfigs: new Map(),
-        userRoles: [],
-      });
+        });
 
       const result = guard.guard(
         'The contact record shows Jane Smith as primary',
@@ -165,34 +158,11 @@ describe('OutputGuard', () => {
     });
   });
 
-  describe('stage 4: scope check', () => {
-    it('flags unqualified aggregates', () => {
+  describe('no scope checking (no role system)', () => {
+    it('does not flag aggregate statements', () => {
       const guard = new OutputGuard({
         tracker,
         accessConfigs: new Map(),
-        userRoles: [],
-        scopeContext: {
-          scopeRules: {
-            deal: {type: 'field_match', userContextField: 'owner_id'},
-          },
-          scopeLabels: {deal: 'by owner'},
-        },
-      });
-
-      const result = guard.guard('All deals have been processed');
-      const scopeFinding = result.findings.find(
-        (f) => f.type === 'scope_violation',
-      );
-      expect(scopeFinding).toBeDefined();
-      expect(scopeFinding?.severity).toBe('warning');
-      expect(result.blocked).toBe(false); // warnings don't block
-    });
-
-    it('does not flag when no scope context', () => {
-      const guard = new OutputGuard({
-        tracker,
-        accessConfigs: new Map(),
-        userRoles: [],
       });
 
       const result = guard.guard('All deals have been processed');
@@ -212,13 +182,6 @@ describe('OutputGuard', () => {
     const guard = new OutputGuard({
       tracker,
       accessConfigs: new Map(),
-      userRoles: [],
-      scopeContext: {
-        scopeRules: {
-          deal: {type: 'field_match', userContextField: 'owner_id'},
-        },
-        scopeLabels: {},
-      },
     });
 
     const result = guard.guard(
@@ -233,7 +196,6 @@ describe('OutputGuard', () => {
     const guard = new OutputGuard({
       tracker,
       accessConfigs: new Map(),
-      userRoles: [],
     });
 
     const result = guard.guard('');
@@ -245,24 +207,16 @@ describe('OutputGuard', () => {
     const guard = new OutputGuard({
       tracker,
       accessConfigs: new Map(),
-      userRoles: [],
     });
 
     const result = guard.guard('SSN: 123-45-6789');
     expect(result.blocked).toBe(true);
   });
 
-  it('blocked is false when only warnings', () => {
+  it('blocked is false when no critical findings', () => {
     const guard = new OutputGuard({
       tracker,
       accessConfigs: new Map(),
-      userRoles: [],
-      scopeContext: {
-        scopeRules: {
-          deal: {type: 'field_match', userContextField: 'owner_id'},
-        },
-        scopeLabels: {},
-      },
     });
 
     const result = guard.guard('All deals look good');
@@ -281,7 +235,6 @@ describe('OutputGuard', () => {
     const guard = new OutputGuard({
       tracker,
       accessConfigs: new Map(),
-      userRoles: [],
     });
 
     const result = guard.guard('John said hi, John is here');
@@ -300,22 +253,14 @@ describe('OutputGuard', () => {
     const guard = new OutputGuard({
       tracker,
       accessConfigs: new Map(),
-      userRoles: [],
-      scopeContext: {
-        scopeRules: {
-          deal: {type: 'field_match', userContextField: 'owner_id'},
-        },
-        scopeLabels: {},
-      },
     });
 
     const result = guard.guard(
       'SECRET found across all deals, SSN: 123-45-6789',
     );
-    // Should have findings from field_redaction, pattern_match, and scope_violation
+    // Should have findings from field_redaction and pattern_match
     const types = new Set(result.findings.map((f) => f.type));
     expect(types.has('field_redaction')).toBe(true);
     expect(types.has('pattern_match')).toBe(true);
-    expect(types.has('scope_violation')).toBe(true);
   });
 });

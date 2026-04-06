@@ -67,7 +67,6 @@ export interface SessionComponents {
   permissionChecker: PermissionChecker;
   systemPrompt: string;
   toolContextFactory: (callId: string) => ToolContext;
-  userRoles: string[];
 }
 
 /** Options for building session components. */
@@ -80,8 +79,6 @@ export interface BuildSessionComponentsOptions {
   mcpManager: McpManager | null;
   /** Session type — determines which content and tools are available. */
   sessionType?: SessionType;
-  /** User roles for permission checks and field guidance. */
-  userRoles?: string[];
   /** Pinned model override (takes precedence over bundle config). */
   pinnedModel?: {provider: string; model: string};
   /** Logger instance. */
@@ -270,7 +267,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     storeBackend,
     mcpManager,
     sessionType = 'chat',
-    userRoles = [],
     pinnedModel,
     logger,
     appId = LOCAL_APP_ID,
@@ -424,7 +420,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   const compilerInput: CompilerInput = {
     name: bundle.config.name,
     description: bundle.config.description,
-    userContext: bundle.config.userContext,
     agentOverride,
     basePrompt: bundle.config.basePrompt,
     connections: compilerConnections,
@@ -447,7 +442,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
         schema: s.entity.schema,
       },
     })),
-    userRoles,
   };
 
   const compiled = compileContext(compilerInput);
@@ -473,7 +467,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     logger,
     fieldScrubber,
     sessionId,
-    user: {roles: userRoles},
     ...(searchProvider ? {searchProvider} : {}),
   };
 
@@ -489,7 +482,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     permissionChecker: sessionPermissionChecker,
     systemPrompt: compiled.systemPrompt,
     toolContextFactory,
-    userRoles,
   };
 }
 

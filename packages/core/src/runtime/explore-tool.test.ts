@@ -67,7 +67,6 @@ function makeSessionRuntime(overrides?: {
     compiledContext: {systemPrompt: '', tokenUsage: {total: 0, used: 0, remaining: 0, sectionBreakdown: {}}, sections: []},
     outputPipeline: {} as SessionRuntime['outputPipeline'],
     telemetry: {} as SessionRuntime['telemetry'],
-    userRoles: [],
     sessionId: 'test-session-id',
     isDelegated: false,
   };

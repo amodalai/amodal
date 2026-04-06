@@ -18,7 +18,6 @@ describe('ChatRequestSchema', () => {
     if (result.success) {
       expect(result.data.message).toBe('hello');
       expect(result.data.session_id).toBeUndefined();
-      expect(result.data.role).toBeUndefined();
     }
   });
 
@@ -26,12 +25,10 @@ describe('ChatRequestSchema', () => {
     const result = ChatRequestSchema.safeParse({
       message: 'hello',
       session_id: 'sess-123',
-      role: 'analyst',
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.session_id).toBe('sess-123');
-      expect(result.data.role).toBe('analyst');
     }
   });
 

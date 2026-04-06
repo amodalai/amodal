@@ -13,7 +13,6 @@ import type {ScrubTracker} from './scrub-tracker.js';
 
 export interface FieldScrubberConfig {
   accessConfigs: Map<string, AccessConfig>;
-  userRoles: string[];
   tracker: ScrubTracker;
 }
 
@@ -23,12 +22,10 @@ export interface FieldScrubberConfig {
  */
 export class FieldScrubber {
   private readonly accessConfigs: Map<string, AccessConfig>;
-  private readonly userRoles: string[];
   private readonly tracker: ScrubTracker;
 
   constructor(config: FieldScrubberConfig) {
     this.accessConfigs = config.accessConfigs;
-    this.userRoles = config.userRoles;
     this.tracker = config.tracker;
   }
 
@@ -75,38 +72,17 @@ export class FieldScrubber {
     );
 
     for (const record of records) {
-      if (record.policy === 'never_retrieve') {
+      if (record.policy === 'never_retrieve' || record.policy === 'role_gated') {
+        // role_gated is always denied in OSS runtime (no role system)
         strippedCount++;
       } else if (record.policy === 'retrieve_but_redact') {
         redactableCount++;
-      } else if (record.policy === 'role_gated') {
-        if (!this.hasRole(this.findRestriction(restrictions, record))) {
-          strippedCount++;
-        } else {
-          redactableCount++;
-        }
       }
     }
 
     this.tracker.addRecords(records);
 
     return {data: scrubbed, records, strippedCount, redactableCount};
-  }
-
-  private findRestriction(
-    restrictions: FieldRestriction[],
-    record: ScrubRecord,
-  ): FieldRestriction | undefined {
-    return restrictions.find(
-      (r) => r.entity === record.entity && r.field === record.field,
-    );
-  }
-
-  private hasRole(restriction: FieldRestriction | undefined): boolean {
-    if (!restriction) return false;
-    const allowed = restriction.allowedRoles;
-    if (!allowed || allowed.length === 0) return false;
-    return this.userRoles.some((role) => allowed.includes(role));
   }
 
   private walkAndScrub(
@@ -172,13 +148,9 @@ export class FieldScrubber {
                 records.push(record);
                 result[key] = value; // keep for now, output guard redacts
               } else if (restriction.policy === 'role_gated') {
-                if (this.hasRole(restriction)) {
-                  records.push(record);
-                  result[key] = value; // keep, redactable
-                } else {
-                  records.push(record);
-                  continue; // strip — no role access
-                }
+                // No role system in OSS runtime — always strip role_gated fields
+                records.push(record);
+                continue; // strip — no role access
               }
               continue;
             }

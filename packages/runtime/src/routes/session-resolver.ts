@@ -60,7 +60,6 @@ export interface ResolveSessionOptions {
   sessionManager: StandaloneSessionManager;
   bundleResolver: BundleResolver;
   shared: SharedResources;
-  role?: string;
   sessionType?: SessionType;
   deployId?: string;
   auth?: AuthContext;
@@ -69,6 +68,15 @@ export interface ResolveSessionOptions {
    * a new session; resumed sessions keep the budget set at creation.
    */
   maxSessionTokens?: number;
+  /**
+   * Hook called after session components are built but before the session
+   * is created. Allows the hosting layer to enhance components — e.g.,
+   * injecting role-based field guidance into the system prompt.
+   */
+  onSessionBuild?: (
+    components: SessionComponents,
+    context: { auth?: AuthContext; bundle: AgentBundle },
+  ) => SessionComponents | Promise<SessionComponents>;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +109,6 @@ function buildComponents(
   shared: SharedResources,
   opts: {
     sessionType?: SessionType;
-    userRoles: string[];
     sessionId?: string;
   },
 ): SessionComponents {
@@ -113,7 +120,6 @@ function buildComponents(
     toolExecutor: shared.toolExecutor,
     fieldScrubber: shared.fieldScrubber,
     sessionType: opts.sessionType,
-    userRoles: opts.userRoles,
     sessionId: opts.sessionId,
   });
 }
@@ -141,7 +147,6 @@ export async function resolveSession(
   opts: ResolveSessionOptions,
 ): Promise<ResolvedSession> {
   const {sessionManager, bundleResolver, shared, auth} = opts;
-  const userRoles = opts.role ? [opts.role] : [];
 
   // 1. In-memory lookup (existing live session)
   if (sessionId) {
@@ -154,20 +159,35 @@ export async function resolveSession(
   // Resolve bundle once — shared between resume and create paths
   const bundle = await resolveBundle(bundleResolver, opts.deployId, auth?.token);
 
+  // Run the onSessionBuild hook once and cache the enhanced prompt so we
+  // don't make duplicate external calls (e.g. user-context fetch) when the
+  // resume path misses and falls through to create.
+  let hookResult: SessionComponents | null = null;
+  async function enhance(components: SessionComponents): Promise<SessionComponents> {
+    if (!opts.onSessionBuild) return components;
+    // The hook enhances the prompt based on auth + bundle, which is the same
+    // regardless of sessionId. Cache the first result and apply it to
+    // subsequent components by copying the enhanced systemPrompt.
+    if (!hookResult) {
+      hookResult = await opts.onSessionBuild(components, {auth, bundle: bundle!});
+      return hookResult;
+    }
+    // Reuse the enhanced prompt from the first call
+    return {...components, systemPrompt: hookResult.systemPrompt};
+  }
+
   // 2. Resume from store (with dedup handled by StandaloneSessionManager)
   if (sessionId && bundle) {
-    const components = buildComponents(bundle, shared, {
+    const components = await enhance(buildComponents(bundle, shared, {
       sessionType: opts.sessionType,
-      userRoles,
       sessionId,
-    });
+    }));
 
     const resumed = await sessionManager.resume(sessionId, {
       provider: components.provider,
       toolRegistry: components.toolRegistry,
       permissionChecker: components.permissionChecker,
       systemPrompt: components.systemPrompt,
-      userRoles: components.userRoles,
       toolContextFactory: components.toolContextFactory,
     });
 
@@ -184,17 +204,15 @@ export async function resolveSession(
     });
   }
 
-  const components = buildComponents(bundle, shared, {
+  const components = await enhance(buildComponents(bundle, shared, {
     sessionType: opts.sessionType,
-    userRoles,
-  });
+  }));
 
   const session = sessionManager.create({
     provider: components.provider,
     toolRegistry: components.toolRegistry,
     permissionChecker: components.permissionChecker,
     systemPrompt: components.systemPrompt,
-    userRoles: components.userRoles,
     toolContextFactory: components.toolContextFactory,
     maxSessionTokens: opts.maxSessionTokens,
   });

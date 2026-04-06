@@ -87,7 +87,6 @@ const mockCtx: ToolContext = {
   store: vi.fn(),
   env: vi.fn(),
   log: vi.fn(),
-  user: {roles: ['admin']},
   signal: AbortSignal.timeout(5000),
   sessionId: 'test-session',
 };

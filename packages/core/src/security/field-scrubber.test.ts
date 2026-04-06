@@ -56,7 +56,6 @@ describe('FieldScrubber', () => {
   it('passes through data when no access config exists', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map(),
-      userRoles: [],
       tracker,
     });
 
@@ -70,7 +69,6 @@ describe('FieldScrubber', () => {
   it('passes through data when endpoint not found', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -84,7 +82,6 @@ describe('FieldScrubber', () => {
   it('strips never_retrieve fields', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -100,7 +97,6 @@ describe('FieldScrubber', () => {
   it('keeps retrieve_but_redact fields and records them', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -112,10 +108,9 @@ describe('FieldScrubber', () => {
     expect(result.redactableCount).toBe(1);
   });
 
-  it('strips role_gated fields when user lacks role', () => {
+  it('strips role_gated fields unconditionally (no role system)', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: ['analyst'],
       tracker,
     });
 
@@ -127,25 +122,9 @@ describe('FieldScrubber', () => {
     expect(result.strippedCount).toBe(1);
   });
 
-  it('keeps role_gated fields when user has role', () => {
-    const scrubber = new FieldScrubber({
-      accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: ['finance_admin'],
-      tracker,
-    });
-
-    const data = {contact: {salary: 150000, email: 'a@b.com'}};
-    const result = scrubber.scrub(data, '/api/contacts', 'crm');
-
-    const scrubbed = result.data as Record<string, Record<string, unknown>>;
-    expect(scrubbed['contact']?.['salary']).toBe(150000);
-    expect(result.redactableCount).toBe(1);
-  });
-
   it('handles arrays of entities', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -170,7 +149,6 @@ describe('FieldScrubber', () => {
   it('handles nested entities via key hints', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -193,7 +171,6 @@ describe('FieldScrubber', () => {
   it('writes records to tracker', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -208,7 +185,6 @@ describe('FieldScrubber', () => {
   it('handles null data', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -220,7 +196,6 @@ describe('FieldScrubber', () => {
   it('handles primitive data', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -231,7 +206,6 @@ describe('FieldScrubber', () => {
   it('handles empty object', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -243,7 +217,6 @@ describe('FieldScrubber', () => {
   it('preserves non-restricted fields', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -270,7 +243,6 @@ describe('FieldScrubber', () => {
 
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['store', config]]),
-      userRoles: [],
       tracker,
     });
 
@@ -281,7 +253,7 @@ describe('FieldScrubber', () => {
     expect(result.records).toHaveLength(0);
   });
 
-  it('role_gated with empty allowedRoles treats as never_retrieve', () => {
+  it('role_gated with empty allowedRoles is always stripped', () => {
     const config = makeAccessConfig({
       fieldRestrictions: [
         {
@@ -296,7 +268,6 @@ describe('FieldScrubber', () => {
 
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', config]]),
-      userRoles: ['admin'],
       tracker,
     });
 
@@ -307,7 +278,7 @@ describe('FieldScrubber', () => {
     expect(scrubbed['contact']?.['secret']).toBeUndefined();
   });
 
-  it('role_gated without allowedRoles property treats as never_retrieve', () => {
+  it('role_gated without allowedRoles property is always stripped', () => {
     const config = makeAccessConfig({
       fieldRestrictions: [
         {
@@ -321,7 +292,6 @@ describe('FieldScrubber', () => {
 
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', config]]),
-      userRoles: ['admin'],
       tracker,
     });
 
@@ -343,7 +313,6 @@ describe('FieldScrubber', () => {
         ['crm', crmConfig],
         ['erp', erpConfig],
       ]),
-      userRoles: [],
       tracker,
     });
 
@@ -359,7 +328,6 @@ describe('FieldScrubber', () => {
   it('handles undefined values gracefully', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -370,7 +338,6 @@ describe('FieldScrubber', () => {
   it('returns correct combined counts', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -389,7 +356,6 @@ describe('FieldScrubber', () => {
   it('handles deeply nested structures', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 
@@ -417,7 +383,6 @@ describe('FieldScrubber', () => {
   it('scrubs contact fields inside deals endpoint', () => {
     const scrubber = new FieldScrubber({
       accessConfigs: new Map([['crm', makeAccessConfig()]]),
-      userRoles: [],
       tracker,
     });
 

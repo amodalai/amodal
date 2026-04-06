@@ -134,7 +134,6 @@ function makeBundle(overrides?: Partial<AgentBundle>): AgentBundle {
       name: 'test-agent',
       version: '1.0.0',
       description: 'A test agent',
-      userContext: 'Be helpful and concise.',
       models: {
         main: {provider: 'anthropic', model: 'claude-sonnet-4-20250514'},
       },
@@ -187,7 +186,7 @@ describe('buildSessionComponents', () => {
     expect(components.permissionChecker).toBeDefined();
     expect(components.systemPrompt).toBeTruthy();
     expect(components.toolContextFactory).toBeInstanceOf(Function);
-    expect(components.userRoles).toEqual([]);
+    // userRoles removed — no role system in OSS runtime
   });
 
   it('registers store tools', () => {
@@ -365,9 +364,9 @@ describe('buildSessionComponents', () => {
       expect(components.systemPrompt).toContain('markdown tables');
     });
 
-    it('includes userContext (G10)', () => {
+    it('includes agent description', () => {
       const components = buildSessionComponents(makeOpts());
-      expect(components.systemPrompt).toContain('Be helpful and concise');
+      expect(components.systemPrompt).toContain('A test agent');
     });
   });
 
@@ -403,12 +402,10 @@ describe('buildSessionComponents', () => {
     it('factory produces ToolContext with correct session info', () => {
       const components = buildSessionComponents(makeOpts({
         sessionId: 'sess-123',
-        userRoles: ['analyst'],
       }));
 
       const ctx = components.toolContextFactory('call-1');
       expect(ctx.sessionId).toBe('sess-123');
-      expect(ctx.user.roles).toEqual(['analyst']);
     });
   });
 });

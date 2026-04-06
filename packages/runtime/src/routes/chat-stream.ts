@@ -21,7 +21,7 @@ import type {AuthContext} from '../middleware/auth.js';
 import type {StandaloneSessionManager} from '../session/manager.js';
 import type {StreamHooks} from '../session/stream-hooks.js';
 import {resolveSession} from './session-resolver.js';
-import type {BundleResolver, SharedResources} from './session-resolver.js';
+import type {BundleResolver, SharedResources, ResolveSessionOptions} from './session-resolver.js';
 import {adaptOnUsage, asyncHandler, fireDrainHooks, UNKNOWN_TOOL_NAME} from './route-helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -40,6 +40,8 @@ export interface ChatStreamRouterOptions {
     content: string;
     signal: AbortSignal;
   }) => Promise<string>;
+  /** Hook to enhance session components before session creation. */
+  onSessionBuild?: ResolveSessionOptions['onSessionBuild'];
 }
 
 // ---------------------------------------------------------------------------
@@ -65,11 +67,11 @@ export function createChatStreamRouter(
           sessionManager: options.sessionManager,
           bundleResolver: options.bundleResolver,
           shared: options.shared,
-          role: body.role,
           sessionType: body.session_type,
           deployId: body.deploy_id,
           auth,
           maxSessionTokens: body.max_session_tokens,
+          onSessionBuild: options.onSessionBuild,
         });
 
         // Set up SSE headers (use setHeader to preserve CORS headers from middleware)

@@ -27,7 +27,6 @@ function createGuard(tracker?: ScrubTracker): OutputGuard {
   return new OutputGuard({
     tracker: tracker ?? new ScrubTracker(),
     accessConfigs: new Map(),
-    userRoles: [],
   });
 }
 
@@ -76,26 +75,17 @@ describe('OutputPipeline', () => {
       expect(result.findings.some((f) => f.type === 'leak_detected')).toBe(true);
     });
 
-    it('scope violation produces warning but does not block', () => {
+    it('no scope violations (no role system)', () => {
       const guard = new OutputGuard({
         tracker,
         accessConfigs: new Map(),
-        userRoles: [],
-        scopeContext: {
-          scopeRules: {
-            deal: {type: 'field_match', userContextField: 'owner_id'},
-          },
-          scopeLabels: {deal: 'by owner'},
-        },
       });
 
       const pipeline = new OutputPipeline({outputGuard: guard});
 
       const result = pipeline.process('All deals have been processed');
       expect(result.blocked).toBe(false);
-      const scopeFinding = result.findings.find((f) => f.type === 'scope_violation');
-      expect(scopeFinding).toBeDefined();
-      expect(scopeFinding?.severity).toBe('warning');
+      expect(result.findings).toHaveLength(0);
     });
 
     it('critical finding blocks output', () => {
@@ -119,13 +109,6 @@ describe('OutputPipeline', () => {
       const guard = new OutputGuard({
         tracker,
         accessConfigs: new Map(),
-        userRoles: [],
-        scopeContext: {
-          scopeRules: {
-            deal: {type: 'field_match', userContextField: 'owner_id'},
-          },
-          scopeLabels: {},
-        },
       });
 
       const pipeline = new OutputPipeline({outputGuard: guard});
@@ -136,7 +119,6 @@ describe('OutputPipeline', () => {
       const types = new Set(result.findings.map((f) => f.type));
       expect(types.has('field_redaction')).toBe(true);
       expect(types.has('pattern_match')).toBe(true);
-      expect(types.has('scope_violation')).toBe(true);
     });
 
     it('calls onGuardDecision callback with guard result', () => {

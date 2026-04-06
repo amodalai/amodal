@@ -9,35 +9,25 @@ import type {ScrubTracker} from './scrub-tracker.js';
 import type {GuardFinding, GuardResult} from './security-types.js';
 import {PatternScanner} from './pattern-scanner.js';
 import {LeakDetector} from './leak-detector.js';
-import {ScopeChecker} from './scope-checker.js';
-import type {ScopeCheckerContext} from './scope-checker.js';
 
 export interface OutputGuardConfig {
   tracker: ScrubTracker;
   accessConfigs: Map<string, AccessConfig>;
-  userRoles: string[];
-  scopeContext?: ScopeCheckerContext;
 }
 
 /**
- * Orchestrates four output guard stages to filter agent responses
+ * Orchestrates output guard stages to filter agent responses
  * before the user sees them.
  */
 export class OutputGuard {
   private readonly tracker: ScrubTracker;
-  private readonly userRoles: string[];
   private readonly patternScanner: PatternScanner;
   private readonly leakDetector: LeakDetector;
-  private readonly scopeChecker: ScopeChecker | null;
 
   constructor(config: OutputGuardConfig) {
     this.tracker = config.tracker;
-    this.userRoles = config.userRoles;
     this.patternScanner = new PatternScanner();
     this.leakDetector = new LeakDetector(config.tracker);
-    this.scopeChecker = config.scopeContext
-      ? new ScopeChecker(config.scopeContext)
-      : null;
   }
 
   guard(output: string): GuardResult {
@@ -45,17 +35,11 @@ export class OutputGuard {
     let text = output;
     let modified = false;
 
-    // Stage 1: Field redaction — replace retrieve_but_redact and denied role_gated values
+    // Stage 1: Field redaction — replace retrieve_but_redact and role_gated values
+    // (role_gated is always denied in OSS runtime — no role system)
     const redactableRecords = this.tracker.getAllRecords().filter((r) => {
       if (r.policy === 'retrieve_but_redact') return true;
-      if (r.policy === 'role_gated') {
-        // Check if user lacks role
-        const restriction = this.findRestrictionForRecord(r);
-        if (!restriction) return true; // conservative
-        const allowed = restriction.allowedRoles;
-        if (!allowed || allowed.length === 0) return true;
-        return !this.userRoles.some((role) => allowed.includes(role));
-      }
+      if (r.policy === 'role_gated') return true;
       return false;
     });
 
@@ -101,42 +85,8 @@ export class OutputGuard {
       });
     }
 
-    // Stage 4: Scope check — flag unqualified aggregates
-    if (this.scopeChecker) {
-      const violations = this.scopeChecker.check(text);
-      for (const v of violations) {
-        findings.push({
-          type: 'scope_violation',
-          description: `Unqualified aggregate for "${v.entity}" — expected: ${v.expectedQualification}`,
-          location: v.snippet,
-          severity: 'warning',
-        });
-      }
-    }
-
     const blocked = findings.some((f) => f.severity === 'critical');
 
     return {output: text, modified, findings, blocked};
-  }
-
-  /**
-   * Look up the original restriction for a scrub record.
-   * Returns a minimal object with allowedRoles for the role check.
-   */
-  private findRestrictionForRecord(
-    record: {entity: string; field: string; connectionName: string},
-  ): {allowedRoles?: string[]} | undefined {
-    const accessConfig = this.tracker
-      .getAllRecords()
-      .find(
-        (r) =>
-          r.entity === record.entity &&
-          r.field === record.field &&
-          r.connectionName === record.connectionName,
-      );
-    // We don't have direct access to the restriction, but we stored policy
-    // For role_gated, we need the original restriction's allowedRoles
-    // Since we only have the record, treat missing roles as denied (conservative)
-    return accessConfig ? {allowedRoles: []} : undefined;
   }
 }

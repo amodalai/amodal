@@ -321,7 +321,6 @@ export type ContentBlock =
 
 export interface ChatUser {
   id: string;
-  role?: string;
 }
 
 export interface ChatTheme {

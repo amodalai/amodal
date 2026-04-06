@@ -87,7 +87,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
       const contributions: Array<{name: string; category: string; tokens: number; filePath?: string}> = [];
 
       try {
-        const { buildDefaultPrompt, resolveScopeLabels, generateFieldGuidance, generateAlternativeLookupGuidance } = await import('@amodalai/core');
+        const { buildDefaultPrompt, generateFieldGuidance, generateAlternativeLookupGuidance } = await import('@amodalai/core');
         const est = (text: string) => Math.ceil(text.length / 4);
 
         const connArray = repo.connections?.size ? Array.from(repo.connections.values()).map((conn: {name: string; surface?: Array<{included: boolean; method: string; path: string; description: string}>; entities?: string; rules?: string}) => ({
@@ -100,13 +100,11 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
         const knowledgeArray = repo.knowledge?.map((k: {name: string; title?: string; body?: string}) => ({name: k.name, title: k.title, body: k.body ?? ''}));
 
         // Compute scope/field/alt guidance same as session-manager
-        let scopeLabels: Record<string, string> = {};
+        const scopeLabels: Record<string, string> = {};
         let fieldGuidance: string | undefined;
         let altLookup: string | undefined;
         if (repo.connections?.size) {
-          const scopeResult = resolveScopeLabels(repo.connections, []);
-          scopeLabels = scopeResult.scopeLabels;
-          fieldGuidance = generateFieldGuidance(repo.connections, []);
+          fieldGuidance = generateFieldGuidance(repo.connections);
           altLookup = generateAlternativeLookupGuidance(repo.connections);
         }
 
@@ -114,7 +112,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
         systemPrompt = repo.config?.basePrompt ?? buildDefaultPrompt({
           name: repo.config?.name ?? 'Agent',
           description: repo.config?.description,
-          agentContext: String(repo.config?.userContext ?? repo.config?.description ?? ''),
+          agentContext: String(repo.config?.description ?? ''),
           agentOverride: repo.agents?.main,
           connections: connArray,
           skills: skillArray,

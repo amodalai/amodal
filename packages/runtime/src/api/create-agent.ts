@@ -105,13 +105,12 @@ export async function createAgent(config: AgentConfig): Promise<Agent> {
   });
 
   return {
-    createSession(opts) {
+    createSession() {
       const session = sessionManager.create({
         provider: components.provider,
         toolRegistry: components.toolRegistry,
         permissionChecker: components.permissionChecker,
         systemPrompt: components.systemPrompt,
-        userRoles: opts?.userRoles ?? components.userRoles,
         toolContextFactory: components.toolContextFactory,
       });
 

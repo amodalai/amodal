@@ -46,9 +46,6 @@ export interface ToolContext {
   /** Log a message (emitted as tool_log SSE event) */
   log(message: string): void;
 
-  /** Current user info */
-  user: {roles: string[]; [key: string]: unknown};
-
   /** Abort signal for cancellation/timeout */
   signal: AbortSignal;
 

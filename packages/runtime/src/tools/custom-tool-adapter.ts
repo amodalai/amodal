@@ -182,7 +182,6 @@ function buildCustomToolContext(
       runtimeCtx.log(message);
     },
 
-    user: runtimeCtx.user,
     signal: combinedSignal,
   };
 }

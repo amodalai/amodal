@@ -16,7 +16,7 @@ import type { WidgetEvent } from '../events/types';
 
 const defaultOptions = {
   serverUrl: 'http://localhost:4555',
-  user: { id: 'analyst-1', role: 'analyst' },
+  user: { id: 'analyst-1' },
 };
 
 describe('chatReducer', () => {
@@ -276,7 +276,7 @@ describe('useChat hook', () => {
     expect(result.current.messages).toHaveLength(0);
     expect(result.current.isStreaming).toBe(false);
     expect(result.current.error).toBeNull();
-    expect(result.current.session.role).toBe('analyst');
+    expect(result.current.session.id).toBeNull();
   });
 
   it('sends a message and receives stream', async () => {

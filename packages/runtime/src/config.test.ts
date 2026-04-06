@@ -21,7 +21,6 @@ const VALID_CONFIG = {
   name: 'test-agent',
   version: '1.0.0',
   description: 'A test agent',
-  userContext: 'Always be helpful.',
   models: {
     main: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
   },
@@ -52,7 +51,6 @@ describe('loadConfig', () => {
       expect(config.name).toBe('test-agent');
       expect(config.version).toBe('1.0.0');
       expect(config.description).toBe('A test agent');
-      expect(config.userContext).toBe('Always be helpful.');
       expect(config.primaryModel.provider).toBe('anthropic');
       expect(config.primaryModel.model).toBe('claude-sonnet-4-6');
       expect(config.repoPath).toBe(dir);

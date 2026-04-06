@@ -77,7 +77,6 @@ function makeToolContext(overrides?: Partial<ToolContext>): ToolContext {
     store: vi.fn(),
     env: vi.fn(),
     log: vi.fn(),
-    user: { roles: ['admin'] },
     signal: AbortSignal.timeout(30_000),
     sessionId: 'sess-1',
     ...overrides,

@@ -88,8 +88,6 @@ export interface AgentConfig {
   readonly version: string;
   /** Agent description */
   readonly description?: string;
-  /** Standing instructions for the LLM (userContext from amodal.json) */
-  readonly userContext?: string;
   /** Custom base system prompt (overrides default) */
   readonly basePrompt?: string;
   /** Subagent names to disable */
@@ -282,7 +280,6 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
     name: repoConfig.name,
     version: repoConfig.version,
     description: repoConfig.description,
-    userContext: repoConfig.userContext,
     basePrompt: repoConfig.basePrompt,
     disabledSubagents: repoConfig.disabledSubagents ?? [],
 

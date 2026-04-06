@@ -17,10 +17,8 @@ export type {SessionRuntime, SessionSetupOptions} from './session-setup.js';
 export {getModelContextWindow, TokenAllocator} from './token-allocator.js';
 export {
   defaultUserContext,
-  extractRoles,
   generateAlternativeLookupGuidance,
   generateFieldGuidance,
-  resolveScopeLabels,
 } from './user-context.js';
 export type {UserContextResult} from './user-context.js';
 export {
@@ -41,7 +39,5 @@ export type {OutputPipelineConfig, PipelineResult} from './output-pipeline.js';
 export {RuntimeTelemetry} from './telemetry-hooks.js';
 export type {RuntimeTelemetryEvent, TelemetrySink, TelemetryEventType} from './telemetry-hooks.js';
 export {PlatformTelemetrySink} from './telemetry-client.js';
-export {PreferenceClient, formatPreferencesPrompt} from './preference-client.js';
-export type {UserPreference} from './preference-client.js';
 export {detectPreferences} from './preference-detector.js';
 export type {DetectedPreference} from './preference-detector.js';

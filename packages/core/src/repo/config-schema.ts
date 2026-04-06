@@ -83,7 +83,6 @@ export const AmodalConfigSchema = z.object({
   name: z.string().min(1),
   version: z.string().min(1),
   description: z.string().optional(),
-  userContext: z.string().optional(),
   /** Custom base system prompt. When omitted, the platform default is used. */
   basePrompt: z.string().optional(),
   /** Subagent names to disable (e.g., ['explore', 'plan'] to turn off platform defaults) */

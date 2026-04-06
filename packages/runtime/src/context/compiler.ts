@@ -44,7 +44,6 @@ function estimateTokens(text: string): number {
 
 function generateFieldGuidance(
   connections: CompilerConnection[],
-  userRoles: string[],
 ): string {
   const lines: string[] = [];
 
@@ -59,13 +58,8 @@ function generateFieldGuidance(
           break;
         }
         case 'role_gated': {
-          const allowed = r.allowedRoles ?? [];
-          const hasAccess = userRoles.some((role) => allowed.includes(role));
-          if (!hasAccess) {
-            lines.push(
-              `Do not request: ${r.entity}.${r.field} (requires role: ${allowed.join(', ')})`,
-            );
-          }
+          // No role system in OSS runtime — role_gated fields are always denied
+          lines.push(`Do not request: ${r.entity}.${r.field}`);
           break;
         }
         case 'retrieve_but_redact':
@@ -86,29 +80,14 @@ function generateFieldGuidance(
 // Scope labels
 // ---------------------------------------------------------------------------
 
+/**
+ * Scope labels are not resolved in OSS runtime (no role system).
+ * Returns an empty record.
+ */
 function resolveScopeLabels(
-  connections: CompilerConnection[],
-  userRoles: string[],
+  _connections: CompilerConnection[],
 ): Record<string, string> {
-  const labels: Record<string, string> = {};
-
-  for (const conn of connections) {
-    if (!conn.rowScoping) continue;
-
-    for (const [entity, roleMap] of Object.entries(conn.rowScoping)) {
-      if (labels[entity]) continue; // already resolved from a prior connection
-
-      for (const role of userRoles) {
-        const rule = roleMap[role];
-        if (rule) {
-          labels[entity] = rule.label ?? `scoped by ${rule.type}`;
-          break;
-        }
-      }
-    }
-  }
-
-  return labels;
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -222,14 +201,6 @@ export function compileContext(input: CompilerInput): CompilerOutput {
   const identity = `You are ${input.name}${input.description ? ` — ${input.description}` : ''}.`;
   parts.push(identity);
   parts.push('');
-
-  // -------------------------------------------------------------------------
-  // User context (standing instructions for this deployment)
-  // -------------------------------------------------------------------------
-  if (input.userContext) {
-    parts.push(input.userContext);
-    parts.push('');
-  }
 
   // -------------------------------------------------------------------------
   // Agent override (custom prompt from agents/main.md)
@@ -383,10 +354,8 @@ export function compileContext(input: CompilerInput): CompilerOutput {
   // -------------------------------------------------------------------------
   // Field access restrictions (generated from connection access configs)
   // -------------------------------------------------------------------------
-  const userRoles = input.userRoles ?? [];
-
   if (input.connections && input.connections.length > 0) {
-    const fieldGuidance = generateFieldGuidance(input.connections, userRoles);
+    const fieldGuidance = generateFieldGuidance(input.connections);
     if (fieldGuidance) {
       parts.push('## Field Access Restrictions');
       parts.push(fieldGuidance);
@@ -394,7 +363,7 @@ export function compileContext(input: CompilerInput): CompilerOutput {
       contributions.push({name: 'Field guidance', category: 'system', tokens: estimateTokens(fieldGuidance)});
     }
 
-    const scopeLabels = resolveScopeLabels(input.connections, userRoles);
+    const scopeLabels = resolveScopeLabels(input.connections);
     if (Object.keys(scopeLabels).length > 0) {
       parts.push('## Data Scope');
       for (const [entity, label] of Object.entries(scopeLabels)) {
