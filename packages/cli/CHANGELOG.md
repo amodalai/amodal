@@ -1,5 +1,15 @@
 # @amodalai/amodal
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`80cfcfc`](https://github.com/amodalai/amodal/commit/80cfcfc63e8f67e80585f416ce3abdfdde0c966f), [`3ab8e19`](https://github.com/amodalai/amodal/commit/3ab8e19130ad6458171f2e3605bf6dc6be1bce6d), [`745228d`](https://github.com/amodalai/amodal/commit/745228db110b6da50e0514f6dc90250037ada958), [`cdcf62f`](https://github.com/amodalai/amodal/commit/cdcf62f90f42a3a6064f7e86cdcfa0293493e949), [`46f7c4a`](https://github.com/amodalai/amodal/commit/46f7c4a65478b0ee4a0115fde5415f65a760af16), [`5ea8f5e`](https://github.com/amodalai/amodal/commit/5ea8f5ed89000d7cef7e57e7cc56e64b1bc6191b), [`efedd6a`](https://github.com/amodalai/amodal/commit/efedd6ad75fdc420ef602fba45fc1992e884ee3a), [`901d606`](https://github.com/amodalai/amodal/commit/901d6065c5e4c7e5c3038757aeb476d352eb4335), [`bf907d4`](https://github.com/amodalai/amodal/commit/bf907d4f083fa000a246de1a749548a86dc2e3bf), [`7811174`](https://github.com/amodalai/amodal/commit/781117447532ed3bf513ce776b39e86d16220f90), [`5104a17`](https://github.com/amodalai/amodal/commit/5104a17315f9072a79e6f668bfff3d3f2473a330), [`7d6e825`](https://github.com/amodalai/amodal/commit/7d6e8257b790380ca599c8cb1a0d937bb3741dd1), [`57b143f`](https://github.com/amodalai/amodal/commit/57b143fac3c0de23651dd26a295be9ee553a91d1)]:
+  - @amodalai/runtime@0.2.1
+  - @amodalai/core@0.2.1
+  - @amodalai/types@0.2.1
+  - @amodalai/runtime-app@0.2.1
+
 ## 0.2.0
 
 ### Patch Changes

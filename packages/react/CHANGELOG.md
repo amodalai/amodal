@@ -1,5 +1,36 @@
 # @amodalai/react
 
+## 0.2.1
+
+### Patch Changes
+
+- [#163](https://github.com/amodalai/amodal/pull/163) [`7d6e825`](https://github.com/amodalai/amodal/commit/7d6e8257b790380ca599c8cb1a0d937bb3741dd1) Thanks [@gte620v](https://github.com/gte620v)! - Unify chat-stream plumbing behind a single canonical `useChatStream`
+  hook. Both `useChat` and `useAmodalChat` now delegate to it, and the
+  admin chat in the runtime app gets tool-call callouts for free — it
+  previously rolled its own SSE parser that silently dropped every
+  event type except `init`, `text_delta`, and `error`.
+
+  `useChatStream` owns the reducer, the SSE → action mapping, and the
+  widget event bus. Consumers inject transport via a `streamFn` option:
+
+  ```ts
+  const stream = useChatStream({
+    streamFn: (text, signal) =>
+      streamSSE("/my/endpoint", { message: text }, { signal }),
+    onToolCall: (call) => console.log("tool finished:", call),
+  });
+  ```
+
+  The public API of `useChat` and `useAmodalChat` is unchanged — the
+  refactor is internal. No behavior changes for existing consumers
+  beyond a few previously-missing fixes that are now in the canonical
+  reducer (e.g. `parameters` fallback on `tool_call_result`, usage
+  accumulation on `done`).
+
+  New exports from `@amodalai/react`:
+  - `useChatStream`, `UseChatStreamOptions`, `UseChatStreamReturn`
+  - `chatReducer` (re-exported from the canonical location)
+
 ## 0.2.0
 
 ## 0.1.26

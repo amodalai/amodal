@@ -1,5 +1,378 @@
 # @amodalai/runtime
 
+## 0.2.1
+
+### Patch Changes
+
+- [#156](https://github.com/amodalai/amodal/pull/156) [`80cfcfc`](https://github.com/amodalai/amodal/commit/80cfcfc63e8f67e80585f416ce3abdfdde0c966f) Thanks [@gte620v](https://github.com/gte620v)! - Restore admin file-discovery tools that went missing after the SDK swap.
+
+  The admin agent had `read_repo_file`, `write_repo_file`, `delete_repo_file`
+  and `internal_api` but no way to **enumerate** what files exist — it spent
+  turns guessing paths (`skills/content-analysis/SKILL.md`, `agents/main.md`)
+  and often failing. This adds five new admin file tools, all sharing the
+  same allowed-directory allowlist:
+  - `list_repo_files` — list files in an allowed directory (or every
+    allowlist dir at once). Recursive by default. Skips `.git`,
+    `node_modules`, `.DS_Store`. Capped at 2000 entries with a
+    `truncated: true` signal.
+  - `glob_repo_files` — glob pattern match (`**/SKILL.md`, `skills/**/*.md`)
+    with recent-first sort (24h-touched files surfaced first). Capped at 500.
+  - `grep_repo_files` — regex content search across the allowlist. Optional
+    `dir` filter, `include` glob, case-insensitivity default. Capped at 100
+    matches (matches gemini-cli's `DEFAULT_TOTAL_MAX_MATCHES`).
+  - `edit_repo_file` — find-and-replace edit in place. Default requires
+    exactly-one-occurrence (fails safely on ambiguous edits); set
+    `allow_multiple: true` to replace every match. Saves context tokens
+    vs full-rewrite `write_repo_file`.
+  - `read_many_repo_files` — batched read of multiple files. Capped at
+    20 files × 50KB each.
+
+  Also fixes the confusing `Path "skills" is not in an allowed directory`
+  error from `read_repo_file`/`write_repo_file`/`delete_repo_file` when
+  passed a bare allowlist directory name — they now emit a directed error
+  pointing at `list_repo_files`:
+
+      Path "skills" is a directory — use list_repo_files to enumerate its
+      contents, or provide a file path like "skills/<name>".
+
+  **Dead code removed:**
+  - `packages/runtime/src/session/admin-file-tools.ts` (superseded by
+    `packages/runtime/src/tools/admin-file-tools.ts` in the SDK swap,
+    never deleted, zero imports).
+  - `packages/core/src/tools/definitions/amodal-tools.ts` plus
+    `getProposeKnowledgeDefinition`/`getPresentToolDefinition`/
+    `getRequestToolDefinition` exports from `@amodalai/core` — the
+    underlying `propose_knowledge` tool was deleted in [#144](https://github.com/amodalai/amodal/issues/144), leaving
+    these as stale definitions for a non-existent tool.
+
+- [#149](https://github.com/amodalai/amodal/pull/149) [`3ab8e19`](https://github.com/amodalai/amodal/commit/3ab8e19130ad6458171f2e3605bf6dc6be1bce6d) Thanks [@gte620v](https://github.com/gte620v)! - Agent loop safety and quality features:
+  - **Token budget enforcement.** `AgentContext` gains an optional `maxTokens` cap; `runAgent()` checks `usage.totalTokens` between state transitions and terminates with `DoneReason: 'budget_exceeded'` when the cap is hit. Closes the silent-cost-runaway hole where a long-running automation could burn through tokens in a tight retry loop. Sub-agent dispatches inherit the parent's remaining budget. The `DoneReason` is now surfaced on the SSE `done` event so consumers can distinguish normal termination from enforced caps.
+  - **Generalized tool confirmation.** `ToolDefinition` gains a `requiresConfirmation` flag that routes any flagged tool through the existing `CONFIRMING` state, not just connection tools. Approvals are tracked per-session via `ctx.confirmedCallIds`, which also fixes a latent infinite-loop bug in the connection-tool confirmation path where a re-check after approval would re-route back to CONFIRMING.
+  - **Tool result summarization hook.** `AgentContext.summarizeToolResult` is a new optional hook (wired through `SessionManager.runMessage` opts); when set, context-evicted tool results are replaced with a 1-2 sentence LLM-generated summary instead of the generic `[Tool result cleared]` marker. Bounded by a 5-second timeout, idempotent across turns, and degrades to the static marker on summarizer failure. Also fixes three latent bugs in `clearOldToolResults`: orphaned tool-calls (cleared markers now preserve the original `toolCallId`/`toolName` so providers don't reject the conversation), cleared state not persisted (ctx.messages is now written back so the hook isn't called repeatedly for the same messages), and already-cleared detection (by output-value prefix now that the callId is preserved).
+  - **Provider-native token counting.** `LLMProvider` gains an optional `countTokens(messages)` method; `estimateTokenCount()` delegates to it when implemented, falling back to the 4-chars-per-token heuristic otherwise. Unlocks accurate compaction boundaries as providers wire native tokenizers.
+  - **Loop detection escalation tier.** New `loopEscalationThreshold` (default 5) sits between the warning threshold (3) and the hard-stop (8). When hit, the loop emits a stronger system message and removes the looping tool from the tool set for that turn, forcing the agent to try a different approach.
+
+- [#152](https://github.com/amodalai/amodal/pull/152) [`745228d`](https://github.com/amodalai/amodal/commit/745228db110b6da50e0514f6dc90250037ada958) Thanks [@gte620v](https://github.com/gte620v)! - Add delivery routing for automations.
+
+  Automations can now declare where their results go when they complete, and
+  where failure alerts go when they fail repeatedly. Targets can be webhooks,
+  ISV-provided callbacks, or multiple of each in parallel.
+
+  ```json
+  {
+    "name": "scan-trending",
+    "schedule": "0 */4 * * *",
+    "prompt": "Scan for trending AI content",
+    "delivery": {
+      "targets": [
+        { "type": "webhook", "url": "env:SLACK_WEBHOOK_URL" },
+        { "type": "callback" }
+      ],
+      "template": "Found {{count}} new articles. Top: {{top_title}}"
+    },
+    "failureAlert": {
+      "after": 3,
+      "targets": [{ "type": "webhook", "url": "env:ALERT_WEBHOOK_URL" }],
+      "cooldownMinutes": 60
+    }
+  }
+  ```
+
+  Features:
+  - **Multiple targets in parallel.** Each target is dispatched concurrently.
+  - **Template rendering** with `{{variable}}` substitution. Variables come from
+    the automation's parsed JSON result (top-level keys) plus built-ins
+    `{{automation}}`, `{{timestamp}}`, `{{result}}`. Missing variables stay as
+    literal tokens and emit a `delivery_template_missing_var` log warning (once
+    per automation+template+missing-key combo) so prompt drift is diagnosable.
+    Template output is plain text — receivers that interpret markdown (Slack,
+    GitHub) will render any markdown/tag syntax present in agent output.
+  - **ISV callback targets** via `createLocalServer({ onAutomationResult })` —
+    receive the full delivery payload plus target metadata (including the
+    optional `name` field) so ISVs can distinguish between multiple callback
+    targets on the same automation. Signature: `(payload, target) => void`.
+  - **Failure alerting** with consecutive-failure tracking per automation, a
+    configurable `after` threshold, and a `cooldownMinutes` window to prevent
+    alert spam during sustained outages. Counter resets on success. Note:
+    failure state is in-memory per process; restart resets counters and
+    cooldown windows.
+  - **Webhook retry** on transient failures — one retry with 1s delay on 5xx
+    responses and network errors. 4xx responses do not retry.
+  - **HMAC signing** on webhook deliveries when `webhookSecret` is configured.
+    Receivers verify with: `expected = "sha256=" + hmac_sha256(secret, body)`
+    against the `X-Amodal-Signature` header. Use constant-time comparison.
+  - **Result truncation** at 16KB — long agent outputs are truncated (head+tail
+    preserved around an elision marker) with `truncated: true` on the payload,
+    so receivers with size caps (Slack 4KB, GitHub 64KB) aren't silently
+    dropped. Templates receive the full untruncated text.
+  - **env:NAME resolution** on webhook URLs happens at bundle-load time (in
+    `bridgeAutomation`), so missing env vars fail fast at server boot with a
+    `RepoError` — not at first delivery attempt. URLs are validated at parse
+    time to require `http://`, `https://`, or `env:` prefix.
+  - **Observability via event bus** — each delivery emits a `delivery_succeeded`
+    or `delivery_failed` event with automation name, target type/url, HTTP
+    status, duration, and retry attempt count, so operators can answer "which
+    deliveries failed in the last hour?" without grepping logs.
+
+  Backward compatible: automations without `delivery` or `failureAlert` fields
+  run exactly as before. The `onAutomationResult` callback signature changed
+  to `(payload, target)` — ISVs calling this will need to accept the second
+  argument.
+
+  New public types: `DeliveryTarget`, `DeliveryConfig`, `FailureAlertConfig`,
+  `DeliveryPayload` in `@amodalai/types`. New event types:
+  `DeliverySucceededEvent`, `DeliveryFailedEvent`.
+
+- [#148](https://github.com/amodalai/amodal/pull/148) [`cdcf62f`](https://github.com/amodalai/amodal/commit/cdcf62f90f42a3a6064f7e86cdcfa0293493e949) Thanks [@gte620v](https://github.com/gte620v)! - Add runtime event bus for push-based UI updates.
+
+  The runtime now emits typed lifecycle events (session_created/updated/deleted,
+  automation_triggered/completed/failed, manifest_changed, files_changed) on an
+  internal `RuntimeEventBus`. Events are streamed to clients over a new
+  `/api/events` SSE endpoint.
+
+  Clients connect once via EventSource and receive every state change in real
+  time. Replaces `setInterval` polling in the runtime-app for session list,
+  automation status, manifest reloads, file tree, and health checks. The UI now
+  updates the instant something changes instead of on 3-10 second cycles.
+
+  The bus buffers the last 200 events and supports `Last-Event-ID` for
+  reconnect-and-resume, so clients never miss state changes across brief
+  disconnects.
+
+  New public types: `RuntimeEvent`, `RuntimeEventType`, `RuntimeEventPayload`.
+
+- [#161](https://github.com/amodalai/amodal/pull/161) [`46f7c4a`](https://github.com/amodalai/amodal/commit/46f7c4a65478b0ee4a0115fde5415f65a760af16) Thanks [@gte620v](https://github.com/gte620v)! - Fix Anthropic provider-key verification at `amodal dev` startup.
+  The check was hitting `GET /v1/messages`, which Anthropic rejects
+  with HTTP 405 (Method Not Allowed) before it even looks at the
+  `x-api-key` header — so every key, valid or bogus, showed up as
+  `provider_key_invalid`. Switch to `GET /v1/models`, which returns
+  200 on valid keys and 401 on bad ones.
+
+- [#155](https://github.com/amodalai/amodal/pull/155) [`5ea8f5e`](https://github.com/amodalai/amodal/commit/5ea8f5ed89000d7cef7e57e7cc56e64b1bc6191b) Thanks [@gte620v](https://github.com/gte620v)! - Fix process crash when an SSE client disconnects mid-stream.
+
+  When a browser tab reloads, navigates away, or otherwise drops an in-flight
+  SSE connection, the route's `res.on('close', () => controller.abort())`
+  handler fires `ctx.signal.abort()`. Inside the agent loop, the provider's
+  `streamText()` returns a `StreamTextResult` with three separate promises
+  (`fullStream`, `text`, `usage`) that share the same upstream fetch. When
+  the fetch aborts, all three reject.
+
+  `handleStreaming` iterates `fullStream` first and only awaits `text`/`usage`
+  after the loop completes. If the loop throws due to abort, the derived
+  promises were never awaited and Node surfaces them as unhandled promise
+  rejections, crashing the process.
+
+  The fix attaches passive `.catch(() => {})` handlers to `state.stream.text`
+  and `state.stream.usage` at the top of `handleStreaming`, before entering
+  the for-await loop. The real error still surfaces via the thrown stream
+  error that propagates up to the route's try/catch; the suppressed handlers
+  only prevent an abort-induced rejection from escaping as unhandled.
+
+  This was most visible in the admin-chat route (browser auto-reloads on
+  `config_reloaded` events triggered by `write_repo_file` tool calls), but
+  affects every streaming chat route equally.
+
+- [#160](https://github.com/amodalai/amodal/pull/160) [`efedd6a`](https://github.com/amodalai/amodal/commit/efedd6ad75fdc420ef602fba45fc1992e884ee3a) Thanks [@gte620v](https://github.com/gte620v)! - Run read-only tool calls concurrently within a turn.
+
+  The EXECUTING state handler now batches contiguous leading read-only,
+  non-confirmation, non-connection tool calls from the queue and runs them
+  via `Promise.all`. Writes, confirmation-gated tools, connection-ACL tools,
+  and `dispatch_task` still flow through the single-call path for
+  correctness.
+
+  **What changes:** when a model emits multiple parallel tool calls per
+  turn, independent reads (store reads, knowledge lookups, search/fetch,
+  etc.) return in one `max(tool_duration)` instead of `sum(tool_duration)`.
+  This also collapses N EXECUTING transitions into one, cutting
+  state-machine overhead.
+
+  **What stays the same:** sanitize/log behavior, SSE event shape (per-call
+  ToolCallStart + ToolCallResult events still fire for every call in batch
+  order), result-message ordering in the conversation history, pre-execution
+  cache (still honored per-call inside the batch), smart-snipping on
+  oversized results, and compaction threshold checks after the queue drains.
+
+  **Why it's safe:** tools declared `readOnly: true` have no external
+  side-effects that depend on ordering, so running them in parallel can't
+  change outcomes. Connection tools and tools flagged `requiresConfirmation`
+  are explicitly excluded because their gates must evaluate per-call.
+
+- [#151](https://github.com/amodalai/amodal/pull/151) [`901d606`](https://github.com/amodalai/amodal/commit/901d6065c5e4c7e5c3038757aeb476d352eb4335) Thanks [@gte620v](https://github.com/gte620v)! - Add `PostgresSessionStore` for production session persistence.
+
+  Completes the "no PGLite in production" story started in [#146](https://github.com/amodalai/amodal/issues/146). Any ISV
+  embedding `@amodalai/runtime` can now point session persistence at a
+  real Postgres database by setting `stores.backend: 'postgres'` and
+  `stores.postgresUrl` in `amodal.json`. PGLite remains the default for
+  `amodal dev` — zero config unchanged.
+
+  **New surface:**
+  - `PostgresSessionStore` class and `createPostgresSessionStore()` factory
+    (accepts either a `connectionString` or an existing `pg.Pool`).
+  - `SessionStoreHooks` — optional `onAfterSave` / `onAfterDelete` /
+    `onAfterCleanup` callbacks, awaited on the write path. Intended for
+    dual-write, observability, or cache invalidation.
+  - `SessionListOptions` — cursor pagination, metadata JSONB filters,
+    `updatedAfter` / `updatedBefore` date range.
+  - `SessionStoreError` typed error for module-boundary failures.
+  - `selectSessionStore()` helper used by `local-server.ts` to pick the
+    backend. Falls back to PGLite if `postgres` is configured but the URL
+    is missing — the session store must always be available.
+
+  **Interface change:** `SessionStore.list()` now returns
+  `{sessions, nextCursor}` instead of `PersistedSession[]`. Internal only —
+  not publicly exported via `@amodalai/runtime`.
+
+- [#157](https://github.com/amodalai/amodal/pull/157) [`bf907d4`](https://github.com/amodalai/amodal/commit/bf907d4f083fa000a246de1a749548a86dc2e3bf) Thanks [@gte620v](https://github.com/gte620v)! - Add line-range pagination to `read_repo_file` so long files don't blow the
+  agent's context window on a single call.
+
+  Matches the conventions of Claude Code's `Read` tool and gemini-cli's
+  `read_file`: by default a read returns the first 2000 lines and tells the
+  agent how many more there are, so the agent can paginate only when it
+  actually needs the rest.
+
+  **New parameters on `read_repo_file`:**
+  - `offset` (1-indexed, default `1`) — the line number to start reading from
+  - `limit` (default 2000, max 10000) — how many lines to return
+
+  **New response fields on `read_repo_file`:**
+  - `line_start`, `line_end` — the 1-indexed range actually returned
+  - `total_lines` — how many lines the file has
+  - `truncated: true` — present when `line_end < total_lines`; agent should
+    call again with `offset: line_end + 1` to continue
+
+  Before this change, `read_repo_file` returned the entire file regardless
+  of size. A 50KB connection spec or 2000-line lockfile would land in the
+  agent's next prompt verbatim, eating context budget for no reason. With
+  pagination the default read is bounded and the agent has the metadata it
+  needs to ask for more.
+
+  Also:
+  - `read_repo_file` now rejects binary files (NUL-byte heuristic) instead
+    of returning mojibake.
+  - `read_many_repo_files` now reports `total_lines` for each file in the
+    response, so when byte-based truncation fires the agent knows whether
+    to switch to the paginated `read_repo_file` for the full content.
+  - New exported constants: `READ_FILE_DEFAULT_LINES`, `READ_FILE_MAX_LINES`.
+  - **Loop detector now skips pagination variants.** Previously the detector
+    counted calls as "similar" when ≥50% of their values matched — which
+    flagged legitimate multi-chunk pagination (same tool, same path, three
+    different `offset` values: 67% matching) as a loop after 3 calls. The
+    heuristic now treats known iteration keys (`offset`, `limit`, `page`,
+    `cursor`, `start_line`/`end_line`, `after`/`before`, etc.) as
+    pagination, not loop-defining — two calls that differ ONLY in those
+    keys no longer count toward loop detection.
+
+- [#154](https://github.com/amodalai/amodal/pull/154) [`7811174`](https://github.com/amodalai/amodal/commit/781117447532ed3bf513ce776b39e86d16220f90) Thanks [@gte620v](https://github.com/gte620v)! - Remove `tenantId` and `userId` from sessions, tool context, and session store.
+
+  Both fields were vestigial — carried through every layer but never used
+  for any authorization, scoping, or product decision. Default values
+  were hard-coded placeholders (`'local'`, `'admin'`, `'snapshot'`,
+  `'automation'`, `'api'`, `'anonymous'`) that had no relationship to
+  real identities.
+
+  Consumers needing tenant or user scoping should:
+  - Namespace session IDs directly (e.g. `tenant-a:session-123`)
+  - Stamp scope into `metadata` JSONB and filter via `list({filter})`
+  - Use `userRoles` (still present, still drives connection ACLs)
+
+  **API changes:**
+  - `Agent.createSession()` no longer accepts `tenantId` / `userId` options
+  - `ToolContext` drops `tenantId` field — tools reading `ctx.tenantId`
+    must be updated
+  - `PersistedSession`, `Session`, `CreateSessionOptions` all drop both
+    fields
+  - `SessionStore.load(sessionId)` — was `load(tenantId, sessionId)`
+  - `SessionStore.delete(sessionId)` — was `delete(tenantId, sessionId)`
+  - `SessionStore.list(opts)` — was `list(tenantId, opts)`
+  - `StandaloneSessionManager.listPersisted(opts)` — was
+    `listPersisted(tenantId, opts)`
+  - `AuthContext` drops unused `orgId` and `actor` fields
+
+  **Schema change:**
+  - `agent_sessions` table drops `tenant_id` and `user_id` columns
+  - Index `idx_agent_sessions_tenant` replaced with
+    `idx_agent_sessions_updated`
+  - **Existing deployments must drop these columns** before running this
+    version, or roll back persisted sessions. The columns are no longer
+    written to or read from.
+
+- [#153](https://github.com/amodalai/amodal/pull/153) [`5104a17`](https://github.com/amodalai/amodal/commit/5104a17315f9072a79e6f668bfff3d3f2473a330) Thanks [@gte620v](https://github.com/gte620v)! - Retire the legacy file-based `SessionStore` (`.amodal/sessions/*.json`).
+
+  The dev-UI session history routes in `local-server.ts` (`GET /sessions`,
+  `GET /session/:id`, `PATCH /session/:id`, `DELETE /session/:id`, and
+  `resumeSessionId: 'latest'`) now read and write through the
+  `DrizzleSessionStore` that was already handling session resume. This
+  removes the dual-persistence path that held overlapping data in two
+  stores.
+
+  **Behavioural changes:**
+  - Chat sessions no longer write to `.amodal/sessions/` — they only land
+    in PGLite (or Postgres). The dev UI reads from the same store.
+  - Session metadata now carries `appId` so list queries can filter out
+    eval-runner / admin sessions via `metadata.appId = 'local'`.
+  - Automation session history is tagged via `metadata.automationName`
+    (set in the proactive-runner `onSessionComplete` hook), preserving
+    the `/sessions?automation=<name>` filter used by the automation
+    detail page.
+  - Session titles (set via `PATCH /session/:id`) live on
+    `metadata.title` and persist through `sessionManager.persist()`.
+
+  Existing `.amodal/sessions/*.json` files are orphaned and can be
+  deleted — they are no longer read.
+
+- [#163](https://github.com/amodalai/amodal/pull/163) [`7d6e825`](https://github.com/amodalai/amodal/commit/7d6e8257b790380ca599c8cb1a0d937bb3741dd1) Thanks [@gte620v](https://github.com/gte620v)! - Unify chat-stream plumbing behind a single canonical `useChatStream`
+  hook. Both `useChat` and `useAmodalChat` now delegate to it, and the
+  admin chat in the runtime app gets tool-call callouts for free — it
+  previously rolled its own SSE parser that silently dropped every
+  event type except `init`, `text_delta`, and `error`.
+
+  `useChatStream` owns the reducer, the SSE → action mapping, and the
+  widget event bus. Consumers inject transport via a `streamFn` option:
+
+  ```ts
+  const stream = useChatStream({
+    streamFn: (text, signal) =>
+      streamSSE("/my/endpoint", { message: text }, { signal }),
+    onToolCall: (call) => console.log("tool finished:", call),
+  });
+  ```
+
+  The public API of `useChat` and `useAmodalChat` is unchanged — the
+  refactor is internal. No behavior changes for existing consumers
+  beyond a few previously-missing fixes that are now in the canonical
+  reducer (e.g. `parameters` fallback on `tool_call_result`, usage
+  accumulation on `done`).
+
+  New exports from `@amodalai/react`:
+  - `useChatStream`, `UseChatStreamOptions`, `UseChatStreamReturn`
+  - `chatReducer` (re-exported from the canonical location)
+
+- [#158](https://github.com/amodalai/amodal/pull/158) [`57b143f`](https://github.com/amodalai/amodal/commit/57b143fac3c0de23651dd26a295be9ee553a91d1) Thanks [@gte620v](https://github.com/gte620v)! - Add built-in `web_search` and `fetch_url` tools backed by Gemini Flash
+  grounding. Enabled when `webTools` is configured in `amodal.json` with
+  a Google API key:
+
+  ```json
+  {
+    "webTools": {
+      "provider": "google",
+      "apiKey": "env:GOOGLE_API_KEY",
+      "model": "gemini-3-flash-preview"
+    }
+  }
+  ```
+
+  `web_search` returns a synthesized answer with cited source URLs.
+  `fetch_url` returns page content as markdown — Gemini `urlContext` is
+  the primary path, with a local `fetch()` + Mozilla Readability fallback
+  for private-network URLs (localhost, RFC1918) or Gemini failures. Both
+  tools are registered automatically on every session when `webTools` is
+  present. Per-hostname rate limiting (10 req / 60s) and a 2000-token
+  cap apply to both tools.
+
+- Updated dependencies [[`80cfcfc`](https://github.com/amodalai/amodal/commit/80cfcfc63e8f67e80585f416ce3abdfdde0c966f), [`745228d`](https://github.com/amodalai/amodal/commit/745228db110b6da50e0514f6dc90250037ada958), [`cdcf62f`](https://github.com/amodalai/amodal/commit/cdcf62f90f42a3a6064f7e86cdcfa0293493e949), [`57b143f`](https://github.com/amodalai/amodal/commit/57b143fac3c0de23651dd26a295be9ee553a91d1)]:
+  - @amodalai/core@0.2.1
+  - @amodalai/types@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
