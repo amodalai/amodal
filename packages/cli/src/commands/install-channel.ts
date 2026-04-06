@@ -16,6 +16,7 @@ import type {CommandModule} from 'yargs';
 import {readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {ensurePackageJson, pmAdd} from '@amodalai/core';
+// eslint-disable-next-line import/no-internal-modules -- shared utility
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
 /** Default config scaffolds per channel type. */
@@ -27,6 +28,7 @@ const CONFIG_SCAFFOLDS: Record<string, Record<string, unknown>> = {
   },
 };
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- yargs CommandModule default generic
 export const installChannelCommand: CommandModule<{}, {name: string}> = {
   command: 'install <name>',
   describe: 'Install a messaging channel plugin',
@@ -66,12 +68,14 @@ export const installChannelCommand: CommandModule<{}, {name: string}> = {
     const configPath = path.join(repoPath, 'amodal.json');
     try {
       const raw = readFileSync(configPath, 'utf-8');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
       const config = JSON.parse(raw) as Record<string, unknown>;
 
       // Add channels block if missing
       if (!config['channels'] || typeof config['channels'] !== 'object') {
         config['channels'] = {};
       }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowed by typeof check above
       const channels = config['channels'] as Record<string, unknown>;
 
       // Only scaffold if the channel isn't already configured

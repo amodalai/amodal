@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- resolver imports from sibling repo submodules */
+
 import {readFile, readdir, stat} from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -322,8 +324,10 @@ export async function resolveAllPackages(options: {
       const channelJson = await readOptionalFile(path.join(pkgDir, 'channel.json'));
       if (channelJson) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
           const parsed = JSON.parse(channelJson) as Record<string, unknown>;
           const channelType = String(parsed['type'] ?? '');
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowing parsed config
           const channelConfig = (parsed['config'] ?? {}) as Record<string, unknown>;
           if (channelType) {
             channels.push({channelType, packageName: npmName, packageDir: pkgDir, config: channelConfig});

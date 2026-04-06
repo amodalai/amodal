@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- channel module imports from sibling submodules */
+
 /**
  * Shared channel bootstrap sequence.
  *

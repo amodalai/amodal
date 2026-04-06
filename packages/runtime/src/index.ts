@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- barrel file re-exports from internal modules */
+
 import { createServer, type ServerInstance } from './server.js';
 import { log } from './logger.js';
 

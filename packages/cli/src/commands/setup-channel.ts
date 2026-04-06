@@ -18,6 +18,7 @@
 import type {CommandModule} from 'yargs';
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
+// eslint-disable-next-line import/no-internal-modules -- shared utility
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
 const ENV_PREFIX = 'env:';
@@ -30,6 +31,7 @@ function resolveEnv(value: unknown): string | undefined {
   return value;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- yargs CommandModule default generic
 export const setupChannelCommand: CommandModule<{}, {name: string; url: string}> = {
   command: 'setup <name>',
   describe: 'Register webhook with the messaging platform',
@@ -64,8 +66,11 @@ export const setupChannelCommand: CommandModule<{}, {name: string; url: string}>
     let channelConfig: Record<string, unknown>;
     try {
       const raw = readFileSync(configPath, 'utf-8');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
       const config = JSON.parse(raw) as Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowing config field
       const channels = config['channels'] as Record<string, unknown> | undefined;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowing channel config
       channelConfig = (channels?.[channelName] ?? {}) as Record<string, unknown>;
     } catch {
       process.stderr.write(`[channels setup] Could not read amodal.json\n`);
@@ -108,6 +113,7 @@ async function setupTelegram(config: Record<string, unknown>, webhookUrl: string
       signal: AbortSignal.timeout(10_000),
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing Telegram API response
     const result = await response.json() as {ok: boolean; description?: string};
     if (result.ok) {
       process.stderr.write(`✅ Telegram webhook registered successfully.\n`);

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- channel module imports from sibling submodules */
+
 /**
  * Drizzle-based channel session mapper.
  *
@@ -76,7 +78,7 @@ export class DrizzleChannelSessionMapper implements ChannelSessionMapper {
       .limit(1);
 
     if (rows.length > 0) {
-      const {sessionId} = rows[0]!;
+      const {sessionId} = rows[0];
       // Update last_active_at
       await this.db
         .update(channelSessions)

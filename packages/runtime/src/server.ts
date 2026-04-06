@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- server module imports from internal submodules */
+
 /**
  * Hosted server.
  *

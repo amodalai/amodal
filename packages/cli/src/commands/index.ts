@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- barrel file re-exports from internal modules */
+
 import {initCommand} from './init.js';
 import {devCommand} from './dev.js';
 import {inspectCommand} from './inspect.js';

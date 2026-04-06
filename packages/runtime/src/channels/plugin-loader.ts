@@ -46,6 +46,7 @@ export async function loadChannelPlugins(
     const mod = await importChannelModule(channelType, repoPath, opts.packages ?? [], logger);
 
     // Validate the default export satisfies ChannelPlugin shape
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validating shape below
     const plugin = mod.default as ChannelPlugin | undefined;
     if (
       !plugin ||
@@ -134,10 +135,12 @@ async function importChannelModule(
 
   try {
     const {readFileSync} = await import('node:fs');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
     const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as Record<string, unknown>;
     const mainField = String(pkgJson['main'] ?? 'dist/index.js');
     const entryPath = path.join(packageDir, mainField);
     const moduleUrl = pathToFileURL(entryPath).href;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic import returns unknown module shape
     const mod = await import(moduleUrl) as {default?: unknown};
     logger.info('channel_plugin_loaded', {channelType, source: 'package', package: packageName});
     return mod;
@@ -178,6 +181,7 @@ async function importLocalChannel(
   }
 
   const moduleUrl = pathToFileURL(importPath).href;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic import returns unknown module shape
   const mod = await import(moduleUrl) as {default?: unknown};
   logger.info('channel_plugin_loaded', {channelType, source: 'local', path: entryPath});
   return mod;

@@ -18,6 +18,7 @@
 
 import {drizzle} from 'drizzle-orm/pglite';
 
+// eslint-disable-next-line import/no-internal-modules -- shared schema between session and store modules
 import {agentSessions} from '../stores/schema.js';
 import {log as defaultLogger} from '../logger.js';
 import type {Logger} from '../logger.js';

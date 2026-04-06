@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- server wiring imports from internal submodules */
+
 /**
  * Local server for repo-based agent mode.
  *
@@ -378,6 +380,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
     // Both PGLite and Postgres factories return DrizzleSessionStore which
     // exposes `db`. Cast through the concrete type safely.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowing to concrete DrizzleSessionStore
     const storeDb = (sessionStore as import('../session/drizzle-session-store.js').DrizzleSessionStore).db;
     const channelSessionMapper = new DrizzleChannelSessionMapper({
       db: storeDb,

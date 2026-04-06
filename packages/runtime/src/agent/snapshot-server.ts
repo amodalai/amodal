@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- server wiring imports from internal submodules */
+
 /**
  * Snapshot server.
  *

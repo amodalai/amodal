@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- channel module imports from sibling submodules */
+
 /**
  * Express router for inbound messaging channel webhooks.
  *
@@ -68,6 +70,7 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
     const msg = await adapter.parseIncoming(webhookReq);
     if (!msg) {
       // Check for Slack URL verification challenge
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- accessing optional Slack challenge field
       const challenge = (webhookReq as unknown as Record<string, unknown>)['_slackChallenge'];
       if (challenge) {
         res.status(200).json({challenge});
@@ -145,7 +148,7 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
 
         for await (const event of stream) {
           if (event.type === 'text_delta' && 'content' in event) {
-            replyParts.push(event.content as string);
+            replyParts.push(String(event.content));
           }
         }
       } finally {
