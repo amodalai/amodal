@@ -1,5 +1,6 @@
 ---
-"@amodalai/react": minor
+"@amodalai/react": patch
+"@amodalai/runtime": patch
 ---
 
 Unify chat-stream plumbing behind a single canonical `useChatStream`
