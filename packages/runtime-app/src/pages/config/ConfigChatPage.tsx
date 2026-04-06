@@ -19,10 +19,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Send, Square, Bot, AlertCircle, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Send, Square, Bot, AlertCircle, Loader2 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { useChatStream, streamSSE } from '@amodalai/react';
-import type { ChatMessage, ContentBlock, SSEEvent, ToolCallInfo } from '@amodalai/react';
+import type { ChatMessage, ContentBlock, SSEEvent } from '@amodalai/react';
+import { ToolCallCard } from '../../components/ToolCallCard';
 
 // ---------------------------------------------------------------------------
 // Persistence
@@ -75,26 +76,6 @@ function ElapsedTimer({ startTime }: { startTime: number }) {
   return <span className="text-muted-foreground font-mono tabular-nums text-xs">{elapsed}s</span>;
 }
 
-function ToolCallBadge({ call }: { call: ToolCallInfo }) {
-  const isRunning = call.status === 'running';
-  const isError = call.status === 'error';
-  return (
-    <div className="flex items-center gap-2 px-3 py-1.5 my-1 rounded-md bg-muted border border-border text-xs font-mono">
-      {isRunning ? (
-        <Loader2 className="h-3 w-3 text-primary animate-spin shrink-0" />
-      ) : isError ? (
-        <XCircle className="h-3 w-3 text-red-400 shrink-0" />
-      ) : (
-        <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
-      )}
-      <span className="text-primary font-semibold">{call.toolName}</span>
-      {call.duration_ms != null && (
-        <span className="text-muted-foreground ml-auto">{String(call.duration_ms)}ms</span>
-      )}
-    </div>
-  );
-}
-
 function AssistantBlocks({ blocks, compact }: { blocks: ContentBlock[]; compact: boolean }) {
   const textScale = compact ? 'text-xs' : 'text-sm';
   return (
@@ -114,7 +95,7 @@ function AssistantBlocks({ blocks, compact }: { blocks: ContentBlock[]; compact:
           case 'tool_calls':
             return (
               <div key={`tc-${String(i)}`}>
-                {block.calls.map((call) => <ToolCallBadge key={call.toolId} call={call} />)}
+                {block.calls.map((call) => <ToolCallCard key={call.toolId} call={call} />)}
               </div>
             );
           default:
