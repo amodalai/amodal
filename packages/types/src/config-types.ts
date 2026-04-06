@@ -65,8 +65,9 @@ export interface AmodalConfig {
     backend: 'pglite' | 'postgres';
     postgresUrl?: string;
   };
-  dependencies?: Record<string, string>;
   webTools?: WebToolsConfig;
+  /** Installed npm packages to load (content type detected from package structure) */
+  packages?: string[];
   mcp?: {
     servers: Record<string, {
       transport: 'stdio' | 'sse' | 'http';

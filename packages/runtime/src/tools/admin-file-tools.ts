@@ -47,7 +47,7 @@ const ALLOWED_REPO_DIRS = [
   'evals/',
   'agents/',
   'tools/',
-  'amodal_packages/',
+  'node_modules/',
 ];
 
 const BLOCKED_FILENAMES = [
@@ -59,7 +59,7 @@ const BLOCKED_FILENAMES = [
 ];
 
 const READ_ONLY_DIRS = [
-  'amodal_packages/',
+  'node_modules/',
 ];
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ import {promisify} from 'node:util';
 const execFileAsync = promisify(execFile);
 
 const ADMIN_AGENT_NPM = '@amodalai/agent-admin';
-const DEFAULT_REGISTRY = 'https://registry.amodalai.com';
+const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const CACHE_DIR_NAME = 'admin-agent';
 const FETCH_TIMEOUT = 30_000;
 
@@ -65,7 +65,7 @@ export async function resolveAdminAgent(repoPath?: string): Promise<string | nul
  * Returns the cache directory path.
  */
 export async function fetchAdminAgent(registryUrl?: string): Promise<string> {
-  const registry = registryUrl ?? process.env['AMODAL_REGISTRY'] ?? DEFAULT_REGISTRY;
+  const registry = registryUrl ?? DEFAULT_REGISTRY;
   const cacheDir = getAdminCacheDir();
 
   // Create a temp directory for npm pack

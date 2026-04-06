@@ -9,7 +9,6 @@ import type {Request, Response} from 'express';
 import rateLimit from 'express-rate-limit';
 import {readdir, readFile, writeFile, stat, mkdir} from 'node:fs/promises';
 import path from 'node:path';
-import {readLockFile, getNpmContextPaths} from '@amodalai/core';
 import {asyncHandler} from '../../routes/route-helpers.js';
 
 export interface FilesRouterOptions {
@@ -153,40 +152,40 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
       }
 
       // Add installed package files (merged into convention directories)
+      // Only load packages explicitly declared in amodal.json
       try {
-        const lockFile = await readLockFile(repoPath);
-        if (lockFile && Object.keys(lockFile.packages).length > 0) {
-          const paths = getNpmContextPaths(repoPath);
-          const scopeDir = path.join(paths.nodeModules, '@amodalai');
-          let pkgDirs: string[] = [];
+        const configRaw = await readFile(path.join(repoPath, 'amodal.json'), 'utf-8');
+        const parsed: unknown = JSON.parse(configRaw);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated object above
+        const config = (parsed && typeof parsed === 'object') ? parsed as Record<string, unknown> : {};
+        const declaredPackages = Array.isArray(config['packages'])
+          ? config['packages'].filter((p): p is string => typeof p === 'string')
+          : [];
+
+        for (const npmName of declaredPackages) {
+          const pkgDir = path.join(repoPath, 'node_modules', ...npmName.split('/'));
           try {
-            const entries = await readdir(scopeDir, {withFileTypes: true});
-            pkgDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
-          } catch { /* no packages dir */ }
+            const s = await stat(pkgDir);
+            if (!s.isDirectory()) continue;
+          } catch { continue; /* package not installed */ }
 
-          for (const pkgDirName of pkgDirs) {
-            const npmName = `@amodalai/${pkgDirName}`;
-            if (!lockFile.packages[npmName]) continue;
+          const meta = {source: 'package' as const, packageName: npmName};
+          const pkgTree: FileTreeEntry[] = [];
 
-            const pkgDir = path.join(scopeDir, pkgDirName);
-            const meta = {source: 'package' as const, packageName: npmName};
-            const pkgTree: FileTreeEntry[] = [];
-
-            for (const dir of CONVENTION_DIRS) {
-              const pkgConvDir = path.join(pkgDir, dir);
-              try {
-                const s = await stat(pkgConvDir);
-                if (s.isDirectory()) {
-                  const children = await buildTree(pkgConvDir, pkgDir, 0, meta);
-                  pkgTree.push({name: dir, path: dir, type: 'directory', children, ...meta});
-                }
-              } catch { /* dir doesn't exist in package */ }
-            }
-
-            mergePackageTree(tree, pkgTree);
+          for (const dir of CONVENTION_DIRS) {
+            const pkgConvDir = path.join(pkgDir, dir);
+            try {
+              const s = await stat(pkgConvDir);
+              if (s.isDirectory()) {
+                const children = await buildTree(pkgConvDir, pkgDir, 0, meta);
+                pkgTree.push({name: dir, path: dir, type: 'directory', children, ...meta});
+              }
+            } catch { /* dir doesn't exist in package */ }
           }
+
+          mergePackageTree(tree, pkgTree);
         }
-      } catch { /* lock file read failed, skip packages */ }
+      } catch { /* config read or package scan failed, skip packages */ }
 
       res.json({tree, repoPath});
     } catch (err) {
@@ -218,33 +217,28 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
         content = await readFile(resolved, 'utf-8');
       } catch { /* not found locally */ }
 
-      // Fall back to installed packages
+      // Fall back to declared packages
       if (content === null) {
         try {
-          const lockFile = await readLockFile(repoPath);
-          if (lockFile) {
-            const paths = getNpmContextPaths(repoPath);
-            const scopeDir = path.join(paths.nodeModules, '@amodalai');
-            let pkgDirs: string[] = [];
-            try {
-              const entries = await readdir(scopeDir, {withFileTypes: true});
-              pkgDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
-            } catch { /* */ }
+          const configRaw = await readFile(path.join(repoPath, 'amodal.json'), 'utf-8');
+          const parsed2: unknown = JSON.parse(configRaw);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated object above
+          const config = (parsed2 && typeof parsed2 === 'object') ? parsed2 as Record<string, unknown> : {};
+          const declaredPackages = Array.isArray(config['packages'])
+            ? config['packages'].filter((p): p is string => typeof p === 'string')
+            : [];
 
-            for (const pkgDirName of pkgDirs) {
-              const npmName = `@amodalai/${pkgDirName}`;
-              if (!lockFile.packages[npmName]) continue;
-              const pkgRoot = path.join(scopeDir, pkgDirName);
-              const pkgFilePath = validateFilePath(pkgRoot, filePath);
-              if (!pkgFilePath) continue;
-              try {
-                content = await readFile(pkgFilePath, 'utf-8');
-                source = 'package';
-                break;
-              } catch { /* not in this package */ }
-            }
+          for (const npmName of declaredPackages) {
+            const pkgRoot = path.join(repoPath, 'node_modules', ...npmName.split('/'));
+            const pkgFilePath = validateFilePath(pkgRoot, filePath);
+            if (!pkgFilePath) continue;
+            try {
+              content = await readFile(pkgFilePath, 'utf-8');
+              source = 'package';
+              break;
+            } catch { /* not in this package */ }
           }
-        } catch { /* lock file read failed */ }
+        } catch { /* config read or package scan failed */ }
       }
 
       if (content === null) {

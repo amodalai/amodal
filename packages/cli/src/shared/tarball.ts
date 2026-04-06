@@ -22,7 +22,7 @@ export async function createRepoTarball(repoPath: string): Promise<string> {
   );
 
   execSync(
-    `tar -czf "${tarballPath}" --exclude=node_modules --exclude=.git --exclude=amodal_packages --exclude=.amodal -C "${repoPath}" .`,
+    `tar -czf "${tarballPath}" --exclude=node_modules --exclude=.git --exclude=.amodal -C "${repoPath}" .`,
     {stdio: 'pipe', timeout: 30_000},
   );
 
