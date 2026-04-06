@@ -176,7 +176,11 @@ sessionId = await chat('What were our top customers last month?', sessionId);
 sessionId = await chat('How does that compare to the month before?', sessionId);
 ```
 
-For production use, the `@amodalai/react` package provides a `useChat` hook and `ChatProvider` that handle all of this — reconnection, event parsing, widget rendering, confirmation flows — so you do not need to build the SSE client from scratch.
+For production use, the `@amodalai/react` package provides hooks that handle all of this — reconnection, event parsing, widget rendering, confirmation flows — so you do not need to build the SSE client from scratch:
+
+- **`useChat`** — full-featured hook for the main chat endpoint (`/chat/stream`). Includes session resume, history loading, auth tokens, and ask-user flows.
+- **`useAmodalChat`** — convenience wrapper for apps using the `AmodalProvider` context (uses `AmodalClient` for transport).
+- **`useChatStream`** — low-level hook for custom endpoints. You supply a `streamFn` that connects to any SSE endpoint; the hook handles the reducer, event loop, tool-call tracking, and widget event bus. Use this when integrating with non-standard chat endpoints (e.g. admin chat at `/config/chat`).
 
 ## Session Lifecycle
 

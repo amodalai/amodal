@@ -138,7 +138,7 @@ MCP (Model Context Protocol) servers extend your agent with additional tools bey
 
 The `sandbox` block controls shell execution. When `shellExec` is `true`, the agent can run arbitrary commands. The `template` field specifies which sandbox image to use (pre-configured with your dependencies), and `maxTimeout` caps how long any single command can run.
 
-The `stores` block configures the database backend used for **both** agent document stores (see [Stores](/guide/stores)) **and** session persistence (conversation history across reconnects). PGLite (the default) runs an in-process WASM build of Postgres — no external database needed for local dev. For hosted runtimes and ISV production deployments, switch to a real Postgres by setting `backend: "postgres"` and providing `postgresUrl` (typically `env:DATABASE_URL`). Both backends share the same Drizzle schema, so switching is a pure config change.
+The `stores` block configures the database backend used for **both** agent document stores (see [Stores](/guide/stores)) **and** session persistence (conversation history across restarts). PGLite (the default) runs an in-process WASM build of Postgres — no external database needed for local dev. Agent data lives in `.amodal/store-data/` and session history in `.amodal/session-data/`, both file-backed so they survive restarts. For hosted runtimes and ISV production deployments, switch to a real Postgres by setting `backend: "postgres"` and providing `postgresUrl` (typically `env:DATABASE_URL`). Both backends share the same Drizzle schema, so switching is a pure config change.
 
 ## Fields
 
