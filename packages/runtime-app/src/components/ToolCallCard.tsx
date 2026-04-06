@@ -158,7 +158,7 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
   // All other tools — compact badge with parameter summary
   const summary = summarizeParams(call.toolName, params);
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 my-1 rounded-md bg-muted border border-border text-xs font-mono overflow-hidden">
+    <div className="flex items-center gap-2 px-3.5 py-2 my-1.5 rounded-lg bg-muted border border-border text-xs font-mono overflow-hidden">
       <StatusIcon isRunning={isRunning} isError={isError} />
       <span className="text-primary font-semibold shrink-0">{call.toolName}</span>
       {summary && (
