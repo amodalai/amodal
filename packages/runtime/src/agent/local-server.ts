@@ -97,6 +97,10 @@ interface ProviderStatus {
 const PROVIDER_CHECKS = [
   {provider: 'anthropic', envVar: 'ANTHROPIC_API_KEY', url: 'https://api.anthropic.com/v1/models', authHeader: (key: string) => ({'x-api-key': key, 'anthropic-version': '2023-06-01'})},
   {provider: 'openai', envVar: 'OPENAI_API_KEY', url: 'https://api.openai.com/v1/models', authHeader: (key: string) => ({Authorization: `Bearer ${key}`})},
+  {provider: 'google', envVar: 'GOOGLE_API_KEY', url: 'https://generativelanguage.googleapis.com/v1beta/models', authHeader: (key: string) => ({'x-goog-api-key': key})},
+  {provider: 'groq', envVar: 'GROQ_API_KEY', url: 'https://api.groq.com/openai/v1/models', authHeader: (key: string) => ({Authorization: `Bearer ${key}`})},
+  {provider: 'deepseek', envVar: 'DEEPSEEK_API_KEY', url: 'https://api.deepseek.com/v1/models', authHeader: (key: string) => ({Authorization: `Bearer ${key}`})},
+  {provider: 'xai', envVar: 'XAI_API_KEY', url: 'https://api.x.ai/v1/models', authHeader: (key: string) => ({Authorization: `Bearer ${key}`})},
 ];
 
 async function checkProviders(): Promise<ProviderStatus[]> {
