@@ -10,9 +10,9 @@ Amodal supports multiple LLM providers with a unified interface, built on the Ve
 
 | Provider | Models | Auth env var | Notes |
 |----------|--------|--------------|-------|
-| **Anthropic** | Claude Opus, Sonnet, Haiku | `ANTHROPIC_API_KEY` | Native adapter |
+| **Anthropic** | Claude Opus 4, Sonnet 4, Haiku 4.5 | `ANTHROPIC_API_KEY` | Native adapter, prompt caching supported |
 | **OpenAI** | GPT-4o, GPT-4, o1, o3 | `OPENAI_API_KEY` | Native adapter |
-| **Google** | Gemini 2.5 Flash / Pro | `GOOGLE_API_KEY` | Native adapter |
+| **Google** | Gemini 3.1 Pro, 3 Flash, 2.5 Pro/Flash | `GOOGLE_API_KEY` | Native adapter, same key as webTools |
 | **Groq** | Llama 3.3 70B, Kimi-K2 | `GROQ_API_KEY` | OpenAI-compatible — ultra-low latency |
 | **DeepSeek** | deepseek-chat, deepseek-reasoner | `DEEPSEEK_API_KEY` | OpenAI-compatible |
 | **xAI** | Grok-4, Grok-3 | `XAI_API_KEY` | OpenAI-compatible |
@@ -22,6 +22,16 @@ Amodal supports multiple LLM providers with a unified interface, built on the Ve
 | **Bedrock** | Claude, Titan, Llama (AWS) | AWS credentials | Available for eval judges; agent loop coming |
 | **Azure OpenAI** | GPT-4, GPT-4o on Azure | Azure creds | Available for eval judges; agent loop coming |
 | **Custom** | Any OpenAI-compatible endpoint | per-provider | Set `baseUrl` to point at your own inference server |
+
+### Recommended models by use case
+
+| Use case | Model | Input/Output per 1M | Why |
+|----------|-------|---------------------|-----|
+| Production agents | `gemini-3.1-pro-preview` | $2.00 / $12.00 | Best quality/cost ratio, strong tool-calling |
+| Budget agents | `gemini-3-flash-preview` | $0.50 / $3.00 | Fast, cheap, good for simple workflows |
+| Maximum quality | `claude-opus-4-20250514` | $15.00 / $75.00 | Best reasoning, prompt caching cuts repeat costs |
+| Fast + cheap | `gemini-3.1-flash-lite-preview` | $0.25 / $1.50 | Sub-agent dispatch, simple tasks |
+| Low-latency | `groq/llama-3.3-70b-versatile` | ~$0.60 / $0.80 | Groq hardware, ~300 tok/s |
 
 OpenAI-compatible providers (Groq, DeepSeek, xAI, Mistral, Fireworks, Together) reuse the OpenAI adapter with a per-provider `baseUrl`. Any additional OpenAI-compatible endpoint works by setting `baseUrl` explicitly in `amodal.json` — no code changes needed.
 
