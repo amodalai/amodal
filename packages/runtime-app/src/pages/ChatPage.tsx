@@ -33,7 +33,8 @@ function FeedbackButtons({ messageId, sessionId, query, response, toolCalls, mod
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({sessionId: sessionId ?? '', messageId, rating: r, comment: c, query, response, toolCalls, model}),
-    }).catch(() => {});
+        // eslint-disable-next-line no-console -- fire-and-forget: log for debugging
+    }).catch((err: unknown) => { console.warn('[feedback] submit failed:', err); });
   };
 
   const clear = () => {
@@ -208,7 +209,8 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
         const session = sessions.find((s) => s.id === sessionId);
         if (session) setTitle(session.title ?? session.summary);
       })
-      .catch(() => {});
+      // eslint-disable-next-line no-console -- fire-and-forget: log for debugging
+      .catch((err: unknown) => { console.warn('[session] title fetch failed:', err); });
   }, [sessionId]);
 
   if (!sessionId || !title) return null;
@@ -222,7 +224,8 @@ function SessionTitle({ sessionId }: { sessionId: string | null }) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: trimmed }),
-    }).catch(() => {});
+    // eslint-disable-next-line no-console -- fire-and-forget: log for debugging
+    }).catch((err: unknown) => { console.warn('[session] title save failed:', err); });
   };
 
   if (editing) {
@@ -328,7 +331,8 @@ export function ChatPage() {
           setHistory(msgs.filter((m) => m.role === 'user' || m.role === 'assistant'));
         }
       })
-      .catch(() => {});
+      // eslint-disable-next-line no-console -- fire-and-forget: log for debugging
+      .catch((err: unknown) => { console.warn('[session] history fetch failed:', err); });
   }, [activeResumeId]);
 
   useEffect(() => {
