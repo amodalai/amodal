@@ -26,7 +26,7 @@ import type {StandaloneSessionManager} from '../session/manager.js';
 import type {StreamHooks} from '../session/stream-hooks.js';
 import {SSEEventType, type SSEEvent} from '../types.js';
 import {resolveSession} from './session-resolver.js';
-import type {BundleResolver, SharedResources} from './session-resolver.js';
+import type {BundleResolver, SharedResources, ResolveSessionOptions} from './session-resolver.js';
 import {adaptOnUsage, asyncHandler, fireDrainHooks} from './route-helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -418,6 +418,8 @@ export interface AIStreamRouterOptions {
     content: string;
     signal: AbortSignal;
   }) => Promise<string>;
+  /** Hook to enhance session components before session creation. */
+  onSessionBuild?: ResolveSessionOptions['onSessionBuild'];
 }
 
 export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
@@ -449,6 +451,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
           deployId: body.deploy_id,
           auth,
           maxSessionTokens: body.max_session_tokens,
+          onSessionBuild: options.onSessionBuild,
         });
 
         // Set up SSE headers with Vercel AI SDK protocol marker

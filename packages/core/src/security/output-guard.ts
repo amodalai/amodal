@@ -13,7 +13,6 @@ import {LeakDetector} from './leak-detector.js';
 export interface OutputGuardConfig {
   tracker: ScrubTracker;
   accessConfigs: Map<string, AccessConfig>;
-  scopeContext?: undefined;
 }
 
 /**

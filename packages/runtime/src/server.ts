@@ -22,6 +22,7 @@ import {createAIStreamRouter} from './routes/ai-stream.js';
 import {StandaloneSessionManager} from './session/manager.js';
 import type {StreamHooks} from './session/stream-hooks.js';
 import type {AuthContext} from './middleware/auth.js';
+import type {SessionComponents} from './session/session-builder.js';
 import type {ServerConfig} from './types.js';
 import {log, createLogger} from './logger.js';
 
@@ -56,6 +57,15 @@ export interface CreateServerOptions {
   onShutdown?: () => Promise<void>;
   /** Async callback that resolves an AgentBundle from a deploy ID (used by hosted runtime) */
   bundleProvider?: (deployId: string, token?: string) => Promise<AgentBundle | null>;
+  /**
+   * Hook called after session components are built but before the session
+   * is created. Allows the hosting layer to enhance components — e.g.,
+   * injecting role-based field guidance into the system prompt.
+   */
+  onSessionBuild?: (
+    components: SessionComponents,
+    context: { auth?: AuthContext; bundle: AgentBundle },
+  ) => SessionComponents | Promise<SessionComponents>;
 }
 
 /**
@@ -126,6 +136,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     shared,
     createStreamHooks: options.createStreamHooks,
     summarizeToolResult: options.summarizeToolResult,
+    onSessionBuild: options.onSessionBuild,
   }));
   app.use(createAIStreamRouter({
     sessionManager,
@@ -133,6 +144,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     shared,
     createStreamHooks: options.createStreamHooks,
     summarizeToolResult: options.summarizeToolResult,
+    onSessionBuild: options.onSessionBuild,
   }));
 
   // Additional routers (e.g., session history proxy from hosting layer)

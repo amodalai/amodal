@@ -234,4 +234,140 @@ describe('resolveSession', () => {
     expect(createArg['toolContextFactory']).toBeDefined();
     expect(typeof createArg['toolContextFactory']).toBe('function');
   });
+
+  // -------------------------------------------------------------------------
+  // onSessionBuild hook
+  // -------------------------------------------------------------------------
+
+  describe('onSessionBuild hook', () => {
+    it('enhances components on new session creation', async () => {
+      const created = stubSession('sess-hook');
+      const mockCreate = vi.fn().mockReturnValue(created);
+      const mgr = stubSessionManager({create: mockCreate});
+      const bundle = stubBundle();
+
+      const hook = vi.fn().mockImplementation((components) => ({
+        ...components,
+        systemPrompt: components.systemPrompt + '\n## Extra guidance',
+      }));
+
+      await resolveSession(undefined, {
+        sessionManager: mgr,
+        bundleResolver: {staticBundle: bundle},
+        shared: stubShared(),
+        onSessionBuild: hook,
+      });
+
+      expect(hook).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({systemPrompt: 'test prompt'}), expect.objectContaining({bundle}));
+      const createArg = mockCreate.mock.calls[0][0] as Record<string, unknown>;
+      expect(createArg['systemPrompt']).toBe('test prompt\n## Extra guidance');
+    });
+
+    it('enhances components on session resume', async () => {
+      const resumed = stubSession('sess-resume-hook');
+      const mockResume = vi.fn().mockResolvedValue(resumed);
+      const mgr = stubSessionManager({
+        get: vi.fn().mockReturnValue(undefined),
+        resume: mockResume,
+      });
+      const bundle = stubBundle();
+
+      const hook = vi.fn().mockImplementation((components) => ({
+        ...components,
+        systemPrompt: components.systemPrompt + '\n## Roles injected',
+      }));
+
+      await resolveSession('sess-resume-hook', {
+        sessionManager: mgr,
+        bundleResolver: {staticBundle: bundle},
+        shared: stubShared(),
+        onSessionBuild: hook,
+      });
+
+      expect(hook).toHaveBeenCalledOnce();
+      const resumeArg = mockResume.mock.calls[0][1] as Record<string, unknown>;
+      expect(resumeArg['systemPrompt']).toBe('test prompt\n## Roles injected');
+    });
+
+    it('is not called for in-memory session hits', async () => {
+      const session = stubSession('sess-mem');
+      const mgr = stubSessionManager({get: vi.fn().mockReturnValue(session)});
+      const hook = vi.fn();
+
+      await resolveSession('sess-mem', {
+        sessionManager: mgr,
+        bundleResolver: {staticBundle: stubBundle()},
+        shared: stubShared(),
+        onSessionBuild: hook,
+      });
+
+      expect(hook).not.toHaveBeenCalled();
+    });
+
+    it('calls hook only once when resume misses and falls through to create', async () => {
+      const created = stubSession('sess-fallthrough');
+      const mgr = stubSessionManager({
+        get: vi.fn().mockReturnValue(undefined),
+        resume: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockReturnValue(created),
+      });
+
+      const hook = vi.fn().mockImplementation((components) => ({
+        ...components,
+        systemPrompt: 'enhanced prompt',
+      }));
+
+      await resolveSession('sess-not-in-store', {
+        sessionManager: mgr,
+        bundleResolver: {staticBundle: stubBundle()},
+        shared: stubShared(),
+        onSessionBuild: hook,
+      });
+
+      // Hook called once (resume path), cached result reused (create path)
+      expect(hook).toHaveBeenCalledOnce();
+      const createArg = (mgr.create as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
+      expect(createArg['systemPrompt']).toBe('enhanced prompt');
+    });
+
+    it('works with async hooks', async () => {
+      const created = stubSession('sess-async');
+      const mgr = stubSessionManager({create: vi.fn().mockReturnValue(created)});
+
+      const hook = vi.fn().mockImplementation(async (components) => ({
+        ...components,
+        systemPrompt: 'async enhanced',
+      }));
+
+      await resolveSession(undefined, {
+        sessionManager: mgr,
+        bundleResolver: {staticBundle: stubBundle()},
+        shared: stubShared(),
+        onSessionBuild: hook,
+      });
+
+      const createArg = (mgr.create as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
+      expect(createArg['systemPrompt']).toBe('async enhanced');
+    });
+
+    it('passes auth context to hook', async () => {
+      const created = stubSession('sess-auth-hook');
+      const mgr = stubSessionManager({create: vi.fn().mockReturnValue(created)});
+      const hook = vi.fn().mockImplementation((c) => c);
+      const auth = {applicationId: 'app-1', authMethod: 'api_key' as const, token: 'tok-123'};
+
+      await resolveSession(undefined, {
+        sessionManager: mgr,
+        bundleResolver: {staticBundle: stubBundle()},
+        shared: stubShared(),
+        onSessionBuild: hook,
+        auth,
+      });
+
+      expect(hook).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({auth}),
+      );
+    });
+  });
 });
