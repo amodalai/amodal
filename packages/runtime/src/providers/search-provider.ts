@@ -42,6 +42,10 @@ const SEARCH_SYSTEM_PREAMBLE =
   'When asked for a version number, date, or other exact value, cite it directly from the source. ' +
   'If sources disagree, say so.';
 
+/** Timeout for individual Gemini grounding calls. Separate from the tool-level
+ *  ctx.signal so the fallback path still has time if the primary is slow. */
+const GROUNDING_TIMEOUT_MS = 15_000;
+
 /** Tool names required by the Google provider — must match SDK expectations. */
 const GOOGLE_SEARCH_TOOL_NAME = 'google_search';
 const URL_CONTEXT_TOOL_NAME = 'url_context';
@@ -216,7 +220,9 @@ export function createSearchProvider(config: WebToolsConfig): SearchProvider {
           tools: {
             [GOOGLE_SEARCH_TOOL_NAME]: google.tools.googleSearch({}),
           },
-          ...(opts?.signal ? {abortSignal: opts.signal} : {}),
+          abortSignal: opts?.signal
+            ? AbortSignal.any([opts.signal, AbortSignal.timeout(GROUNDING_TIMEOUT_MS)])
+            : AbortSignal.timeout(GROUNDING_TIMEOUT_MS),
         });
         const metadata = extractGoogleMetadata(result.providerMetadata);
         return {
@@ -246,7 +252,9 @@ export function createSearchProvider(config: WebToolsConfig): SearchProvider {
           tools: {
             [URL_CONTEXT_TOOL_NAME]: google.tools.urlContext({}),
           },
-          ...(opts?.signal ? {abortSignal: opts.signal} : {}),
+          abortSignal: opts?.signal
+            ? AbortSignal.any([opts.signal, AbortSignal.timeout(GROUNDING_TIMEOUT_MS)])
+            : AbortSignal.timeout(GROUNDING_TIMEOUT_MS),
         });
         const metadata = extractGoogleMetadata(result.providerMetadata);
         return {
