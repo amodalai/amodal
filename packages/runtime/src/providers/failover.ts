@@ -124,6 +124,12 @@ export function createFailoverProvider(config: FailoverChainConfig): LLMProvider
       });
 
       const failedAttempts: FailedAttempt[] = [];
+      let resolveResponseMsgs: (msgs: Array<import('ai').ModelMessage>) => void;
+      let rejectResponseMsgs: (err: unknown) => void;
+      const responseMessagesPromise = new Promise<Array<import('ai').ModelMessage>>((resolve, reject) => {
+        resolveResponseMsgs = resolve;
+        rejectResponseMsgs = reject;
+      });
 
       const fullStream = (async function* (): AsyncGenerator<StreamEvent> {
         let lastUsage: TokenUsage | undefined;
@@ -144,6 +150,7 @@ export function createFailoverProvider(config: FailoverChainConfig): LLMProvider
             logSuccess(i, failedAttempts);
             resolveUsage(lastUsage ?? {inputTokens: 0, outputTokens: 0, totalTokens: 0});
             resolveText(textChunks.join(''));
+            void result.responseMessages.then(resolveResponseMsgs!, rejectResponseMsgs!);
             return;
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
@@ -180,6 +187,7 @@ export function createFailoverProvider(config: FailoverChainConfig): LLMProvider
         })(),
         usage: usagePromise,
         text: textPromise,
+        responseMessages: responseMessagesPromise,
       };
     },
 

@@ -196,6 +196,7 @@ export function createProvider(config: ProviderConfig): LLMProvider {
 
         usage: usagePromise,
         text: textPromise,
+        responseMessages: sdkResult.response.then((r) => r.messages),
       };
     },
 

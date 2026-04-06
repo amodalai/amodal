@@ -71,6 +71,7 @@ function streamingProvider(responseText: string): LLMProvider {
         textStream: makeTextStream(),
         usage: Promise.resolve(usage),
         text: Promise.resolve(responseText),
+        responseMessages: Promise.resolve([{role: 'assistant' as const, content: responseText}]),
       };
     },
     generateText: () => Promise.reject(new Error('not implemented')),

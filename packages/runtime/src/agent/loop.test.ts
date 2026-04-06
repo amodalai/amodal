@@ -98,6 +98,7 @@ function makeMockStream(
     })(),
     usage: Promise.resolve(makeUsage({inputTokens: 100, outputTokens: 50, totalTokens: 150})),
     text: Promise.resolve(text),
+    responseMessages: Promise.resolve([{role: 'assistant' as const, content: text}]),
   };
 }
 
