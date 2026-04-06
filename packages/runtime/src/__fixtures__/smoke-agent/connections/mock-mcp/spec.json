@@ -2,5 +2,7 @@
   "protocol": "mcp",
   "transport": "stdio",
   "command": "node",
-  "args": ["__REWRITTEN_AT_TEST_RUNTIME__"]
+  "args": [
+    "/Users/bobbaxley/code/amodal-parallel-tools/packages/runtime/src/__fixtures__/smoke-mcp-server.mjs"
+  ]
 }
