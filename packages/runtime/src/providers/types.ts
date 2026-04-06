@@ -16,6 +16,7 @@
 import type {
   LanguageModel,
   ModelMessage,
+  SystemModelMessage,
   Tool,
   ToolChoice,
   ToolSet,
@@ -27,7 +28,7 @@ import type {
 
 export interface StreamTextOptions {
   messages: ModelMessage[];
-  system?: string;
+  system?: string | SystemModelMessage | SystemModelMessage[];
   tools?: Record<string, Tool>;
   toolChoice?: ToolChoice<ToolSet>;
   maxOutputTokens?: number;
@@ -37,7 +38,7 @@ export interface StreamTextOptions {
 
 export interface GenerateTextOptions {
   messages: ModelMessage[];
-  system?: string;
+  system?: string | SystemModelMessage | SystemModelMessage[];
   tools?: Record<string, Tool>;
   toolChoice?: ToolChoice<ToolSet>;
   maxOutputTokens?: number;

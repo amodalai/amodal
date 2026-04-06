@@ -137,6 +137,22 @@ export async function handleThinking(
     } as Tool;
   }
 
+  // Mark the last tool definition for Anthropic prompt caching. Tool
+  // definitions are stable across turns (same tools every call), so
+  // caching them alongside the system prompt avoids re-encoding them
+  // on every turn. Anthropic allows up to 4 cache breakpoints — we
+  // use 2 (system prompt + last tool).
+  if (ctx.provider.provider === 'anthropic') {
+    const toolNames = Object.keys(tools);
+    const lastToolName = toolNames[toolNames.length - 1];
+    if (lastToolName && tools[lastToolName]) {
+      tools[lastToolName] = {
+        ...tools[lastToolName],
+        providerOptions: {anthropic: {cacheControl: {type: 'ephemeral'}}},
+      } as Tool;
+    }
+  }
+
   ctx.logger.debug('agent_thinking_start', {
     session: ctx.sessionId,
     turn: ctx.turnCount,
@@ -145,9 +161,22 @@ export async function handleThinking(
   });
 
   // 5. Start streaming LLM call
+  // Mark the system prompt for Anthropic prompt caching. The AI SDK
+  // passes providerOptions through to the Anthropic adapter, which sets
+  // cache_control on the system content block. Other providers ignore it.
+  // This gives ~90% input-token savings on cache hits (every turn after
+  // the first in a session).
+  const system = ctx.provider.provider === 'anthropic'
+    ? {
+        role: 'system' as const,
+        content: ctx.systemPrompt,
+        providerOptions: {anthropic: {cacheControl: {type: 'ephemeral'}}},
+      }
+    : ctx.systemPrompt;
+
   const result = ctx.provider.streamText({
     messages,
-    system: ctx.systemPrompt,
+    system,
     tools,
     maxOutputTokens: ctx.config.maxOutputTokens,
     abortSignal: ctx.signal,
