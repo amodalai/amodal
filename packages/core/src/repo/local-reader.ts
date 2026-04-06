@@ -198,6 +198,7 @@ export async function loadRepoFromDisk(repoPath: string): Promise<AgentBundle> {
     tools,
     stores,
     mcpServers: config.mcp?.servers,
+    channels: resolved.channels.length > 0 ? resolved.channels : undefined,
     warnings,
   };
 }

@@ -67,7 +67,8 @@ export interface DrizzleSessionStoreOptions {
 }
 
 export class DrizzleSessionStore implements SessionStore {
-  private readonly db: AnyPgDatabase;
+  /** Exposed for channel session mapper to share the connection pool. */
+  readonly db: AnyPgDatabase;
   private readonly table: AgentSessionsTable;
   readonly backendName: string;
   private readonly logger: Logger;

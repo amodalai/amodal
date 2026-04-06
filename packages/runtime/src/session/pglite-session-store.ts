@@ -40,6 +40,21 @@ const CREATE_TABLE_DDL = `
 
   CREATE INDEX IF NOT EXISTS idx_agent_sessions_updated
     ON agent_sessions (updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS channel_sessions (
+    channel_type TEXT NOT NULL,
+    channel_user_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_active_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}',
+    PRIMARY KEY (channel_type, channel_user_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_channel_sessions_session
+    ON channel_sessions (session_id);
+  CREATE INDEX IF NOT EXISTS idx_channel_sessions_activity
+    ON channel_sessions (last_active_at DESC);
 `;
 
 export interface PGLiteSessionStoreOptions {

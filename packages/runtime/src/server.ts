@@ -15,7 +15,7 @@
 import express from 'express';
 import type {Express} from 'express';
 import type http from 'node:http';
-import type {AgentBundle} from '@amodalai/types';
+import type {AgentBundle, ChannelAdapter, ChannelSessionMapper} from '@amodalai/types';
 import {errorHandler} from './middleware/error-handler.js';
 import {createChatStreamRouter} from './routes/chat-stream.js';
 import {createAIStreamRouter} from './routes/ai-stream.js';
@@ -24,6 +24,9 @@ import type {StreamHooks} from './session/stream-hooks.js';
 import type {AuthContext} from './middleware/auth.js';
 import type {SessionComponents} from './session/session-builder.js';
 import type {ServerConfig} from './types.js';
+import {RuntimeEventBus} from './events/event-bus.js';
+import {createChannelsRouter} from './channels/routes.js';
+import {MessageDedupCache} from './channels/dedup-cache.js';
 import {log, createLogger} from './logger.js';
 
 export interface ServerInstance {
@@ -66,6 +69,24 @@ export interface CreateServerOptions {
     components: SessionComponents,
     context: { auth?: AuthContext; bundle: AgentBundle },
   ) => SessionComponents | Promise<SessionComponents>;
+
+  // --- Messaging channels (optional) ---
+
+  /**
+   * Pre-loaded channel adapters. The hosting layer calls
+   * `loadChannelPlugins()` and passes the result here.
+   */
+  channelAdapters?: Map<string, ChannelAdapter>;
+  /**
+   * Channel session mapper. The hosting layer creates this with its
+   * own DB connection (DrizzleChannelSessionMapper) or uses the
+   * InMemoryChannelSessionMapper for testing.
+   */
+  channelSessionMapper?: ChannelSessionMapper & {
+    setSessionFactory(f: (origin: import('@amodalai/types').ChannelOrigin) => {sessionId: string}): void;
+  };
+  /** Event bus for channel lifecycle events. If omitted, a minimal one is created. */
+  channelEventBus?: RuntimeEventBus;
 }
 
 /**
@@ -146,6 +167,34 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     summarizeToolResult: options.summarizeToolResult,
     onSessionBuild: options.onSessionBuild,
   }));
+
+  // Messaging channels
+  if (options.channelAdapters && options.channelAdapters.size > 0 && options.channelSessionMapper) {
+    const channelEventBus = options.channelEventBus ?? new RuntimeEventBus({
+      onListenerError: (err, event) => {
+        log.warn('channel_event_bus_listener_error', {
+          seq: event.seq,
+          type: event.type,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      },
+    });
+
+    if (options.authMiddleware) {
+      app.use('/channels', options.authMiddleware);
+    }
+
+    app.use('/channels', createChannelsRouter({
+      adapters: options.channelAdapters,
+      sessionMapper: options.channelSessionMapper,
+      sessionManager,
+      dedupCache: new MessageDedupCache(),
+      eventBus: channelEventBus,
+      logger: log,
+    }));
+
+    log.info('channels_router_mounted', {channels: [...options.channelAdapters.keys()]});
+  }
 
   // Additional routers (e.g., session history proxy from hosting layer)
   if (options.additionalRouters) {

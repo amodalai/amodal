@@ -23,6 +23,10 @@ import {createTaskRouter} from './routes/task.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {ServerInstance} from '../server.js';
 import {ConfigError} from '../errors.js';
+import {resolveEnvRef} from '../env-ref.js';
+import {RuntimeEventBus} from '../events/event-bus.js';
+import {InMemoryChannelSessionMapper} from '../channels/in-memory-session-mapper.js';
+import {bootstrapChannels} from '../channels/bootstrap.js';
 import {log, createLogger} from '../logger.js';
 
 export interface SnapshotServerConfig {
@@ -72,6 +76,46 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
     logger: log,
     toolExecutor,
   };
+
+  // Channel plugins (if configured)
+  const eventBus = new RuntimeEventBus({
+    onListenerError: (err, event) => {
+      log.warn('event_bus_listener_error', {seq: event.seq, type: event.type, error: err instanceof Error ? err.message : String(err)});
+    },
+  });
+
+  let channelsRouter: import('express').Router | null = null;
+  if (bundle.channels && bundle.channels.length > 0) {
+    const channelsConfig: Record<string, Record<string, unknown>> = {};
+    for (const ch of bundle.channels) {
+      const resolvedConfig: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(ch.config)) {
+        resolvedConfig[k] = typeof v === 'string' ? (resolveEnvRef(v) ?? v) : v;
+      }
+      channelsConfig[ch.channelType] = resolvedConfig;
+    }
+
+    const channelMapper = new InMemoryChannelSessionMapper({logger: log, eventBus});
+    const result = await bootstrapChannels({
+      channelsConfig,
+      repoPath: '', // No local channel discovery in snapshot mode
+      packages: bundle.config.packages,
+      sessionMapper: channelMapper,
+      sessionManager,
+      buildSessionComponents: () => buildSessionComponents({
+        bundle,
+        storeBackend: null,
+        mcpManager: null,
+        logger: log,
+        toolExecutor,
+      }),
+      eventBus,
+      logger: log,
+    });
+    if (result) {
+      channelsRouter = result.router;
+    }
+  }
 
   const createTaskSession = () => {
     const components = buildSessionComponents({
@@ -130,6 +174,12 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
     shared,
   }));
   app.use(createTaskRouter({sessionManager, createTaskSession}));
+
+  // Messaging channels
+  if (channelsRouter) {
+    app.use('/channels', channelsRouter);
+    log.info('channels_router_mounted', {mode: 'snapshot'});
+  }
 
   // Error handler (must be last)
   app.use(errorHandler);
