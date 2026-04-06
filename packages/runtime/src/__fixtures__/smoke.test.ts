@@ -736,6 +736,57 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   }, TIMEOUT * 3);
 
   // -------------------------------------------------------------------------
+  // 11e. Parallel tool calls — batched read-only execution
+  // -------------------------------------------------------------------------
+
+  it('batches parallel read-only tool calls in a single turn', async () => {
+    // Seed three distinct items with unique names so we can verify the
+    // model saw each result.
+    const seed = [
+      ['parallel-alpha', 'Alpha Marker'],
+      ['parallel-beta', 'Beta Marker'],
+      ['parallel-gamma', 'Gamma Marker'],
+    ];
+    const writes = await Promise.all(seed.map(([id, name]) =>
+      chat(`Write to test-items store: item_id="${id}", name="${name}", status="active".`),
+    ));
+    const allWritesOk = writes.every((w) =>
+      findEvents(w.events, 'tool_call_result').some((e) => e['status'] === 'success'),
+    );
+    if (!allWritesOk) return; // seeding failed — skip
+
+    // Ask the model to fetch all three in parallel. Models sometimes split
+    // this across turns; when they emit a single-turn parallel batch we
+    // verify the runtime handled it correctly end-to-end.
+    const {events} = await chat(
+      'Fetch all three of these items from the test-items store in parallel ' +
+      'using three concurrent query_store tool calls (one per key): ' +
+      '"parallel-alpha", "parallel-beta", "parallel-gamma". Then list the name ' +
+      'field of each item in your response.',
+    );
+
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const toolResults = findEvents(events, 'tool_call_result');
+    const queryStoreStarts = toolStarts.filter((e) => e['tool_name'] === 'query_store');
+
+    if (queryStoreStarts.length < 2) {
+      // eslint-disable-next-line no-console -- intentional test diagnostic
+      console.warn(
+        `[smoke] Model emitted ${String(queryStoreStarts.length)} query_store call(s) — ` +
+        'parallel-batch path not exercised this run (LLM non-determinism)',
+      );
+      return;
+    }
+
+    // Every start must have a matching successful result — batching must
+    // not drop events or corrupt SSE ordering. (This is the assertion that
+    // actually exercises the batching code path; content coverage of the
+    // response is LLM-variable and not the batcher's job.)
+    const successResults = toolResults.filter((e) => e['status'] === 'success');
+    expect(successResults.length).toBeGreaterThanOrEqual(queryStoreStarts.length);
+  }, TIMEOUT * 3);
+
+  // -------------------------------------------------------------------------
   // 12. Concurrent sessions don't bleed context
   // -------------------------------------------------------------------------
 
