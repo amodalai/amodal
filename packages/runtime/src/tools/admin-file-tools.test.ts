@@ -46,7 +46,7 @@ beforeEach(() => {
   mkdirSync(join(repoRoot, 'skills'), {recursive: true});
   mkdirSync(join(repoRoot, 'knowledge'), {recursive: true});
   mkdirSync(join(repoRoot, 'evals'), {recursive: true});
-  mkdirSync(join(repoRoot, 'amodal_packages', 'test-pkg'), {recursive: true});
+  mkdirSync(join(repoRoot, 'node_modules', 'test-pkg'), {recursive: true});
 });
 
 afterEach(() => {
@@ -70,7 +70,11 @@ describe('isAllowedRepoPath', () => {
 
   it('blocks paths outside allowed directories', () => {
     expect(isAllowedRepoPath('src/index.ts')).toBe(false);
-    expect(isAllowedRepoPath('node_modules/foo')).toBe(false);
+    expect(isAllowedRepoPath('dist/bundle.js')).toBe(false);
+  });
+
+  it('allows node_modules as read-only', () => {
+    expect(isAllowedRepoPath('node_modules/@amodalai/foo/skills/bar.md')).toBe(true);
   });
 });
 
@@ -292,7 +296,7 @@ describe('createWriteRepoFileTool', () => {
 
   it('rejects writes to read-only directories', async () => {
     const tool = createWriteRepoFileTool(repoRoot);
-    const result = await tool.execute({path: 'amodal_packages/test-pkg/file.ts', content: 'code'}, mockCtx) as Record<string, unknown>;
+    const result = await tool.execute({path: 'node_modules/test-pkg/file.ts', content: 'code'}, mockCtx) as Record<string, unknown>;
 
     expect(result['error']).toContain('read-only');
   });
@@ -323,7 +327,7 @@ describe('createDeleteRepoFileTool', () => {
 
   it('rejects deletes in read-only directories', async () => {
     const tool = createDeleteRepoFileTool(repoRoot);
-    const result = await tool.execute({path: 'amodal_packages/test-pkg/file.ts'}, mockCtx) as Record<string, unknown>;
+    const result = await tool.execute({path: 'node_modules/test-pkg/file.ts'}, mockCtx) as Record<string, unknown>;
 
     expect(result['error']).toContain('read-only');
   });
@@ -618,11 +622,11 @@ describe('createEditRepoFileTool', () => {
   });
 
   it('rejects edits to read-only directories', async () => {
-    writeFileSync(join(repoRoot, 'amodal_packages', 'test-pkg', 'file.ts'), 'code');
+    writeFileSync(join(repoRoot, 'node_modules', 'test-pkg', 'file.ts'), 'code');
     const tool = createEditRepoFileTool(repoRoot);
 
     const result = await tool.execute(
-      {path: 'amodal_packages/test-pkg/file.ts', old_string: 'code', new_string: 'new'},
+      {path: 'node_modules/test-pkg/file.ts', old_string: 'code', new_string: 'new'},
       mockCtx,
     ) as Record<string, unknown>;
 

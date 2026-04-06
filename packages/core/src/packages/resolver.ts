@@ -14,10 +14,7 @@ import type {LoadedStore} from '../repo/store-types.js';
 import {parseStoreJson} from '../repo/store-loader.js';
 import type {LoadedTool} from '../repo/tool-types.js';
 import {loadTools} from '../repo/tool-loader.js';
-
-import {getNpmContextPaths} from './npm-context.js';
-import type {LockFile} from './package-types.js';
-// isAmodalPackage available for future use
+import type {AmodalConfig} from '../repo/config-schema.js';
 
 /**
  * The result of resolving all installed packages + local repo content.
@@ -32,7 +29,9 @@ export interface ResolvedPackages {
   warnings: string[];
 }
 
-// --- Helpers ---
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 async function readOptionalFile(filePath: string): Promise<string | null> {
   try {
@@ -73,9 +72,19 @@ async function listFiles(dirPath: string, ext?: string): Promise<string[]> {
   }
 }
 
-// --- Loading from a single package directory ---
+/**
+ * Resolve the directory for an npm package from node_modules.
+ * Handles both scoped (@scope/name) and unscoped packages.
+ */
+function resolvePackageDir(repoPath: string, npmName: string): string {
+  return path.join(repoPath, 'node_modules', ...npmName.split('/'));
+}
 
-async function loadConnectionsFromDir(
+// ---------------------------------------------------------------------------
+// Loading from local repo directories (nested structure)
+// ---------------------------------------------------------------------------
+
+async function loadLocalConnections(
   dir: string,
   existing: Map<string, LoadedConnection>,
   warnings: string[],
@@ -83,7 +92,7 @@ async function loadConnectionsFromDir(
   const connDir = path.join(dir, 'connections');
   const subdirs = await listSubdirs(connDir);
   for (const name of subdirs) {
-    if (existing.has(name)) continue; // Local wins
+    if (existing.has(name)) continue;
     const connPath = path.join(connDir, name);
     const specJson = await readOptionalFile(path.join(connPath, 'spec.json'));
     if (!specJson) {
@@ -91,7 +100,6 @@ async function loadConnectionsFromDir(
       continue;
     }
 
-    // Check if this is an MCP connection (access.json not required)
     let isMcp = false;
     try {
       const parsed: unknown = JSON.parse(specJson);
@@ -122,7 +130,7 @@ async function loadConnectionsFromDir(
   }
 }
 
-async function loadSkillsFromDir(
+async function loadLocalSkills(
   dir: string,
   existingNames: Set<string>,
   skills: LoadedSkill[],
@@ -146,7 +154,7 @@ async function loadSkillsFromDir(
   }
 }
 
-async function loadAutomationsFromDir(
+async function loadLocalAutomations(
   dir: string,
   existingNames: Set<string>,
   automations: LoadedAutomation[],
@@ -171,7 +179,7 @@ async function loadAutomationsFromDir(
   }
 }
 
-async function loadKnowledgeFromDir(
+async function loadLocalKnowledge(
   dir: string,
   existingNames: Set<string>,
   knowledge: LoadedKnowledge[],
@@ -195,7 +203,7 @@ async function loadKnowledgeFromDir(
   }
 }
 
-async function loadStoresFromDir(
+async function loadLocalStores(
   dir: string,
   existingNames: Set<string>,
   stores: LoadedStore[],
@@ -219,7 +227,7 @@ async function loadStoresFromDir(
   }
 }
 
-async function loadToolsFromDir(
+async function loadLocalTools(
   dir: string,
   existingNames: Set<string>,
   tools: LoadedTool[],
@@ -238,17 +246,23 @@ async function loadToolsFromDir(
   }
 }
 
-// --- Full resolution ---
+// ---------------------------------------------------------------------------
+// Full resolution
+// ---------------------------------------------------------------------------
 
 /**
- * Resolve all packages: scan installed packages in node_modules, then local repo.
+ * Resolve all content: local repo directories + declared npm packages.
  * Local repo files always win over package files for the same name.
+ *
+ * Packages are declared in amodal.json `packages` array. Each package
+ * is scanned for standard content directories (connections/, skills/, etc.)
+ * using the same loaders as local repo content.
  */
 export async function resolveAllPackages(options: {
   repoPath: string;
-  lockFile: LockFile | null;
+  config?: AmodalConfig;
 }): Promise<ResolvedPackages> {
-  const {repoPath, lockFile} = options;
+  const {repoPath, config} = options;
   const warnings: string[] = [];
 
   const connections = new Map<string, LoadedConnection>();
@@ -266,39 +280,29 @@ export async function resolveAllPackages(options: {
   const toolNames = new Set<string>();
 
   // 1. Load from local repo first (local always wins)
-  await loadConnectionsFromDir(repoPath, connections, warnings);
-  await loadSkillsFromDir(repoPath, skillNames, skills, warnings);
-  await loadAutomationsFromDir(repoPath, automationNames, automations, warnings);
-  await loadKnowledgeFromDir(repoPath, knowledgeNames, knowledge, warnings);
-  await loadStoresFromDir(repoPath, storeNames, stores, warnings);
-  await loadToolsFromDir(repoPath, toolNames, tools, warnings);
+  await loadLocalConnections(repoPath, connections, warnings);
+  await loadLocalSkills(repoPath, skillNames, skills, warnings);
+  await loadLocalAutomations(repoPath, automationNames, automations, warnings);
+  await loadLocalKnowledge(repoPath, knowledgeNames, knowledge, warnings);
+  await loadLocalStores(repoPath, storeNames, stores, warnings);
+  await loadLocalTools(repoPath, toolNames, tools, warnings);
 
-  // 2. Load from installed packages (additive, local wins on conflicts)
-  if (lockFile && Object.keys(lockFile.packages).length > 0) {
-    const paths = getNpmContextPaths(repoPath);
-    const scopeDir = path.join(paths.nodeModules, '@amodalai');
-
-    if (await dirExists(scopeDir)) {
-      let packageDirs: string[];
-      try {
-        packageDirs = await listSubdirs(scopeDir);
-      } catch {
-        packageDirs = [];
+  // 2. Load from declared npm packages (same nested structure as local repo)
+  const packageNames = config?.packages;
+  if (packageNames && packageNames.length > 0) {
+    for (const npmName of packageNames) {
+      const pkgDir = resolvePackageDir(repoPath, npmName);
+      if (!(await dirExists(pkgDir))) {
+        warnings.push(`Package "${npmName}" declared in amodal.json but not installed. Run: npm install`);
+        continue;
       }
-
-      for (const pkgDirName of packageDirs) {
-        const npmName = `@amodalai/${pkgDirName}`;
-        // Only load packages that are in the lock file
-        if (!lockFile.packages[npmName]) continue;
-
-        const pkgDir = path.join(scopeDir, pkgDirName);
-        await loadConnectionsFromDir(pkgDir, connections, warnings);
-        await loadSkillsFromDir(pkgDir, skillNames, skills, warnings);
-        await loadAutomationsFromDir(pkgDir, automationNames, automations, warnings);
-        await loadKnowledgeFromDir(pkgDir, knowledgeNames, knowledge, warnings);
-        await loadStoresFromDir(pkgDir, storeNames, stores, warnings);
-        await loadToolsFromDir(pkgDir, toolNames, tools, warnings);
-      }
+      // Scan package for all content types — same loaders as local repo
+      await loadLocalConnections(pkgDir, connections, warnings);
+      await loadLocalSkills(pkgDir, skillNames, skills, warnings);
+      await loadLocalAutomations(pkgDir, automationNames, automations, warnings);
+      await loadLocalKnowledge(pkgDir, knowledgeNames, knowledge, warnings);
+      await loadLocalStores(pkgDir, storeNames, stores, warnings);
+      await loadLocalTools(pkgDir, toolNames, tools, warnings);
     }
   }
 

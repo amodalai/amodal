@@ -1,13 +1,12 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 
 const mockFindRepoRoot = vi.fn(() => '/test/repo');
-const mockReadLockFile = vi.fn();
 const mockResolveAllPackages = vi.fn();
 
 vi.mock('../shared/repo-discovery.js', () => ({
@@ -15,7 +14,6 @@ vi.mock('../shared/repo-discovery.js', () => ({
 }));
 
 vi.mock('@amodalai/core', () => ({
-  readLockFile: mockReadLockFile,
   resolveAllPackages: mockResolveAllPackages,
   loadRepo: vi.fn().mockResolvedValue({
     config: {models: {main: {provider: 'anthropic', model: 'test'}}},
@@ -130,7 +128,6 @@ describe('runInspect', () => {
 
   // Resolved package tests
   it('should show resolved packages when resolved flag set', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map([['salesforce', {surface: [{}, {}, {}], spec: {auth: {type: 'bearer'}}}]]),
       skills: [{name: 'triage', body: 'Triage methodology content'}],
@@ -149,7 +146,6 @@ describe('runInspect', () => {
   });
 
   it('should filter by scope', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map([
         ['salesforce', {surface: [{}, {}], spec: {auth: {type: 'bearer'}}}],
@@ -169,18 +165,7 @@ describe('runInspect', () => {
     expect(output).not.toContain('stripe');
   });
 
-  it('should show no lock file message when resolved without lock', async () => {
-    mockReadLockFile.mockResolvedValue(null);
-
-    const {runInspect} = await import('./inspect.js');
-    await runInspect({resolved: true});
-
-    const output = stdoutOutput.join('');
-    expect(output).toContain('No lock file found');
-  });
-
   it('should show resolution warnings', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
@@ -198,7 +183,6 @@ describe('runInspect', () => {
   });
 
   it('should show connection details in resolved view', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map([['crm', {surface: [{}, {}], spec: {auth: {type: 'oauth2'}}}]]),
       skills: [],
@@ -216,7 +200,6 @@ describe('runInspect', () => {
   });
 
   it('should show skill body length in resolved view', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [{name: 'investigate', body: 'A'.repeat(500)}],

@@ -1,24 +1,18 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
 import {describe, it, expect, vi, beforeEach} from 'vitest';
 
 const mockFindRepoRoot = vi.fn(() => '/test/repo');
-const mockEnsureNpmContext = vi.fn();
-const mockNpmInstall = vi.fn();
-const mockAddLockEntry = vi.fn();
-const mockGetLockEntry = vi.fn();
-const mockGetNpmContextPaths = vi.fn();
+const mockEnsurePackageJson = vi.fn();
+const mockPmAdd = vi.fn();
 const mockReadPackageManifest = vi.fn();
 const mockToNpmName = vi.fn((name: string) => `@amodalai/connection-${name}`);
 const mockFindMissingEnvVars = vi.fn();
 const mockUpsertEnvEntries = vi.fn();
-const mockAddConfigDep = vi.fn();
-const mockDiscoverInstalledPackages = vi.fn();
-const mockBuildLockFile = vi.fn();
 
 const mockPromptForCredentials = vi.fn();
 const mockTestConnection = vi.fn();
@@ -26,23 +20,19 @@ const mockRunOAuth2Flow = vi.fn();
 
 const mockPrompts = vi.fn();
 
+const mockStatSync = vi.fn();
+
 vi.mock('../shared/repo-discovery.js', () => ({
   findRepoRoot: mockFindRepoRoot,
 }));
 
 vi.mock('@amodalai/core', () => ({
-  ensureNpmContext: mockEnsureNpmContext,
-  npmInstall: mockNpmInstall,
-  addLockEntry: mockAddLockEntry,
-  getLockEntry: mockGetLockEntry,
-  getNpmContextPaths: mockGetNpmContextPaths,
+  ensurePackageJson: mockEnsurePackageJson,
+  pmAdd: mockPmAdd,
   readPackageManifest: mockReadPackageManifest,
   toNpmName: mockToNpmName,
   findMissingEnvVars: mockFindMissingEnvVars,
   upsertEnvEntries: mockUpsertEnvEntries,
-  addConfigDep: mockAddConfigDep,
-  discoverInstalledPackages: mockDiscoverInstalledPackages,
-  buildLockFile: mockBuildLockFile,
 }));
 
 vi.mock('../auth/index.js', () => ({
@@ -55,13 +45,13 @@ vi.mock('prompts', () => ({
   default: mockPrompts,
 }));
 
-const mockPaths = {
-  root: '/test/repo/.amodal/packages',
-  npmDir: '/test/repo/.amodal/packages/.npm',
-  npmrc: '/test/repo/.amodal/packages/.npm/.npmrc',
-  packageJson: '/test/repo/.amodal/packages/.npm/package.json',
-  nodeModules: '/test/repo/.amodal/packages/.npm/node_modules',
-};
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    statSync: mockStatSync,
+  };
+});
 
 const bearerManifest = {
   name: 'stripe',
@@ -105,16 +95,13 @@ describe('runConnect', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFindRepoRoot.mockReturnValue('/test/repo');
-    mockEnsureNpmContext.mockResolvedValue(mockPaths);
-    mockGetLockEntry.mockResolvedValue(null); // fresh install by default
-    mockNpmInstall.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
-    mockAddLockEntry.mockResolvedValue({lockVersion: 2, packages: {}});
-    mockGetNpmContextPaths.mockReturnValue(mockPaths);
+    // By default, package is NOT installed (statSync throws)
+    mockStatSync.mockImplementation(() => {
+      throw new Error('ENOENT');
+    });
+    mockPmAdd.mockResolvedValue(undefined);
     mockFindMissingEnvVars.mockResolvedValue([]);
     mockUpsertEnvEntries.mockResolvedValue(undefined);
-    mockAddConfigDep.mockResolvedValue(undefined);
-    mockDiscoverInstalledPackages.mockResolvedValue([]);
-    mockBuildLockFile.mockResolvedValue(undefined);
     mockPromptForCredentials.mockResolvedValue({credentials: {}, summary: 'Set 1 credential'});
     mockTestConnection.mockResolvedValue({connectionName: 'test', results: [], allPassed: true});
     stderrOutput = '';
@@ -135,7 +122,7 @@ describe('runConnect', () => {
     const {runConnect} = await import('./connect.js');
     const result = await runConnect({name: 'stripe'});
     expect(result).toBe(0);
-    expect(mockNpmInstall).toHaveBeenCalled();
+    expect(mockPmAdd).toHaveBeenCalled();
     expect(mockPromptForCredentials).toHaveBeenCalled();
     expect(mockTestConnection).toHaveBeenCalled();
     expect(stderrOutput).toContain('Connected: stripe');
@@ -147,7 +134,7 @@ describe('runConnect', () => {
     const {runConnect} = await import('./connect.js');
     const result = await runConnect({name: 'datadog'});
     expect(result).toBe(0);
-    expect(mockNpmInstall).toHaveBeenCalled();
+    expect(mockPmAdd).toHaveBeenCalled();
     expect(mockPromptForCredentials).toHaveBeenCalled();
   });
 
@@ -182,18 +169,19 @@ describe('runConnect', () => {
   });
 
   it('should skip install on reconnect', async () => {
-    mockGetLockEntry.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
+    // Package already installed in node_modules
+    mockStatSync.mockReturnValue({isDirectory: () => true});
     mockReadPackageManifest.mockResolvedValue(bearerManifest);
 
     const {runConnect} = await import('./connect.js');
     const result = await runConnect({name: 'stripe'});
     expect(result).toBe(0);
-    expect(mockNpmInstall).not.toHaveBeenCalled();
+    expect(mockPmAdd).not.toHaveBeenCalled();
     expect(stderrOutput).toContain('already installed');
   });
 
   it('should skip credential prompt on reconnect when vars present', async () => {
-    mockGetLockEntry.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
+    mockStatSync.mockReturnValue({isDirectory: () => true});
     mockReadPackageManifest.mockResolvedValue(bearerManifest);
     mockFindMissingEnvVars.mockResolvedValue([]);
 
@@ -204,7 +192,7 @@ describe('runConnect', () => {
   });
 
   it('should re-prompt on reconnect with force', async () => {
-    mockGetLockEntry.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
+    mockStatSync.mockReturnValue({isDirectory: () => true});
     mockReadPackageManifest.mockResolvedValue(bearerManifest);
 
     const {runConnect} = await import('./connect.js');
@@ -239,7 +227,7 @@ describe('runConnect', () => {
   });
 
   it('should return 1 when npm install fails', async () => {
-    mockNpmInstall.mockRejectedValue(new Error('Registry down'));
+    mockPmAdd.mockRejectedValue(new Error('Registry down'));
 
     const {runConnect} = await import('./connect.js');
     const result = await runConnect({name: 'stripe'});
@@ -291,7 +279,7 @@ describe('runConnect', () => {
   });
 
   it('should prompt for missing vars on reconnect without force', async () => {
-    mockGetLockEntry.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
+    mockStatSync.mockReturnValue({isDirectory: () => true});
     mockReadPackageManifest.mockResolvedValue(bearerManifest);
     mockFindMissingEnvVars.mockResolvedValue(['STRIPE_API_KEY']);
 

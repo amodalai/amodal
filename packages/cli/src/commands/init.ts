@@ -7,6 +7,7 @@
 import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import type {CommandModule} from 'yargs';
+import {ensurePackageJson} from '@amodalai/core';
 import {generateConfigTemplate} from '../templates/config-template.js';
 
 export interface InitOptions {
@@ -46,10 +47,13 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   // Write amodal.json at repo root
   writeFileSync(configPath, generateConfigTemplate({name, provider}));
 
+  // Ensure package.json exists
+  ensurePackageJson(cwd, name);
+
   // Write .gitignore if it doesn't exist
   const gitignorePath = join(cwd, '.gitignore');
   if (!existsSync(gitignorePath)) {
-    writeFileSync(gitignorePath, '.amodal/\namodal_packages/\n.env\n.env.*\n');
+    writeFileSync(gitignorePath, '.amodal/\nnode_modules/\n.env\n.env.*\n');
   }
 
   process.stderr.write(`[init] Created project "${name}" (${provider})\n`);

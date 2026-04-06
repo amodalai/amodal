@@ -35,7 +35,6 @@ import {runInit} from './commands/init.js';
 import {runInstallPkg} from './commands/install-pkg.js';
 import {runValidate} from './commands/validate.js';
 import {runBuild} from './commands/build.js';
-import {runList} from './commands/list.js';
 import {runUninstall} from './commands/uninstall.js';
 import {loadRepo} from '@amodalai/core';
 
