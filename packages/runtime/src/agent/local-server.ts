@@ -261,10 +261,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // -------------------------------------------------------------------------
 
   const sessionLogger = createLogger({component: 'session-manager'});
+  const sessionDataDir = `${config.repoPath}/.amodal/session-data`;
   const sessionStore = await selectSessionStore({
     backend: bundle.config.stores?.backend,
     postgresUrl: resolveEnvRef(bundle.config.stores?.postgresUrl),
     logger: sessionLogger,
+    dataDir: sessionDataDir,
   });
 
   const sessionManager = new StandaloneSessionManager({
