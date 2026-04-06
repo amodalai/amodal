@@ -430,7 +430,7 @@ describe('handleThinking (via transition)', () => {
 
     // Escalation message should be appended
     const lastMsg = streamTextCall.messages[streamTextCall.messages.length - 1];
-    expect(lastMsg.role).toBe('system');
+    expect(lastMsg.role).toBe('user');
     if (typeof lastMsg.content === 'string') {
       expect(lastMsg.content).toContain('temporarily disabled');
       expect(lastMsg.content).toContain('stuck_api');
@@ -504,7 +504,7 @@ describe('handleThinking (via transition)', () => {
     expect(result.next.type).toBe('streaming');
     const streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[0][0];
     const lastMsg = streamTextCall.messages[streamTextCall.messages.length - 1];
-    expect(lastMsg.role).toBe('system');
+    expect(lastMsg.role).toBe('user');
     if (typeof lastMsg.content === 'string') {
       expect(lastMsg.content).toContain('flaky_api');
       expect(lastMsg.content).toContain('3 times');
@@ -1335,9 +1335,10 @@ describe('handleCompacting (via transition)', () => {
     if (result.next.type === 'thinking') {
       // Should have fewer messages (summary + recent turns)
       expect(result.next.messages.length).toBeLessThan(messages.length);
-      // First message should be the system summary
+      // First message should be the compaction summary (user role, not system,
+      // because Anthropic rejects system messages after user/assistant turns)
       const firstMsg = result.next.messages[0];
-      expect(firstMsg.role).toBe('system');
+      expect(firstMsg.role).toBe('user');
       const firstContent = firstMsg.content;
       expect(typeof firstContent === 'string' && firstContent.includes('Conversation Summary')).toBe(true);
     }
