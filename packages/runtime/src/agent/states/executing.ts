@@ -7,7 +7,13 @@
 /**
  * EXECUTING state handler.
  *
- * Runs one tool call at a time:
+ * Runs tool calls from the queue. Contiguous read-only calls at the head
+ * of the queue are batched and executed concurrently via Promise.all;
+ * writes, confirmation-gated tools, and connection-ACL tools run one at
+ * a time so their per-call state-machine gates (CONFIRMING transitions,
+ * ACL checks) can evaluate individually.
+ *
+ * Per-call steps (single or batched):
  * 1. Look up tool in registry
  * 2. Check permissions (via PermissionChecker)
  * 3. Execute the tool (or use pre-execution cache)
@@ -233,10 +239,12 @@ interface Batch {
 }
 
 /**
- * A call is batchable when it has no per-call gates that the state machine
- * needs to route through. Anything that could transition to CONFIRMING,
- * DISPATCHING, or that runs a connection ACL check must go through the
- * single-call path.
+ * A call is batchable when it can't trigger a mid-queue state-machine
+ * transition. Connection tools are excluded because their ACL check can
+ * return `requiresConfirmation`, which would need a transition to
+ * CONFIRMING — and a batch can only produce one `next` state.
+ * Confirmation-flagged and dispatch tools are excluded for the same
+ * reason: the state machine must route them individually.
  */
 function isBatchable(toolDef: ToolDefinition): boolean {
   return (

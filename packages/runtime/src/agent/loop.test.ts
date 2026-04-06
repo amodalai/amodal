@@ -1084,7 +1084,7 @@ describe('handleExecuting (via transition)', () => {
     }
   });
 
-  it('does not batch connection tools (ACL gate must run per-call)', async () => {
+  it('does not batch connection tools (any call could transition to CONFIRMING)', async () => {
     const connRead = makeMockToolDef({
       readOnly: true,
       execute: vi.fn().mockResolvedValue('x'),
