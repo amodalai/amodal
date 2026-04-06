@@ -60,7 +60,6 @@ const ctx = {
   log(message) {
     process.stderr.write('[tool] ' + message + '\\n');
   },
-  user: payload.user ?? {roles: []},
   signal: AbortSignal.timeout(payload.timeout ?? 30000),
 };
 

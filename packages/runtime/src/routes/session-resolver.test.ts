@@ -46,7 +46,6 @@ function stubComponents() {
     permissionChecker: {check: () => ({allowed: true as const})},
     systemPrompt: 'test prompt',
     toolContextFactory: factory,
-    userRoles: [],
   };
 }
 
@@ -199,24 +198,6 @@ describe('resolveSession', () => {
         shared: stubShared(),
       }),
     ).rejects.toThrow(SessionError);
-  });
-
-  it('passes userRoles from role option', async () => {
-    const created = stubSession('sess-roles');
-    const mgr = stubSessionManager({
-      create: vi.fn().mockReturnValue(created),
-    });
-
-    await resolveSession(undefined, {
-      sessionManager: mgr,
-      bundleResolver: {staticBundle: stubBundle()},
-      shared: stubShared(),
-      role: 'analyst',
-    });
-
-    expect(mockBuildSessionComponents).toHaveBeenCalledWith(
-      expect.objectContaining({userRoles: ['analyst']}),
-    );
   });
 
   it('passes auth context through to the session manager', async () => {

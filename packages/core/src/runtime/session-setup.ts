@@ -20,7 +20,6 @@ import {OutputPipeline} from './output-pipeline.js';
 import {RuntimeTelemetry} from './telemetry-hooks.js';
 import {buildAccessConfigs, buildConnectionsMap} from './connection-bridge.js';
 import {
-  resolveScopeLabels,
   generateFieldGuidance,
   generateAlternativeLookupGuidance,
 } from './user-context.js';
@@ -30,8 +29,6 @@ import {
  */
 export interface SessionSetupOptions {
   repo: AgentBundle;
-  userId?: string;
-  userRoles?: string[];
   isDelegated?: boolean;
   telemetrySink?: (event: RuntimeTelemetryEvent) => void;
 }
@@ -51,7 +48,6 @@ export interface SessionRuntime {
   outputPipeline: OutputPipeline;
   telemetry: RuntimeTelemetry;
   connectionsMap: ConnectionsMap;
-  userRoles: string[];
   sessionId: string;
   isDelegated: boolean;
 }
@@ -66,30 +62,25 @@ export interface SessionRuntime {
 export function setupSession(options: SessionSetupOptions): SessionRuntime {
   const {repo} = options;
   const isDelegated = options.isDelegated ?? false;
-  const userRoles = options.userRoles ?? [];
   const sessionId = randomUUID();
 
   // Build connection maps
   const accessConfigs = buildAccessConfigs(repo.connections);
   const connectionsMap = buildConnectionsMap(repo.connections);
 
-  // Resolve scope and field guidance
-  const {scopeLabels, scopeRules} = resolveScopeLabels(repo.connections, userRoles);
-  const fieldGuidance = generateFieldGuidance(repo.connections, userRoles);
+  // Resolve field guidance (no role system — role_gated fields always denied)
+  const fieldGuidance = generateFieldGuidance(repo.connections);
   const alternativeLookupGuidance = generateAlternativeLookupGuidance(repo.connections);
 
   // Security components
   const scrubTracker = new ScrubTracker();
   const fieldScrubber = new FieldScrubber({
     accessConfigs,
-    userRoles,
     tracker: scrubTracker,
   });
   const outputGuard = new OutputGuard({
     tracker: scrubTracker,
     accessConfigs,
-    userRoles,
-    scopeContext: {scopeRules, scopeLabels},
   });
   const actionGate = new ActionGate({
     accessConfigs,
@@ -103,8 +94,7 @@ export function setupSession(options: SessionSetupOptions): SessionRuntime {
 
   const sessionConfig: SessionConfig = {
     repo,
-    userRoles,
-    scopeLabels,
+    scopeLabels: {},
     fieldGuidance,
     alternativeLookupGuidance,
     planMode: false,
@@ -133,7 +123,6 @@ export function setupSession(options: SessionSetupOptions): SessionRuntime {
     outputPipeline,
     telemetry,
     connectionsMap,
-    userRoles,
     sessionId,
     isDelegated,
   };

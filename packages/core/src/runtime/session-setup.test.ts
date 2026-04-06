@@ -86,7 +86,6 @@ describe('setupSession', () => {
     expect(runtime.outputPipeline).toBeDefined();
     expect(runtime.telemetry).toBeDefined();
     expect(runtime.connectionsMap).toBeDefined();
-    expect(runtime.userRoles).toBeDefined();
     expect(runtime.sessionId).toBeDefined();
     expect(typeof runtime.isDelegated).toBe('boolean');
   });
@@ -100,19 +99,6 @@ describe('setupSession', () => {
     const r1 = setupSession({repo: makeRepo()});
     const r2 = setupSession({repo: makeRepo()});
     expect(r1.sessionId).not.toBe(r2.sessionId);
-  });
-
-  it('uses provided userRoles', () => {
-    const runtime = setupSession({
-      repo: makeRepo(),
-      userRoles: ['admin', 'analyst'],
-    });
-    expect(runtime.userRoles).toEqual(['admin', 'analyst']);
-  });
-
-  it('defaults userRoles to empty array', () => {
-    const runtime = setupSession({repo: makeRepo()});
-    expect(runtime.userRoles).toEqual([]);
   });
 
   it('passes isDelegated through', () => {
@@ -186,7 +172,7 @@ describe('setupSession', () => {
     expect(runtime.telemetry).toBeInstanceOf(RuntimeTelemetry);
   });
 
-  it('includes scope labels in compiledContext when connections have rowScoping', () => {
+  it('does not include scope labels (no role system in OSS)', () => {
     const connections = new Map([
       [
         'crm',
@@ -203,9 +189,9 @@ describe('setupSession', () => {
 
     const runtime = setupSession({
       repo: makeRepo({connections}),
-      userRoles: ['analyst'],
     });
 
-    expect(runtime.compiledContext.systemPrompt).toContain('your team customers');
+    // Without a role system, scope labels are not resolved
+    expect(runtime.compiledContext.systemPrompt).not.toContain('your team customers');
   });
 });

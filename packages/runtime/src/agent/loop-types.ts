@@ -229,9 +229,6 @@ export interface AgentContext {
   /** Session ID for correlation */
   sessionId: string;
 
-  /** Current user info */
-  user: {roles: string[]; [key: string]: unknown};
-
   /** System prompt compiled from skills, knowledge, connections, etc. */
   systemPrompt: string;
 

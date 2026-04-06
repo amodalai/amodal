@@ -11,7 +11,6 @@ import type {AgentBundle} from '../repo/repo-types.js';
  */
 export interface SessionConfig {
   repo: AgentBundle;
-  userRoles: string[];
   scopeLabels: Record<string, string>;
   fieldGuidance: string;
   alternativeLookupGuidance: string;

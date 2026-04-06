@@ -65,7 +65,6 @@ export interface CustomToolContext {
   store(storeName: string, payload: Record<string, unknown>): Promise<{key: string}>;
   env(name: string): string | undefined;
   log(message: string): void;
-  user: {roles: string[]; [key: string]: unknown};
   signal: AbortSignal;
 }
 

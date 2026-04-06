@@ -60,7 +60,6 @@ describe('LocalToolExecutor', () => {
       store: async () => ({key: 'test'}),
       env: () => undefined,
       log: () => {},
-      user: {roles: []},
       signal: AbortSignal.timeout(10000),
     };
   }

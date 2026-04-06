@@ -41,7 +41,6 @@ export interface AmodalConfig {
   name: string;
   version: string;
   description?: string;
-  userContext?: string;
   basePrompt?: string;
   disabledSubagents?: string[];
   models: {

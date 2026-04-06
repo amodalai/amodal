@@ -30,10 +30,8 @@ vi.mock('@amodalai/core', async (importOriginal) => {
     setupSession: mockSetupSession,
     prepareExploreConfig: mockPrepareExploreConfig,
     PlanModeManager: mockPlanModeManager,
-    extractRoles: vi.fn(() => []),
     buildConnectionsMap: vi.fn(() => ({})),
     buildDefaultPrompt: vi.fn(() => 'You are test agent.'),
-    resolveScopeLabels: vi.fn(() => ({scopeLabels: {}})),
     generateFieldGuidance: vi.fn(() => ''),
     generateAlternativeLookupGuidance: vi.fn(() => ''),
     getModelContextWindow: vi.fn(() => 200_000),
@@ -72,7 +70,6 @@ function applyMockImplementations(): void {
     outputPipeline: {process: vi.fn(), createStreamProcessor: vi.fn()},
     telemetry: {logScrub: vi.fn(), logGuard: vi.fn(), logGate: vi.fn()},
     connectionsMap: {},
-    userRoles: [],
     sessionId: 'test',
     isDelegated: false,
   });

@@ -166,7 +166,6 @@ describe('streamChat', () => {
     for await (const _event of streamChat('http://localhost:4555', {
       message: 'test',
       session_id: 'sid-1',
-      role: 'analyst',
     })) {
       // consume
     }
@@ -174,20 +173,15 @@ describe('streamChat', () => {
     expect(capturedBody).toMatchObject({
       message: 'test',
       session_id: 'sid-1',
-      role: 'analyst',
     });
   });
 });
 
 describe('createSession', () => {
   it('creates a session', async () => {
-    const result = await createSession('http://localhost:4555', {
-      id: 'analyst-1',
-      role: 'analyst',
-    });
+    const result = await createSession('http://localhost:4555');
     expect(result).toEqual({
       session_id: 'test-session-1',
-      role: 'analyst',
     });
   });
 
@@ -199,7 +193,7 @@ describe('createSession', () => {
     );
 
     await expect(
-      createSession('http://localhost:4555', { id: 'a', role: 'analyst' }),
+      createSession('http://localhost:4555'),
     ).rejects.toThrow('Session creation failed');
   });
 });

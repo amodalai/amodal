@@ -66,7 +66,6 @@ const mockSession: Session = {
   usage: {inputTokens: 0, outputTokens: 0, totalTokens: 0},
   model: 'test-model',
   providerName: 'test',
-  userRoles: [],
   appId: 'local',
   metadata: {},
   createdAt: Date.now(),

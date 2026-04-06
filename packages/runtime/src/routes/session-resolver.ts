@@ -60,7 +60,6 @@ export interface ResolveSessionOptions {
   sessionManager: StandaloneSessionManager;
   bundleResolver: BundleResolver;
   shared: SharedResources;
-  role?: string;
   sessionType?: SessionType;
   deployId?: string;
   auth?: AuthContext;
@@ -101,7 +100,6 @@ function buildComponents(
   shared: SharedResources,
   opts: {
     sessionType?: SessionType;
-    userRoles: string[];
     sessionId?: string;
   },
 ): SessionComponents {
@@ -113,7 +111,6 @@ function buildComponents(
     toolExecutor: shared.toolExecutor,
     fieldScrubber: shared.fieldScrubber,
     sessionType: opts.sessionType,
-    userRoles: opts.userRoles,
     sessionId: opts.sessionId,
   });
 }
@@ -141,7 +138,6 @@ export async function resolveSession(
   opts: ResolveSessionOptions,
 ): Promise<ResolvedSession> {
   const {sessionManager, bundleResolver, shared, auth} = opts;
-  const userRoles = opts.role ? [opts.role] : [];
 
   // 1. In-memory lookup (existing live session)
   if (sessionId) {
@@ -158,7 +154,6 @@ export async function resolveSession(
   if (sessionId && bundle) {
     const components = buildComponents(bundle, shared, {
       sessionType: opts.sessionType,
-      userRoles,
       sessionId,
     });
 
@@ -167,7 +162,6 @@ export async function resolveSession(
       toolRegistry: components.toolRegistry,
       permissionChecker: components.permissionChecker,
       systemPrompt: components.systemPrompt,
-      userRoles: components.userRoles,
       toolContextFactory: components.toolContextFactory,
     });
 
@@ -186,7 +180,6 @@ export async function resolveSession(
 
   const components = buildComponents(bundle, shared, {
     sessionType: opts.sessionType,
-    userRoles,
   });
 
   const session = sessionManager.create({
@@ -194,7 +187,6 @@ export async function resolveSession(
     toolRegistry: components.toolRegistry,
     permissionChecker: components.permissionChecker,
     systemPrompt: components.systemPrompt,
-    userRoles: components.userRoles,
     toolContextFactory: components.toolContextFactory,
     maxSessionTokens: opts.maxSessionTokens,
   });

@@ -16,7 +16,7 @@ const BASE_URL = 'http://localhost:4555';
 function makeClient(): ChatClient {
   return new ChatClient({
     serverUrl: BASE_URL,
-    user: { id: 'analyst-1', role: 'analyst' },
+    user: { id: 'analyst-1' },
   });
 }
 
@@ -359,7 +359,7 @@ describe('ChatClient', () => {
 
       const client = new ChatClient({
         serverUrl: BASE_URL,
-        user: { id: 'analyst-1', role: 'analyst' },
+        user: { id: 'analyst-1' },
         entityExtractors: [customExtractor],
       });
 

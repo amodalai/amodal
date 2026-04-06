@@ -109,7 +109,6 @@ describe('AmodalConfigSchema', () => {
       name: 'acme-crm',
       version: '1.0.0',
       description: 'Intelligence for Acme CRM',
-      userContext: 'GET /users/{id}/context',
       models: {
         main: {provider: 'anthropic', model: 'claude-sonnet-4-6'},
         simple: {provider: 'anthropic', model: 'claude-haiku-4-5'},

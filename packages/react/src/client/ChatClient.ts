@@ -105,7 +105,6 @@ export class ChatClient extends TypedEventEmitter<ClientEvents> {
     try {
       const session = await createSession(
         this.config.serverUrl,
-        this.config.user,
         this.config.token,
       );
       this.sessionId = session.session_id;
@@ -205,7 +204,6 @@ export class ChatClient extends TypedEventEmitter<ClientEvents> {
     const chatStream = new ChatStream(this.config.serverUrl, {
       message: text,
       session_id: this.sessionId ?? undefined,
-      role: this.config.user.role,
     }, this.config.token);
 
     // Track streaming state
@@ -256,8 +254,7 @@ export class ChatClient extends TypedEventEmitter<ClientEvents> {
       {
         message: text,
         session_id: this.sessionId ?? undefined,
-        role: this.config.user.role,
-      },
+        },
       undefined,
       this.config.token,
     );

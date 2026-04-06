@@ -43,7 +43,6 @@ function makeMockContext(overrides?: Partial<ToolContext>): ToolContext {
     store: vi.fn(),
     env: vi.fn(),
     log: vi.fn(),
-    user: {roles: []},
     signal: AbortSignal.timeout(10000),
     sessionId: 'test-session',
     ...overrides,

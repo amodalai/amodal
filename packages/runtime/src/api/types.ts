@@ -53,9 +53,7 @@ export interface AgentConfig {
 /** A running agent instance. */
 export interface Agent {
   /** Create a new chat session. */
-  createSession(opts?: {
-    userRoles?: string[];
-  }): AgentSession;
+  createSession(): AgentSession;
 
   /** Resume an existing session by ID. Returns null if not found. */
   resumeSession(sessionId: string): Promise<AgentSession | null>;

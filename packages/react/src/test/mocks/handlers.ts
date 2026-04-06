@@ -185,7 +185,6 @@ export const chatHandlers = [
   http.post(`${WIDGET_URL}/sessions`, () =>
     HttpResponse.json({
       session_id: 'test-session-1',
-      role: 'analyst',
     }),
   ),
 

@@ -108,7 +108,6 @@ export function createAdminChatRouter(options: AdminChatRouterOptions): Router {
           toolRegistry: components.toolRegistry,
           permissionChecker: components.permissionChecker,
           systemPrompt: components.systemPrompt,
-          userRoles: components.userRoles,
           toolContextFactory: components.toolContextFactory,
           appId: 'admin',
         });

@@ -152,7 +152,6 @@ export class StandaloneSessionManager {
       usage: opts.usage ?? {inputTokens: 0, outputTokens: 0, totalTokens: 0},
       model: opts.provider.model,
       providerName: opts.provider.provider,
-      userRoles: opts.userRoles ?? [],
       appId,
       metadata,
       createdAt: now,
@@ -220,7 +219,6 @@ export class StandaloneSessionManager {
       logger: session.logger,
       signal: opts?.signal ?? AbortSignal.timeout(600_000),
       sessionId: session.id,
-      user: {roles: session.userRoles},
       systemPrompt: session.systemPrompt,
       messages: session.messages,
       usage: session.usage,
@@ -476,7 +474,6 @@ function makeNoOpToolContext(session: Session): (callId: string) => ToolContext 
     store: () => Promise.reject(new Error('store() not wired — provide buildToolContext')),
     env: () => undefined,
     log: (message: string) => { session.logger.debug('tool_log', {session: session.id, message}); },
-    user: {roles: session.userRoles},
     signal: AbortSignal.timeout(30_000),
     sessionId: session.id,
   });

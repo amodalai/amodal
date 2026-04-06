@@ -71,8 +71,6 @@ export interface CompilerInput {
   name: string;
   /** Agent description — what the agent is. */
   description?: string;
-  /** User context — standing instructions for the deployment. */
-  userContext?: string;
   /** Custom agent prompt override from agents/main.md. */
   agentOverride?: string;
   /** Custom base prompt — if set, skip compilation entirely. */
@@ -86,9 +84,6 @@ export interface CompilerInput {
   knowledge?: CompilerKnowledge[];
   /** Store definitions loaded from stores/. */
   stores?: CompilerStore[];
-
-  /** User's roles for field guidance and scope resolution. */
-  userRoles?: string[];
 
   /** Automation context — prompt and constraints when running as an automation. */
   automationContext?: string;

@@ -329,7 +329,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       toolRegistry: components.toolRegistry,
       permissionChecker: components.permissionChecker,
       systemPrompt: components.systemPrompt,
-      userRoles: components.userRoles,
       toolContextFactory: components.toolContextFactory,
       appId: LOCAL_APP_ID,
     });

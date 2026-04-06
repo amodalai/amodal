@@ -65,7 +65,6 @@ export function createChatStreamRouter(
           sessionManager: options.sessionManager,
           bundleResolver: options.bundleResolver,
           shared: options.shared,
-          role: body.role,
           sessionType: body.session_type,
           deployId: body.deploy_id,
           auth,

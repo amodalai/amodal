@@ -72,7 +72,7 @@ export interface UseChatReturn {
   stop: () => void;
   isStreaming: boolean;
   activeToolCalls: ToolCallInfo[];
-  session: { id: string | null; role?: string };
+  session: { id: string | null };
   error: string | null;
   reset: () => void;
   /** Event bus for subscribing to widget events. */
@@ -92,7 +92,6 @@ export interface UseChatReturn {
 export function useChat(options: UseChatOptions): UseChatReturn {
   const {
     serverUrl,
-    user,
     getToken,
     onToolCall,
     onKBProposal,
@@ -108,8 +107,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
   // We keep callbacks + request metadata in refs so the streamFn closure
   // captured by useChatStream stays stable while still using fresh values.
-  const authRef = useRef({ getToken, user, sessionType, deployId });
-  authRef.current = { getToken, user, sessionType, deployId };
+  const authRef = useRef({ getToken, sessionType, deployId });
+  authRef.current = { getToken, sessionType, deployId };
 
   // Track current session id in a ref so the streamFn closure can pass it
   // with every POST (used to resume an in-flight session).
@@ -124,7 +123,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         {
           message: text,
           session_id: sessionIdRef.current ?? undefined,
-          role: authRef.current.user.role,
           session_type: authRef.current.sessionType,
           deploy_id: authRef.current.deployId,
         },
@@ -265,7 +263,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     stop: stream.stop,
     isStreaming: stream.isStreaming,
     activeToolCalls: stream.activeToolCalls,
-    session: { id: stream.sessionId, role: user.role },
+    session: { id: stream.sessionId },
     error: stream.error,
     reset: stream.reset,
     eventBus: stream.eventBus,

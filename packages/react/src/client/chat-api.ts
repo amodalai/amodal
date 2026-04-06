@@ -10,14 +10,12 @@ import { streamSSE } from './sse-client';
 export interface ChatStreamRequest {
   message: string;
   session_id?: string;
-  role?: string;
   session_type?: string;
   deploy_id?: string;
 }
 
 export interface SessionInfo {
   session_id: string;
-  role: string;
 }
 
 /**
@@ -39,7 +37,6 @@ export async function* streamChat(
 
   const body: Record<string, unknown> = { message: request.message };
   if (request.session_id) body['session_id'] = request.session_id;
-  if (request.role) body['role'] = request.role;
   if (request.session_type) body['session_type'] = request.session_type;
   if (request.deploy_id) body['deploy_id'] = request.deploy_id;
 
@@ -54,7 +51,6 @@ export async function* streamChat(
  */
 export async function createSession(
   serverUrl: string,
-  user: { id: string; role?: string },
   token?: string,
 ): Promise<SessionInfo> {
   const url = `${serverUrl}/sessions`;
@@ -66,13 +62,10 @@ export async function createSession(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const body: Record<string, string> = { user_id: user.id };
-  if (user.role) body['role'] = user.role;
-
   const response = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify({}),
   });
 
   if (!response.ok) {
@@ -190,8 +183,8 @@ export function createChatClient(serverUrl: string, token?: string) {
   return {
     stream: (request: ChatStreamRequest, signal?: AbortSignal) =>
       streamChat(serverUrl, request, signal, token),
-    createSession: (user: { id: string; role?: string }) =>
-      createSession(serverUrl, user, token),
+    createSession: () =>
+      createSession(serverUrl, token),
     listSessions: (tags?: string[]) => listSessions(serverUrl, token, tags),
     getSessionHistory: (sessionId: string) => getSessionHistory(serverUrl, sessionId, token),
     updateSession: (sessionId: string, updates: { title?: string; tags?: string[] }) =>

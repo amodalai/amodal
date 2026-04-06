@@ -45,8 +45,6 @@ export interface ToolContextFactoryOptions {
   logger: Logger;
   /** Field scrubber for response sanitization (optional) */
   fieldScrubber?: FieldScrubber | null;
-  /** User info */
-  user: {roles: string[]; [key: string]: unknown};
   /** Session ID for correlation */
   sessionId: string;
   /** Grounded search provider for web_search/fetch_url (optional). */
@@ -264,7 +262,6 @@ export function createToolContextFactory(
         });
       },
 
-      user: opts.user,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       sessionId: opts.sessionId,
       ...(opts.searchProvider ? {searchProvider: opts.searchProvider} : {}),

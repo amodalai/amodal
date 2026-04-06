@@ -47,7 +47,6 @@ const AIMessageSchema = z.object({
 export const AIStreamRequestSchema = z.object({
   messages: z.array(AIMessageSchema).min(1),
   session_id: z.string().optional(),
-  role: z.string().optional(),
   deploy_id: z.string().optional(),
   /**
    * Optional session-wide **token** budget cap (cumulative across all
@@ -447,7 +446,6 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
           sessionManager: options.sessionManager,
           bundleResolver: options.bundleResolver,
           shared: options.shared,
-          role: body.role,
           deployId: body.deploy_id,
           auth,
           maxSessionTokens: body.max_session_tokens,
