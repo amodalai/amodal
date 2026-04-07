@@ -1,5 +1,14 @@
 # @amodalai/core
 
+## 0.2.3
+
+### Patch Changes
+
+- [#169](https://github.com/amodalai/amodal/pull/169) [`83d0153`](https://github.com/amodalai/amodal/commit/83d01530ae0b85cf7333df75e6fe15cabb1cb63b) Thanks [@whodatdev](https://github.com/whodatdev)! - Add messaging channels to deploy snapshots
+
+- Updated dependencies [[`83d0153`](https://github.com/amodalai/amodal/commit/83d01530ae0b85cf7333df75e6fe15cabb1cb63b)]:
+  - @amodalai/types@0.2.3
+
 ## 0.2.2
 
 ### Patch Changes
