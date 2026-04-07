@@ -51,6 +51,7 @@ export async function handleStreaming(
   // caller's try/catch.
   Promise.resolve(state.stream.text).catch(() => {});
   Promise.resolve(state.stream.usage).catch(() => {});
+  Promise.resolve(state.stream.responseMessages).catch(() => {});
 
   // Consume the full stream
   for await (const event of state.stream.fullStream) {
