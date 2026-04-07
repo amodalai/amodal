@@ -125,6 +125,7 @@ function abortAwareStreamingProvider(): LLMProvider {
         textStream: (async function* () {})(),
         text: textPromise,
         usage: usagePromise,
+        responseMessages: textPromise.then((t) => [{role: 'assistant' as const, content: t}]),
       };
     },
     generateText: () => Promise.reject(new Error('unused')),

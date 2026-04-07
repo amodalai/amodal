@@ -51,6 +51,7 @@ export async function handleStreaming(
   // caller's try/catch.
   Promise.resolve(state.stream.text).catch(() => {});
   Promise.resolve(state.stream.usage).catch(() => {});
+  Promise.resolve(state.stream.responseMessages).catch(() => {});
 
   // Consume the full stream
   for await (const event of state.stream.fullStream) {
@@ -148,10 +149,12 @@ export async function handleStreaming(
     }
   }
 
-  // Append assistant message to conversation (text + tool calls)
-  const text = await state.stream.text;
-  const assistantMessage = buildAssistantMessage(text, toolCalls);
-  ctx.messages = [...ctx.messages, assistantMessage];
+  // Append the SDK's response messages (not manually constructed) so that
+  // provider-specific metadata — like Gemini 3's thought signatures — is
+  // preserved. Without this, Gemini 3 rejects the next turn with
+  // "Function call is missing a thought_signature."
+  const responseMessages = await state.stream.responseMessages;
+  ctx.messages = [...ctx.messages, ...responseMessages];
 
   // No tool calls → model is done
   if (toolCalls.length === 0) {
@@ -169,36 +172,3 @@ export async function handleStreaming(
   };
 }
 
-/**
- * Build a ModelMessage for the assistant's response.
- */
-function buildAssistantMessage(
-  text: string,
-  toolCalls: ToolCall[],
-): import('ai').ModelMessage {
-  // If text only, use string content shorthand
-  if (toolCalls.length === 0) {
-    return {role: 'assistant', content: text};
-  }
-
-  // Mix of text + tool calls — use content array
-  const content: Array<
-    | {type: 'text'; text: string}
-    | {type: 'tool-call'; toolCallId: string; toolName: string; input: unknown}
-  > = [];
-
-  if (text) {
-    content.push({type: 'text', text});
-  }
-
-  for (const call of toolCalls) {
-    content.push({
-      type: 'tool-call',
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      input: call.args,
-    });
-  }
-
-  return {role: 'assistant', content};
-}

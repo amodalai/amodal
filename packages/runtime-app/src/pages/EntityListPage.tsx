@@ -8,6 +8,7 @@ import { useCallback, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useStoreList } from '@amodalai/react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
+import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
 import { EntityTable } from '@/components/entity/EntityTable';
 import { Database } from 'lucide-react';
 
@@ -22,12 +23,17 @@ export function EntityListPage() {
 
   const store = stores.find((s) => s.name === storeName);
 
-  const { documents, total, isLoading, error } = useStoreList(storeName ?? '', {
+  const { documents, total, isLoading, error, refetch } = useStoreList(storeName ?? '', {
     sort,
     filter,
     limit: 50,
     refreshInterval: 15000,
   });
+
+  // Refresh immediately when a store write happens (instead of waiting
+  // for the 15s poll). Fires on any store_updated event — the hook
+  // re-fetches the current store's data.
+  useRuntimeEvents(['store_updated'], refetch);
 
   const handleSortChange = useCallback((newSort: string) => {
     setSort(newSort);

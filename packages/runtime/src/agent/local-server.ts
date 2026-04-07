@@ -19,8 +19,27 @@
 
 import express from 'express';
 import type http from 'node:http';
-import {existsSync} from 'node:fs';
+import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+// Read version from package.json at module load time so /api/config
+// always reflects the actual deployed runtime version.
+const __runtimeDir = path.dirname(fileURLToPath(import.meta.url));
+const RUNTIME_VERSION: string = (() => {
+  try {
+    // Walk up from dist/src/agent/ to find package.json at package root.
+    for (let dir = __runtimeDir; dir !== path.dirname(dir); dir = path.dirname(dir)) {
+      const candidate = path.join(dir, 'package.json');
+      if (existsSync(candidate)) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse at build-time boundary
+        const pkg = JSON.parse(readFileSync(candidate, 'utf-8')) as {name?: string; version?: string};
+        if (pkg.name === '@amodalai/runtime') return pkg.version ?? '0.0.0';
+      }
+    }
+  } catch { /* fall through */ }
+  return '0.0.0';
+})();
 import {loadRepo} from '@amodalai/core';
 import type {AgentBundle} from '@amodalai/types';
 import {StandaloneSessionManager} from '../session/manager.js';
@@ -83,6 +102,10 @@ interface ProviderStatus {
 const PROVIDER_CHECKS = [
   {provider: 'anthropic', envVar: 'ANTHROPIC_API_KEY', url: 'https://api.anthropic.com/v1/models', authHeader: (key: string) => ({'x-api-key': key, 'anthropic-version': '2023-06-01'})},
   {provider: 'openai', envVar: 'OPENAI_API_KEY', url: 'https://api.openai.com/v1/models', authHeader: (key: string) => ({Authorization: `Bearer ${key}`})},
+  {provider: 'google', envVar: 'GOOGLE_API_KEY', url: 'https://generativelanguage.googleapis.com/v1beta/models', authHeader: (key: string) => ({'x-goog-api-key': key})},
+  {provider: 'groq', envVar: 'GROQ_API_KEY', url: 'https://api.groq.com/openai/v1/models', authHeader: (key: string) => ({Authorization: `Bearer ${key}`})},
+  {provider: 'deepseek', envVar: 'DEEPSEEK_API_KEY', url: 'https://api.deepseek.com/v1/models', authHeader: (key: string) => ({Authorization: `Bearer ${key}`})},
+  {provider: 'xai', envVar: 'XAI_API_KEY', url: 'https://api.x.ai/v1/models', authHeader: (key: string) => ({Authorization: `Bearer ${key}`})},
 ];
 
 async function checkProviders(): Promise<ProviderStatus[]> {
@@ -474,7 +497,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       envRefs,
       providerStatuses,
       nodeVersion: process.version,
-      runtimeVersion: '0.1.10',
+      runtimeVersion: RUNTIME_VERSION,
       uptime: Math.floor(process.uptime()),
     });
   });
