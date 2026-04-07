@@ -1,5 +1,21 @@
 # @amodalai/react
 
+## 0.2.2
+
+### Patch Changes
+
+- [#162](https://github.com/amodalai/amodal/pull/162) [`a33e080`](https://github.com/amodalai/amodal/commit/a33e0807e6607c88aa203f5dd2c1bf89299026d8) Thanks [@whodatdev](https://github.com/whodatdev)! - Remove userId, userRoles, and userContext from the OSS runtime
+
+  The local runtime is single-tenant with no user system. Role-based access
+  control is now the responsibility of the hosting layer via the new
+  `onSessionBuild` hook on `CreateServerOptions`.
+  - Removed `userRoles` from FieldScrubber, OutputGuard, Session, AgentContext, ToolContext
+  - Removed `userContext` from AmodalConfig
+  - Removed `role` from chat request schema and React client
+  - Simplified `role_gated` policy to always deny (same as `never_retrieve`)
+  - Deleted PreferenceClient, ScopeChecker, user-context-fetcher
+  - Added `onSessionBuild` hook for hosting layer to enhance session components
+
 ## 0.2.1
 
 ### Patch Changes
