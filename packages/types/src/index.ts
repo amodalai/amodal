@@ -123,6 +123,7 @@ export type {
   ChannelSessionMapper,
   ChannelPlugin,
   ChannelOrigin,
+  ChannelSetupContext,
 } from './channel-types.js';
 
 // Delivery routing types

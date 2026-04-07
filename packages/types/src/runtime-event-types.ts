@@ -180,7 +180,7 @@ export interface ChannelAuthRejectedEvent extends RuntimeEventBase {
   type: 'channel_auth_rejected';
   channelType: string;
   channelUserId?: string;
-  reason: 'bad_signature' | 'unauthorized_sender';
+  reason: 'rejected';
 }
 
 export type RuntimeEvent =

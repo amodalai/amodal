@@ -5,7 +5,6 @@
  */
 
 import type {CommandModule} from 'yargs';
-import {connectCommand} from '../connect.js';
 import {installPkgCommand} from '../install-pkg.js';
 import {uninstallCommand} from '../uninstall.js';
 import {linkCommand} from '../link.js';
@@ -16,7 +15,6 @@ export const pkgCommand: CommandModule = {
   describe: 'Manage packages',
   builder: (yargs) =>
     yargs
-      .command(connectCommand)
       .command(installPkgCommand)
       .command(uninstallCommand)
       .command(linkCommand)

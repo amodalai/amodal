@@ -138,7 +138,13 @@ async function importChannelModule(
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
     const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as Record<string, unknown>;
     const mainField = String(pkgJson['main'] ?? 'dist/index.js');
-    const entryPath = path.join(packageDir, mainField);
+    const entryPath = path.resolve(packageDir, mainField);
+    if (!entryPath.startsWith(path.resolve(packageDir))) {
+      throw new ChannelPluginError(
+        `Channel package "${packageName}" has invalid main field that escapes package directory`,
+        {channelType},
+      );
+    }
     const moduleUrl = pathToFileURL(entryPath).href;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic import returns unknown module shape
     const mod = await import(moduleUrl) as {default?: unknown};

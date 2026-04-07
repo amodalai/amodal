@@ -125,6 +125,31 @@ export interface ChannelPlugin {
   /** Zod schema for validating the channel's config block. */
   readonly configSchema: {parse(data: unknown): unknown};
   createAdapter(config: unknown): ChannelAdapter;
+
+  /**
+   * Interactive setup flow for this channel. Called by `amodal channels setup <type>`.
+   * The plugin prompts for credentials, writes config, and performs any
+   * platform-specific registration (e.g. setting a webhook URL).
+   *
+   * @param context Setup context provided by the CLI.
+   */
+  setup?(context: ChannelSetupContext): Promise<void>;
+}
+
+/** Context passed to a channel plugin's interactive setup flow. */
+export interface ChannelSetupContext {
+  /** Absolute path to the repo root. */
+  repoPath: string;
+  /** Parsed amodal.json config. */
+  config: Record<string, unknown>;
+  /** The public webhook URL for this channel (e.g. from ngrok or deploy). */
+  webhookUrl?: string;
+  /** Write a key-value pair to the repo's .env file. */
+  writeEnv(key: string, value: string): Promise<void>;
+  /** Update amodal.json with the given partial config. */
+  updateConfig(patch: Record<string, unknown>): Promise<void>;
+  /** Prompt the user for input. */
+  prompt(message: string, options?: {secret?: boolean; default?: string}): Promise<string>;
 }
 
 // ---------------------------------------------------------------------------

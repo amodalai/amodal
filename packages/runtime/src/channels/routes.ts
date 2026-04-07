@@ -74,7 +74,7 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
       eventBus.emit({
         type: 'channel_auth_rejected',
         channelType,
-        reason: 'bad_signature',
+        reason: 'rejected' as const,
       });
       res.status(200).json({ok: true});
       return;
@@ -144,15 +144,30 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
           }
         }
       } finally {
-        cleanup?.stop();
+        try {
+          cleanup?.stop();
+        } catch (stopErr) {
+          logger.error('channel_cleanup_stop_failed', {
+            channelType: msg.channelType,
+            error: stopErr instanceof Error ? stopErr.message : String(stopErr),
+          });
+        }
       }
 
       const fullReply = replyParts.join('');
       if (fullReply.length > 0) {
         // Let the adapter deliver the response (may edit a placeholder or send fresh)
-        const delivered = cleanup
-          ? await cleanup.finish(fullReply)
-          : false;
+        let delivered = false;
+        if (cleanup) {
+          try {
+            delivered = await cleanup.finish(fullReply);
+          } catch (finishErr) {
+            logger.error('channel_cleanup_finish_failed', {
+              channelType: msg.channelType,
+              error: finishErr instanceof Error ? finishErr.message : String(finishErr),
+            });
+          }
+        }
 
         if (!delivered) {
           await adapter.sendMessage(

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable import/no-internal-modules -- channel module imports from sibling submodules */
+ 
 
 /**
  * Drizzle-based channel session mapper.
@@ -65,31 +65,20 @@ export class DrizzleChannelSessionMapper implements ChannelSessionMapper {
     channelUserId: string,
     displayName?: string,
   ): Promise<ChannelSessionMapResult> {
-    // Try to find an existing mapping
+    // Try to find an existing mapping and touch last_active_at in one query
     const rows = await this.db
-      .select({sessionId: channelSessions.sessionId})
-      .from(channelSessions)
+      .update(channelSessions)
+      .set({lastActiveAt: sql`NOW()`})
       .where(
         and(
           eq(channelSessions.channelType, channelType),
           eq(channelSessions.channelUserId, channelUserId),
         ),
       )
-      .limit(1);
+      .returning({sessionId: channelSessions.sessionId});
 
     if (rows.length > 0) {
       const {sessionId} = rows[0];
-      // Update last_active_at
-      await this.db
-        .update(channelSessions)
-        .set({lastActiveAt: sql`NOW()`})
-        .where(
-          and(
-            eq(channelSessions.channelType, channelType),
-            eq(channelSessions.channelUserId, channelUserId),
-          ),
-        );
-
       this.logger.debug('channel_session_found', {channelType, channelUserId, sessionId});
       return {sessionId, isNew: false};
     }
@@ -106,23 +95,37 @@ export class DrizzleChannelSessionMapper implements ChannelSessionMapper {
     };
     const {sessionId} = this.createSession(channelOrigin);
 
-    // Persist the mapping
-    await this.db.insert(channelSessions).values({
-      channelType,
-      channelUserId,
-      sessionId,
-      metadata: {channelUserDisplay: displayName},
-    });
+    // Atomic upsert — if a concurrent request inserted first, return the existing row
+    const inserted = await this.db
+      .insert(channelSessions)
+      .values({
+        channelType,
+        channelUserId,
+        sessionId,
+        metadata: {channelUserDisplay: displayName},
+      })
+      .onConflictDoUpdate({
+        target: [channelSessions.channelType, channelSessions.channelUserId],
+        set: {lastActiveAt: sql`NOW()`},
+      })
+      .returning({sessionId: channelSessions.sessionId});
 
-    this.logger.info('channel_session_created', {channelType, channelUserId, sessionId});
-    this.eventBus?.emit({
-      type: 'channel_session_created',
-      channelType,
-      channelUserId,
-      sessionId,
-    });
+    const finalSessionId = inserted[0].sessionId;
+    const isNew = finalSessionId === sessionId;
 
-    return {sessionId, isNew: true};
+    if (isNew) {
+      this.logger.info('channel_session_created', {channelType, channelUserId, sessionId: finalSessionId});
+      this.eventBus?.emit({
+        type: 'channel_session_created',
+        channelType,
+        channelUserId,
+        sessionId: finalSessionId,
+      });
+    } else {
+      this.logger.debug('channel_session_found', {channelType, channelUserId, sessionId: finalSessionId});
+    }
+
+    return {sessionId: finalSessionId, isNew};
   }
 
   async resetSession(
