@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable import/no-internal-modules -- server module imports from internal submodules */
+ 
 
 /**
  * Hosted server.
@@ -181,10 +181,6 @@ export function createServer(options: CreateServerOptions): ServerInstance {
         });
       },
     });
-
-    if (options.authMiddleware) {
-      app.use('/channels', options.authMiddleware);
-    }
 
     app.use('/channels', createChannelsRouter({
       adapters: options.channelAdapters,

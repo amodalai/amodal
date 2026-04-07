@@ -131,6 +131,20 @@ export const SnapshotEvalSchema = z.object({
 export type SnapshotEval = z.infer<typeof SnapshotEvalSchema>;
 
 /**
+ * A serialized channel plugin in a deploy snapshot.
+ * Contains the bundled adapter code (ESM) so the hosted runtime can
+ * load channels without npm-installing packages at serve time.
+ */
+export const SnapshotChannelSchema = z.object({
+  /** Channel type identifier (e.g. "slack", "telegram"). */
+  channelType: z.string().min(1),
+  /** Config with env: refs (resolved at runtime). */
+  config: z.record(z.unknown()),
+});
+
+export type SnapshotChannel = z.infer<typeof SnapshotChannelSchema>;
+
+/**
  * The complete deploy snapshot — an immutable, fully-resolved JSON blob
  * that captures the entire agent configuration at a point in time.
  */
@@ -160,6 +174,8 @@ export const DeploySnapshotSchema = z.object({
   buildManifest: SnapshotBuildManifestSchema.optional(),
   /** Eval definitions for model evaluation */
   evals: z.array(SnapshotEvalSchema).optional(),
+  /** Messaging channel plugins (bundled adapter code + config) */
+  channels: z.array(SnapshotChannelSchema).optional(),
   /** MCP servers to connect to */
   mcpServers: z.record(z.string(), z.object({
     transport: z.enum(['stdio', 'sse', 'http']),
