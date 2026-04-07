@@ -320,21 +320,22 @@ export async function resolveAllPackages(options: {
       await loadLocalStores(pkgDir, storeNames, stores, warnings);
       await loadLocalTools(pkgDir, toolNames, tools, warnings);
 
-      // Check for channel.json — marks this package as a channel plugin
-      const channelJson = await readOptionalFile(path.join(pkgDir, 'channel.json'));
-      if (channelJson) {
+      // Scan channels/<name>/channel.json — marks this package as a channel plugin
+      const channelsDir = path.join(pkgDir, 'channels');
+      const channelSubdirs = await listSubdirs(channelsDir);
+      for (const channelName of channelSubdirs) {
+        const channelJson = await readOptionalFile(path.join(channelsDir, channelName, 'channel.json'));
+        if (!channelJson) continue;
         try {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
           const parsed = JSON.parse(channelJson) as Record<string, unknown>;
-          const channelType = String(parsed['type'] ?? '');
+          const channelType = String(parsed['type'] ?? channelName);
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowing parsed config
           const channelConfig = (parsed['config'] ?? {}) as Record<string, unknown>;
-          if (channelType) {
-            channels.push({channelType, packageName: npmName, packageDir: pkgDir, config: channelConfig});
-          }
+          channels.push({channelType, packageName: npmName, packageDir: pkgDir, config: channelConfig});
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          warnings.push(`Failed to parse channel.json in "${npmName}": ${msg}`);
+          warnings.push(`Failed to parse channel.json in "${npmName}/${channelName}": ${msg}`);
         }
       }
     }
