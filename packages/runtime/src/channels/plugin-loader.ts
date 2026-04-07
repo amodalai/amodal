@@ -88,7 +88,7 @@ const LOCAL_ENTRY_FILES = ['index.ts', 'index.js', 'index.mjs'];
 /**
  * Find a channel package from the declared packages list.
  * Matches packages ending with `channel-{type}` (any scope).
- * E.g. channelType "telegram" matches "@amodalai/channel-telegram" or "@myorg/channel-telegram".
+ * E.g. channelType "foo" matches "@amodalai/channel-foo" or "@myorg/channel-foo".
  */
 function findChannelPackage(channelType: string, packages: string[]): string | undefined {
   const suffix = `channel-${channelType}`;

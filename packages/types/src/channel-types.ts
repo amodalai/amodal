@@ -78,7 +78,7 @@ export interface ChannelAdapter {
 
   /**
    * Start showing a processing/loading indicator. Each adapter decides how
-   * (Telegram: placeholder message, Slack: typing indicator, etc.).
+   * (e.g. placeholder message, typing indicator, etc.).
    *
    * Returns a handle to stop the indicator and deliver the final response.
    * If not implemented, the route sends the response as a new message.

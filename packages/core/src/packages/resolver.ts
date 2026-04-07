@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable import/no-internal-modules -- resolver imports from sibling repo submodules */
+ 
 
 import {readFile, readdir, stat} from 'node:fs/promises';
 import * as path from 'node:path';
@@ -23,7 +23,7 @@ import type {AmodalConfig} from '../repo/config-schema.js';
  */
 /** A discovered channel plugin from a package. */
 export interface ResolvedChannel {
-  /** Channel type (e.g. "telegram"). */
+  /** Channel type identifier. */
   channelType: string;
   /** npm package name. */
   packageName: string;

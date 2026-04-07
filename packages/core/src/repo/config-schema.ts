@@ -150,7 +150,7 @@ export const AmodalConfigSchema = z.object({
     })
     .optional(),
   /**
-   * Messaging channel configurations, keyed by channel type (e.g. 'telegram').
+   * Messaging channel configurations, keyed by channel type.
    * Each channel's config block is validated by the plugin's own Zod schema
    * at runtime — the core schema only enforces the top-level shape.
    */

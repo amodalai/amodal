@@ -80,7 +80,7 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
       return;
     }
 
-    // Dedup check (Telegram resends on slow 200s)
+    // Dedup check (platforms may resend on slow 200s)
     if (dedupCache.isDuplicate(msg.channelType, msg.messageId)) {
       logger.debug('channel_message_duplicate', {channelType, messageId: msg.messageId});
       res.status(200).json({ok: true});
@@ -192,7 +192,7 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
       }
     }
 
-    // Always return 200 to prevent Telegram retries
+    // Always return 200 to prevent platform retries
     res.status(200).json({ok: true});
   }));
 

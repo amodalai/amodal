@@ -7,7 +7,7 @@
 /**
  * In-memory dedup cache for channel webhook retries.
  *
- * Telegram (and other platforms) resend webhook payloads when the server
+ * Messaging platforms may resend webhook payloads when the server
  * doesn't respond with 200 quickly enough. This cache prevents the same
  * message from being processed twice.
  *
