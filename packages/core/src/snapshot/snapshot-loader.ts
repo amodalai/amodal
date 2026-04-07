@@ -196,5 +196,11 @@ export function snapshotToBundle(snapshot: DeploySnapshot, origin: string): Agen
       location: `snapshot:${snapshot.deployId}`,
     })) as Array<import('../repo/store-types.js').LoadedStore>,
     mcpServers: snapshot.mcpServers,
+    ...((snapshot.channels?.length ?? 0) > 0 ? {channels: snapshot.channels!.map((ch) => ({
+      channelType: ch.channelType,
+      packageName: `snapshot:${snapshot.deployId}`,
+      packageDir: '',
+      config: ch.config,
+    }))} : {}),
   };
 }

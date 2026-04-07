@@ -83,7 +83,12 @@ export async function bootstrapChannels(
     }
 
     // Load and validate plugins
-    const adapters = await loadChannelPlugins({channelsConfig, repoPath, packages: opts.packages, logger});
+    const adapters = await loadChannelPlugins({
+      channelsConfig,
+      repoPath,
+      packages: opts.packages,
+      logger,
+    });
     logger.info('channels_loaded', {channels: [...adapters.keys()]});
 
     // Wire session factory — creates chat sessions for channel users

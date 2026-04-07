@@ -10,6 +10,7 @@ import type {SurfaceEndpoint} from '../repo/connection-types.js';
 import type {
   BuildSnapshotOptions,
   DeploySnapshot,
+  SnapshotChannel,
   SnapshotConnection,
   SnapshotSkill,
   SnapshotAutomation,
@@ -151,6 +152,10 @@ export function buildSnapshot(
     ...(tools.length > 0 ? {tools} : {}),
     ...(options.buildManifest ? {buildManifest: options.buildManifest} : {}),
     ...(evals.length > 0 ? {evals} : {}),
+    ...((repo.channels?.length ?? 0) > 0 ? {channels: repo.channels!.map((ch): SnapshotChannel => ({
+      channelType: ch.channelType,
+      config: ch.config,
+    }))} : {}),
     ...((repo.stores?.length ?? 0) > 0 ? {stores: repo.stores.map((s) => ({
       name: s.name,
       entity: s.entity,
