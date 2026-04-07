@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {describe, it, expect, vi} from 'vitest';
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
+import {mkdirSync, writeFileSync, rmSync} from 'node:fs';
+import path from 'node:path';
 import {loadChannelPlugins} from './plugin-loader.js';
 import {ChannelPluginError, ChannelConfigError} from './errors.js';
 
@@ -18,6 +20,33 @@ const mockLogger = {
 /** Helper — no local channels dir exists at this fake path. */
 const NO_LOCAL = '/tmp/nonexistent-repo-path';
 
+/**
+ * Create a fake npm channel package in a temp directory so that
+ * the file-based resolution in plugin-loader can find it.
+ */
+function createFakePackage(
+  repoPath: string,
+  packageName: string,
+  pluginModule: string,
+): void {
+  const pkgDir = path.join(repoPath, 'node_modules', ...packageName.split('/'));
+  const distDir = path.join(pkgDir, 'dist');
+  mkdirSync(distDir, {recursive: true});
+  writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({name: packageName, main: 'dist/index.mjs'}));
+  writeFileSync(path.join(distDir, 'index.mjs'), pluginModule);
+}
+
+const TEMP_REPO = '/tmp/plugin-loader-test-repo';
+
+beforeEach(() => {
+  mkdirSync(TEMP_REPO, {recursive: true});
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  rmSync(TEMP_REPO, {recursive: true, force: true});
+});
+
 describe('loadChannelPlugins', () => {
   it('throws ChannelPluginError for missing package (no local, no npm)', async () => {
     await expect(
@@ -30,62 +59,63 @@ describe('loadChannelPlugins', () => {
   });
 
   it('throws ChannelPluginError for invalid plugin export', async () => {
-    vi.doMock('@amodalai/channel-badshape', () => ({
-      default: {notAPlugin: true},
-    }));
+    createFakePackage(TEMP_REPO, '@amodalai/channel-badshape', 'export default {notAPlugin: true};');
 
     await expect(
       loadChannelPlugins({
         channelsConfig: {badshape: {}},
-        repoPath: NO_LOCAL,
+        repoPath: TEMP_REPO,
+        packages: ['@amodalai/channel-badshape'],
         logger: mockLogger as never,
       }),
     ).rejects.toThrow(ChannelPluginError);
-
-    vi.doUnmock('@amodalai/channel-badshape');
   });
 
   it('throws ChannelConfigError for invalid config', async () => {
-    const {z} = await import('zod');
-    vi.doMock('@amodalai/channel-testvalid', () => ({
-      default: {
+    // Inline config schema that rejects anything without 'required' field
+    const pluginCode = `
+      export default {
         channelType: 'testvalid',
-        configSchema: z.object({required: z.string()}),
-        createAdapter: () => ({channelType: 'testvalid', parseIncoming: vi.fn(), sendMessage: vi.fn()}),
-      },
-    }));
+        configSchema: {
+          parse(data) {
+            if (!data || typeof data.required !== 'string') throw new Error('missing required field');
+            return data;
+          },
+        },
+        createAdapter: (cfg) => ({channelType: 'testvalid', parseIncoming: async () => null, sendMessage: async () => {}}),
+      };
+    `;
+    createFakePackage(TEMP_REPO, '@amodalai/channel-testvalid', pluginCode);
 
     await expect(
       loadChannelPlugins({
         channelsConfig: {testvalid: {wrong: 'field'}},
-        repoPath: NO_LOCAL,
+        repoPath: TEMP_REPO,
+        packages: ['@amodalai/channel-testvalid'],
         logger: mockLogger as never,
       }),
     ).rejects.toThrow(ChannelConfigError);
-
-    vi.doUnmock('@amodalai/channel-testvalid');
   });
 
   it('loads a valid npm plugin and returns adapter map', async () => {
-    const mockAdapter = {channelType: 'testok', parseIncoming: vi.fn(), sendMessage: vi.fn()};
-    const {z} = await import('zod');
-    vi.doMock('@amodalai/channel-testok', () => ({
-      default: {
+    const pluginCode = `
+      export default {
         channelType: 'testok',
-        configSchema: z.object({token: z.string()}),
-        createAdapter: () => mockAdapter,
-      },
-    }));
+        configSchema: { parse(data) { return data; } },
+        createAdapter: () => ({channelType: 'testok', parseIncoming: async () => null, sendMessage: async () => {}}),
+      };
+    `;
+    createFakePackage(TEMP_REPO, '@amodalai/channel-testok', pluginCode);
 
     const adapters = await loadChannelPlugins({
       channelsConfig: {testok: {token: 'abc'}},
-      repoPath: NO_LOCAL,
+      repoPath: TEMP_REPO,
+      packages: ['@amodalai/channel-testok'],
       logger: mockLogger as never,
     });
     expect(adapters.size).toBe(1);
-    expect(adapters.get('testok')).toBe(mockAdapter);
-
-    vi.doUnmock('@amodalai/channel-testok');
+    expect(adapters.get('testok')).toBeDefined();
+    expect(adapters.get('testok')?.channelType).toBe('testok');
   });
 
   it('error message mentions both local and npm when channel not found', async () => {
@@ -100,7 +130,7 @@ describe('loadChannelPlugins', () => {
       expect(err).toBeInstanceOf(ChannelPluginError);
       const msg = (err as ChannelPluginError).message;
       expect(msg).toContain('channels/missing/index.ts');
-      expect(msg).toContain('amodal channels install');
+      expect(msg).toContain('channel-missing');
     }
   });
 });
