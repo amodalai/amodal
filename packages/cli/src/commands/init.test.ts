@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
@@ -36,7 +36,7 @@ describe('runInit', () => {
     expect(existsSync(join(tempDir, 'evals'))).toBe(true);
     expect(existsSync(join(tempDir, '.gitignore'))).toBe(true);
     const gitignore = readFileSync(join(tempDir, '.gitignore'), 'utf-8');
-    expect(gitignore).toContain('amodal_packages/');
+    expect(gitignore).toContain('node_modules/');
     expect(gitignore).toContain('.env');
   });
 

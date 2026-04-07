@@ -5,7 +5,7 @@
  */
 
 import type {CommandModule} from 'yargs';
-import {loadRepo, setupSession, readLockFile, resolveAllPackages} from '@amodalai/core';
+import {loadRepo, setupSession, resolveAllPackages} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
 export interface InspectOptions {
@@ -79,47 +79,42 @@ export async function runInspect(options: InspectOptions = {}): Promise<void> {
   if (options.resolved) {
     process.stdout.write('\n=== Resolved Packages ===\n');
 
-    const lockFile = await readLockFile(repoPath);
-    if (!lockFile) {
-      process.stdout.write('  No lock file found.\n');
-    } else {
-      const resolved = await resolveAllPackages({repoPath, lockFile});
+    const resolved = await resolveAllPackages({repoPath});
 
-      // Filter by scope if given
-      const scopeParts = options.scope?.split('/');
-      const scopeType = scopeParts?.[0];
-      const scopeName = scopeParts?.[1];
+    // Filter by scope if given
+    const scopeParts = options.scope?.split('/');
+    const scopeType = scopeParts?.[0];
+    const scopeName = scopeParts?.[1];
 
-      if (!scopeType || scopeType === 'connections') {
-        for (const [name, conn] of resolved.connections) {
-          if (scopeName && name !== scopeName) continue;
-          process.stdout.write(`\n  Connection: ${name}\n`);
-          process.stdout.write(`    Endpoints: ${conn.surface.length}\n`);
-          process.stdout.write(`    Auth: ${conn.spec.auth?.type ?? 'none'}\n`);
-        }
+    if (!scopeType || scopeType === 'connections') {
+      for (const [name, conn] of resolved.connections) {
+        if (scopeName && name !== scopeName) continue;
+        process.stdout.write(`\n  Connection: ${name}\n`);
+        process.stdout.write(`    Endpoints: ${conn.surface.length}\n`);
+        process.stdout.write(`    Auth: ${conn.spec.auth?.type ?? 'none'}\n`);
       }
+    }
 
-      if (!scopeType || scopeType === 'skills') {
-        for (const skill of resolved.skills) {
-          if (scopeName && skill.name !== scopeName) continue;
-          process.stdout.write(`\n  Skill: ${skill.name}\n`);
-          process.stdout.write(`    Body: ${skill.body.length} chars\n`);
-        }
+    if (!scopeType || scopeType === 'skills') {
+      for (const skill of resolved.skills) {
+        if (scopeName && skill.name !== scopeName) continue;
+        process.stdout.write(`\n  Skill: ${skill.name}\n`);
+        process.stdout.write(`    Body: ${skill.body.length} chars\n`);
       }
+    }
 
-      if (!scopeType || scopeType === 'automations') {
-        for (const auto of resolved.automations) {
-          if (scopeName && auto.name !== scopeName) continue;
-          process.stdout.write(`\n  Automation: ${auto.name}\n`);
-        }
+    if (!scopeType || scopeType === 'automations') {
+      for (const auto of resolved.automations) {
+        if (scopeName && auto.name !== scopeName) continue;
+        process.stdout.write(`\n  Automation: ${auto.name}\n`);
       }
+    }
 
-      // Print warnings
-      if (resolved.warnings.length > 0) {
-        process.stdout.write('\n  Warnings:\n');
-        for (const warning of resolved.warnings) {
-          process.stdout.write(`    - ${warning}\n`);
-        }
+    // Print warnings
+    if (resolved.warnings.length > 0) {
+      process.stdout.write('\n  Warnings:\n');
+      for (const warning of resolved.warnings) {
+        process.stdout.write(`    - ${warning}\n`);
       }
     }
   }

@@ -11,12 +11,7 @@ import {loadRepoFromDisk} from './local-reader.js';
 import {RepoError} from './repo-types.js';
 
 // Module-level mocks for package resolution
-const mockReadLockFile = vi.fn();
 const mockResolveAllPackages = vi.fn();
-
-vi.mock('../packages/lock-file.js', () => ({
-  readLockFile: (...args: unknown[]) => mockReadLockFile(...args),
-}));
 
 vi.mock('../packages/resolver.js', () => ({
   resolveAllPackages: (...args: unknown[]) => mockResolveAllPackages(...args),
@@ -130,7 +125,6 @@ describe('loadRepoFromDisk', () => {
   afterEach(() => {
     mockFs.restore();
     vi.clearAllMocks();
-    mockReadLockFile.mockResolvedValue(null);
     mockResolveAllPackages.mockReset();
   });
 
@@ -138,7 +132,6 @@ describe('loadRepoFromDisk', () => {
     mockFs({
       '/repo/amodal.json': minimalConfig,
     });
-    mockReadLockFile.mockResolvedValue(null);
     mockEmptyResolve();
 
     const repo = await loadRepoFromDisk('/repo');
@@ -184,7 +177,6 @@ describe('loadRepoFromDisk', () => {
     const mockKnowledge = [{name: 'domain-rules', title: 'Domain Rules', body: 'Items older than 30 days need review.', location: '/repo/knowledge/domain-rules.md'}];
     const mockAutomations = [{name: 'daily-check', title: 'Daily Check', schedule: 'daily at 8:00 AM', location: '/repo/automations/daily-check.md'}];
 
-    mockReadLockFile.mockResolvedValue(null);
     mockResolveAllPackages.mockResolvedValue({
       connections: mockConnections,
       skills: mockSkills,
@@ -267,7 +259,6 @@ describe('loadRepoFromDisk', () => {
     mockFs({
       '/repo/amodal.json': minimalConfig,
     });
-    mockReadLockFile.mockResolvedValue(null);
     mockEmptyResolve();
 
     const repo = await loadRepoFromDisk('/repo');
@@ -277,58 +268,17 @@ describe('loadRepoFromDisk', () => {
 
   // --- Package resolution integration tests ---
 
-  it('always calls resolveAllPackages', async () => {
+  it('always calls resolveAllPackages with repoPath only', async () => {
     mockFs({
       '/repo/amodal.json': minimalConfig,
     });
 
-    mockReadLockFile.mockResolvedValue(null);
     mockEmptyResolve();
 
     const repo = await loadRepoFromDisk('/repo');
-    expect(mockResolveAllPackages).toHaveBeenCalledOnce();
+    expect(mockResolveAllPackages).toHaveBeenCalledExactlyOnceWith({repoPath: '/repo', config: expect.any(Object)});
     expect(repo.connections.size).toBe(0);
     expect(repo.skills).toEqual([]);
-  });
-
-  it('passes lock file to resolveAllPackages when present', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-    });
-
-    const lockFile = {
-      lockVersion: 2,
-      packages: {'@amodalai/connection-test-api': {version: '1.0.0', integrity: 'sha512-abc'}},
-    };
-    const mockConnections = new Map([['test-api', {spec: {}, access: {}, surface: [], entities: [], rules: []}]]);
-
-    mockReadLockFile.mockResolvedValue(lockFile);
-    mockResolveAllPackages.mockResolvedValue({
-      connections: mockConnections,
-      skills: [],
-      automations: [],
-      knowledge: [],
-      stores: [],
-      tools: [],
-      warnings: [],
-    });
-
-    const repo = await loadRepoFromDisk('/repo');
-    expect(mockResolveAllPackages).toHaveBeenCalledExactlyOnceWith({repoPath: '/repo', lockFile});
-    expect(repo.connections).toBe(mockConnections);
-    expect(repo.warnings).toBeUndefined();
-  });
-
-  it('passes null lock file to resolveAllPackages when no lock file', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-    });
-
-    mockReadLockFile.mockResolvedValue(null);
-    mockEmptyResolve();
-
-    await loadRepoFromDisk('/repo');
-    expect(mockResolveAllPackages).toHaveBeenCalledWith({repoPath: '/repo', lockFile: null});
   });
 
   it('propagates resolver warnings', async () => {
@@ -336,10 +286,6 @@ describe('loadRepoFromDisk', () => {
       '/repo/amodal.json': minimalConfig,
     });
 
-    mockReadLockFile.mockResolvedValue({
-      lockVersion: 2,
-      packages: {'@amodalai/skill-triage': {version: '1.0.0', integrity: 'sha512-abc'}},
-    });
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
@@ -347,11 +293,11 @@ describe('loadRepoFromDisk', () => {
       knowledge: [],
       stores: [],
       tools: [],
-      warnings: ['Package @amodalai/skill-triage is in lock file but not installed'],
+      warnings: ['Package @amodalai/skill-triage not found in node_modules'],
     });
 
     const repo = await loadRepoFromDisk('/repo');
-    expect(repo.warnings).toEqual(['Package @amodalai/skill-triage is in lock file but not installed']);
+    expect(repo.warnings).toEqual(['Package @amodalai/skill-triage not found in node_modules']);
   });
 
   it('loads agents and evals from disk even with packages', async () => {
@@ -361,10 +307,6 @@ describe('loadRepoFromDisk', () => {
       '/repo/evals/test-eval.md': evalMd,
     });
 
-    mockReadLockFile.mockResolvedValue({
-      lockVersion: 2,
-      packages: {'@amodalai/connection-api': {version: '1.0.0', integrity: 'sha512-abc'}},
-    });
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
@@ -379,19 +321,5 @@ describe('loadRepoFromDisk', () => {
     expect(repo.agents.main).toContain('Be direct');
     expect(repo.evals).toHaveLength(1);
     expect(repo.evals[0].title).toBe('Stale Item');
-  });
-
-  it('falls back to null lock file when lock file read fails', async () => {
-    mockFs({
-      '/repo/amodal.json': minimalConfig,
-    });
-
-    mockReadLockFile.mockRejectedValue(new Error('corrupt lock file'));
-    mockEmptyResolve();
-
-    const repo = await loadRepoFromDisk('/repo');
-    // resolveAllPackages is still called with null lock file
-    expect(mockResolveAllPackages).toHaveBeenCalledWith({repoPath: '/repo', lockFile: null});
-    expect(repo.connections.size).toBe(0);
   });
 });

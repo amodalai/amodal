@@ -88,21 +88,6 @@ export type PackageManifest = z.infer<typeof PackageManifestSchema>;
  * A single lock file entry for an installed package.
  * Keyed by npm package name (e.g., "@amodalai/alert-enrichment").
  */
-export const LockEntrySchema = z.object({
-  version: z.string().min(1),
-  integrity: z.string(),
-});
-export type LockEntry = z.infer<typeof LockEntrySchema>;
-
-/**
- * The lock file schema (amodal.lock).
- */
-export const LockFileSchema = z.object({
-  lockVersion: z.literal(2),
-  packages: z.record(z.string(), LockEntrySchema),
-});
-export type LockFile = z.infer<typeof LockFileSchema>;
-
 // --- Naming helpers ---
 
 const AMODAL_SCOPE = '@amodalai/';

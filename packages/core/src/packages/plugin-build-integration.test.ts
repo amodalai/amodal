@@ -5,12 +5,12 @@
  */
 
 /**
- * Integration tests: verifies that connections installed via plugin (npm package)
+ * Integration tests: verifies that connections installed via package (npm)
  * are correctly resolved during repo load and included in deploy snapshots.
  *
  * Simulates the full pipeline:
- *   amodal connect <name>  ->  amodal.lock written  ->  package in node_modules
- *   amodal build           ->  loadRepoFromDisk     ->  resolveAllPackages  ->  buildSnapshot
+ *   amodal connect <name>  ->  package in node_modules
+ *   amodal build           ->  loadRepoFromDisk  ->  resolveAllPackages  ->  buildSnapshot
  */
 
 import * as fs from 'node:fs/promises';
@@ -18,9 +18,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 
-import {getNpmContextPaths} from './npm-context.js';
-import type {LockFile} from './package-types.js';
-import {writeLockFile} from './lock-file.js';
 import {loadRepoFromDisk} from '../repo/local-reader.js';
 import {buildSnapshot} from '../snapshot/snapshot-builder.js';
 import {buildConnectionsMap} from '../runtime/connection-bridge.js';
@@ -38,13 +35,14 @@ afterEach(async () => {
 /**
  * Write amodal.json config file.
  */
-async function writeConfig(repoPath: string): Promise<void> {
+async function writeConfig(repoPath: string, packages?: string[]): Promise<void> {
   await fs.writeFile(
     path.join(repoPath, 'amodal.json'),
     JSON.stringify({
       name: 'test-agent',
       version: '1.0.0',
       models: {main: {provider: 'anthropic', model: 'claude-sonnet-4-20250514'}},
+      ...(packages ? {packages} : {}),
     }),
   );
 }
@@ -58,31 +56,13 @@ async function simulatePluginInstall(
   connectionName: string,
   files: Record<string, string>,
 ): Promise<void> {
-  const paths = getNpmContextPaths(repoPath);
   // Package contains a connections/<name>/ subdirectory with the connection files
-  const connDir = path.join(paths.nodeModules, `@amodalai/connection-${connectionName}`, 'connections', connectionName);
+  const connDir = path.join(repoPath, 'node_modules', `@amodalai/connection-${connectionName}`, 'connections', connectionName);
   await fs.mkdir(connDir, {recursive: true});
 
   for (const [fname, content] of Object.entries(files)) {
     await fs.writeFile(path.join(connDir, fname), content);
   }
-}
-
-/**
- * Write the lock file with connection entries.
- */
-async function writeLock(
-  repoPath: string,
-  connections: Array<{name: string; version: string}>,
-): Promise<void> {
-  const lock: LockFile = {lockVersion: 2, packages: {}};
-  for (const c of connections) {
-    lock.packages[`@amodalai/connection-${c.name}`] = {
-      version: c.version,
-      integrity: `sha256-test-${c.name}`,
-    };
-  }
-  await writeLockFile(repoPath, lock);
 }
 
 // Minimal valid spec.json for a plugin connection
@@ -111,12 +91,11 @@ function pluginAccess(overrides: Record<string, unknown> = {}): string {
 
 describe('plugin connection -> build pipeline', () => {
   it('loads a single plugin-installed connection via loadRepoFromDisk', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-acme']);
     await simulatePluginInstall(tmpDir, 'acme', {
       'spec.json': pluginSpec(),
       'access.json': pluginAccess(),
     });
-    await writeLock(tmpDir, [{name: 'acme', version: '1.0.0'}]);
 
     const repo = await loadRepoFromDisk(tmpDir);
 
@@ -129,7 +108,7 @@ describe('plugin connection -> build pipeline', () => {
   });
 
   it('includes plugin connections in buildSnapshot output', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-acme']);
     await simulatePluginInstall(tmpDir, 'acme', {
       'spec.json': pluginSpec(),
       'access.json': pluginAccess(),
@@ -137,7 +116,6 @@ describe('plugin connection -> build pipeline', () => {
       'entities.md': '# Entities\n\n## item\nAn item in the system.',
       'rules.md': '# Rules\n\nAlways paginate list requests.',
     });
-    await writeLock(tmpDir, [{name: 'acme', version: '1.0.0'}]);
 
     const repo = await loadRepoFromDisk(tmpDir);
     const snapshot = buildSnapshot(repo, {
@@ -154,12 +132,11 @@ describe('plugin connection -> build pipeline', () => {
   });
 
   it('builds ConnectionsMap with auth from plugin connections', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-acme']);
     await simulatePluginInstall(tmpDir, 'acme', {
       'spec.json': pluginSpec(),
       'access.json': pluginAccess(),
     });
-    await writeLock(tmpDir, [{name: 'acme', version: '1.0.0'}]);
 
     const repo = await loadRepoFromDisk(tmpDir);
     const connectionsMap = buildConnectionsMap(repo.connections);
@@ -176,7 +153,7 @@ describe('plugin connection -> build pipeline', () => {
   });
 
   it('loads multiple plugin connections', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-acme', '@amodalai/connection-widgets']);
     await simulatePluginInstall(tmpDir, 'acme', {
       'spec.json': pluginSpec({baseUrl: 'https://acme.example.com'}),
       'access.json': pluginAccess(),
@@ -185,10 +162,6 @@ describe('plugin connection -> build pipeline', () => {
       'spec.json': pluginSpec({baseUrl: 'https://widgets.example.com'}),
       'access.json': pluginAccess(),
     });
-    await writeLock(tmpDir, [
-      {name: 'acme', version: '1.0.0'},
-      {name: 'widgets', version: '2.0.0'},
-    ]);
 
     const repo = await loadRepoFromDisk(tmpDir);
 
@@ -201,14 +174,13 @@ describe('plugin connection -> build pipeline', () => {
   });
 
   it('local repo connection overrides plugin connection with same name', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-acme']);
 
     // Plugin provides base spec and access
     await simulatePluginInstall(tmpDir, 'acme', {
       'spec.json': pluginSpec({baseUrl: 'https://api.acme.com'}),
       'access.json': pluginAccess(),
     });
-    await writeLock(tmpDir, [{name: 'acme', version: '1.0.0'}]);
 
     // Repo provides a full local connection with the same name — local wins
     const repoConnDir = path.join(tmpDir, 'connections', 'acme');
@@ -235,14 +207,13 @@ describe('plugin connection -> build pipeline', () => {
   });
 
   it('coexists: plugin connections + hand-written connections', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-acme']);
 
     // Plugin connection
     await simulatePluginInstall(tmpDir, 'acme', {
       'spec.json': pluginSpec({baseUrl: 'https://acme.example.com'}),
       'access.json': pluginAccess(),
     });
-    await writeLock(tmpDir, [{name: 'acme', version: '1.0.0'}]);
 
     // Hand-written connection (no package, just repo files)
     const repoConnDir = path.join(tmpDir, 'connections', 'internal-api');
@@ -272,26 +243,23 @@ describe('plugin connection -> build pipeline', () => {
     expect(snapshot.connections['internal-api'].spec.baseUrl).toBe('https://internal.corp/v1');
   });
 
-  it('handles lock file with missing package gracefully (warns, does not crash)', async () => {
+  it('handles missing package gracefully (does not crash)', async () => {
     await writeConfig(tmpDir);
 
-    // Write lock file referencing a connection that's NOT actually installed
-    await writeLock(tmpDir, [{name: 'missing-pkg', version: '1.0.0'}]);
-
+    // No packages installed — just an empty repo
     const repo = await loadRepoFromDisk(tmpDir);
 
-    // Should not crash — connection is simply missing
-    expect(repo.connections.has('missing-pkg')).toBe(false);
+    // Should not crash
+    expect(repo.connections.size).toBe(0);
   });
 
   it('handles plugin connection with empty optional files', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-minimal']);
     // Only spec.json and access.json — no surface.md, entities.md, or rules.md
     await simulatePluginInstall(tmpDir, 'minimal', {
       'spec.json': pluginSpec(),
       'access.json': pluginAccess(),
     });
-    await writeLock(tmpDir, [{name: 'minimal', version: '1.0.0'}]);
 
     const repo = await loadRepoFromDisk(tmpDir);
 
@@ -307,7 +275,7 @@ describe('plugin connection -> build pipeline', () => {
   });
 
   it('loads plugin connection with sync.frequency=weekly (real-world plugin spec)', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-salesforce']);
 
     // This mirrors the actual Salesforce plugin spec.json structure
     await simulatePluginInstall(tmpDir, 'salesforce', {
@@ -329,7 +297,6 @@ describe('plugin connection -> build pipeline', () => {
       }),
       'access.json': pluginAccess(),
     });
-    await writeLock(tmpDir, [{name: 'salesforce', version: '2.1.0'}]);
 
     const repo = await loadRepoFromDisk(tmpDir);
 
@@ -338,9 +305,9 @@ describe('plugin connection -> build pipeline', () => {
   });
 
   it('loads plugin connection with format=rest (real-world plugin spec)', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-internal']);
 
-    // Many real plugins use format: "rest" instead of "openapi"
+    // Many real plugins use format: 'rest' instead of 'openapi'
     await simulatePluginInstall(tmpDir, 'internal', {
       'spec.json': JSON.stringify({
         specUrl: 'https://api.internal.com/docs',
@@ -350,7 +317,6 @@ describe('plugin connection -> build pipeline', () => {
       }),
       'access.json': pluginAccess(),
     });
-    await writeLock(tmpDir, [{name: 'internal', version: '1.0.0'}]);
 
     const repo = await loadRepoFromDisk(tmpDir);
 
@@ -359,7 +325,7 @@ describe('plugin connection -> build pipeline', () => {
   });
 
   it('loads plugin connection with sync.frequency=hourly', async () => {
-    await writeConfig(tmpDir);
+    await writeConfig(tmpDir, ['@amodalai/connection-monitor']);
 
     await simulatePluginInstall(tmpDir, 'monitor', {
       'spec.json': JSON.stringify({
@@ -370,38 +336,8 @@ describe('plugin connection -> build pipeline', () => {
       }),
       'access.json': pluginAccess(),
     });
-    await writeLock(tmpDir, [{name: 'monitor', version: '1.0.0'}]);
 
     const repo = await loadRepoFromDisk(tmpDir);
     expect(repo.connections.has('monitor')).toBe(true);
-  });
-
-  it('handles lock file with empty integrity (private registry scenario)', async () => {
-    await writeConfig(tmpDir);
-
-    await simulatePluginInstall(tmpDir, 'private', {
-      'spec.json': pluginSpec(),
-      'access.json': pluginAccess(),
-    });
-
-    // Simulate what happens with a private registry: empty integrity
-    const lock: LockFile = {
-      lockVersion: 2,
-      packages: {
-        '@amodalai/connection-private': {
-          version: '1.0.0',
-          integrity: '',
-        },
-      },
-    };
-    await fs.writeFile(
-      path.join(tmpDir, 'amodal.lock'),
-      JSON.stringify(lock, null, 2) + '\n',
-    );
-
-    const repo = await loadRepoFromDisk(tmpDir);
-    // Connection should still be loaded despite empty integrity
-    expect(repo.connections.size).toBe(1);
-    expect(repo.connections.has('private')).toBe(true);
   });
 });

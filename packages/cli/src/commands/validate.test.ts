@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
@@ -8,7 +8,6 @@ import {describe, it, expect, vi, beforeEach} from 'vitest';
 
 const mockFindRepoRoot = vi.fn(() => '/test/repo');
 const mockLoadRepo = vi.fn();
-const mockReadLockFile = vi.fn();
 const mockResolveAllPackages = vi.fn();
 
 vi.mock('../shared/repo-discovery.js', () => ({
@@ -23,7 +22,6 @@ const mockMcpManager = {
 
 vi.mock('@amodalai/core', () => ({
   loadRepo: mockLoadRepo,
-  readLockFile: mockReadLockFile,
   resolveAllPackages: mockResolveAllPackages,
   McpManager: vi.fn(() => mockMcpManager),
 }));
@@ -149,7 +147,6 @@ describe('runValidate', () => {
       skills: [{name: 'test', body: 'content'}],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
@@ -161,7 +158,7 @@ describe('runValidate', () => {
     const {runValidate} = await import('./validate.js');
     const result = await runValidate({packages: true, skipTest: true});
     expect(result).toBe(0);
-    expect(mockResolveAllPackages).toHaveBeenCalled();
+    expect(mockResolveAllPackages).toHaveBeenCalledWith({repoPath: '/test/repo'});
   });
 
   it('should report resolution warnings as validation warnings', async () => {
@@ -170,7 +167,6 @@ describe('runValidate', () => {
       skills: [],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {'@amodalai/connection-salesforce': {version: '1.0.0', integrity: 'sha512-x'}}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [],
@@ -190,7 +186,6 @@ describe('runValidate', () => {
       skills: [],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map(),
       skills: [{name: 'bad-skill', body: '  '}],
@@ -204,20 +199,6 @@ describe('runValidate', () => {
     expect(result).toBe(1);
   });
 
-  it('should skip package validation when no lock file', async () => {
-    mockLoadRepo.mockResolvedValue({
-      connections: new Map([['api', {surface: [{method: 'GET', path: '/test'}], access: {}}]]),
-      skills: [],
-      automations: [],
-    });
-    mockReadLockFile.mockResolvedValue(null);
-
-    const {runValidate} = await import('./validate.js');
-    const result = await runValidate({packages: true, skipTest: true});
-    expect(result).toBe(0);
-    expect(mockResolveAllPackages).not.toHaveBeenCalled();
-  });
-
   it('should not run package checks without packages flag', async () => {
     mockLoadRepo.mockResolvedValue({
       connections: new Map([['api', {surface: [{method: 'GET', path: '/test'}], access: {}}]]),
@@ -228,7 +209,7 @@ describe('runValidate', () => {
     const {runValidate} = await import('./validate.js');
     const result = await runValidate({skipTest: true});
     expect(result).toBe(0);
-    expect(mockReadLockFile).not.toHaveBeenCalled();
+    expect(mockResolveAllPackages).not.toHaveBeenCalled();
   });
 
   it('should handle package resolution failure', async () => {
@@ -237,7 +218,6 @@ describe('runValidate', () => {
       skills: [],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockRejectedValue(new Error('Disk error'));
 
     const {runValidate} = await import('./validate.js');
@@ -251,7 +231,6 @@ describe('runValidate', () => {
       skills: [],
       automations: [],
     });
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
     mockResolveAllPackages.mockResolvedValue({
       connections: new Map([['empty-conn', {surface: [], spec: {auth: null}}]]),
       skills: [],
@@ -396,8 +375,8 @@ describe('runValidate', () => {
         skills: [],
         automations: [],
       });
-      // First call: redirected, lost auth → 401
-      // Second call: retry with auth → 200
+      // First call: redirected, lost auth -> 401
+      // Second call: retry with auth -> 200
       mockFetch
         .mockResolvedValueOnce({status: 401, redirected: true, url: 'https://api.example.com/v2/'})
         .mockResolvedValueOnce({status: 200, redirected: false});

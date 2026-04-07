@@ -7,7 +7,7 @@
 import {join} from 'node:path';
 import {readFile} from 'node:fs/promises';
 import type {CommandModule} from 'yargs';
-import {loadRepo, readLockFile, resolveAllPackages, McpManager} from '@amodalai/core';
+import {loadRepo, resolveAllPackages, McpManager} from '@amodalai/core';
 import type {ConnectionSpec} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
@@ -337,30 +337,25 @@ export async function runValidate(options: ValidateOptions = {}): Promise<number
   // Package-aware validation
   if (options.packages) {
     try {
-      const lockFile = await readLockFile(repoPath);
-      if (lockFile) {
-        const resolved = await resolveAllPackages({repoPath, lockFile});
+      const resolved = await resolveAllPackages({repoPath});
 
-        // Report warnings from resolution (missing packages, broken symlinks)
-        for (const warning of resolved.warnings) {
-          issues.push({level: 'warning', message: warning});
-        }
+      // Report warnings from resolution (missing packages, broken symlinks)
+      for (const warning of resolved.warnings) {
+        issues.push({level: 'warning', message: warning});
+      }
 
-        // Check for empty resolved connections
-        for (const [name, conn] of resolved.connections) {
-          if (conn.surface.length === 0) {
-            issues.push({level: 'warning', message: `Resolved connection "${name}" has no surface endpoints.`});
-          }
+      // Check for empty resolved connections
+      for (const [name, conn] of resolved.connections) {
+        if (conn.surface.length === 0) {
+          issues.push({level: 'warning', message: `Resolved connection "${name}" has no surface endpoints.`});
         }
+      }
 
-        // Check for empty resolved skills
-        for (const skill of resolved.skills) {
-          if (!skill.body.trim()) {
-            issues.push({level: 'error', message: `Resolved skill "${skill.name}" has an empty body.`});
-          }
+      // Check for empty resolved skills
+      for (const skill of resolved.skills) {
+        if (!skill.body.trim()) {
+          issues.push({level: 'error', message: `Resolved skill "${skill.name}" has an empty body.`});
         }
-      } else {
-        process.stderr.write('[validate] No lock file found, skipping package validation.\n');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

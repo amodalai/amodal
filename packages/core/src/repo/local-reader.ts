@@ -14,7 +14,7 @@ import {
   parseConfig,
   parseEval,
 } from './parsers.js';
-import {readLockFile} from '../packages/lock-file.js';
+ 
 import {resolveAllPackages} from '../packages/resolver.js';
 
 /**
@@ -170,17 +170,8 @@ export async function loadRepoFromDisk(repoPath: string): Promise<AgentBundle> {
   );
   const config = parseConfig(configJson);
 
-  // Check for lock file to decide resolution strategy
-  let lockFile;
-  try {
-    lockFile = await readLockFile(absolutePath);
-  } catch {
-    // Lock file read failed — fall through to direct load
-    lockFile = null;
-  }
-
   // Resolve all packages: local repo + installed packages (local wins)
-  const resolved = await resolveAllPackages({repoPath: absolutePath, lockFile});
+  const resolved = await resolveAllPackages({repoPath: absolutePath, config});
   const connections = resolved.connections;
   const skills = resolved.skills;
   const knowledge = resolved.knowledge;
@@ -208,6 +199,7 @@ export async function loadRepoFromDisk(repoPath: string): Promise<AgentBundle> {
     tools,
     stores,
     mcpServers: config.mcp?.servers,
+    channels: resolved.channels && resolved.channels.length > 0 ? resolved.channels : undefined,
     warnings,
   };
 }

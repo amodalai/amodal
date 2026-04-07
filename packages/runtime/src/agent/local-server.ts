@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+ 
+
 /**
  * Local server for repo-based agent mode.
  *
@@ -75,6 +77,9 @@ import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
 import {LOCAL_APP_ID} from '../constants.js';
 import {log, createLogger} from '../logger.js';
+import {bootstrapChannels} from '../channels/bootstrap.js';
+import {DrizzleChannelSessionMapper} from '../channels/channel-session-mapper.js';
+import type {ChannelAdapter} from '@amodalai/types';
 
 // ---------------------------------------------------------------------------
 // Provider verification (background, non-blocking)
@@ -379,6 +384,43 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   });
 
   // -------------------------------------------------------------------------
+  // Channel plugins (messaging integrations)
+  // -------------------------------------------------------------------------
+
+  let channelsResult: {adapters: Map<string, ChannelAdapter>; router: import('express').Router} | null = null;
+
+  if (bundle.channels && bundle.channels.length > 0) {
+    // Both PGLite and Postgres factories return DrizzleSessionStore which
+    // exposes `db`. Cast through the concrete type safely.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowing to concrete DrizzleSessionStore
+    const storeDb = (sessionStore as import('../session/drizzle-session-store.js').DrizzleSessionStore).db;
+    const channelSessionMapper = new DrizzleChannelSessionMapper({
+      db: storeDb,
+      logger: log,
+      eventBus,
+    });
+
+    channelsResult = await bootstrapChannels({
+      channels: bundle.channels,
+      repoPath: config.repoPath,
+      packages: bundle.config.packages,
+      sessionMapper: channelSessionMapper,
+      sessionManager,
+      buildSessionComponents: () => buildSessionComponents({
+        bundle,
+        storeBackend: storeBackend ?? null,
+        mcpManager,
+        logger: log,
+        toolExecutor,
+        sessionType: 'chat',
+      }),
+      appId: LOCAL_APP_ID,
+      eventBus,
+      logger: log,
+    });
+  }
+
+  // -------------------------------------------------------------------------
   // Config watcher (hot reload)
   // -------------------------------------------------------------------------
 
@@ -618,6 +660,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.use(createAutomationRouter({runner}));
   app.use(createWebhookRouter({runner, webhookSecret: config.webhookSecret}));
 
+  // Messaging channels
+  if (channelsResult) {
+    app.use('/channels', channelsResult.router);
+    log.info('channels_router_mounted', {channels: [...channelsResult.adapters.keys()]});
+  }
+
   // Store REST API (if stores are defined)
   if (storeBackend) {
     app.use(createStoresRouter({repo: bundle, storeBackend, appId: LOCAL_APP_ID}));
@@ -832,4 +880,5 @@ function flattenModelMessage(raw: unknown): HistoryMessage | null {
   }
   return null;
 }
+
 

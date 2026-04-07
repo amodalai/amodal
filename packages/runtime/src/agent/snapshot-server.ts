@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+ 
+
 /**
  * Snapshot server.
  *
@@ -23,6 +25,9 @@ import {createTaskRouter} from './routes/task.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {ServerInstance} from '../server.js';
 import {ConfigError} from '../errors.js';
+import {RuntimeEventBus} from '../events/event-bus.js';
+import {InMemoryChannelSessionMapper} from '../channels/in-memory-session-mapper.js';
+import {bootstrapChannels} from '../channels/bootstrap.js';
 import {log, createLogger} from '../logger.js';
 
 export interface SnapshotServerConfig {
@@ -72,6 +77,37 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
     logger: log,
     toolExecutor,
   };
+
+  // Channel plugins (if configured)
+  const eventBus = new RuntimeEventBus({
+    onListenerError: (err, event) => {
+      log.warn('event_bus_listener_error', {seq: event.seq, type: event.type, error: err instanceof Error ? err.message : String(err)});
+    },
+  });
+
+  let channelsRouter: import('express').Router | null = null;
+  if (bundle.channels && bundle.channels.length > 0) {
+    const channelMapper = new InMemoryChannelSessionMapper({logger: log, eventBus});
+    const result = await bootstrapChannels({
+      channels: bundle.channels,
+      repoPath: '', // No local channel discovery in snapshot mode
+      packages: bundle.config.packages,
+      sessionMapper: channelMapper,
+      sessionManager,
+      buildSessionComponents: () => buildSessionComponents({
+        bundle,
+        storeBackend: null,
+        mcpManager: null,
+        logger: log,
+        toolExecutor,
+      }),
+      eventBus,
+      logger: log,
+    });
+    if (result) {
+      channelsRouter = result.router;
+    }
+  }
 
   const createTaskSession = () => {
     const components = buildSessionComponents({
@@ -130,6 +166,12 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
     shared,
   }));
   app.use(createTaskRouter({sessionManager, createTaskSession}));
+
+  // Messaging channels
+  if (channelsRouter) {
+    app.use('/channels', channelsRouter);
+    log.info('channels_router_mounted', {mode: 'snapshot'});
+  }
 
   // Error handler (must be last)
   app.use(errorHandler);

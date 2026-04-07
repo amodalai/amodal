@@ -36,25 +36,29 @@ export async function buildPages(repoPath: string): Promise<{pages: BuiltPage[];
   const pageFileExt = /\.(tsx|jsx|ts|js)$/;
   const pageEntries = new Map<string, string>();
 
-  // 1. Scan installed packages for pages (lower priority)
-  const scopeDir = join(repoPath, 'amodal_packages', '.npm', 'node_modules', '@amodalai');
-  if (existsSync(scopeDir)) {
-    try {
-      const pkgDirs = readdirSync(scopeDir, {withFileTypes: true}).filter((e) => e.isDirectory());
-      for (const pkgDir of pkgDirs) {
-        const pkgPagesDir = join(scopeDir, pkgDir.name, 'pages');
-        if (!existsSync(pkgPagesDir)) continue;
-        const pkgFiles = readdirSync(pkgPagesDir, {withFileTypes: true}).filter(
-          (e) => e.isFile() && pageFileExt.test(e.name),
-        );
-        for (const f of pkgFiles) {
-          const name = f.name.replace(pageFileExt, '');
-          pageEntries.set(name, join(pkgPagesDir, f.name));
-        }
+  // 1. Scan declared packages for pages (lower priority)
+  try {
+    const configRaw = readFileSync(join(repoPath, 'amodal.json'), 'utf-8');
+    const parsed: unknown = JSON.parse(configRaw);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated object above
+    const config = (parsed && typeof parsed === 'object') ? parsed as Record<string, unknown> : {};
+    const declaredPackages = Array.isArray(config['packages'])
+      ? config['packages'].filter((p): p is string => typeof p === 'string')
+      : [];
+
+    for (const npmName of declaredPackages) {
+      const pkgPagesDir = join(repoPath, 'node_modules', ...npmName.split('/'), 'pages');
+      if (!existsSync(pkgPagesDir)) continue;
+      const pkgFiles = readdirSync(pkgPagesDir, {withFileTypes: true}).filter(
+        (e) => e.isFile() && pageFileExt.test(e.name),
+      );
+      for (const f of pkgFiles) {
+        const name = f.name.replace(pageFileExt, '');
+        pageEntries.set(name, join(pkgPagesDir, f.name));
       }
-    } catch {
-      // Ignore errors reading package dirs
     }
+  } catch {
+    // Ignore errors reading config or package dirs
   }
 
   // 2. Scan local pages/ directory (higher priority — overwrites package entries)

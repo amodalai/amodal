@@ -123,8 +123,6 @@ export const AmodalConfigSchema = z.object({
       postgresUrl: z.string().optional(),
     })
     .optional(),
-  /** Installed packages — maps "type/name" to semver range (like package.json dependencies) */
-  dependencies: z.record(z.string(), z.string()).optional(),
   webTools: z
     .object({
       /** Search/fetch provider. Only 'google' (Gemini grounding) is supported today. */
@@ -135,6 +133,8 @@ export const AmodalConfigSchema = z.object({
       model: z.string().min(1).optional(),
     })
     .optional(),
+  /** Installed npm packages to load (content type detected from package structure) */
+  packages: z.array(z.string()).optional(),
   mcp: z
     .object({
       /** MCP servers to connect to as a client */
@@ -149,6 +149,11 @@ export const AmodalConfigSchema = z.object({
       })),
     })
     .optional(),
+  /**
+   * Messaging channel configurations, keyed by channel type.
+   * Each channel's config block is validated by the plugin's own Zod schema
+   * at runtime — the core schema only enforces the top-level shape.
+   */
 });
 
 export type AmodalConfig = z.infer<typeof AmodalConfigSchema>;

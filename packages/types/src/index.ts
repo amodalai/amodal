@@ -113,6 +113,19 @@ export type {
   RepoLoadOptions,
 } from './repo-types.js';
 
+// Channel types
+export type {
+  ChannelWebhookRequest,
+  IncomingMessage,
+  ChannelAddress,
+  ChannelAdapter,
+  ChannelSessionMapResult,
+  ChannelSessionMapper,
+  ChannelPlugin,
+  ChannelOrigin,
+  ChannelSetupContext,
+} from './channel-types.js';
+
 // Delivery routing types
 export type {
   DeliveryTarget,
@@ -141,6 +154,10 @@ export type {
   StoreUpdatedEvent,
   ManifestChangedEvent,
   FilesChangedEvent,
+  ChannelMessageReceivedEvent,
+  ChannelReplySentEvent,
+  ChannelSessionCreatedEvent,
+  ChannelAuthRejectedEvent,
 } from './runtime-event-types.js';
 
 // Snapshot types

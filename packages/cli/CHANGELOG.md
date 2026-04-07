@@ -1,5 +1,34 @@
 # @amodalai/amodal
 
+## 0.2.2
+
+### Patch Changes
+
+- [#167](https://github.com/amodalai/amodal/pull/167) [`f4d59ea`](https://github.com/amodalai/amodal/commit/f4d59eae060aa5fa35e1f2f756413457a4d5331b) Thanks [@whodatdev](https://github.com/whodatdev)! - Add messaging channel plugin system
+  - Channel plugins are npm packages discovered via channel.json, dynamically loaded at boot
+  - Webhook router at POST /channels/:channelType/webhook with dedup, rate limiting, session affinity
+  - Drizzle and in-memory session mappers for channel user → session mapping
+  - ChannelPlugin interface with optional setup() for interactive CLI configuration
+  - `amodal connect channel <pkg>` and `amodal connect connection <pkg>` commands
+  - ChannelSetupContext for plugin-owned setup flows (prompt, writeEnv, updateConfig)
+
+- [#166](https://github.com/amodalai/amodal/pull/166) [`1523d96`](https://github.com/amodalai/amodal/commit/1523d96f2bb1d6b5e2f0023690f9abb371b88fd3) Thanks [@whodatdev](https://github.com/whodatdev)! - Replace custom package registry with standard npm
+
+  Packages are now standard npm dependencies installed to node_modules/.
+  Declare installed packages in amodal.json `packages` array.
+  - Remove custom registry, hidden npm context (amodal_packages/), and lock file (amodal.lock)
+  - Add package-manager.ts (detectPackageManager, pmAdd, pmRemove, ensurePackageJson)
+  - Resolver loads declared packages using same nested structure as local repo
+  - amodal install/uninstall manage both npm deps and amodal.json packages array
+  - Remove publish, search, diff, update, list commands (use npm directly)
+  - Admin agent fetches from npmjs.org
+
+- Updated dependencies [[`024207b`](https://github.com/amodalai/amodal/commit/024207b91220acfc9e44a73499dfd64124f54ab0), [`f4d59ea`](https://github.com/amodalai/amodal/commit/f4d59eae060aa5fa35e1f2f756413457a4d5331b), [`1523d96`](https://github.com/amodalai/amodal/commit/1523d96f2bb1d6b5e2f0023690f9abb371b88fd3), [`a33e080`](https://github.com/amodalai/amodal/commit/a33e0807e6607c88aa203f5dd2c1bf89299026d8)]:
+  - @amodalai/core@0.2.2
+  - @amodalai/types@0.2.2
+  - @amodalai/runtime@0.2.2
+  - @amodalai/runtime-app@0.2.2
+
 ## 0.2.1
 
 ### Patch Changes

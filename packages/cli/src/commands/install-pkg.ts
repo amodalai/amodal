@@ -1,30 +1,29 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
+import {readFileSync} from 'node:fs';
+import * as path from 'node:path';
 import type {CommandModule} from 'yargs';
 import {
-  addConfigDep,
-  buildLockFile,
-  discoverInstalledPackages,
-  ensureNpmContext,
-  npmInstall,
-  readConfigDeps,
-  readLockFile,
+  ensurePackageJson,
+  addAmodalPackage,
+  pmAdd,
+  pmInstall,
   toNpmName,
 } from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
 /**
- * Install one or more packages, or restore all from lock file.
+ * Install one or more packages, or run a bare install.
  * Returns the number of failures (0 = success).
  *
  * Usage:
- *   amodal install                          — restore from lock file or amodal.json deps
- *   amodal install alert-enrichment         — install @amodalai/alert-enrichment + transitive deps
- *   amodal install @amodalai/soc-agent      — install with full npm name
+ *   amodal install                          — run package manager install
+ *   amodal install alert-enrichment         — add @amodalai/alert-enrichment
+ *   amodal install @amodalai/soc-agent      — add with full npm name
  */
 export async function runInstallPkg(options: {cwd?: string; packages?: string[]} = {}): Promise<number> {
   let repoPath: string;
@@ -36,74 +35,43 @@ export async function runInstallPkg(options: {cwd?: string; packages?: string[]}
     return 1;
   }
 
-  const paths = await ensureNpmContext(repoPath);
+  // Read project name from amodal.json for ensurePackageJson
+  let projectName = 'amodal-project';
+  try {
+    const configRaw = readFileSync(path.join(repoPath, 'amodal.json'), 'utf-8');
+    const config: unknown = JSON.parse(configRaw);
+    if (config && typeof config === 'object' && 'name' in config) {
+      projectName = String((config as Record<string, unknown>)['name']);
+    }
+  } catch {
+    // Use default project name
+  }
 
-  // Bare install: restore from lock file or amodal.json dependencies
+  ensurePackageJson(repoPath, projectName);
+
+  // Bare install: run package manager install
   if (!options.packages || options.packages.length === 0) {
-    const lockFile = await readLockFile(repoPath);
-
-    if (lockFile && Object.keys(lockFile.packages).length > 0) {
-      const entries = Object.entries(lockFile.packages);
-      process.stderr.write(`[install] Restoring ${entries.length} package(s) from lock file...\n`);
-      let failures = 0;
-      for (const [npmName, entry] of entries) {
-        try {
-          await npmInstall(paths, npmName, entry.version);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          process.stderr.write(`[install] Failed: ${npmName}@${entry.version}: ${msg}\n`);
-          failures++;
-        }
-      }
-      if (failures > 0) {
-        process.stderr.write(`[install] ${failures} package(s) failed.\n`);
-        return failures;
-      }
-      process.stderr.write(`[install] Restored ${entries.length} package(s).\n`);
-      return 0;
-    }
-
-    // No lock file — check amodal.json dependencies
-    let deps: Record<string, string>;
+    process.stderr.write('[install] Running package manager install...\n');
     try {
-      deps = await readConfigDeps(repoPath);
-    } catch {
-      deps = {};
-    }
-
-    if (Object.keys(deps).length === 0) {
-      process.stderr.write('[install] Nothing to install.\n');
+      await pmInstall(repoPath);
+      process.stderr.write('[install] Done.\n');
       return 0;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[install] Install failed: ${msg}\n`);
+      return 1;
     }
-
-    process.stderr.write(`[install] Installing ${Object.keys(deps).length} package(s) from amodal.json...\n`);
-    let failures = 0;
-    for (const [name, versionRange] of Object.entries(deps)) {
-      const npmName = toNpmName(name);
-      try {
-        await npmInstall(paths, npmName, versionRange);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`[install] Failed: ${npmName}@${versionRange}: ${msg}\n`);
-        failures++;
-      }
-    }
-
-    // Rebuild lock file from what's actually installed
-    const discovered = await discoverInstalledPackages(paths);
-    await buildLockFile(repoPath, discovered);
-    process.stderr.write(`[install] ${discovered.length} package(s) installed.\n`);
-    return failures;
   }
 
   // Install specific packages
   let failures = 0;
   for (const name of options.packages) {
     const npmName = toNpmName(name);
-    process.stderr.write(`[install] Installing ${npmName}...\n`);
+    process.stderr.write(`[install] Adding ${npmName}...\n`);
     try {
-      await npmInstall(paths, npmName);
-      process.stderr.write(`[install] Installed ${npmName}\n`);
+      await pmAdd(repoPath, npmName);
+      addAmodalPackage(repoPath, npmName);
+      process.stderr.write(`[install] Added ${npmName}\n`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[install] Failed: ${npmName}: ${msg}\n`);
@@ -111,27 +79,10 @@ export async function runInstallPkg(options: {cwd?: string; packages?: string[]}
     }
   }
 
-  // Discover everything installed (including transitive deps) and rebuild lock file
-  const discovered = await discoverInstalledPackages(paths);
-  await buildLockFile(repoPath, discovered);
-
-  // Add direct installs to amodal.json dependencies
-  for (const name of options.packages) {
-    const npmName = toNpmName(name);
-    const installed = discovered.find((d) => d.npmName === npmName);
-    if (installed) {
-      try {
-        await addConfigDep(repoPath, npmName, installed.version);
-      } catch {
-        // amodal.json might not exist yet
-      }
-    }
-  }
-
   if (failures > 0) {
     process.stderr.write(`[install] ${failures} package(s) failed.\n`);
   } else {
-    process.stderr.write(`[install] ${discovered.length} total package(s) (including dependencies).\n`);
+    process.stderr.write(`[install] ${options.packages.length} package(s) added.\n`);
   }
 
   return failures;
@@ -139,7 +90,7 @@ export async function runInstallPkg(options: {cwd?: string; packages?: string[]}
 
 export const installPkgCommand: CommandModule = {
   command: 'install [packages..]',
-  describe: 'Install packages (or restore all from lock file)',
+  describe: 'Install packages (or run bare install)',
   builder: (yargs) =>
     yargs.positional('packages', {type: 'string', array: true, describe: 'Package names to install'}),
   handler: async (argv) => {

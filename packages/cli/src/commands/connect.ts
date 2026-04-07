@@ -1,23 +1,18 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
+import {statSync} from 'node:fs';
 import {join} from 'node:path';
 
 import type {CommandModule} from 'yargs';
 import prompts from 'prompts';
 import {
-  addConfigDep,
-  addLockEntry,
-  buildLockFile,
-  discoverInstalledPackages,
-  ensureNpmContext,
+  ensurePackageJson,
   findMissingEnvVars,
-  getLockEntry,
-  getNpmContextPaths,
-  npmInstall,
+  pmAdd,
   readPackageManifest,
   toNpmName,
   upsertEnvEntries,
@@ -47,24 +42,23 @@ export async function runConnect(options: ConnectOptions): Promise<number> {
     return 1;
   }
 
-  const paths = await ensureNpmContext(repoPath);
   const npmName = toNpmName(options.name);
-  const existing = await getLockEntry(repoPath, npmName);
-  const isReconnect = existing !== null;
+  const packageDir = join(repoPath, 'node_modules', npmName);
+
+  // Check if already installed by looking in node_modules
+  let isReconnect = false;
+  try {
+    isReconnect = statSync(packageDir).isDirectory();
+  } catch {
+    // Not installed
+  }
 
   // Step 1: Install if fresh
   if (!isReconnect) {
     process.stderr.write(`[connect] Installing ${npmName}...\n`);
     try {
-      const result = await npmInstall(paths, npmName);
-      await addLockEntry(repoPath, npmName, {
-        version: result.version,
-        integrity: result.integrity,
-      });
-      await addConfigDep(repoPath, npmName, result.version);
-      // Rebuild lock file from what's actually installed
-      const discovered = await discoverInstalledPackages(paths);
-      await buildLockFile(repoPath, discovered);
+      ensurePackageJson(repoPath, 'amodal-project');
+      await pmAdd(repoPath, npmName);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[connect] Install failed: ${msg}\n`);
@@ -75,9 +69,6 @@ export async function runConnect(options: ConnectOptions): Promise<number> {
   }
 
   // Step 2: Read manifest
-  const contextPaths = getNpmContextPaths(repoPath);
-  const packageDir = join(contextPaths.nodeModules, npmName);
-
   let manifest;
   try {
     manifest = await readPackageManifest(packageDir);
@@ -219,6 +210,21 @@ function getEnvVarNames(auth: PackageAuth): string[] {
 
 export const connectCommand: CommandModule = {
   command: 'connect <name>',
+  describe: 'Connect a connection package (install + auth + test)',
+  builder: (yargs) =>
+    yargs
+      .positional('name', {type: 'string', demandOption: true, describe: 'Connection name'})
+      .option('force', {type: 'boolean', default: false, describe: 'Force re-authentication'}),
+  handler: async (argv) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const code = await runConnect({name: argv['name'] as string, force: argv['force'] as boolean});
+    process.exit(code);
+  },
+};
+
+/** Variant of connectCommand registered as `amodal connect connection <name>`. */
+export const connectConnectionCommand: CommandModule = {
+  command: 'connection <name>',
   describe: 'Connect a connection package (install + auth + test)',
   builder: (yargs) =>
     yargs

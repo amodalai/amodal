@@ -1,24 +1,19 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
-import {readFile, writeFile} from 'node:fs/promises';
-import * as path from 'node:path';
 import type {CommandModule} from 'yargs';
 import {
-  buildLockFile,
-  discoverInstalledPackages,
-  ensureNpmContext,
-  getNpmContextPaths,
-  npmUninstall,
+  pmRemove,
+  removeAmodalPackage,
   toNpmName,
 } from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 
 /**
- * Uninstall a package: npm uninstall + rebuild lock file.
+ * Uninstall a package via the detected package manager.
  * Returns 0 on success, 1 on error.
  */
 export async function runUninstall(options: {cwd?: string; name: string}): Promise<number> {
@@ -32,38 +27,14 @@ export async function runUninstall(options: {cwd?: string; name: string}): Promi
   }
 
   const npmName = toNpmName(options.name);
-  const paths = getNpmContextPaths(repoPath);
 
   try {
-    await npmUninstall(paths, npmName);
+    await pmRemove(repoPath, npmName);
+    removeAmodalPackage(repoPath, npmName);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[uninstall] npm uninstall failed: ${msg}\n`);
+    process.stderr.write(`[uninstall] Failed to remove ${npmName}: ${msg}\n`);
     return 1;
-  }
-
-  // Rebuild lock file from remaining packages
-  await ensureNpmContext(repoPath);
-  const discovered = await discoverInstalledPackages(paths);
-  await buildLockFile(repoPath, discovered);
-
-  // Remove from amodal.json dependencies
-  try {
-    const configPath = path.join(repoPath, 'amodal.json');
-    const configRaw = await readFile(configPath, 'utf-8');
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- config JSON
-    const config = JSON.parse(configRaw) as Record<string, unknown>;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    const deps = (config['dependencies'] as Record<string, string>) ?? {};
-    delete deps[npmName];
-    if (Object.keys(deps).length > 0) {
-      config['dependencies'] = deps;
-    } else {
-      delete config['dependencies'];
-    }
-    await writeFile(configPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-  } catch {
-    // Non-fatal
   }
 
   process.stderr.write(`[uninstall] Removed ${npmName}\n`);

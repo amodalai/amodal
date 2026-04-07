@@ -20,11 +20,6 @@ import type {ArgumentsCamelCase, CommandModule} from 'yargs';
 import {connectCommand} from './commands/connect.js';
 import {installPkgCommand} from './commands/install-pkg.js';
 import {uninstallCommand} from './commands/uninstall.js';
-import {listCommand} from './commands/list.js';
-import {updateCommand} from './commands/update.js';
-import {diffCommand} from './commands/diff.js';
-import {searchCommand} from './commands/search.js';
-import {publishCommand} from './commands/publish.js';
 import {loginCommand} from './commands/login.js';
 import {linkCommand} from './commands/link.js';
 import {secretsCommand} from './commands/secrets.js';
@@ -131,90 +126,6 @@ describe('amodal CLI e2e', () => {
     it('parses name positional', async () => {
       const args = await parseArgs(uninstallCommand, ['uninstall', 'connection-stripe']);
       expect(args['name']).toBe('connection-stripe');
-    });
-  });
-
-  // --- list ---
-
-  describe('list', () => {
-    it('defaults to json=false', async () => {
-      const args = await parseArgs(listCommand, ['list']);
-      expect(args['json']).toBe(false);
-      expect(args['filter']).toBeUndefined();
-    });
-
-    it('parses --filter and --json', async () => {
-      const args = await parseArgs(listCommand, ['list', '--filter', 'skill', '--json']);
-      expect(args['filter']).toBe('skill');
-      expect(args['json']).toBe(true);
-    });
-  });
-
-  // --- update ---
-
-  describe('update', () => {
-    it('optional positional defaults to undefined', async () => {
-      const args = await parseArgs(updateCommand, ['update']);
-      expect(args['name']).toBeUndefined();
-      expect(args['latest']).toBe(false);
-      expect(args['dryRun']).toBe(false);
-    });
-
-    it('parses name', async () => {
-      const args = await parseArgs(updateCommand, ['update', 'stripe']);
-      expect(args['name']).toBe('stripe');
-    });
-
-    it('parses --latest and --dry-run', async () => {
-      const args = await parseArgs(updateCommand, ['update', '--latest', '--dry-run']);
-      expect(args['latest']).toBe(true);
-      expect(args['dryRun']).toBe(true);
-    });
-  });
-
-  // --- diff ---
-
-  describe('diff', () => {
-    it('parses name', async () => {
-      const args = await parseArgs(diffCommand, ['diff', 'triage']);
-      expect(args['name']).toBe('triage');
-    });
-  });
-
-  // --- search ---
-
-  describe('search', () => {
-    it('optional query defaults to undefined', async () => {
-      const args = await parseArgs(searchCommand, ['search']);
-      expect(args['query']).toBeUndefined();
-      expect(args['json']).toBe(false);
-    });
-
-    it('parses query and --type', async () => {
-      const args = await parseArgs(searchCommand, ['search', 'stripe', '--type', 'connection']);
-      expect(args['query']).toBe('stripe');
-      expect(args['type']).toBe('connection');
-    });
-
-    it('parses --json', async () => {
-      const args = await parseArgs(searchCommand, ['search', '--json']);
-      expect(args['json']).toBe(true);
-    });
-  });
-
-  // --- publish ---
-
-  describe('publish', () => {
-    it('defaults', async () => {
-      const args = await parseArgs(publishCommand, ['publish']);
-      expect(args['dryRun']).toBe(false);
-      expect(args['registry']).toBeUndefined();
-    });
-
-    it('parses --dry-run and --registry', async () => {
-      const args = await parseArgs(publishCommand, ['publish', '--dry-run', '--registry', 'https://my-registry.dev']);
-      expect(args['dryRun']).toBe(true);
-      expect(args['registry']).toBe('https://my-registry.dev');
     });
   });
 

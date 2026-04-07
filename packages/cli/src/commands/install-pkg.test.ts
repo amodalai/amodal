@@ -1,43 +1,35 @@
 /**
  * @license
- * Copyright 2025 Amodal Labs, Inc.
+ * Copyright 2026 Amodal Labs, Inc.
  * SPDX-License-Identifier: MIT
  */
 
 import {describe, it, expect, vi, beforeEach} from 'vitest';
 
 const mockFindRepoRoot = vi.fn(() => '/test/repo');
-const mockEnsureNpmContext = vi.fn();
-const mockNpmInstall = vi.fn();
-const mockReadLockFile = vi.fn();
-const mockReadConfigDeps = vi.fn();
+const mockEnsurePackageJson = vi.fn();
+const mockPmAdd = vi.fn();
+const mockPmInstall = vi.fn();
+const mockAddAmodalPackage = vi.fn();
 const mockToNpmName = vi.fn((name: string) => `@amodalai/${name}`);
-const mockAddConfigDep = vi.fn();
-const mockDiscoverInstalledPackages = vi.fn();
-const mockBuildLockFile = vi.fn();
+
+const mockReadFileSync = vi.fn();
 
 vi.mock('../shared/repo-discovery.js', () => ({
   findRepoRoot: mockFindRepoRoot,
 }));
 
 vi.mock('@amodalai/core', () => ({
-  ensureNpmContext: mockEnsureNpmContext,
-  npmInstall: mockNpmInstall,
-  readLockFile: mockReadLockFile,
-  readConfigDeps: mockReadConfigDeps,
+  ensurePackageJson: mockEnsurePackageJson,
+  pmAdd: mockPmAdd,
+  pmInstall: mockPmInstall,
+  addAmodalPackage: mockAddAmodalPackage,
   toNpmName: mockToNpmName,
-  addConfigDep: mockAddConfigDep,
-  discoverInstalledPackages: mockDiscoverInstalledPackages,
-  buildLockFile: mockBuildLockFile,
 }));
 
-const mockPaths = {
-  root: '/test/repo/.amodal/packages',
-  npmDir: '/test/repo/.amodal/packages/.npm',
-  npmrc: '/test/repo/.amodal/packages/.npm/.npmrc',
-  packageJson: '/test/repo/.amodal/packages/.npm/package.json',
-  nodeModules: '/test/repo/.amodal/packages/.npm/node_modules',
-};
+vi.mock('node:fs', () => ({
+  readFileSync: mockReadFileSync,
+}));
 
 describe('runInstallPkg', () => {
   let stderrOutput: string;
@@ -45,11 +37,9 @@ describe('runInstallPkg', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFindRepoRoot.mockReturnValue('/test/repo');
-    mockEnsureNpmContext.mockResolvedValue(mockPaths);
-    mockNpmInstall.mockResolvedValue({version: '1.0.0', integrity: 'sha512-abc'});
-    mockDiscoverInstalledPackages.mockResolvedValue([]);
-    mockBuildLockFile.mockResolvedValue(undefined);
-    mockAddConfigDep.mockResolvedValue(undefined);
+    mockPmAdd.mockResolvedValue(undefined);
+    mockPmInstall.mockResolvedValue(undefined);
+    mockReadFileSync.mockReturnValue(JSON.stringify({name: 'test-project'}));
     stderrOutput = '';
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
       stderrOutput += String(chunk);
@@ -57,66 +47,48 @@ describe('runInstallPkg', () => {
     });
   });
 
-  it('should restore from lock file on bare install', async () => {
-    mockReadLockFile.mockResolvedValue({
-      lockVersion: 2,
-      packages: {'@amodalai/connection-salesforce': {version: '2.0.0', integrity: 'sha512-x'}},
-    });
-
+  it('should run pmInstall on bare install', async () => {
     const {runInstallPkg} = await import('./install-pkg.js');
     const result = await runInstallPkg();
     expect(result).toBe(0);
-    expect(mockNpmInstall).toHaveBeenCalledWith(mockPaths, '@amodalai/connection-salesforce', '2.0.0');
-    expect(stderrOutput).toContain('Restoring 1 package');
+    expect(mockEnsurePackageJson).toHaveBeenCalledWith('/test/repo', 'test-project');
+    expect(mockPmInstall).toHaveBeenCalledWith('/test/repo');
+    expect(stderrOutput).toContain('Done');
   });
 
-  it('should print nothing to install when no lock file and no deps on bare install', async () => {
-    mockReadLockFile.mockResolvedValue(null);
-    mockReadConfigDeps.mockResolvedValue({});
+  it('should handle pmInstall failure on bare install', async () => {
+    mockPmInstall.mockRejectedValue(new Error('Install failed'));
 
     const {runInstallPkg} = await import('./install-pkg.js');
     const result = await runInstallPkg();
-    expect(result).toBe(0);
-    expect(stderrOutput).toContain('Nothing to install');
+    expect(result).toBe(1);
+    expect(stderrOutput).toContain('Install failed');
   });
 
   it('should install a single package', async () => {
-    mockDiscoverInstalledPackages.mockResolvedValue([
-      {npmName: '@amodalai/alert-enrichment', version: '1.0.0', integrity: 'sha512-abc'},
-    ]);
-
     const {runInstallPkg} = await import('./install-pkg.js');
     const result = await runInstallPkg({
       packages: ['alert-enrichment'],
     });
     expect(result).toBe(0);
     expect(mockToNpmName).toHaveBeenCalledWith('alert-enrichment');
-    expect(mockNpmInstall).toHaveBeenCalledWith(mockPaths, '@amodalai/alert-enrichment');
-    expect(mockDiscoverInstalledPackages).toHaveBeenCalledWith(mockPaths);
-    expect(mockBuildLockFile).toHaveBeenCalledWith('/test/repo', expect.any(Array));
+    expect(mockPmAdd).toHaveBeenCalledWith('/test/repo', '@amodalai/alert-enrichment');
+    expect(mockAddAmodalPackage).toHaveBeenCalledWith('/test/repo', '@amodalai/alert-enrichment');
   });
 
   it('should install multiple packages', async () => {
-    mockDiscoverInstalledPackages.mockResolvedValue([
-      {npmName: '@amodalai/connection-stripe', version: '1.0.0', integrity: 'sha512-abc'},
-      {npmName: '@amodalai/soc-agent', version: '1.0.0', integrity: 'sha512-def'},
-    ]);
-
     const {runInstallPkg} = await import('./install-pkg.js');
     const result = await runInstallPkg({
       packages: ['connection-stripe', 'soc-agent'],
     });
     expect(result).toBe(0);
-    expect(mockNpmInstall).toHaveBeenCalledTimes(2);
+    expect(mockPmAdd).toHaveBeenCalledTimes(2);
   });
 
   it('should continue on error and report failure count', async () => {
-    mockNpmInstall
+    mockPmAdd
       .mockRejectedValueOnce(new Error('Network error'))
-      .mockResolvedValueOnce({version: '1.0.0', integrity: 'sha512-ok'});
-    mockDiscoverInstalledPackages.mockResolvedValue([
-      {npmName: '@amodalai/good', version: '1.0.0', integrity: 'sha512-ok'},
-    ]);
+      .mockResolvedValueOnce(undefined);
 
     const {runInstallPkg} = await import('./install-pkg.js');
     const result = await runInstallPkg({
@@ -128,10 +100,9 @@ describe('runInstallPkg', () => {
   });
 
   it('should report all failures', async () => {
-    mockNpmInstall
+    mockPmAdd
       .mockRejectedValueOnce(new Error('Fail 1'))
       .mockRejectedValueOnce(new Error('Fail 2'));
-    mockDiscoverInstalledPackages.mockResolvedValue([]);
 
     const {runInstallPkg} = await import('./install-pkg.js');
     const result = await runInstallPkg({
@@ -152,27 +123,25 @@ describe('runInstallPkg', () => {
     expect(stderrOutput).toContain('Not found');
   });
 
-  it('should handle bare install with empty lock file packages', async () => {
-    mockReadLockFile.mockResolvedValue({lockVersion: 2, packages: {}});
+  it('should use default project name when amodal.json is missing', async () => {
+    mockReadFileSync.mockImplementation(() => {
+      throw new Error('ENOENT');
+    });
 
     const {runInstallPkg} = await import('./install-pkg.js');
     const result = await runInstallPkg();
     expect(result).toBe(0);
-    expect(stderrOutput).toContain('Nothing to install');
+    expect(mockEnsurePackageJson).toHaveBeenCalledWith('/test/repo', 'amodal-project');
   });
 
   it('should pass cwd to findRepoRoot', async () => {
-    mockReadLockFile.mockResolvedValue(null);
-    mockReadConfigDeps.mockResolvedValue({});
-
     const {runInstallPkg} = await import('./install-pkg.js');
     await runInstallPkg({cwd: '/custom/dir'});
     expect(mockFindRepoRoot).toHaveBeenCalledWith('/custom/dir');
   });
 
-  it('should handle npm install failure for single package', async () => {
-    mockNpmInstall.mockRejectedValue(new Error('Registry unreachable'));
-    mockDiscoverInstalledPackages.mockResolvedValue([]);
+  it('should handle npm add failure for single package', async () => {
+    mockPmAdd.mockRejectedValue(new Error('Registry unreachable'));
 
     const {runInstallPkg} = await import('./install-pkg.js');
     const result = await runInstallPkg({
@@ -183,12 +152,9 @@ describe('runInstallPkg', () => {
   });
 
   it('should handle empty packages array like bare install', async () => {
-    mockReadLockFile.mockResolvedValue(null);
-    mockReadConfigDeps.mockResolvedValue({});
-
     const {runInstallPkg} = await import('./install-pkg.js');
     const result = await runInstallPkg({packages: []});
     expect(result).toBe(0);
-    expect(stderrOutput).toContain('Nothing to install');
+    expect(mockPmInstall).toHaveBeenCalledWith('/test/repo');
   });
 });

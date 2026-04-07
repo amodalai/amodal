@@ -29,7 +29,6 @@ import {runValidate} from './commands/validate.js';
 import {runInspect} from './commands/inspect.js';
 import {runBuild} from './commands/build.js';
 import {runDeploy} from './commands/deploy.js';
-import {runList} from './commands/list.js';
 import {runDocker} from './commands/docker.js';
 import {runStatus} from './commands/status.js';
 import {runDeployments} from './commands/deployments.js';

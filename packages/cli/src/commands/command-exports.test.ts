@@ -47,6 +47,6 @@ describe('command-exports', () => {
   });
 
   it('amodalCommands has expected count', () => {
-    expect(amodalCommands).toHaveLength(11);
+    expect(amodalCommands).toHaveLength(12);
   });
 });

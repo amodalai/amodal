@@ -119,6 +119,8 @@ export interface AgentBundle {
   tools: LoadedTool[];
   stores: LoadedStore[];
   mcpServers?: Record<string, RepoMcpServerConfig>;
+  /** Discovered channel plugins from installed packages. */
+  channels?: Array<{channelType: string; packageName: string; packageDir: string; config: Record<string, unknown>}>;
   resolvedCredentials?: Record<string, string>;
   warnings?: string[];
 }
