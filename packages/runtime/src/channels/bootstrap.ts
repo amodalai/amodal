@@ -115,8 +115,9 @@ export async function bootstrapChannels(
 
     return {adapters, router};
   } catch (err) {
-    logger.error('channels_load_failed', {
+    logger.warn('channels_load_failed', {
       error: err instanceof Error ? err.message : String(err),
+      hint: 'Server will start without messaging channels',
     });
     return null;
   }

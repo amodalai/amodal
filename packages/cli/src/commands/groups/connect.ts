@@ -5,7 +5,7 @@
  */
 
 import type {CommandModule} from 'yargs';
-import {connectCommand as connectConnectionCommand} from '../connect.js';
+import {connectConnectionCommand} from '../connect.js';
 import {connectChannelCommand} from '../connect-channel.js';
 
 export const connectGroupCommand: CommandModule = {
@@ -13,11 +13,7 @@ export const connectGroupCommand: CommandModule = {
   describe: 'Connect a package (connection or channel)',
   builder: (yargs) =>
     yargs
-      .command({
-        ...connectConnectionCommand,
-        command: 'connection <name>',
-        describe: 'Connect a connection package (install + auth + test)',
-      })
+      .command(connectConnectionCommand)
       .command(connectChannelCommand)
       .demandCommand(1, 'Specify: connection or channel'),
   handler: () => {},
