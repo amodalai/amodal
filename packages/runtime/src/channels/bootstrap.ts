@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable import/no-internal-modules -- channel module imports from sibling submodules */
+ 
 
 /**
  * Shared channel bootstrap sequence.
@@ -26,9 +26,17 @@ import {createChannelsRouter} from './routes.js';
 import {MessageDedupCache} from './dedup-cache.js';
 import {resolveEnvRef} from '../env-ref.js';
 
+/** A discovered channel from the bundle (matches AgentBundle['channels'][n]). */
+interface BundleChannel {
+  channelType: string;
+  packageName: string;
+  packageDir: string;
+  config: Record<string, unknown>;
+}
+
 export interface BootstrapChannelsOptions {
-  /** The `channels` block from amodal.json / bundle.config.channels. */
-  channelsConfig: Record<string, Record<string, unknown>>;
+  /** Discovered channel plugins from the bundle. */
+  channels: BundleChannel[];
   /** Repo path for local channel discovery + node_modules resolution. */
   repoPath: string;
   /** The `packages` array from amodal.json. */
@@ -60,22 +68,22 @@ export interface BootstrapChannelsResult {
 export async function bootstrapChannels(
   opts: BootstrapChannelsOptions,
 ): Promise<BootstrapChannelsResult | null> {
-  const {channelsConfig, repoPath, sessionMapper, sessionManager, buildSessionComponents, eventBus, logger} = opts;
+  const {channels, repoPath, sessionMapper, sessionManager, buildSessionComponents, eventBus, logger} = opts;
   const appId = opts.appId ?? 'local';
 
-  if (Object.keys(channelsConfig).length === 0) {
+  if (channels.length === 0) {
     return null;
   }
 
   try {
-    // Resolve env:VAR refs in channel config values
-    const resolved: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(channelsConfig)) {
-      resolved[key] = resolveChannelConfig(value);
+    // Build and resolve env:VAR refs in channel config values
+    const channelsConfig: Record<string, unknown> = {};
+    for (const ch of channels) {
+      channelsConfig[ch.channelType] = resolveChannelConfig(ch.config);
     }
 
     // Load and validate plugins
-    const adapters = await loadChannelPlugins({channelsConfig: resolved, repoPath, packages: opts.packages, logger});
+    const adapters = await loadChannelPlugins({channelsConfig, repoPath, packages: opts.packages, logger});
     logger.info('channels_loaded', {channels: [...adapters.keys()]});
 
     // Wire session factory — creates chat sessions for channel users

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable import/no-internal-modules -- channel module imports from sibling submodules */
+ 
 
 /**
  * Express router for inbound messaging channel webhooks.
@@ -69,16 +69,8 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
     // Parse and verify the incoming message
     const msg = await adapter.parseIncoming(webhookReq);
     if (!msg) {
-      // Check for Slack URL verification challenge
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- accessing optional Slack challenge field
-      const challenge = (webhookReq as unknown as Record<string, unknown>)['_slackChallenge'];
-      if (challenge) {
-        res.status(200).json({challenge});
-        return;
-      }
-
       // Rejected (bad signature, unauthorized sender, or non-text update).
-      // Always return 200 — Telegram retries on non-200.
+      // Always return 200 — platforms retry on non-200.
       eventBus.emit({
         type: 'channel_auth_rejected',
         channelType,

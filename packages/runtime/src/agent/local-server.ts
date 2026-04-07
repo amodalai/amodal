@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable import/no-internal-modules -- server wiring imports from internal submodules */
+ 
 
 /**
  * Local server for repo-based agent mode.
@@ -367,17 +367,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   let channelsResult: {adapters: Map<string, ChannelAdapter>; router: import('express').Router} | null = null;
 
   if (bundle.channels && bundle.channels.length > 0) {
-    // Build channelsConfig from discovered channel packages
-    // Each channel's config comes from channel.json in the package (env: refs resolved at boot)
-    const channelsConfig: Record<string, Record<string, unknown>> = {};
-    for (const ch of bundle.channels) {
-      const resolvedConfig: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(ch.config)) {
-        resolvedConfig[k] = typeof v === 'string' ? (resolveEnvRef(v) ?? v) : v;
-      }
-      channelsConfig[ch.channelType] = resolvedConfig;
-    }
-
     // Both PGLite and Postgres factories return DrizzleSessionStore which
     // exposes `db`. Cast through the concrete type safely.
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowing to concrete DrizzleSessionStore
@@ -389,7 +378,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     });
 
     channelsResult = await bootstrapChannels({
-      channelsConfig,
+      channels: bundle.channels,
       repoPath: config.repoPath,
       packages: bundle.config.packages,
       sessionMapper: channelSessionMapper,

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable import/no-internal-modules -- server wiring imports from internal submodules */
+ 
 
 /**
  * Snapshot server.
@@ -25,7 +25,6 @@ import {createTaskRouter} from './routes/task.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import type {ServerInstance} from '../server.js';
 import {ConfigError} from '../errors.js';
-import {resolveEnvRef} from '../env-ref.js';
 import {RuntimeEventBus} from '../events/event-bus.js';
 import {InMemoryChannelSessionMapper} from '../channels/in-memory-session-mapper.js';
 import {bootstrapChannels} from '../channels/bootstrap.js';
@@ -88,18 +87,9 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
 
   let channelsRouter: import('express').Router | null = null;
   if (bundle.channels && bundle.channels.length > 0) {
-    const channelsConfig: Record<string, Record<string, unknown>> = {};
-    for (const ch of bundle.channels) {
-      const resolvedConfig: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(ch.config)) {
-        resolvedConfig[k] = typeof v === 'string' ? (resolveEnvRef(v) ?? v) : v;
-      }
-      channelsConfig[ch.channelType] = resolvedConfig;
-    }
-
     const channelMapper = new InMemoryChannelSessionMapper({logger: log, eventBus});
     const result = await bootstrapChannels({
-      channelsConfig,
+      channels: bundle.channels,
       repoPath: '', // No local channel discovery in snapshot mode
       packages: bundle.config.packages,
       sessionMapper: channelMapper,
