@@ -76,3 +76,24 @@ export const storeDocumentVersions = pgTable(
     lookupIdx: index('idx_store_versions_lookup').on(t.appId, t.store, t.key, t.version),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Channel sessions (messaging channel → session affinity)
+// ---------------------------------------------------------------------------
+
+export const channelSessions = pgTable(
+  'channel_sessions',
+  {
+    channelType: text('channel_type').notNull(),
+    channelUserId: text('channel_user_id').notNull(),
+    sessionId: text('session_id').notNull(),
+    createdAt: timestamp('created_at', {withTimezone: true}).defaultNow().notNull(),
+    lastActiveAt: timestamp('last_active_at', {withTimezone: true}).defaultNow().notNull(),
+    metadata: jsonb('metadata').default({}).$type<Record<string, unknown>>(),
+  },
+  (t) => ({
+    pk: primaryKey({columns: [t.channelType, t.channelUserId]}),
+    sessionIdx: index('idx_channel_sessions_session').on(t.sessionId),
+    activityIdx: index('idx_channel_sessions_activity').on(t.lastActiveAt),
+  }),
+);

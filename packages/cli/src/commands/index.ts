@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+ 
+
 import {initCommand} from './init.js';
 import {devCommand} from './dev.js';
 import {inspectCommand} from './inspect.js';
@@ -15,12 +17,13 @@ import {pkgCommand} from './groups/pkg.js';
 import {deployGroupCommand} from './groups/deploy.js';
 import {opsCommand} from './groups/ops.js';
 import {authCommand} from './groups/auth.js';
+import {connectGroupCommand} from './groups/connect.js';
 
 /**
  * All amodal subcommands registered on the root yargs instance.
  *
  * Top-level: daily-driver commands (init, dev, chat, validate, inspect, eval, test)
- * Groups: pkg, deploy, ops, auth
+ * Groups: pkg, deploy, ops, auth, connect
  */
 export const amodalCommands = [
   // Top-level
@@ -36,4 +39,5 @@ export const amodalCommands = [
   deployGroupCommand,
   opsCommand,
   authCommand,
+  connectGroupCommand,
 ];

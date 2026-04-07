@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+/* eslint-disable import/no-internal-modules -- barrel file re-exports from internal modules */
+
 import { createServer, type ServerInstance } from './server.js';
 import { log } from './logger.js';
 
@@ -188,6 +190,21 @@ export type {
   CompilerKnowledge,
   CompilerStore,
 } from './context/types.js';
+
+// Messaging channels
+export { loadChannelPlugins } from './channels/plugin-loader.js';
+export type { LoadChannelPluginsOptions } from './channels/plugin-loader.js';
+export { createChannelsRouter } from './channels/routes.js';
+export type { ChannelsRouterOptions } from './channels/routes.js';
+export { DrizzleChannelSessionMapper } from './channels/channel-session-mapper.js';
+export type { ChannelSessionMapperOptions, CreateChannelSession } from './channels/channel-session-mapper.js';
+export { InMemoryChannelSessionMapper } from './channels/in-memory-session-mapper.js';
+export type { InMemoryChannelSessionMapperOptions } from './channels/in-memory-session-mapper.js';
+export { bootstrapChannels } from './channels/bootstrap.js';
+export type { BootstrapChannelsOptions, BootstrapChannelsResult } from './channels/bootstrap.js';
+export { MessageDedupCache } from './channels/dedup-cache.js';
+export { ChannelPluginError, ChannelConfigError } from './channels/errors.js';
+export { RuntimeEventBus } from './events/event-bus.js';
 
 // Permission checker
 export { AccessJsonPermissionChecker } from './security/permission-checker.js';

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+ 
+
 import {readFile, readdir, stat} from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -19,6 +21,18 @@ import type {AmodalConfig} from '../repo/config-schema.js';
 /**
  * The result of resolving all installed packages + local repo content.
  */
+/** A discovered channel plugin from a package. */
+export interface ResolvedChannel {
+  /** Channel type identifier. */
+  channelType: string;
+  /** npm package name. */
+  packageName: string;
+  /** Absolute path to the package directory in node_modules. */
+  packageDir: string;
+  /** Config from channel.json with env: refs (not yet resolved). */
+  config: Record<string, unknown>;
+}
+
 export interface ResolvedPackages {
   connections: Map<string, LoadedConnection>;
   skills: LoadedSkill[];
@@ -26,6 +40,7 @@ export interface ResolvedPackages {
   knowledge: LoadedKnowledge[];
   stores: LoadedStore[];
   tools: LoadedTool[];
+  channels: ResolvedChannel[];
   warnings: string[];
 }
 
@@ -271,6 +286,7 @@ export async function resolveAllPackages(options: {
   const knowledge: LoadedKnowledge[] = [];
   const stores: LoadedStore[] = [];
   const tools: LoadedTool[] = [];
+  const channels: ResolvedChannel[] = [];
 
   // Track names to prevent duplicates (local wins over packages)
   const skillNames = new Set<string>();
@@ -303,8 +319,26 @@ export async function resolveAllPackages(options: {
       await loadLocalKnowledge(pkgDir, knowledgeNames, knowledge, warnings);
       await loadLocalStores(pkgDir, storeNames, stores, warnings);
       await loadLocalTools(pkgDir, toolNames, tools, warnings);
+
+      // Check for channel.json — marks this package as a channel plugin
+      const channelJson = await readOptionalFile(path.join(pkgDir, 'channel.json'));
+      if (channelJson) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
+          const parsed = JSON.parse(channelJson) as Record<string, unknown>;
+          const channelType = String(parsed['type'] ?? '');
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowing parsed config
+          const channelConfig = (parsed['config'] ?? {}) as Record<string, unknown>;
+          if (channelType) {
+            channels.push({channelType, packageName: npmName, packageDir: pkgDir, config: channelConfig});
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          warnings.push(`Failed to parse channel.json in "${npmName}": ${msg}`);
+        }
+      }
     }
   }
 
-  return {connections, skills, automations, knowledge, stores, tools, warnings};
+  return {connections, skills, automations, knowledge, stores, tools, channels, warnings};
 }

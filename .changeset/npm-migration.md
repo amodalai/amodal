@@ -2,7 +2,7 @@
 "@amodalai/types": patch
 "@amodalai/core": patch
 "@amodalai/runtime": patch
-"@amodalai/cli": patch
+"@amodalai/amodal": patch
 ---
 
 Replace custom package registry with standard npm

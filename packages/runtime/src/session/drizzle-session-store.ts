@@ -25,6 +25,7 @@ import type {PgDatabase, PgQueryResultHKT} from 'drizzle-orm/pg-core';
 import {SessionStoreError} from '../errors.js';
 import type {Logger} from '../logger.js';
 import type {PersistedSession} from './types.js';
+// eslint-disable-next-line import/no-internal-modules -- shared schema between session and store modules
 import type {agentSessions} from '../stores/schema.js';
 import {
   buildListConditions,
@@ -67,7 +68,8 @@ export interface DrizzleSessionStoreOptions {
 }
 
 export class DrizzleSessionStore implements SessionStore {
-  private readonly db: AnyPgDatabase;
+  /** Exposed for channel session mapper to share the connection pool. */
+  readonly db: AnyPgDatabase;
   private readonly table: AgentSessionsTable;
   readonly backendName: string;
   private readonly logger: Logger;

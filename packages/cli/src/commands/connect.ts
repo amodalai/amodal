@@ -221,3 +221,18 @@ export const connectCommand: CommandModule = {
     process.exit(code);
   },
 };
+
+/** Variant of connectCommand registered as `amodal connect connection <name>`. */
+export const connectConnectionCommand: CommandModule = {
+  command: 'connection <name>',
+  describe: 'Connect a connection package (install + auth + test)',
+  builder: (yargs) =>
+    yargs
+      .positional('name', {type: 'string', demandOption: true, describe: 'Connection name'})
+      .option('force', {type: 'boolean', default: false, describe: 'Force re-authentication'}),
+  handler: async (argv) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const code = await runConnect({name: argv['name'] as string, force: argv['force'] as boolean});
+    process.exit(code);
+  },
+};

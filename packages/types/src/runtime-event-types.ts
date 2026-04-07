@@ -37,6 +37,10 @@ export const RUNTIME_EVENT_TYPES = [
   'store_updated',
   'manifest_changed',
   'files_changed',
+  'channel_message_received',
+  'channel_reply_sent',
+  'channel_session_created',
+  'channel_auth_rejected',
 ] as const;
 
 export type RuntimeEventType = typeof RUNTIME_EVENT_TYPES[number];
@@ -143,6 +147,42 @@ export interface FilesChangedEvent extends RuntimeEventBase {
   path?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Channel events
+// ---------------------------------------------------------------------------
+
+export interface ChannelMessageReceivedEvent extends RuntimeEventBase {
+  type: 'channel_message_received';
+  channelType: string;
+  channelUserId: string;
+  sessionId: string;
+  /** First ~50 chars of the message text */
+  messagePreview: string;
+}
+
+export interface ChannelReplySentEvent extends RuntimeEventBase {
+  type: 'channel_reply_sent';
+  channelType: string;
+  channelUserId: string;
+  sessionId: string;
+  /** First ~50 chars of the reply text */
+  replyPreview: string;
+}
+
+export interface ChannelSessionCreatedEvent extends RuntimeEventBase {
+  type: 'channel_session_created';
+  channelType: string;
+  channelUserId: string;
+  sessionId: string;
+}
+
+export interface ChannelAuthRejectedEvent extends RuntimeEventBase {
+  type: 'channel_auth_rejected';
+  channelType: string;
+  channelUserId?: string;
+  reason: 'rejected';
+}
+
 export type RuntimeEvent =
   | SessionCreatedEvent
   | SessionUpdatedEvent
@@ -156,7 +196,11 @@ export type RuntimeEvent =
   | DeliveryFailedEvent
   | StoreUpdatedEvent
   | ManifestChangedEvent
-  | FilesChangedEvent;
+  | FilesChangedEvent
+  | ChannelMessageReceivedEvent
+  | ChannelReplySentEvent
+  | ChannelSessionCreatedEvent
+  | ChannelAuthRejectedEvent;
 
 /** Payload for events minus the seq/timestamp fields that the bus assigns */
 export type RuntimeEventPayload<T extends RuntimeEvent = RuntimeEvent> =
