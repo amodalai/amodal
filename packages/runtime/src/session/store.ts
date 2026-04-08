@@ -22,10 +22,14 @@
 import {and, eq, lt, or, gte, lte, sql} from 'drizzle-orm';
 import type {AnyPgColumn} from 'drizzle-orm/pg-core';
 import type {agentSessions} from '../stores/schema.js';
-import type {PersistedSession, SessionMetadata} from './types.js';
+import {randomUUID} from 'node:crypto';
+import type {PersistedSession, SessionMetadata, ImageDataMap} from './types.js';
 import type {TokenUsage} from '../providers/types.js';
 import type {ModelMessage} from 'ai';
 import {SessionStoreError} from '../errors.js';
+
+const IMAGE_REF_PREFIX = '__amodal_imgref:';
+const IMAGE_REF_PATTERN = /^__amodal_imgref:([a-f0-9-]+)__$/;
 
 // ---------------------------------------------------------------------------
 // List options, hooks, and cursor type
@@ -189,24 +193,105 @@ export function decodeCursor(
  * Map a `PersistedSession` to its row shape for insert/update. Separate
  * function so both backends do the exact same type conversion.
  */
+/**
+ * Extract inline image data from messages into a separate map,
+ * replacing each image part with a lightweight `imageRef` placeholder.
+ * This keeps the messages JSONB column small while preserving images
+ * in their own column for rehydration on load.
+ */
+function extractImages(messages: ModelMessage[]): {
+  messages: ModelMessage[];
+  imageData: ImageDataMap;
+} {
+  const imageData: ImageDataMap = {};
+  const cleaned = messages.map((msg) => {
+    if (msg.role !== 'user' || !Array.isArray(msg.content)) return msg;
+
+    const hasImage = msg.content.some(
+      (p) => typeof p === 'object' && 'type' in p && p.type === 'image' && 'image' in p,
+    );
+    if (!hasImage) return msg;
+
+    return {
+      ...msg,
+      content: msg.content.map((part) => {
+        if (typeof part !== 'object' || !('type' in part) || part.type !== 'image' || !('image' in part)) {
+          return part;
+        }
+        const refId = randomUUID().slice(0, 12);
+        const data = typeof part.image === 'string' ? part.image : '';
+        const mimeType = String(part.mediaType ?? 'image/png');
+        imageData[refId] = {mimeType, data};
+        return {type: 'text' as const, text: `${IMAGE_REF_PREFIX}${refId}__`};
+      }),
+    };
+  });
+  return {messages: cleaned, imageData};
+}
+
+/**
+ * Rehydrate `[imageRef:id]` placeholders back into full image content
+ * parts using the stored image data map. Called when loading a session
+ * from the database.
+ */
+function rehydrateImages(messages: ModelMessage[], imageData: ImageDataMap): ModelMessage[] {
+  if (!imageData || Object.keys(imageData).length === 0) return messages;
+
+  return messages.map((msg) => {
+    if (msg.role !== 'user' || !Array.isArray(msg.content)) return msg;
+
+    const hasRef = msg.content.some(
+      (p) => typeof p === 'object' && 'type' in p && p.type === 'text' && 'text' in p
+        && typeof p.text === 'string' && p.text.startsWith(IMAGE_REF_PREFIX),
+    );
+    if (!hasRef) return msg;
+
+    return {
+      ...msg,
+      content: msg.content.map((part) => {
+        if (typeof part !== 'object' || !('type' in part) || part.type !== 'text' || !('text' in part)) {
+          return part;
+        }
+        const text = String(part.text);
+        const match = IMAGE_REF_PATTERN.exec(text);
+        if (!match) return part;
+        const ref = imageData[match[1]];
+        if (!ref) return part; // ref missing — leave placeholder
+        return {
+          type: 'image' as const,
+          image: ref.data,
+          mediaType: ref.mimeType,
+        };
+      }),
+    };
+  });
+}
+
 export function sessionToRow(session: PersistedSession): {
   id: string;
   messages: unknown[];
   tokenUsage: {inputTokens: number; outputTokens: number; totalTokens: number};
   metadata: Record<string, unknown>;
+  imageData: Record<string, {mimeType: string; data: string}>;
   version: number;
   createdAt: Date;
   updatedAt: Date;
 } {
+  const {messages, imageData} = extractImages(session.messages);
+  // Merge any existing image data from the session (prior turns) with
+  // newly extracted images from this turn.
+  const mergedImageData = {...(session.imageData ?? {}), ...imageData};
+
   return {
     id: session.id,
-    messages: session.messages as unknown[],
+    messages: messages as unknown[],
     tokenUsage: session.tokenUsage as {
       inputTokens: number;
       outputTokens: number;
       totalTokens: number;
     },
     metadata: session.metadata as Record<string, unknown>,
+    imageData: mergedImageData,
     version: session.version,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
@@ -244,15 +329,18 @@ export function rowToPersistedSession(
       context: {sessionId: row.id, messagesType: typeof row.messages},
     });
   }
+   
+  const imageData = (row.imageData ?? {}) as ImageDataMap;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: array-shape checked above; element shape is not validated
+  const rawMessages = row.messages as ModelMessage[];
+
   return {
     version: 1,
     id: row.id,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: array-shape checked above; element shape is not validated
-    messages: row.messages as ModelMessage[],
-
+    messages: rehydrateImages(rawMessages, imageData),
     tokenUsage: row.tokenUsage as TokenUsage,
-
     metadata: (row.metadata ?? {}) as SessionMetadata,
+    imageData,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

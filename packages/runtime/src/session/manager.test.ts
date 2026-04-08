@@ -379,5 +379,71 @@ describe('StandaloneSessionManager', () => {
       // Should have user + assistant messages
       expect(session.messages.length).toBeGreaterThanOrEqual(2);
     });
+
+    it('constructs multimodal user message when images provided', async () => {
+      const visionProvider = streamingProvider('I see an image');
+      (visionProvider as unknown as Record<string, unknown>)['provider'] = 'anthropic';
+      const mgr2 = new StandaloneSessionManager({logger, store});
+      const session = mgr2.create(makeCreateOpts({
+        provider: visionProvider,
+      }));
+
+      const events: SSEEvent[] = [];
+      for await (const event of mgr2.runMessage(session.id, 'Describe this', {
+        images: [{mimeType: 'image/png', data: 'dGVzdA=='}],
+      })) {
+        events.push(event);
+      }
+
+      // First message should be the user message with image content
+      const userMsg = session.messages[0];
+      expect(userMsg.role).toBe('user');
+      expect(Array.isArray(userMsg.content)).toBe(true);
+      const parts = userMsg.content as Array<Record<string, unknown>>;
+      expect(parts).toHaveLength(2);
+      expect(parts[0]).toMatchObject({type: 'image', mediaType: 'image/png'});
+      expect(parts[1]).toMatchObject({type: 'text', text: 'Describe this'});
+    });
+
+    it('strips images and emits warning for non-vision providers', async () => {
+      const groqProvider = streamingProvider('Hello');
+      (groqProvider as unknown as Record<string, unknown>)['provider'] = 'groq';
+      const mgr2 = new StandaloneSessionManager({logger, store});
+      const session = mgr2.create(makeCreateOpts({
+        provider: groqProvider,
+      }));
+
+      const events: SSEEvent[] = [];
+      for await (const event of mgr2.runMessage(session.id, 'Hello', {
+        images: [{mimeType: 'image/png', data: 'dGVzdA=='}],
+      })) {
+        events.push(event);
+      }
+
+      // Should emit a warning
+      const warning = events.find((e) => e.type === SSEEventType.Warning);
+      expect(warning).toBeDefined();
+      if (warning && 'message' in warning) {
+        expect(String(warning.message)).toContain('not supported');
+      }
+
+      // User message should be plain text (images stripped)
+      const userMsg = session.messages[0];
+      expect(typeof userMsg.content).toBe('string');
+    });
+
+    it('passes plain text message when no images provided', async () => {
+      const mgr2 = new StandaloneSessionManager({logger, store});
+      const session = mgr2.create(makeCreateOpts({
+        provider: streamingProvider('Hi'),
+      }));
+
+      for await (const _event of mgr2.runMessage(session.id, 'Just text')) {
+        // consume
+      }
+
+      const userMsg = session.messages[0];
+      expect(userMsg.content).toBe('Just text');
+    });
   });
 });

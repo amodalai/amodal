@@ -44,6 +44,10 @@ export type { UseSkillActionOptions, UseSkillActionReturn } from './hooks/useSki
 export { useNavigate, NavigateContext } from './hooks/useNavigate';
 export type { NavigateFn } from './hooks/useNavigate';
 
+// Image paste hook
+export { useImagePaste, DEFAULT_IMAGE_PROMPT } from './hooks/useImagePaste';
+export type { ImageAttachment, UseImagePasteOptions } from './hooks/useImagePaste';
+
 // Hooks — widget-oriented (chat API)
 export { useChat } from './hooks/useChat';
 export type { UseChatOptions, UseChatReturn } from './hooks/useChat';

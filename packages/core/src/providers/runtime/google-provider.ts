@@ -12,6 +12,7 @@ import type {
   LLMMessage,
   LLMResponseBlock,
   LLMToolDefinition,
+  LLMUserContentPart,
 } from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
@@ -187,7 +188,7 @@ function convertMessages(messages: LLMMessage[]): GeminiContent[] {
   for (const msg of messages) {
     switch (msg.role) {
       case 'user':
-        result.push({role: 'user', parts: [{text: msg.content}]});
+        result.push({role: 'user', parts: formatUserParts(msg.content)});
         break;
 
       case 'assistant':
@@ -228,6 +229,16 @@ function convertMessages(messages: LLMMessage[]): GeminiContent[] {
   }
 
   return result;
+}
+
+function formatUserParts(
+  content: string | LLMUserContentPart[],
+): Array<Record<string, unknown>> {
+  if (typeof content === 'string') return [{text: content}];
+  return content.map((part) => {
+    if (part.type === 'text') return {text: part.text};
+    return {inlineData: {mimeType: part.mimeType, data: part.data}};
+  });
 }
 
 function safeParseJson(content: string): Record<string, unknown> {

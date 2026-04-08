@@ -116,12 +116,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
   // Build a transport function that calls streamChat with /chat/stream.
   const streamFn = useCallback(
-    (text: string, signal: AbortSignal): AsyncIterable<SSEEvent> => {
+    (text: string, signal: AbortSignal, images?: Array<{mimeType: string; data: string}>): AsyncIterable<SSEEvent> => {
       const token = authRef.current.getToken?.() ?? undefined;
       return streamChat(
         serverUrl,
         {
           message: text,
+          images,
           session_id: sessionIdRef.current ?? undefined,
           session_type: authRef.current.sessionType,
           deploy_id: authRef.current.deployId,

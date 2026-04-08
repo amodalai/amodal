@@ -43,6 +43,7 @@ export class RuntimeClient {
     options?: {
       sessionId?: string;
       context?: Record<string, unknown>;
+      images?: Array<{mimeType: string; data: string}>;
       signal?: AbortSignal;
     },
   ): AsyncGenerator<SSEEvent> {
@@ -55,6 +56,9 @@ export class RuntimeClient {
     }
     if (options?.context) {
       body['context'] = options.context;
+    }
+    if (options?.images?.length) {
+      body['images'] = options.images;
     }
 
     const headers = await this.authHeaders();

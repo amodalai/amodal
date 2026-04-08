@@ -22,9 +22,22 @@ export type LLMMessage =
   | LLMAssistantMessage
   | LLMToolResultMessage;
 
+export type LLMUserContentPart = LLMUserTextPart | LLMUserImagePart;
+
+export interface LLMUserTextPart {
+  type: 'text';
+  text: string;
+}
+
+export interface LLMUserImagePart {
+  type: 'image';
+  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+  data: string; // base64-encoded
+}
+
 export interface LLMUserMessage {
   role: 'user';
-  content: string;
+  content: string | LLMUserContentPart[];
 }
 
 export interface LLMAssistantMessage {

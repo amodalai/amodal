@@ -11,9 +11,18 @@ import type { AutomationDefinition } from '@amodalai/core';
 // Request schemas
 // ---------------------------------------------------------------------------
 
+const ImageAttachmentSchema = z.object({
+  /** IANA media type */
+  mimeType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']),
+  /** Base64-encoded image data (no data URI prefix). Max ~5MB decoded. */
+  data: z.string().min(1).max(7_000_000),
+});
+
 export const ChatRequestSchema = z.object({
   /** The user message to send to the agent */
   message: z.string().min(1),
+  /** Optional image attachments */
+  images: z.array(ImageAttachmentSchema).max(5).optional(),
   /** Optional session ID to continue a conversation */
   session_id: z.string().optional(),
   /** Optional session type — controls which skills, tools, KB docs load */
@@ -99,6 +108,7 @@ export enum SSEEventType {
   CompactionStart = 'compaction_start',
   CompactionEnd = 'compaction_end',
   ToolLog = 'tool_log',
+  Warning = 'warning',
   Error = 'error',
   Done = 'done',
 }
@@ -144,6 +154,12 @@ export interface SSESubagentEvent {
   result?: string;
   text?: string;
   error?: string;
+  timestamp: string;
+}
+
+export interface SSEWarningEvent {
+  type: SSEEventType.Warning;
+  message: string;
   timestamp: string;
 }
 
@@ -283,6 +299,7 @@ export type SSEEvent =
   | SSECompactionStartEvent
   | SSECompactionEndEvent
   | SSEToolLogEvent
+  | SSEWarningEvent
   | SSEErrorEvent
   | SSEDoneEvent;
 

@@ -9,7 +9,7 @@ import type { FormEvent } from 'react';
 import { Send, Square, Loader2, Wrench, Pencil, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import Markdown from 'react-markdown';
-import { useAmodalChat } from '@amodalai/react';
+import { useAmodalChat, useImagePaste, DEFAULT_IMAGE_PROMPT } from '@amodalai/react';
 import type { ToolCallInfo, ContentBlock, ConfirmationInfo } from '@amodalai/react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { ToolCallCard } from '@/components/ToolCallCard';
@@ -307,6 +307,13 @@ export function ChatPage() {
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const { images: pastedImages, handlePaste, removeImage: removePastedImage, clearImages } = useImagePaste({
+    onReject: (reason) => {
+      setImageError(reason);
+      setTimeout(() => setImageError(null), 3000);
+    },
+  });
 
   // Auto-send initial prompt from query param (e.g., from "Make Content" button)
   useEffect(() => {
@@ -347,12 +354,13 @@ export function ChatPage() {
     (e: FormEvent) => {
       e.preventDefault();
       const trimmed = input.trim();
-      if (!trimmed || isStreaming) return;
+      if ((!trimmed && pastedImages.length === 0) || isStreaming) return;
       setInput('');
       if (inputRef.current) inputRef.current.style.height = 'auto';
-      send(trimmed);
+      send(trimmed || DEFAULT_IMAGE_PROMPT, pastedImages.length > 0 ? pastedImages : undefined);
+      clearImages();
     },
-    [input, isStreaming, send],
+    [input, isStreaming, send, pastedImages, clearImages],
   );
 
   const handleKeyDown = useCallback(
@@ -360,14 +368,15 @@ export function ChatPage() {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         const trimmed = input.trim();
-        if (trimmed && !isStreaming) {
+        if ((trimmed || pastedImages.length > 0) && !isStreaming) {
           setInput('');
           if (inputRef.current) inputRef.current.style.height = 'auto';
-          send(trimmed);
+          send(trimmed || DEFAULT_IMAGE_PROMPT, pastedImages.length > 0 ? pastedImages : undefined);
+          clearImages();
         }
       }
     },
-    [input, isStreaming, send],
+    [input, isStreaming, send, pastedImages, clearImages],
   );
 
   const hasMessages = messages.length > 0 || history.length > 0;
@@ -426,6 +435,13 @@ export function ChatPage() {
                   return (
                     <div key={msg.id} className="mb-6 flex justify-end">
                       <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary-solid text-white text-[14px] leading-relaxed">
+                        {msg.images && msg.images.length > 0 && (
+                          <div className="flex gap-1.5 flex-wrap mb-2">
+                            {msg.images.map((src, i) => (
+                              <img key={i} src={src} alt="Attachment" className="max-w-[200px] max-h-[200px] rounded-lg object-contain" />
+                            ))}
+                          </div>
+                        )}
                         {msg.text}
                       </div>
                     </div>
@@ -483,6 +499,25 @@ export function ChatPage() {
 
       <div className="border-t border-border/80 bg-card px-4 py-4">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative">
+          {imageError && (
+            <div className="px-3 pt-2 text-xs text-red-400">{imageError}</div>
+          )}
+          {pastedImages.length > 0 && (
+            <div className="flex gap-2 px-3 pt-3 pb-1 flex-wrap">
+              {pastedImages.map((img, i) => (
+                <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border">
+                  <img src={img.preview} alt="Attachment" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removePastedImage(i)}
+                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black/80"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             ref={inputRef}
             value={input}
@@ -493,6 +528,7 @@ export function ChatPage() {
               el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
             }}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder="Message..."
             disabled={isStreaming}
             rows={1}

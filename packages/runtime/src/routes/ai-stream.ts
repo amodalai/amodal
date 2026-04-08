@@ -367,6 +367,14 @@ export function translateEvent(
     // Audit/telemetry events — not forwarded to the chat UI. They're
     // surfaced via other channels (audit log, field-scrub notifications,
     // explore subagent stream in SubagentEvent).
+    case SSEEventType.Warning: {
+      out.push({
+        type: 'data-warning',
+        data: {message: event.message},
+      });
+      break;
+    }
+
     case SSEEventType.ExploreStart:
     case SSEEventType.ExploreEnd:
     case SSEEventType.PlanMode:

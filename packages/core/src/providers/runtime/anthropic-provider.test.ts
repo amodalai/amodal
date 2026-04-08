@@ -262,4 +262,52 @@ describe('AnthropicRuntimeProvider', () => {
       expect.objectContaining({baseURL: 'https://custom.api.com'}),
     );
   });
+
+  it('should format image content parts in user messages', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{type: 'text', text: 'I see a red square.'}],
+      stop_reason: 'end_turn',
+      usage: {input_tokens: 100, output_tokens: 10},
+    });
+
+    const provider = new AnthropicRuntimeProvider({provider: 'anthropic', model: 'test'});
+    await provider.chat(makeRequest({
+      messages: [{
+        role: 'user',
+        content: [
+          {type: 'image', mimeType: 'image/png', data: 'dGVzdA=='},
+          {type: 'text', text: 'What is this?'},
+        ],
+      }],
+    }));
+
+    const callArgs = mockCreate.mock.calls[0][0] as Record<string, unknown>;
+    const messages = callArgs['messages'] as Array<Record<string, unknown>>;
+    const userMsg = messages[0];
+    expect(userMsg['role']).toBe('user');
+    const content = userMsg['content'] as Array<Record<string, unknown>>;
+    expect(content).toHaveLength(2);
+    expect(content[0]).toEqual({
+      type: 'image',
+      source: {type: 'base64', media_type: 'image/png', data: 'dGVzdA=='},
+    });
+    expect(content[1]).toEqual({type: 'text', text: 'What is this?'});
+  });
+
+  it('should pass plain string content unchanged', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{type: 'text', text: 'Hi!'}],
+      stop_reason: 'end_turn',
+      usage: {input_tokens: 10, output_tokens: 5},
+    });
+
+    const provider = new AnthropicRuntimeProvider({provider: 'anthropic', model: 'test'});
+    await provider.chat(makeRequest({
+      messages: [{role: 'user', content: 'just text'}],
+    }));
+
+    const callArgs = mockCreate.mock.calls[0][0] as Record<string, unknown>;
+    const messages = callArgs['messages'] as Array<Record<string, unknown>>;
+    expect(messages[0]['content']).toBe('just text');
+  });
 });

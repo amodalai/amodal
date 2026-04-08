@@ -28,6 +28,7 @@ export class ChatApiError extends Error {
 
 export interface ChatStreamRequest {
   message: string;
+  images?: Array<{mimeType: string; data: string}>;
   session_id?: string;
   session_type?: string;
   deploy_id?: string;
@@ -55,6 +56,7 @@ export async function* streamChat(
   }
 
   const body: Record<string, unknown> = { message: request.message };
+  if (request.images?.length) body['images'] = request.images;
   if (request.session_id) body['session_id'] = request.session_id;
   if (request.session_type) body['session_type'] = request.session_type;
   if (request.deploy_id) body['deploy_id'] = request.deploy_id;

@@ -24,6 +24,7 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest';
 import {createPGLiteSessionStore} from './pglite-session-store.js';
 import {createPostgresSessionStore} from './postgres-session-store.js';
+import {sessionToRow, rowToPersistedSession} from './store.js';
 import type {SessionStore, SessionStoreHooks} from './store.js';
 import type {PersistedSession} from './types.js';
 import {SessionStoreError} from '../errors.js';
@@ -43,6 +44,7 @@ function makeSession(overrides: Partial<PersistedSession> = {}): PersistedSessio
     messages: [{role: 'user', content: 'Hello'}],
     tokenUsage: {inputTokens: 100, outputTokens: 50, totalTokens: 150},
     metadata: {},
+    imageData: {},
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -496,5 +498,156 @@ pgDescribe('Postgres session store (via TEST_POSTGRES_URL)', () => {
         await dropTable(localTable);
       }
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractImages / rehydrateImages round-trip tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a minimal row object matching `agentSessions.$inferSelect`.
+ */
+function makeRow(overrides: Partial<{
+  id: string;
+  messages: unknown[];
+  tokenUsage: {inputTokens: number; outputTokens: number; totalTokens: number};
+  metadata: Record<string, unknown>;
+  imageData: Record<string, {mimeType: string; data: string}> | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}> = {}) {
+  return {
+    id: overrides.id ?? 'test-session',
+    messages: overrides.messages ?? [],
+    tokenUsage: overrides.tokenUsage ?? {inputTokens: 0, outputTokens: 0, totalTokens: 0},
+    metadata: overrides.metadata ?? {},
+    imageData: overrides.imageData ?? {},
+    version: overrides.version ?? 1,
+    createdAt: overrides.createdAt ?? new Date(),
+    updatedAt: overrides.updatedAt ?? new Date(),
+  };
+}
+
+describe('extractImages / rehydrateImages round-trip', () => {
+  it('extracts image parts into imageData and inserts placeholders', () => {
+    const session: PersistedSession = {
+      version: 1,
+      id: 'sess-img-1',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {type: 'image', image: 'base64data', mediaType: 'image/png'},
+            {type: 'text', text: 'What is this?'},
+          ],
+        },
+      ],
+      tokenUsage: {inputTokens: 0, outputTokens: 0, totalTokens: 0},
+      metadata: {},
+      imageData: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const row = sessionToRow(session);
+
+    // Messages should contain a placeholder instead of image data
+    const userMsg = row.messages[0] as {role: string; content: Array<{type: string; text?: string}>};
+    expect(userMsg.content).toHaveLength(2);
+    const imagePart = userMsg.content.find((p) => p.type === 'text' && p.text?.startsWith('__amodal_imgref:'));
+    expect(imagePart).toBeDefined();
+
+    // imageData should have the extracted image
+    const refIds = Object.keys(row.imageData);
+    expect(refIds).toHaveLength(1);
+    expect(row.imageData[refIds[0]]).toEqual({mimeType: 'image/png', data: 'base64data'});
+  });
+
+  it('rehydrates placeholders back to image parts on load', () => {
+    const session: PersistedSession = {
+      version: 1,
+      id: 'sess-img-2',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {type: 'image', image: 'mybase64', mediaType: 'image/jpeg'},
+            {type: 'text', text: 'Describe this'},
+          ],
+        },
+      ],
+      tokenUsage: {inputTokens: 10, outputTokens: 20, totalTokens: 30},
+      metadata: {},
+      imageData: {},
+      createdAt: new Date('2025-01-01'),
+      updatedAt: new Date('2025-01-02'),
+    };
+
+    const row = sessionToRow(session);
+
+    const restored = rowToPersistedSession('test', makeRow({
+      id: row.id,
+      messages: row.messages,
+      tokenUsage: row.tokenUsage,
+      metadata: row.metadata,
+      imageData: row.imageData,
+      version: 1,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    }));
+
+    const userMsg = restored.messages[0];
+    expect(userMsg.role).toBe('user');
+    expect(Array.isArray(userMsg.content)).toBe(true);
+    const parts = userMsg.content as Array<{type: string; image?: string; mediaType?: string; text?: string}>;
+    const imgPart = parts.find((p) => p.type === 'image');
+    expect(imgPart).toBeDefined();
+    expect(imgPart!.image).toBe('mybase64');
+    expect(imgPart!.mediaType).toBe('image/jpeg');
+
+    const textPart = parts.find((p) => p.type === 'text');
+    expect(textPart).toBeDefined();
+    expect(textPart!.text).toBe('Describe this');
+  });
+
+  it('passes messages through unchanged when imageData is empty', () => {
+    const messages = [
+      {role: 'user' as const, content: 'Hello'},
+      {role: 'assistant' as const, content: 'Hi there!'},
+    ];
+
+    const restored = rowToPersistedSession('test', makeRow({
+      messages: messages as unknown[],
+      imageData: {},
+    }));
+
+    expect(restored.messages).toEqual(messages);
+  });
+
+  it('leaves placeholder as-is when ref is missing from imageData', () => {
+    const placeholder = '__amodal_imgref:deadbeef1234__';
+    const messages = [
+      {
+        role: 'user' as const,
+        content: [
+          {type: 'text' as const, text: placeholder},
+          {type: 'text' as const, text: 'Some text'},
+        ],
+      },
+    ];
+
+    // Use a non-empty imageData that doesn't contain the referenced ID
+    const restored = rowToPersistedSession('test', makeRow({
+      messages: messages as unknown[],
+      imageData: {'other-ref': {mimeType: 'image/png', data: 'abc'}},
+    }));
+
+    const userMsg = restored.messages[0];
+    const parts = userMsg.content as Array<{type: string; text?: string}>;
+    const refPart = parts.find((p) => p.text === placeholder);
+    expect(refPart).toBeDefined();
+    expect(refPart!.type).toBe('text');
   });
 });

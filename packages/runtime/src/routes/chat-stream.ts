@@ -89,6 +89,7 @@ export function createChatStreamRouter(
           session.id,
           body.message,
           {
+            images: body.images,
             signal: controller.signal,
             buildToolContext: toolContextFactory,
             onUsage: adaptOnUsage(hooks, session),

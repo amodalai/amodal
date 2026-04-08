@@ -23,6 +23,7 @@ import type {ModelMessage} from 'ai';
 import {runAgent} from '../agent/loop.js';
 import {DEFAULT_LOOP_CONFIG} from '../agent/loop-types.js';
 import type {AgentContext, AgentLoopConfig} from '../agent/loop-types.js';
+import {SSEEventType} from '../types.js';
 import type {SSEEvent} from '../types.js';
 import type {ToolContext} from '../tools/types.js';
 import type {SessionStore} from './store.js';
@@ -35,6 +36,7 @@ import type {
   AutomationResult,
 } from './types.js';
 import {SessionError} from '../errors.js';
+import {VISION_PROVIDERS} from '../providers/types.js';
 import type {Logger} from '../logger.js';
 
 // ---------------------------------------------------------------------------
@@ -195,6 +197,7 @@ export class StandaloneSessionManager {
     sessionId: string,
     userMessage: string,
     opts?: {
+      images?: Array<{mimeType: string; data: string}>;
       signal?: AbortSignal;
       loopConfig?: Partial<AgentLoopConfig>;
       onUsage?: (usage: TurnUsage) => void;
@@ -207,9 +210,33 @@ export class StandaloneSessionManager {
     const session = this.getOrThrow(sessionId);
     session.lastAccessedAt = Date.now();
 
-    // Append user message
-    const userMsg: ModelMessage = {role: 'user', content: userMessage};
+    // Append user message (with optional image attachments)
+    const images = opts?.images ?? [];
+    const supportsVision = VISION_PROVIDERS.has(session.providerName);
+
+    const userMsg: ModelMessage = images.length > 0 && supportsVision
+      ? {
+          role: 'user',
+          content: [
+            ...images.map((img) => ({
+              type: 'image' as const,
+              image: img.data,
+              mediaType: img.mimeType,
+            })),
+            {type: 'text' as const, text: userMessage},
+          ],
+        }
+      : {role: 'user', content: userMessage};
     session.messages = [...session.messages, userMsg];
+
+    // Warn the user if images were stripped
+    if (images.length > 0 && !supportsVision) {
+      yield {
+        type: SSEEventType.Warning,
+        message: `Images are not supported by ${session.providerName} — your image was not sent to the model.`,
+        timestamp: new Date().toISOString(),
+      } satisfies SSEEvent;
+    }
 
     // Build AgentContext from Session
     const ctx: AgentContext = {
@@ -249,7 +276,9 @@ export class StandaloneSessionManager {
     session.messages = ctx.messages;
     session.usage = ctx.usage;
 
-    // Persist if store is available
+    // Persist if store is available. The store layer automatically extracts
+    // inline image data into a separate column to avoid JSONB bloat, and
+    // rehydrates them on session load.
     if (this.store) {
       await this.persist(session);
     }
@@ -279,6 +308,7 @@ export class StandaloneSessionManager {
       messages: session.messages,
       tokenUsage: session.usage,
       metadata: session.metadata,
+      imageData: {},
       createdAt: new Date(session.createdAt),
       updatedAt: new Date(now),
     };
