@@ -115,7 +115,11 @@ export function createMcpToolDefinition(
             if (c.type === 'text' && c.text) {
               blocks.push({type: 'text', text: c.text});
             } else if (c.type === 'image' && c.data) {
-              blocks.push({type: 'image', mimeType: c.mimeType ?? 'image/png', data: c.data});
+              // Some MCP tools return data as a full data URI; extract the raw base64.
+              const dataUriMatch = /^data:([^;]+);base64,(.+)$/.exec(c.data);
+              const mimeType = dataUriMatch ? dataUriMatch[1] : (c.mimeType ?? 'image/png');
+              const rawData = dataUriMatch ? dataUriMatch[2] : c.data;
+              blocks.push({type: 'image', mimeType, data: rawData});
             }
           }
           return {output: blocks};

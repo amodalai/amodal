@@ -528,19 +528,38 @@ export function nextAfterToolResult(
  * are present, and `{output: string}` otherwise. Other tools return
  * strings or JSON-serializable objects.
  */
+/** Regex to detect a data URI with an image MIME type. */
+const DATA_URI_RE = /^data:(image\/[a-z+]+);base64,(.+)$/s;
+
 function extractToolContent(output: unknown): string | ToolResultContentBlock[] {
-  if (typeof output === 'string') return output;
+  if (typeof output === 'string') {
+    // A bare data URI string → convert to image block
+    const m = DATA_URI_RE.exec(output);
+    if (m) return [{type: 'image', mimeType: m[1], data: m[2]}];
+    return output;
+  }
+
+  if (typeof output !== 'object' || output === null) return JSON.stringify(output);
 
   // Detect structured output from MCP adapter: {output: [...blocks]}
-  if (
-    typeof output === 'object' &&
-    output !== null &&
-    'output' in output
-  ) {
-    // `in` operator narrows to `object & Record<'output', unknown>`
+  if ('output' in output) {
     const inner = (output as {output: unknown}).output;
     if (Array.isArray(inner) && inner.length > 0 && isContentBlockArray(inner)) {
       return inner;
+    }
+    // {output: "data:image/...;base64,..."} — single image in output field
+    if (typeof inner === 'string') {
+      const m = DATA_URI_RE.exec(inner);
+      if (m) return [{type: 'image', mimeType: m[1], data: m[2]}];
+    }
+  }
+
+  // {url: "data:image/...;base64,..."} — common pattern from generate_image tools
+  if ('url' in output) {
+    const url = (output as {url: unknown}).url;
+    if (typeof url === 'string') {
+      const m = DATA_URI_RE.exec(url);
+      if (m) return [{type: 'image', mimeType: m[1], data: m[2]}];
     }
   }
 

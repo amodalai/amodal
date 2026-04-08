@@ -23,6 +23,8 @@ interface ImagePreviewProps {
 
 function toSrc(img: ImageSource): string {
   if (typeof img === 'string') return img;
+  // Some MCP tools return data as a full data URI already
+  if (img.data.startsWith('data:')) return img.data;
   return `data:${img.mimeType};base64,${img.data}`;
 }
 
