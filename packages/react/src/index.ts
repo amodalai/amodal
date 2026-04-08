@@ -45,7 +45,7 @@ export { useNavigate, NavigateContext } from './hooks/useNavigate';
 export type { NavigateFn } from './hooks/useNavigate';
 
 // Image paste hook
-export { useImagePaste } from './hooks/useImagePaste';
+export { useImagePaste, DEFAULT_IMAGE_PROMPT } from './hooks/useImagePaste';
 export type { ImageAttachment, UseImagePasteOptions } from './hooks/useImagePaste';
 
 // Hooks — widget-oriented (chat API)

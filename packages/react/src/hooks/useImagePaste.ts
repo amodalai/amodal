@@ -13,6 +13,7 @@ export interface ImageAttachment {
   preview: string; // data URI for rendering
 }
 
+export const DEFAULT_IMAGE_PROMPT = 'Analyze this image.';
 export const ACCEPTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 export const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 export const MAX_IMAGE_COUNT = 5;

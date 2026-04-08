@@ -6,9 +6,9 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { useImagePaste } from '../hooks/useImagePaste';
-export type { ImageAttachment } from '../hooks/useImagePaste';
 import type { ImageAttachment } from '../hooks/useImagePaste';
+export type { ImageAttachment } from '../hooks/useImagePaste';
+import { useImagePaste, DEFAULT_IMAGE_PROMPT } from '../hooks/useImagePaste';
 
 interface InputBarProps {
   onSend: (text: string, images?: ImageAttachment[]) => void;
@@ -52,13 +52,13 @@ export function InputBar({ onSend, onStop, disabled, isStreaming, placeholder }:
   const handleSend = useCallback(() => {
     const trimmed = value.trim();
     if (trimmed.length === 0 && images.length === 0) return;
-    onSend(trimmed || 'Analyze this image.', images.length > 0 ? images : undefined);
+    onSend(trimmed || DEFAULT_IMAGE_PROMPT, images.length > 0 ? images : undefined);
     setValue('');
     clearImages();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [value, images, onSend]);
+  }, [value, images, onSend, clearImages]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {

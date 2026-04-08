@@ -716,8 +716,8 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
+  background: var(--pcw-overlay, rgba(0, 0, 0, 0.6));
+  color: var(--pcw-overlay-text, #fff);
   border: none;
   cursor: pointer;
   display: flex;
@@ -727,7 +727,7 @@
 }
 
 .pcw-input__image-remove:hover {
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--pcw-overlay-hover, rgba(0, 0, 0, 0.8));
 }
 
 /* Images in user message bubbles */

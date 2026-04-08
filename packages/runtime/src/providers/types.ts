@@ -135,6 +135,12 @@ export interface LLMProvider {
 // Provider config (maps to our ModelConfig)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Vision-capable providers
+// ---------------------------------------------------------------------------
+
+export const VISION_PROVIDERS = new Set(['anthropic', 'google', 'openai', 'azure']);
+
 export interface ProviderConfig {
   /** Provider name: 'anthropic', 'openai', 'google', 'deepseek', etc. */
   provider: string;

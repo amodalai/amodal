@@ -9,7 +9,7 @@ import type { FormEvent } from 'react';
 import { Send, Square, Loader2, Wrench, Pencil, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import Markdown from 'react-markdown';
-import { useAmodalChat, useImagePaste } from '@amodalai/react';
+import { useAmodalChat, useImagePaste, DEFAULT_IMAGE_PROMPT } from '@amodalai/react';
 import type { ToolCallInfo, ContentBlock, ConfirmationInfo } from '@amodalai/react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { ToolCallCard } from '@/components/ToolCallCard';
@@ -357,7 +357,7 @@ export function ChatPage() {
       if ((!trimmed && pastedImages.length === 0) || isStreaming) return;
       setInput('');
       if (inputRef.current) inputRef.current.style.height = 'auto';
-      send(trimmed || 'Analyze this image.', pastedImages.length > 0 ? pastedImages : undefined);
+      send(trimmed || DEFAULT_IMAGE_PROMPT, pastedImages.length > 0 ? pastedImages : undefined);
       clearImages();
     },
     [input, isStreaming, send, pastedImages, clearImages],
@@ -371,7 +371,7 @@ export function ChatPage() {
         if ((trimmed || pastedImages.length > 0) && !isStreaming) {
           setInput('');
           if (inputRef.current) inputRef.current.style.height = 'auto';
-          send(trimmed || 'Analyze this image.', pastedImages.length > 0 ? pastedImages : undefined);
+          send(trimmed || DEFAULT_IMAGE_PROMPT, pastedImages.length > 0 ? pastedImages : undefined);
           clearImages();
         }
       }

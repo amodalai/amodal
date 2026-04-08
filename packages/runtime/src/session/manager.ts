@@ -36,13 +36,13 @@ import type {
   AutomationResult,
 } from './types.js';
 import {SessionError} from '../errors.js';
+import {VISION_PROVIDERS} from '../providers/types.js';
 import type {Logger} from '../logger.js';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const VISION_PROVIDERS = new Set(['anthropic', 'google', 'openai', 'azure']);
 const DEFAULT_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const DEFAULT_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_TURNS = 50;

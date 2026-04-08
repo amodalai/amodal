@@ -28,6 +28,9 @@ import type {TokenUsage} from '../providers/types.js';
 import type {ModelMessage} from 'ai';
 import {SessionStoreError} from '../errors.js';
 
+const IMAGE_REF_PREFIX = '__amodal_imgref:';
+const IMAGE_REF_PATTERN = /^__amodal_imgref:([a-f0-9-]+)__$/;
+
 // ---------------------------------------------------------------------------
 // List options, hooks, and cursor type
 // ---------------------------------------------------------------------------
@@ -217,10 +220,9 @@ function extractImages(messages: ModelMessage[]): {
         }
         const refId = randomUUID().slice(0, 12);
         const data = typeof part.image === 'string' ? part.image : '';
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AI SDK ImagePart boundary: mediaType is a known field
-        const mimeType = String((part as unknown as Record<string, unknown>)['mediaType'] ?? 'image/png');
+        const mimeType = String(part.mediaType ?? 'image/png');
         imageData[refId] = {mimeType, data};
-        return {type: 'text' as const, text: `__amodal_imgref:${refId}__`};
+        return {type: 'text' as const, text: `${IMAGE_REF_PREFIX}${refId}__`};
       }),
     };
   });
@@ -240,7 +242,7 @@ function rehydrateImages(messages: ModelMessage[], imageData: ImageDataMap): Mod
 
     const hasRef = msg.content.some(
       (p) => typeof p === 'object' && 'type' in p && p.type === 'text' && 'text' in p
-        && typeof p.text === 'string' && p.text.startsWith('__amodal_imgref:'),
+        && typeof p.text === 'string' && p.text.startsWith(IMAGE_REF_PREFIX),
     );
     if (!hasRef) return msg;
 
@@ -251,7 +253,7 @@ function rehydrateImages(messages: ModelMessage[], imageData: ImageDataMap): Mod
           return part;
         }
         const text = String(part.text);
-        const match = /^__amodal_imgref:([a-f0-9-]+)__$/.exec(text);
+        const match = IMAGE_REF_PATTERN.exec(text);
         if (!match) return part;
         const ref = imageData[match[1]];
         if (!ref) return part; // ref missing — leave placeholder

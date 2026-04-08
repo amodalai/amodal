@@ -19,6 +19,7 @@ import {readFileSync, writeFileSync, rmSync, readdirSync} from 'node:fs';
 import type {ServerInstance} from '../server.js';
 import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
 import {loadTestEnv, defaultTargetName} from './test-env.js';
+import {VISION_PROVIDERS} from '../providers/types.js';
 
 // Pull API keys out of <repo-root>/.env.test (gitignored). Missing keys
 // cause the describe block below to skip with a reason.
@@ -1639,7 +1640,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   // 28. Image paste — vision input
   // -------------------------------------------------------------------------
 
-  const VISION_PROVIDERS = new Set(['anthropic', 'google', 'openai']);
   const testImageBase64 = readFileSync(resolve(__dirname, 'test-image.png')).toString('base64');
 
   it.skipIf(!VISION_PROVIDERS.has(smokeTargetName))('accepts image attachment and model responds', async () => {
