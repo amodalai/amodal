@@ -14,8 +14,8 @@ import type { AutomationDefinition } from '@amodalai/core';
 const ImageAttachmentSchema = z.object({
   /** IANA media type */
   mimeType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']),
-  /** Base64-encoded image data (no data URI prefix) */
-  data: z.string().min(1),
+  /** Base64-encoded image data (no data URI prefix). Max ~5MB decoded. */
+  data: z.string().min(1).max(7_000_000),
 });
 
 export const ChatRequestSchema = z.object({

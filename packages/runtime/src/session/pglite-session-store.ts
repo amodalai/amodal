@@ -18,7 +18,7 @@
 
 import {drizzle} from 'drizzle-orm/pglite';
 
-// eslint-disable-next-line import/no-internal-modules -- shared schema between session and store modules
+ 
 import {agentSessions} from '../stores/schema.js';
 import {log as defaultLogger} from '../logger.js';
 import type {Logger} from '../logger.js';
@@ -34,10 +34,17 @@ const CREATE_TABLE_DDL = `
     messages JSONB NOT NULL,
     token_usage JSONB NOT NULL,
     metadata JSONB DEFAULT '{}',
+    image_data JSONB DEFAULT '{}',
     version INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+
+  -- Add image_data column to existing tables (idempotent migration)
+  DO $$ BEGIN
+    ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS image_data JSONB DEFAULT '{}';
+  EXCEPTION WHEN duplicate_column THEN NULL;
+  END $$;
 
   CREATE INDEX IF NOT EXISTS idx_agent_sessions_updated
     ON agent_sessions (updated_at DESC);

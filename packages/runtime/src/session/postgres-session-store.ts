@@ -103,10 +103,17 @@ function buildDdl(tableName: string): string {
       messages JSONB NOT NULL,
       token_usage JSONB NOT NULL,
       metadata JSONB DEFAULT '{}',
+      image_data JSONB DEFAULT '{}',
       version INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Add image_data column to existing tables (idempotent migration)
+    DO $$ BEGIN
+      ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS image_data JSONB DEFAULT '{}';
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
 
     CREATE INDEX IF NOT EXISTS idx_${tableName}_updated
       ON ${tableName} (updated_at DESC);

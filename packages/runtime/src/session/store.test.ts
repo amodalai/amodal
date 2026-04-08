@@ -43,6 +43,7 @@ function makeSession(overrides: Partial<PersistedSession> = {}): PersistedSessio
     messages: [{role: 'user', content: 'Hello'}],
     tokenUsage: {inputTokens: 100, outputTokens: 50, totalTokens: 150},
     metadata: {},
+    imageData: {},
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

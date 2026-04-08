@@ -373,7 +373,7 @@ export function ChatPage() {
       if ((!trimmed && pastedImages.length === 0) || isStreaming) return;
       setInput('');
       if (inputRef.current) inputRef.current.style.height = 'auto';
-      send(trimmed || '(image)', pastedImages.length > 0 ? pastedImages : undefined);
+      send(trimmed || 'Analyze this image.', pastedImages.length > 0 ? pastedImages : undefined);
       setPastedImages([]);
     },
     [input, isStreaming, send, pastedImages],
@@ -387,7 +387,7 @@ export function ChatPage() {
         if ((trimmed || pastedImages.length > 0) && !isStreaming) {
           setInput('');
           if (inputRef.current) inputRef.current.style.height = 'auto';
-          send(trimmed || '(image)', pastedImages.length > 0 ? pastedImages : undefined);
+          send(trimmed || 'Analyze this image.', pastedImages.length > 0 ? pastedImages : undefined);
           setPastedImages([]);
         }
       }

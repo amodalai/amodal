@@ -381,9 +381,11 @@ describe('StandaloneSessionManager', () => {
     });
 
     it('constructs multimodal user message when images provided', async () => {
+      const visionProvider = streamingProvider('I see an image');
+      (visionProvider as unknown as Record<string, unknown>)['provider'] = 'anthropic';
       const mgr2 = new StandaloneSessionManager({logger, store});
       const session = mgr2.create(makeCreateOpts({
-        provider: streamingProvider('I see an image'),
+        provider: visionProvider,
       }));
 
       const events: SSEEvent[] = [];
@@ -405,7 +407,7 @@ describe('StandaloneSessionManager', () => {
 
     it('strips images and emits warning for non-vision providers', async () => {
       const groqProvider = streamingProvider('Hello');
-      (groqProvider as Record<string, unknown>)['provider'] = 'groq';
+      (groqProvider as unknown as Record<string, unknown>)['provider'] = 'groq';
       const mgr2 = new StandaloneSessionManager({logger, store});
       const session = mgr2.create(makeCreateOpts({
         provider: groqProvider,

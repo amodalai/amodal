@@ -210,15 +210,15 @@ export class StandaloneSessionManager {
     session.lastAccessedAt = Date.now();
 
     // Append user message (with optional image attachments)
-    const NO_VISION_PROVIDERS = new Set(['groq', 'deepseek', 'together', 'fireworks']);
-    const hasImages = opts?.images?.length;
-    const supportsVision = !NO_VISION_PROVIDERS.has(session.providerName);
+    const VISION_PROVIDERS = new Set(['anthropic', 'google', 'openai', 'azure']);
+    const images = opts?.images ?? [];
+    const supportsVision = VISION_PROVIDERS.has(session.providerName);
 
-    const userMsg: ModelMessage = hasImages && supportsVision
+    const userMsg: ModelMessage = images.length > 0 && supportsVision
       ? {
           role: 'user',
           content: [
-            ...opts.images!.map((img) => ({
+            ...images.map((img) => ({
               type: 'image' as const,
               image: img.data,
               mediaType: img.mimeType,
@@ -230,13 +230,12 @@ export class StandaloneSessionManager {
     session.messages = [...session.messages, userMsg];
 
     // Warn the user if images were stripped
-    if (hasImages && !supportsVision) {
-      const warning: SSEEvent = {
+    if (images.length > 0 && !supportsVision) {
+      yield {
         type: SSEEventType.Warning,
         message: `Images are not supported by ${session.providerName} — your image was not sent to the model.`,
         timestamp: new Date().toISOString(),
-      };
-      yield warning;
+      } satisfies SSEEvent;
     }
 
     // Build AgentContext from Session
@@ -277,7 +276,9 @@ export class StandaloneSessionManager {
     session.messages = ctx.messages;
     session.usage = ctx.usage;
 
-    // Persist if store is available
+    // Persist if store is available. The store layer automatically extracts
+    // inline image data into a separate column to avoid JSONB bloat, and
+    // rehydrates them on session load.
     if (this.store) {
       await this.persist(session);
     }
@@ -307,6 +308,7 @@ export class StandaloneSessionManager {
       messages: session.messages,
       tokenUsage: session.usage,
       metadata: session.metadata,
+      imageData: {},
       createdAt: new Date(session.createdAt),
       updatedAt: new Date(now),
     };

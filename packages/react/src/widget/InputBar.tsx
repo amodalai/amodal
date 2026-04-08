@@ -93,7 +93,7 @@ export function InputBar({ onSend, onStop, disabled, isStreaming, placeholder }:
   const handleSend = useCallback(() => {
     const trimmed = value.trim();
     if (trimmed.length === 0 && images.length === 0) return;
-    onSend(trimmed || '(image)', images.length > 0 ? images : undefined);
+    onSend(trimmed || 'Analyze this image.', images.length > 0 ? images : undefined);
     setValue('');
     setImages([]);
     if (textareaRef.current) {

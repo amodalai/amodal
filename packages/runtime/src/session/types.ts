@@ -103,12 +103,17 @@ export interface AutomationResult {
  * Shape of a persisted session record in the database.
  * Versioned from day one so we can migrate the format later.
  */
+/** Map of image ref IDs to their base64 data, stored alongside messages. */
+export type ImageDataMap = Record<string, {mimeType: string; data: string}>;
+
 export interface PersistedSession {
   version: 1;
   id: string;
   messages: ModelMessage[];
   tokenUsage: TokenUsage;
   metadata: SessionMetadata;
+  /** Image blobs extracted from messages to avoid JSONB bloat on the messages column. */
+  imageData: ImageDataMap;
   createdAt: Date;
   updatedAt: Date;
 }

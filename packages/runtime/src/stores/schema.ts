@@ -27,6 +27,7 @@ export const agentSessions = pgTable('agent_sessions', {
     totalTokens: number;
   }>(),
   metadata: jsonb('metadata').default({}).$type<Record<string, unknown>>(),
+  imageData: jsonb('image_data').default({}).$type<Record<string, {mimeType: string; data: string}>>(),
   version: integer('version').notNull().default(1),
   // TIMESTAMPTZ matches the DDL in pglite-session-store.ts and
   // postgres-session-store.ts — without `withTimezone: true` the Drizzle
