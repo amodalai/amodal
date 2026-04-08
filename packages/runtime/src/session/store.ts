@@ -220,7 +220,7 @@ function extractImages(messages: ModelMessage[]): {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- AI SDK ImagePart boundary: mediaType is a known field
         const mimeType = String((part as unknown as Record<string, unknown>)['mediaType'] ?? 'image/png');
         imageData[refId] = {mimeType, data};
-        return {type: 'text' as const, text: `[imageRef:${refId}]`};
+        return {type: 'text' as const, text: `__amodal_imgref:${refId}__`};
       }),
     };
   });
@@ -240,7 +240,7 @@ function rehydrateImages(messages: ModelMessage[], imageData: ImageDataMap): Mod
 
     const hasRef = msg.content.some(
       (p) => typeof p === 'object' && 'type' in p && p.type === 'text' && 'text' in p
-        && typeof p.text === 'string' && p.text.startsWith('[imageRef:'),
+        && typeof p.text === 'string' && p.text.startsWith('__amodal_imgref:'),
     );
     if (!hasRef) return msg;
 
@@ -251,7 +251,7 @@ function rehydrateImages(messages: ModelMessage[], imageData: ImageDataMap): Mod
           return part;
         }
         const text = String(part.text);
-        const match = /^\[imageRef:([a-f0-9-]+)\]$/.exec(text);
+        const match = /^__amodal_imgref:([a-f0-9-]+)__$/.exec(text);
         if (!match) return part;
         const ref = imageData[match[1]];
         if (!ref) return part; // ref missing — leave placeholder

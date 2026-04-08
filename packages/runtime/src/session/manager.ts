@@ -42,6 +42,7 @@ import type {Logger} from '../logger.js';
 // Constants
 // ---------------------------------------------------------------------------
 
+const VISION_PROVIDERS = new Set(['anthropic', 'google', 'openai', 'azure']);
 const DEFAULT_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const DEFAULT_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_TURNS = 50;
@@ -210,7 +211,6 @@ export class StandaloneSessionManager {
     session.lastAccessedAt = Date.now();
 
     // Append user message (with optional image attachments)
-    const VISION_PROVIDERS = new Set(['anthropic', 'google', 'openai', 'azure']);
     const images = opts?.images ?? [];
     const supportsVision = VISION_PROVIDERS.has(session.providerName);
 

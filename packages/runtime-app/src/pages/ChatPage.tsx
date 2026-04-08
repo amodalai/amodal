@@ -9,7 +9,7 @@ import type { FormEvent } from 'react';
 import { Send, Square, Loader2, Wrench, Pencil, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import Markdown from 'react-markdown';
-import { useAmodalChat } from '@amodalai/react';
+import { useAmodalChat, useImagePaste } from '@amodalai/react';
 import type { ToolCallInfo, ContentBlock, ConfirmationInfo } from '@amodalai/react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { ToolCallCard } from '@/components/ToolCallCard';
@@ -307,29 +307,13 @@ export function ChatPage() {
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const [pastedImages, setPastedImages] = useState<Array<{mimeType: string; data: string; preview: string}>>([]);
-
-  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const accepted = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-    const maxSize = 5 * 1024 * 1024;
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of items) {
-      if (item.type.startsWith('image/') && accepted.has(item.type)) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (!file || file.size > maxSize) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUri = String(reader.result);
-          const base64 = dataUri.split(',')[1];
-          setPastedImages((prev) => [...prev, { mimeType: file.type, data: base64, preview: dataUri }]);
-        };
-        reader.readAsDataURL(file);
-        return;
-      }
-    }
-  }, []);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const { images: pastedImages, handlePaste, removeImage: removePastedImage, clearImages } = useImagePaste({
+    onReject: (reason) => {
+      setImageError(reason);
+      setTimeout(() => setImageError(null), 3000);
+    },
+  });
 
   // Auto-send initial prompt from query param (e.g., from "Make Content" button)
   useEffect(() => {
@@ -374,9 +358,9 @@ export function ChatPage() {
       setInput('');
       if (inputRef.current) inputRef.current.style.height = 'auto';
       send(trimmed || 'Analyze this image.', pastedImages.length > 0 ? pastedImages : undefined);
-      setPastedImages([]);
+      clearImages();
     },
-    [input, isStreaming, send, pastedImages],
+    [input, isStreaming, send, pastedImages, clearImages],
   );
 
   const handleKeyDown = useCallback(
@@ -388,11 +372,11 @@ export function ChatPage() {
           setInput('');
           if (inputRef.current) inputRef.current.style.height = 'auto';
           send(trimmed || 'Analyze this image.', pastedImages.length > 0 ? pastedImages : undefined);
-          setPastedImages([]);
+          clearImages();
         }
       }
     },
-    [input, isStreaming, send, pastedImages],
+    [input, isStreaming, send, pastedImages, clearImages],
   );
 
   const hasMessages = messages.length > 0 || history.length > 0;
@@ -515,6 +499,9 @@ export function ChatPage() {
 
       <div className="border-t border-border/80 bg-card px-4 py-4">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative">
+          {imageError && (
+            <div className="px-3 pt-2 text-xs text-red-400">{imageError}</div>
+          )}
           {pastedImages.length > 0 && (
             <div className="flex gap-2 px-3 pt-3 pb-1 flex-wrap">
               {pastedImages.map((img, i) => (
@@ -522,7 +509,7 @@ export function ChatPage() {
                   <img src={img.preview} alt="Attachment" className="w-full h-full object-cover" />
                   <button
                     type="button"
-                    onClick={() => setPastedImages((prev) => prev.filter((_, idx) => idx !== i))}
+                    onClick={() => removePastedImage(i)}
                     className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black/80"
                   >
                     ×

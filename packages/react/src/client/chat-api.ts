@@ -7,14 +7,9 @@
 import type { SSEEvent } from '../types';
 import { streamSSE } from './sse-client';
 
-export interface ImageAttachment {
-  mimeType: string;
-  data: string; // base64, no data URI prefix
-}
-
 export interface ChatStreamRequest {
   message: string;
-  images?: ImageAttachment[];
+  images?: Array<{mimeType: string; data: string}>;
   session_id?: string;
   session_type?: string;
   deploy_id?: string;

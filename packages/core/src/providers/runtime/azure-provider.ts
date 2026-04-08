@@ -166,6 +166,7 @@ import type {
   LLMMessage,
   LLMResponseBlock,
   LLMToolDefinition,
+  LLMUserContentPart,
 } from './runtime-provider-types.js';
 import {RateLimitError, ProviderTimeoutError} from './provider-errors.js';
 
@@ -175,7 +176,7 @@ function convertMessages(systemPrompt: string, messages: LLMMessage[]): OpenAIMe
   for (const msg of messages) {
     switch (msg.role) {
       case 'user':
-        result.push({role: 'user', content: typeof msg.content === 'string' ? msg.content : msg.content.map((p) => p.type === 'text' ? {type: 'text', text: p.text} : {type: 'image_url', image_url: {url: `data:${p.mimeType};base64,${p.data}`}})});
+        result.push({role: 'user', content: formatUserContent(msg.content)});
         break;
 
       case 'assistant': {
@@ -211,6 +212,19 @@ function convertMessages(systemPrompt: string, messages: LLMMessage[]): OpenAIMe
   }
 
   return result;
+}
+
+function formatUserContent(
+  content: string | LLMUserContentPart[],
+): string | Array<Record<string, unknown>> {
+  if (typeof content === 'string') return content;
+  return content.map((part) => {
+    if (part.type === 'text') return {type: 'text', text: part.text};
+    return {
+      type: 'image_url',
+      image_url: {url: `data:${part.mimeType};base64,${part.data}`},
+    };
+  });
 }
 
 function convertTools(tools: LLMToolDefinition[]): OpenAITool[] {
