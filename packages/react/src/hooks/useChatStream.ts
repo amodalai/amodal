@@ -69,6 +69,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         type: 'user',
         id: createMessageId(),
         text: action.text,
+        images: action.images,
         timestamp: new Date().toISOString(),
       };
       const assistantMessage: AssistantTextMessage = {
@@ -382,7 +383,7 @@ export interface UseChatStreamOptions {
    * when the stream ends. `signal` is the hook-managed abort controller —
    * the implementation should pass it to its underlying fetch/client call.
    */
-  streamFn: (text: string, signal: AbortSignal) => AsyncIterable<SSEEvent>;
+  streamFn: (text: string, signal: AbortSignal, images?: Array<{mimeType: string; data: string}>) => AsyncIterable<SSEEvent>;
 
   onToolCall?: (call: ToolCallInfo) => void;
   onKBProposal?: (proposal: KBProposalInfo) => void;
@@ -405,7 +406,7 @@ export interface UseChatStreamReturn {
   /** True when a loaded historical session is being viewed (read-only). */
   isHistorical: boolean;
 
-  send: (text: string) => void;
+  send: (text: string, images?: Array<{mimeType: string; data: string; preview: string}>) => void;
   stop: () => void;
   reset: () => void;
   respondToConfirmation: (correlationId: string, approved: boolean) => void;
@@ -454,10 +455,10 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
   >(new Map());
 
   const send = useCallback(
-    (text: string): void => {
+    (text: string, images?: Array<{mimeType: string; data: string; preview: string}>): void => {
       if (state.isStreaming) return;
 
-      dispatch({ type: 'SEND_MESSAGE', text });
+      dispatch({ type: 'SEND_MESSAGE', text, images: images?.map((i) => i.preview) });
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -465,7 +466,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       const runStream = async (): Promise<void> => {
         let receivedDone = false;
         try {
-          const stream = callbacksRef.current.streamFn(text, controller.signal);
+          const stream = callbacksRef.current.streamFn(text, controller.signal, images);
           for await (const event of stream) {
             processEvent(event, dispatch, pendingToolCallsRef.current, callbacksRef.current, eventBus);
             if (event.type === 'done') receivedDone = true;
@@ -726,6 +727,9 @@ function processEvent(
     }
     case 'tool_log':
       dispatch({ type: 'STREAM_TOOL_LOG', toolName: event.tool_name, message: event.message });
+      return;
+    case 'warning':
+      dispatch({ type: 'STREAM_ERROR', message: event.message });
       return;
     case 'error':
       dispatch({ type: 'STREAM_ERROR', message: event.message });

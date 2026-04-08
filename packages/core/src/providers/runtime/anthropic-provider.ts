@@ -13,6 +13,7 @@ import type {
   LLMResponseBlock,
   LLMToolDefinition,
   LLMUsage,
+  LLMUserContentPart,
 } from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
@@ -265,7 +266,7 @@ function convertMessages(messages: LLMMessage[]): AnthropicMessage[] {
   for (const msg of messages) {
     switch (msg.role) {
       case 'user':
-        result.push({role: 'user', content: msg.content});
+        result.push({role: 'user', content: formatUserContent(msg.content)});
         break;
 
       case 'assistant':
@@ -306,6 +307,19 @@ function convertMessages(messages: LLMMessage[]): AnthropicMessage[] {
   }
 
   return result;
+}
+
+function formatUserContent(
+  content: string | LLMUserContentPart[],
+): string | Array<Record<string, unknown>> {
+  if (typeof content === 'string') return content;
+  return content.map((part) => {
+    if (part.type === 'text') return {type: 'text', text: part.text};
+    return {
+      type: 'image',
+      source: {type: 'base64', media_type: part.mimeType, data: part.data},
+    };
+  });
 }
 
 interface AnthropicTool {

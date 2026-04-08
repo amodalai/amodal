@@ -7,8 +7,14 @@
 import type { SSEEvent } from '../types';
 import { streamSSE } from './sse-client';
 
+export interface ImageAttachment {
+  mimeType: string;
+  data: string; // base64, no data URI prefix
+}
+
 export interface ChatStreamRequest {
   message: string;
+  images?: ImageAttachment[];
   session_id?: string;
   session_type?: string;
   deploy_id?: string;
@@ -36,6 +42,7 @@ export async function* streamChat(
   }
 
   const body: Record<string, unknown> = { message: request.message };
+  if (request.images?.length) body['images'] = request.images;
   if (request.session_id) body['session_id'] = request.session_id;
   if (request.session_type) body['session_type'] = request.session_type;
   if (request.deploy_id) body['deploy_id'] = request.deploy_id;

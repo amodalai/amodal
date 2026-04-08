@@ -5,15 +5,24 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent, ClipboardEvent } from 'react';
+
+export interface ImageAttachment {
+  mimeType: string;
+  data: string; // base64, no data URI prefix
+  preview: string; // data URI for rendering
+}
 
 interface InputBarProps {
-  onSend: (text: string) => void;
+  onSend: (text: string, images?: ImageAttachment[]) => void;
   onStop?: () => void;
   disabled: boolean;
   isStreaming?: boolean;
   placeholder: string;
 }
+
+const ACCEPTED_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
 function SendIcon() {
   return (
@@ -32,19 +41,65 @@ function StopIcon() {
   );
 }
 
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
 export function InputBar({ onSend, onStop, disabled, isStreaming, placeholder }: InputBarProps) {
   const [value, setValue] = useState('');
+  const [images, setImages] = useState<ImageAttachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const addImageFromFile = useCallback((file: File) => {
+    if (!ACCEPTED_TYPES.has(file.type)) return;
+    if (file.size > MAX_IMAGE_SIZE) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = String(reader.result);
+      const base64 = dataUri.split(',')[1];
+      setImages((prev) => [...prev, {
+        mimeType: file.type,
+        data: base64,
+        preview: dataUri,
+      }]);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handlePaste = useCallback((e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) addImageFromFile(file);
+        return;
+      }
+    }
+  }, [addImageFromFile]);
+
+  const removeImage = useCallback((index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleSend = useCallback(() => {
     const trimmed = value.trim();
-    if (trimmed.length === 0) return;
-    onSend(trimmed);
+    if (trimmed.length === 0 && images.length === 0) return;
+    onSend(trimmed || '(image)', images.length > 0 ? images : undefined);
     setValue('');
+    setImages([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [value, onSend]);
+  }, [value, images, onSend]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -65,6 +120,23 @@ export function InputBar({ onSend, onStop, disabled, isStreaming, placeholder }:
 
   return (
     <div className="pcw-input">
+      {images.length > 0 && (
+        <div className="pcw-input__images">
+          {images.map((img, i) => (
+            <div key={i} className="pcw-input__image-thumb">
+              <img src={img.preview} alt="Attachment" />
+              <button
+                type="button"
+                className="pcw-input__image-remove"
+                onClick={() => removeImage(i)}
+                aria-label="Remove image"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <textarea
         ref={textareaRef}
         className="pcw-input__textarea"
@@ -72,6 +144,7 @@ export function InputBar({ onSend, onStop, disabled, isStreaming, placeholder }:
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onInput={handleInput}
+        onPaste={handlePaste}
         placeholder={placeholder}
         disabled={disabled && !isStreaming}
         rows={1}
@@ -90,7 +163,7 @@ export function InputBar({ onSend, onStop, disabled, isStreaming, placeholder }:
           type="button"
           className="pcw-input__send"
           onClick={handleSend}
-          disabled={disabled || value.trim().length === 0}
+          disabled={disabled || (value.trim().length === 0 && images.length === 0)}
           aria-label="Send message"
         >
           <SendIcon />

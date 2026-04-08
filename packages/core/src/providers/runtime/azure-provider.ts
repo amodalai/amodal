@@ -131,7 +131,7 @@ interface AzureOpenAIClient {
 
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content?: string | null;
+  content?: string | null | Array<Record<string, unknown>>;
   tool_calls?: Array<{
     id: string;
     type: 'function';
@@ -175,7 +175,7 @@ function convertMessages(systemPrompt: string, messages: LLMMessage[]): OpenAIMe
   for (const msg of messages) {
     switch (msg.role) {
       case 'user':
-        result.push({role: 'user', content: msg.content});
+        result.push({role: 'user', content: typeof msg.content === 'string' ? msg.content : msg.content.map((p) => p.type === 'text' ? {type: 'text', text: p.text} : {type: 'image_url', image_url: {url: `data:${p.mimeType};base64,${p.data}`}})});
         break;
 
       case 'assistant': {

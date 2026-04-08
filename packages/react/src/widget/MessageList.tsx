@@ -224,6 +224,13 @@ export function MessageList({ messages, isStreaming, sendMessage, customWidgets,
           case 'user':
             return (
               <div key={msg.id} className="pcw-bubble pcw-bubble--user">
+                {msg.images && msg.images.length > 0 && (
+                  <div className="pcw-bubble__images">
+                    {msg.images.map((src, i) => (
+                      <img key={i} src={src} alt="User attachment" className="pcw-bubble__image" />
+                    ))}
+                  </div>
+                )}
                 <p className="pcw-bubble__text">{msg.text}</p>
               </div>
             );

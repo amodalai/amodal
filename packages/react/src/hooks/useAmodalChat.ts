@@ -81,10 +81,11 @@ export function useAmodalChat(options?: UseAmodalChatOptions): UseAmodalChatRetu
   const sessionIdRef = useRef<string | null>(options?.initialSessionId ?? null);
 
   const streamFn = useCallback(
-    (text: string, signal: AbortSignal): AsyncIterable<SSEEvent> =>
+    (text: string, signal: AbortSignal, images?: Array<{mimeType: string; data: string}>): AsyncIterable<SSEEvent> =>
       client.chatStream(text, {
         ...(sessionIdRef.current ? { sessionId: sessionIdRef.current } : {}),
         ...(optsRef.current?.context ? { context: optsRef.current.context } : {}),
+        ...(images?.length ? { images } : {}),
         signal,
       }),
     [client],

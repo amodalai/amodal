@@ -9,6 +9,8 @@ export type {
   LLMChatRequest,
   LLMMessage,
   LLMUserMessage,
+  LLMUserContentPart,
+  LLMUserImagePart,
   LLMAssistantMessage,
   LLMToolResultMessage,
   LLMChatResponse,

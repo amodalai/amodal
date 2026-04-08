@@ -12,6 +12,7 @@ import type {
   LLMMessage,
   LLMResponseBlock,
   LLMToolDefinition,
+  LLMUserContentPart,
 } from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
@@ -203,7 +204,7 @@ interface OpenAIStreamChunk {
 
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content?: string | null;
+  content?: string | null | Array<Record<string, unknown>>;
   tool_calls?: Array<{
     id: string;
     type: 'function';
@@ -218,7 +219,7 @@ function convertMessages(systemPrompt: string, messages: LLMMessage[]): OpenAIMe
   for (const msg of messages) {
     switch (msg.role) {
       case 'user':
-        result.push({role: 'user', content: msg.content});
+        result.push({role: 'user', content: formatUserContent(msg.content)});
         break;
 
       case 'assistant': {
@@ -254,6 +255,19 @@ function convertMessages(systemPrompt: string, messages: LLMMessage[]): OpenAIMe
   }
 
   return result;
+}
+
+function formatUserContent(
+  content: string | LLMUserContentPart[],
+): string | Array<Record<string, unknown>> {
+  if (typeof content === 'string') return content;
+  return content.map((part) => {
+    if (part.type === 'text') return {type: 'text', text: part.text};
+    return {
+      type: 'image_url',
+      image_url: {url: `data:${part.mimeType};base64,${part.data}`},
+    };
+  });
 }
 
 interface OpenAITool {

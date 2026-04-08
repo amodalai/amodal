@@ -686,6 +686,65 @@
   opacity: 0.9;
 }
 
+/* Image attachment previews in input */
+.pcw-input__images {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 0;
+  flex-wrap: wrap;
+}
+
+.pcw-input__image-thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--pcw-border, #e5e7eb);
+}
+
+.pcw-input__image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pcw-input__image-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.pcw-input__image-remove:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Images in user message bubbles */
+.pcw-bubble__images {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.pcw-bubble__image {
+  max-width: 240px;
+  max-height: 240px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
 /* Floating toggle button */
 .pcw-toggle {
   position: fixed;

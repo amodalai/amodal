@@ -27,6 +27,7 @@ export type SSEEventType =
   | 'field_scrub'
   | 'confirmation_required'
   | 'tool_log'
+  | 'warning'
   | 'error'
   | 'done';
 
@@ -176,6 +177,12 @@ export interface SSEDoneEvent {
   usage?: {input_tokens: number; output_tokens: number};
 }
 
+export interface SSEWarningEvent {
+  type: 'warning';
+  message: string;
+  timestamp: string;
+}
+
 export type SSEEvent =
   | SSEInitEvent
   | SSETextDeltaEvent
@@ -194,6 +201,7 @@ export type SSEEvent =
   | SSEFieldScrubEvent
   | SSEConfirmationRequiredEvent
   | SSEToolLogEvent
+  | SSEWarningEvent
   | SSEErrorEvent
   | SSEDoneEvent;
 
@@ -281,6 +289,8 @@ export interface UserMessage {
   type: 'user';
   id: string;
   text: string;
+  /** Data URIs for pasted/uploaded images */
+  images?: string[];
   timestamp: string;
 }
 
@@ -388,7 +398,7 @@ export interface ChatState {
 }
 
 export type ChatAction =
-  | { type: 'SEND_MESSAGE'; text: string }
+  | { type: 'SEND_MESSAGE'; text: string; images?: string[] }
   | { type: 'STREAM_INIT'; sessionId: string }
   | { type: 'STREAM_TEXT_DELTA'; content: string }
   | { type: 'STREAM_TOOL_CALL_START'; toolId: string; toolName: string; parameters: Record<string, unknown> }

@@ -23,6 +23,7 @@ import type {ModelMessage} from 'ai';
 import {runAgent} from '../agent/loop.js';
 import {DEFAULT_LOOP_CONFIG} from '../agent/loop-types.js';
 import type {AgentContext, AgentLoopConfig} from '../agent/loop-types.js';
+import {SSEEventType} from '../types.js';
 import type {SSEEvent} from '../types.js';
 import type {ToolContext} from '../tools/types.js';
 import type {SessionStore} from './store.js';
@@ -195,6 +196,7 @@ export class StandaloneSessionManager {
     sessionId: string,
     userMessage: string,
     opts?: {
+      images?: Array<{mimeType: string; data: string}>;
       signal?: AbortSignal;
       loopConfig?: Partial<AgentLoopConfig>;
       onUsage?: (usage: TurnUsage) => void;
@@ -207,9 +209,35 @@ export class StandaloneSessionManager {
     const session = this.getOrThrow(sessionId);
     session.lastAccessedAt = Date.now();
 
-    // Append user message
-    const userMsg: ModelMessage = {role: 'user', content: userMessage};
+    // Append user message (with optional image attachments)
+    const NO_VISION_PROVIDERS = new Set(['groq', 'deepseek', 'together', 'fireworks']);
+    const hasImages = opts?.images?.length;
+    const supportsVision = !NO_VISION_PROVIDERS.has(session.providerName);
+
+    const userMsg: ModelMessage = hasImages && supportsVision
+      ? {
+          role: 'user',
+          content: [
+            ...opts.images!.map((img) => ({
+              type: 'image' as const,
+              image: img.data,
+              mediaType: img.mimeType,
+            })),
+            {type: 'text' as const, text: userMessage},
+          ],
+        }
+      : {role: 'user', content: userMessage};
     session.messages = [...session.messages, userMsg];
+
+    // Warn the user if images were stripped
+    if (hasImages && !supportsVision) {
+      const warning: SSEEvent = {
+        type: SSEEventType.Warning,
+        message: `Images are not supported by ${session.providerName} — your image was not sent to the model.`,
+        timestamp: new Date().toISOString(),
+      };
+      yield warning;
+    }
 
     // Build AgentContext from Session
     const ctx: AgentContext = {

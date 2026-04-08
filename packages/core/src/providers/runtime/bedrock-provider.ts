@@ -12,6 +12,7 @@ import type {
   LLMMessage,
   LLMResponseBlock,
   LLMToolDefinition,
+  LLMUserContentPart,
 } from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
@@ -258,7 +259,7 @@ function convertMessages(messages: LLMMessage[]): BedrockMessage[] {
   for (const msg of messages) {
     switch (msg.role) {
       case 'user':
-        result.push({role: 'user', content: [{text: msg.content}]});
+        result.push({role: 'user', content: formatUserContent(msg.content)});
         break;
 
       case 'assistant':
@@ -300,6 +301,21 @@ function convertMessages(messages: LLMMessage[]): BedrockMessage[] {
   }
 
   return result;
+}
+
+function formatUserContent(
+  content: string | LLMUserContentPart[],
+): Array<Record<string, unknown>> {
+  if (typeof content === 'string') return [{text: content}];
+  return content.map((part) => {
+    if (part.type === 'text') return {text: part.text};
+    return {
+      image: {
+        format: part.mimeType.split('/')[1],
+        source: {bytes: Uint8Array.from(atob(part.data), (c) => c.charCodeAt(0))},
+      },
+    };
+  });
 }
 
 interface BedrockToolConfig {
