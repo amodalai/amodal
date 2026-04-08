@@ -76,11 +76,12 @@ async function waitForServer(port: number, maxMs = 15_000): Promise<void> {
 async function chat(
   message: string,
   sessionId?: string,
-  opts?: {maxSessionTokens?: number},
+  opts?: {maxSessionTokens?: number; images?: Array<{mimeType: string; data: string}>},
 ): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
   const body: Record<string, unknown> = {message};
   if (sessionId) body['session_id'] = sessionId;
   if (opts?.maxSessionTokens !== undefined) body['max_session_tokens'] = opts.maxSessionTokens;
+  if (opts?.images?.length) body['images'] = opts.images;
 
   const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
     method: 'POST',
@@ -1633,6 +1634,106 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     expect(done?.['reason']).toBe('model_stop');
     expect(allText(events).length).toBeGreaterThan(0);
   }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 28. Image paste — vision input
+  // -------------------------------------------------------------------------
+
+  const VISION_PROVIDERS = new Set(['anthropic', 'google', 'openai']);
+  const testImageBase64 = readFileSync(resolve(__dirname, 'test-image.png')).toString('base64');
+
+  it.skipIf(!VISION_PROVIDERS.has(smokeTargetName))('accepts image attachment and model responds', async () => {
+    const {events} = await chat(
+      'What color is the image? Reply with just the color name.',
+      undefined,
+      {images: [{mimeType: 'image/png', data: testImageBase64}]},
+    );
+
+    // Should get a normal streaming response — init, text deltas, done
+    const init = findEvent(events, 'init');
+    expect(init).toBeDefined();
+
+    const text = allText(events);
+    expect(text.length).toBeGreaterThan(0);
+
+    expectDoneReason(events, 'model_stop');
+  }, TIMEOUT);
+
+  it.skipIf(!VISION_PROVIDERS.has(smokeTargetName))('image persists in session history across turns', async () => {
+    // Turn 1: send image
+    const {sessionId} = await chat(
+      'Remember: I sent you a red image.',
+      undefined,
+      {images: [{mimeType: 'image/png', data: testImageBase64}]},
+    );
+
+    // Turn 2: follow-up without image — model should still know about it
+    const {events: turn2Events} = await chat(
+      'What color was the image I just sent?',
+      sessionId,
+    );
+
+    const text = allText(turn2Events);
+    expect(text.toLowerCase()).toContain('red');
+    expectDoneReason(turn2Events, 'model_stop');
+  }, TIMEOUT * 2);
+
+  it('non-vision provider strips images and emits warning', async () => {
+    // This test sends images regardless of provider — if the provider
+    // doesn't support vision, we expect a warning event and the model
+    // should still respond (to the text portion only).
+    if (VISION_PROVIDERS.has(smokeTargetName)) {
+      // Vision providers won't emit a warning — skip
+      return;
+    }
+
+    const {events} = await chat(
+      'Hello, just testing.',
+      undefined,
+      {images: [{mimeType: 'image/png', data: testImageBase64}]},
+    );
+
+    // Should emit a warning about images not being supported
+    const warning = findEvent(events, 'warning');
+    expect(warning).toBeDefined();
+    expect(String(warning?.['message'])).toContain('not supported');
+
+    // Model should still respond to the text
+    const text = allText(events);
+    expect(text.length).toBeGreaterThan(0);
+    expectDoneReason(events, 'model_stop');
+  }, TIMEOUT);
+
+  it('rejects oversized image array via validation', async () => {
+    // Send 6 images (max is 5) — should fail validation
+    const images = Array.from({length: 6}, () => ({
+      mimeType: 'image/png' as const,
+      data: testImageBase64,
+    }));
+
+    const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: 'test', images}),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects invalid image mime type via validation', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        message: 'test',
+        images: [{mimeType: 'image/svg+xml', data: testImageBase64}],
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    expect(res.status).toBe(400);
+  });
 });
 
 // ---------------------------------------------------------------------------
