@@ -58,7 +58,7 @@ export async function buildPages(repoPath: string): Promise<{pages: BuiltPage[];
       }
     }
   } catch {
-    // Ignore errors reading config or package dirs
+    // amodal.json may not exist (no packages configured) — skip package pages
   }
 
   // 2. Scan local pages/ directory (higher priority — overwrites package entries)

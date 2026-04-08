@@ -7,6 +7,25 @@
 import type { SSEEvent } from '../types';
 import { streamSSE } from './sse-client';
 
+/** Default timeout for non-streaming API requests (15 seconds). */
+const API_TIMEOUT_MS = 15_000;
+
+/**
+ * Error from the Amodal chat API (session creation, history, etc.).
+ * Carries the HTTP status and URL for diagnostics.
+ */
+export class ChatApiError extends Error {
+  readonly status: number;
+  readonly url: string;
+
+  constructor(operation: string, status: number, statusText: string, url: string) {
+    super(`${operation}: ${String(status)} ${statusText}`);
+    this.name = 'ChatApiError';
+    this.status = status;
+    this.url = url;
+  }
+}
+
 export interface ChatStreamRequest {
   message: string;
   session_id?: string;
@@ -66,10 +85,11 @@ export async function createSession(
     method: 'POST',
     headers,
     body: JSON.stringify({}),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
   });
 
   if (!response.ok) {
-    throw new Error(`Session creation failed: ${String(response.status)} ${response.statusText}`);
+    throw new ChatApiError('Session creation failed', response.status, response.statusText, url);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
@@ -124,9 +144,9 @@ export async function listSessions(
   const qs = tags && tags.length > 0 ? `?tags=${tags.join(',')}` : '';
   const url = `${serverUrl}/sessions/history${qs}`;
 
-  const response = await fetch(url, { headers: authHeaders(token) });
+  const response = await fetch(url, { headers: authHeaders(token), signal: AbortSignal.timeout(API_TIMEOUT_MS) });
   if (!response.ok) {
-    throw new Error(`List sessions failed: ${String(response.status)} ${response.statusText}`);
+    throw new ChatApiError('List sessions failed', response.status, response.statusText, url);
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
   return (await response.json()) as SessionHistoryItem[];
@@ -142,9 +162,9 @@ export async function getSessionHistory(
 ): Promise<SessionDetail> {
   const url = `${serverUrl}/sessions/history/${sessionId}`;
 
-  const response = await fetch(url, { headers: authHeaders(token) });
+  const response = await fetch(url, { headers: authHeaders(token), signal: AbortSignal.timeout(API_TIMEOUT_MS) });
   if (!response.ok) {
-    throw new Error(`Get session failed: ${String(response.status)} ${response.statusText}`);
+    throw new ChatApiError('Get session failed', response.status, response.statusText, url);
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
   return (await response.json()) as SessionDetail;
@@ -168,9 +188,10 @@ export async function updateSession(
       ...authHeaders(token),
     },
     body: JSON.stringify(updates),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
   });
   if (!response.ok) {
-    throw new Error(`Update session failed: ${String(response.status)} ${response.statusText}`);
+    throw new ChatApiError('Update session failed', response.status, response.statusText, url);
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
   return (await response.json()) as SessionDetail;

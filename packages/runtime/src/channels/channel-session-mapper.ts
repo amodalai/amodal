@@ -17,9 +17,10 @@
 import {eq, and, sql} from 'drizzle-orm';
 import type {PgDatabase, PgQueryResultHKT} from 'drizzle-orm/pg-core';
 
-import type {ChannelSessionMapper, ChannelSessionMapResult, ChannelOrigin} from '@amodalai/types';
+import type {ChannelSessionMapper, ChannelSessionMapResult, ChannelOrigin, RuntimeEventPayload} from '@amodalai/types';
 import type {Logger} from '../logger.js';
 import {channelSessions} from '../stores/schema.js';
+import {ChannelSessionError} from './errors.js';
 
 type AnyPgDatabase = PgDatabase<PgQueryResultHKT, Record<string, unknown>>;
 
@@ -27,7 +28,7 @@ export interface ChannelSessionMapperOptions {
   db: AnyPgDatabase;
   logger: Logger;
   eventBus?: {
-    emit(payload: {type: string; [key: string]: unknown}): unknown;
+    emit(payload: RuntimeEventPayload): unknown;
   };
 }
 
@@ -85,7 +86,10 @@ export class DrizzleChannelSessionMapper implements ChannelSessionMapper {
 
     // Create new session
     if (!this.createSession) {
-      throw new Error('Channel session mapper: session factory not set. Call setSessionFactory() first.');
+      throw new ChannelSessionError(
+        'Session factory not set. Call setSessionFactory() before handling messages.',
+        {channelType, context: {channelUserId}},
+      );
     }
 
     const channelOrigin: ChannelOrigin = {

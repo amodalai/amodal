@@ -61,7 +61,7 @@ export { parseSSELine, streamSSE, streamSSEGet } from './client/sse-client';
 export type { StreamSSEOptions } from './client/sse-client';
 
 // Client — chat API
-export { streamChat, createSession, createChatClient, listSessions, getSessionHistory, updateSession } from './client/chat-api';
+export { ChatApiError, streamChat, createSession, createChatClient, listSessions, getSessionHistory, updateSession } from './client/chat-api';
 export type { ChatStreamRequest, SessionInfo, SessionHistoryItem, SessionDetail } from './client/chat-api';
 
 // Headless client

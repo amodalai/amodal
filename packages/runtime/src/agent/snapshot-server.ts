@@ -88,24 +88,31 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
   let channelsRouter: import('express').Router | null = null;
   if (bundle.channels && bundle.channels.length > 0) {
     const channelMapper = new InMemoryChannelSessionMapper({logger: log, eventBus});
-    const result = await bootstrapChannels({
-      channels: bundle.channels,
-      repoPath: '', // No local channel discovery in snapshot mode
-      packages: bundle.config.packages,
-      sessionMapper: channelMapper,
-      sessionManager,
-      buildSessionComponents: () => buildSessionComponents({
-        bundle,
-        storeBackend: null,
-        mcpManager: null,
+    try {
+      const result = await bootstrapChannels({
+        channels: bundle.channels,
+        repoPath: '', // No local channel discovery in snapshot mode
+        packages: bundle.config.packages,
+        sessionMapper: channelMapper,
+        sessionManager,
+        buildSessionComponents: () => buildSessionComponents({
+          bundle,
+          storeBackend: null,
+          mcpManager: null,
+          logger: log,
+          toolExecutor,
+        }),
+        eventBus,
         logger: log,
-        toolExecutor,
-      }),
-      eventBus,
-      logger: log,
-    });
-    if (result) {
-      channelsRouter = result.router;
+      });
+      if (result) {
+        channelsRouter = result.router;
+      }
+    } catch (err) {
+      log.warn('channels_load_failed', {
+        error: err instanceof Error ? err.message : String(err),
+        hint: 'Snapshot server will start without messaging channels',
+      });
     }
   }
 

@@ -43,8 +43,12 @@ export async function runInstallPkg(options: {cwd?: string; packages?: string[]}
     if (config && typeof config === 'object' && 'name' in config) {
       projectName = String((config as Record<string, unknown>)['name']);
     }
-  } catch {
-    // Use default project name
+  } catch (err) {
+    // amodal.json may not exist yet (bare install before init). Only warn
+    // if the file was present but unreadable/corrupt.
+    if (err && typeof err === 'object' && 'code' in err && err.code !== 'ENOENT') {
+      process.stderr.write(`[install] Warning: could not read amodal.json: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
   }
 
   ensurePackageJson(repoPath, projectName);

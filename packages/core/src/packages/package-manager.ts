@@ -13,6 +13,9 @@ import {PackageError} from './package-error.js';
 
 const execFileAsync = promisify(execFile);
 
+/** 2 minutes — generous but prevents hanging forever on broken registries. */
+const PM_TIMEOUT_MS = 120_000;
+
 type PackageManager = 'pnpm' | 'npm' | 'yarn';
 
 export function detectPackageManager(repoPath: string): PackageManager {
@@ -27,7 +30,7 @@ export async function pmAdd(repoPath: string, npmName: string): Promise<void> {
   const cmd = pm === 'yarn' ? 'yarn' : pm;
   const args = pm === 'yarn' ? ['add', npmName] : [pm === 'pnpm' ? 'add' : 'install', npmName];
   try {
-    await execFileAsync(cmd, args, {cwd: repoPath});
+    await execFileAsync(cmd, args, {cwd: repoPath, timeout: PM_TIMEOUT_MS});
   } catch (err) {
     throw new PackageError('NPM_INSTALL_FAILED', `Failed to add ${npmName}`, err);
   }
@@ -38,16 +41,16 @@ export async function pmRemove(repoPath: string, npmName: string): Promise<void>
   const cmd = pm === 'yarn' ? 'yarn' : pm;
   const args = pm === 'yarn' ? ['remove', npmName] : [pm === 'pnpm' ? 'remove' : 'uninstall', npmName];
   try {
-    await execFileAsync(cmd, args, {cwd: repoPath});
+    await execFileAsync(cmd, args, {cwd: repoPath, timeout: PM_TIMEOUT_MS});
   } catch (err) {
-    throw new PackageError('NPM_INSTALL_FAILED', `Failed to remove ${npmName}`, err);
+    throw new PackageError('NPM_REMOVE_FAILED', `Failed to remove ${npmName}`, err);
   }
 }
 
 export async function pmInstall(repoPath: string): Promise<void> {
   const pm = detectPackageManager(repoPath);
   try {
-    await execFileAsync(pm, ['install'], {cwd: repoPath});
+    await execFileAsync(pm, ['install'], {cwd: repoPath, timeout: PM_TIMEOUT_MS});
   } catch (err) {
     throw new PackageError('NPM_INSTALL_FAILED', 'Failed to install packages', err);
   }
@@ -72,7 +75,9 @@ export function addAmodalPackage(repoPath: string, npmName: string): void {
   const configPath = path.join(repoPath, 'amodal.json');
   const raw = readFileSync(configPath, 'utf-8');
   const parsed: unknown = JSON.parse(raw);
-  if (!parsed || typeof parsed !== 'object') return;
+  if (!parsed || typeof parsed !== 'object') {
+    throw new PackageError('CONFIG_INVALID', `amodal.json is not a valid object: ${configPath}`);
+  }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated object above
   const config = parsed as Record<string, unknown>;
   const packages = Array.isArray(config['packages'])
@@ -92,7 +97,9 @@ export function removeAmodalPackage(repoPath: string, npmName: string): void {
   const configPath = path.join(repoPath, 'amodal.json');
   const raw = readFileSync(configPath, 'utf-8');
   const parsed: unknown = JSON.parse(raw);
-  if (!parsed || typeof parsed !== 'object') return;
+  if (!parsed || typeof parsed !== 'object') {
+    throw new PackageError('CONFIG_INVALID', `amodal.json is not a valid object: ${configPath}`);
+  }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated object above
   const config = parsed as Record<string, unknown>;
   if (!Array.isArray(config['packages'])) return;

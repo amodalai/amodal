@@ -53,12 +53,7 @@ async function runConnectChannel(options: ConnectChannelOptions): Promise<number
 
   // Step 1: Install if not present
   const packageDir = path.join(repoPath, 'node_modules', ...npmName.split('/'));
-  let alreadyInstalled = false;
-  try {
-    alreadyInstalled = existsSync(path.join(packageDir, 'package.json'));
-  } catch {
-    // Not installed
-  }
+  const alreadyInstalled = existsSync(path.join(packageDir, 'package.json'));
 
   if (!alreadyInstalled) {
     process.stderr.write(`[connect channel] Installing ${npmName}...\n`);
@@ -75,8 +70,14 @@ async function runConnectChannel(options: ConnectChannelOptions): Promise<number
   }
 
   // Step 2: Load the plugin
-  const plugin = await loadChannelPlugin(packageDir, npmName);
-  if (!plugin) return 1;
+  let plugin: ChannelPlugin;
+  try {
+    plugin = await loadChannelPlugin(packageDir, npmName);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[connect channel] ${msg}\n`);
+    return 1;
+  }
 
   // Step 3: Add to packages array in amodal.json if not present
   const configPath = path.join(repoPath, 'amodal.json');
@@ -118,11 +119,10 @@ async function runConnectChannel(options: ConnectChannelOptions): Promise<number
 async function loadChannelPlugin(
   packageDir: string,
   npmName: string,
-): Promise<ChannelPlugin | null> {
+): Promise<ChannelPlugin> {
   const pkgJsonPath = path.join(packageDir, 'package.json');
   if (!existsSync(pkgJsonPath)) {
-    process.stderr.write(`[connect channel] Package "${npmName}" not found in node_modules.\n`);
-    return null;
+    throw new Error(`Package "${npmName}" not found in node_modules.`);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
@@ -131,26 +131,18 @@ async function loadChannelPlugin(
   const entryPath = path.resolve(packageDir, mainField);
 
   if (!entryPath.startsWith(path.resolve(packageDir))) {
-    process.stderr.write(`[connect channel] Package "${npmName}" has invalid main field.\n`);
-    return null;
+    throw new Error(`Package "${npmName}" has invalid main field.`);
   }
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic import
-    const mod = await import(pathToFileURL(entryPath).href) as {default?: unknown};
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validating shape below
-    const plugin = mod.default as ChannelPlugin | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic import
+  const mod = await import(pathToFileURL(entryPath).href) as {default?: unknown};
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validating shape below
+  const plugin = mod.default as ChannelPlugin | undefined;
 
-    if (!plugin || typeof plugin.channelType !== 'string' || typeof plugin.createAdapter !== 'function') {
-      process.stderr.write(`[connect channel] Package "${npmName}" does not export a valid ChannelPlugin.\n`);
-      return null;
-    }
-    return plugin;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[connect channel] Failed to load plugin: ${msg}\n`);
-    return null;
+  if (!plugin || typeof plugin.channelType !== 'string' || typeof plugin.createAdapter !== 'function') {
+    throw new Error(`Package "${npmName}" does not export a valid ChannelPlugin.`);
   }
+  return plugin;
 }
 
 function buildSetupContext(

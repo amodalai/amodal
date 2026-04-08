@@ -24,6 +24,7 @@ import type {CreateChannelSession} from './channel-session-mapper.js';
 import {loadChannelPlugins} from './plugin-loader.js';
 import {createChannelsRouter} from './routes.js';
 import {MessageDedupCache} from './dedup-cache.js';
+import {ChannelPluginError, ChannelConfigError} from './errors.js';
 import {resolveEnvRef} from '../env-ref.js';
 
 /** A discovered channel from the bundle (matches AgentBundle['channels'][n]). */
@@ -63,7 +64,8 @@ export interface BootstrapChannelsResult {
 
 /**
  * Load channel plugins, wire the session factory, and create the
- * Express router. Returns null if loading fails (error is logged).
+ * Express router. Returns null if no channels are configured.
+ * Throws ChannelPluginError or ChannelConfigError on failures.
  */
 export async function bootstrapChannels(
   opts: BootstrapChannelsOptions,
@@ -120,11 +122,16 @@ export async function bootstrapChannels(
 
     return {adapters, router};
   } catch (err) {
-    logger.warn('channels_load_failed', {
-      error: err instanceof Error ? err.message : String(err),
-      hint: 'Server will start without messaging channels',
+    // Re-throw so the caller can decide whether to start without channels.
+    // Previously this silently returned null, masking broken config behind
+    // the same value used for "no channels configured".
+    if (err instanceof ChannelPluginError || err instanceof ChannelConfigError) {
+      throw err;
+    }
+    throw new ChannelPluginError('Failed to load messaging channels', {
+      channelType: '*',
+      cause: err,
     });
-    return null;
   }
 }
 
