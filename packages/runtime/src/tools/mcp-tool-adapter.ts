@@ -106,21 +106,16 @@ export function createMcpToolDefinition(
 
         // Format the response content — preserve image blocks as structured
         // content so they can be rendered in the UI instead of being discarded.
+        // Size enforcement is handled by snipIfOversized in executing.ts.
         const hasImages = result.content.some((c) => c.type === 'image' && c.data);
 
         if (hasImages) {
-          const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB base64
           const blocks: Array<{type: 'text'; text: string} | {type: 'image'; mimeType: string; data: string}> = [];
           for (const c of result.content) {
             if (c.type === 'text' && c.text) {
               blocks.push({type: 'text', text: c.text});
             } else if (c.type === 'image' && c.data) {
-              if (c.data.length > MAX_IMAGE_SIZE) {
-                const sizeMB = (c.data.length / 1024 / 1024).toFixed(1);
-                blocks.push({type: 'text', text: `[image too large: ${c.mimeType ?? 'unknown'}, ${sizeMB}MB]`});
-              } else {
-                blocks.push({type: 'image', mimeType: c.mimeType ?? 'image/png', data: c.data});
-              }
+              blocks.push({type: 'image', mimeType: c.mimeType ?? 'image/png', data: c.data});
             }
           }
           return {output: blocks};

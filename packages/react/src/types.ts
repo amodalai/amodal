@@ -51,6 +51,21 @@ export interface SSEToolCallStartEvent {
   timestamp: string;
 }
 
+/** Mirrored from runtime/src/types.ts — discriminated union for structured tool result content. */
+export interface SSEToolResultTextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface SSEToolResultImageBlock {
+  type: 'image';
+  mimeType: string;
+  data: string;
+  isUrl?: boolean;
+}
+
+export type SSEToolResultContentBlock = SSEToolResultTextBlock | SSEToolResultImageBlock;
+
 export interface SSEToolCallResultEvent {
   type: 'tool_call_result';
   tool_id: string;
@@ -58,7 +73,7 @@ export interface SSEToolCallResultEvent {
   /** Plain text result. */
   result?: unknown;
   /** Structured content blocks (text + images). When present, supersedes `result`. */
-  content?: Array<{type: 'text'; text: string} | {type: 'image'; mimeType: string; data: string; isUrl?: boolean}>;
+  content?: SSEToolResultContentBlock[];
   parameters?: Record<string, unknown>;
   duration_ms?: number;
   error?: string;

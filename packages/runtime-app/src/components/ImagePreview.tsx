@@ -40,7 +40,7 @@ function ImageThumbnail({ img, index }: { img: ImageSource; index: number }) {
 
   if (failed) {
     return (
-      <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-muted border border-border text-[11px] text-muted-foreground max-w-[200px]">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-muted border border-border text-xs text-muted-foreground max-w-[200px]">
         <ImageOff className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{typeof img === 'string' ? img : alt}</span>
       </div>

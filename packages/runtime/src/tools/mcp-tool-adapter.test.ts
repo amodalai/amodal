@@ -250,8 +250,8 @@ describe('createMcpToolDefinition', () => {
     });
   });
 
-  it('replaces oversized images with text placeholder', async () => {
-    const largeData = 'x'.repeat(6 * 1024 * 1024); // 6MB — exceeds 5MB limit
+  it('passes through large images (size enforcement deferred to snipIfOversized)', async () => {
+    const largeData = 'x'.repeat(2 * 1024 * 1024); // 2MB
     const callTool = vi.fn().mockResolvedValue({
       content: [
         {type: 'text', text: 'result'},
@@ -272,11 +272,11 @@ describe('createMcpToolDefinition', () => {
     const result = await def.execute({}, makeMockContext());
 
      
-    const blocks = (result as {output: Array<{type: string; text?: string}>}).output;
+    const blocks = (result as {output: Array<{type: string; data?: string}>}).output;
     expect(blocks).toHaveLength(2);
     expect(blocks[0]).toEqual({type: 'text', text: 'result'});
-    expect(blocks[1].type).toBe('text');
-    expect(blocks[1].text).toContain('image too large');
+    expect(blocks[1].type).toBe('image');
+    expect(blocks[1].data).toBe(largeData);
   });
 
   it('returns plain string output when no images are present', async () => {

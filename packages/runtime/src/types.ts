@@ -133,14 +133,22 @@ export interface SSEToolCallStartEvent {
   timestamp: string;
 }
 
-/** A content block in a structured tool result (text or image). */
-export interface SSEToolResultContentBlock {
-  type: 'text' | 'image';
-  text?: string;
-  mimeType?: string;
-  data?: string;
+/** A text block in a structured tool result. */
+export interface SSEToolResultTextBlock {
+  type: 'text';
+  text: string;
+}
+
+/** An image block in a structured tool result. */
+export interface SSEToolResultImageBlock {
+  type: 'image';
+  mimeType: string;
+  data: string;
   isUrl?: boolean;
 }
+
+/** Discriminated union for structured tool result content. */
+export type SSEToolResultContentBlock = SSEToolResultTextBlock | SSEToolResultImageBlock;
 
 export interface SSEToolCallResultEvent {
   type: SSEEventType.ToolCallResult;

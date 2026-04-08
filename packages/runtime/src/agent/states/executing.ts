@@ -36,6 +36,7 @@ import type {
   ToolResult,
   ToolResultContentBlock,
 } from '../loop-types.js';
+import {MAX_IMAGE_BLOCK_SIZE, MAX_TOTAL_IMAGE_SIZE, contentBlocksToString} from '../loop-types.js';
 import {estimateTokenCount} from '../token-estimate.js';
 import {DISPATCH_TOOL_NAME} from '../../tools/dispatch-tool.js';
 
@@ -536,7 +537,8 @@ function extractToolContent(output: unknown): string | ToolResultContentBlock[] 
     output !== null &&
     'output' in output
   ) {
-    const inner = (output as Record<string, unknown>)['output'];
+    // `in` operator narrows to `object & Record<'output', unknown>`
+    const inner = (output as {output: unknown}).output;
     if (Array.isArray(inner) && inner.length > 0 && isContentBlockArray(inner)) {
       return inner;
     }
@@ -545,24 +547,17 @@ function extractToolContent(output: unknown): string | ToolResultContentBlock[] 
   return JSON.stringify(output);
 }
 
+function hasType(item: unknown): item is {type: string} {
+  return typeof item === 'object' && item !== null && 'type' in item && typeof (item as {type: unknown}).type === 'string';
+}
+
 function isContentBlockArray(arr: unknown[]): arr is ToolResultContentBlock[] {
   return arr.every((item) =>
-    typeof item === 'object' &&
-    item !== null &&
-    'type' in item &&
-    ((item as Record<string, unknown>)['type'] === 'text' || (item as Record<string, unknown>)['type'] === 'image'),
+    hasType(item) && (item.type === 'text' || item.type === 'image'),
   );
 }
 
-/** Convert structured content blocks to a plain string for error messages or LLM context. */
-function contentBlocksToString(blocks: ToolResultContentBlock[]): string {
-  return blocks
-    .map((b) => {
-      if (b.type === 'text') return b.text;
-      return `[image: ${b.mimeType}]`;
-    })
-    .join('\n');
-}
+// contentBlocksToString imported from loop-types.ts
 
 // ---------------------------------------------------------------------------
 // Snipping
@@ -574,15 +569,10 @@ function contentBlocksToString(blocks: ToolResultContentBlock[]): string {
  * beginning (usually headers/structure) and end (usually the answer) while
  * cutting the middle bulk.
  */
-/** Max base64 image data size to keep in a single tool result (1MB). */
-const MAX_IMAGE_BLOCK_SIZE = 1_024 * 1_024;
-/** Max total image data in a single tool result (5MB). */
-const MAX_TOTAL_IMAGE_SIZE = 5 * 1_024 * 1_024;
-
 function snipIfOversized(result: ToolResult, ctx: AgentContext): ToolResult {
   // Structured content: snip text blocks, cap image blocks by size
   if (Array.isArray(result.content)) {
-    return snipStructuredContent(result, ctx);
+    return snipStructuredContent({...result, content: result.content}, ctx);
   }
 
   if (result.content.length <= ctx.config.maxResultSize) return result;

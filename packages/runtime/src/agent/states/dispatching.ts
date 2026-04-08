@@ -20,7 +20,7 @@
 import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 import {createToolRegistry} from '../../tools/registry.js';
-import {DEFAULT_LOOP_CONFIG} from '../loop-types.js';
+import {DEFAULT_LOOP_CONFIG, contentBlocksToString} from '../loop-types.js';
 import type {
   DispatchingState,
   AgentContext,
@@ -96,7 +96,7 @@ export async function handleDispatching(
       tool_id: toolCallId,
       status: result.status,
       duration_ms: Date.now() - startedAt,
-      error: typeof result.content === 'string' ? result.content : undefined,
+      error: typeof result.content === 'string' ? result.content : contentBlocksToString(result.content),
       timestamp: new Date().toISOString(),
     });
     const executingState = {
@@ -287,7 +287,7 @@ export async function handleDispatching(
     tool_id: toolCallId,
     status: result.status,
     duration_ms: duration,
-    ...(result.status === 'error' ? {error: typeof result.content === 'string' ? result.content : undefined} : {}),
+    ...(result.status === 'error' ? {error: typeof result.content === 'string' ? result.content : contentBlocksToString(result.content)} : {}),
     timestamp: new Date().toISOString(),
   });
 
