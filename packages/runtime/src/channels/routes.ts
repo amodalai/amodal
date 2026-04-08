@@ -30,6 +30,23 @@ const ROUTE_PATH = '/:channelType/webhook';
 const RESET_COMMANDS = new Set(['/reset', '/start', '/new']);
 const PREVIEW_LENGTH = 50;
 const FALLBACK_ERROR_MESSAGE = 'Something went wrong. Please try again.';
+
+/** Timeout for external adapter calls (parse, send, cleanup). */
+const ADAPTER_TIMEOUT_MS = 30_000;
+
+/**
+ * Race a promise against an AbortSignal timeout. Prevents misbehaving
+ * channel plugins from hanging request handlers indefinitely.
+ */
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  const signal = AbortSignal.timeout(ADAPTER_TIMEOUT_MS);
+  return new Promise<T>((resolve, reject) => {
+    signal.addEventListener('abort', () => {
+      reject(new Error(`Channel adapter call timed out: ${label} (${String(ADAPTER_TIMEOUT_MS)}ms)`));
+    }, {once: true});
+    promise.then(resolve, reject);
+  });
+}
 export interface ChannelsRouterOptions {
   adapters: Map<string, ChannelAdapter>;
   sessionMapper: ChannelSessionMapper;
@@ -67,7 +84,7 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
     };
 
     // Parse and verify the incoming message
-    const msg = await adapter.parseIncoming(webhookReq);
+    const msg = await withTimeout(adapter.parseIncoming(webhookReq), 'parseIncoming');
     if (!msg) {
       // Rejected (bad signature, unauthorized sender, or non-text update).
       // Always return 200 — platforms retry on non-200.
@@ -90,10 +107,10 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
     // Handle special reset commands
     if (RESET_COMMANDS.has(msg.text.trim().toLowerCase())) {
       await sessionMapper.resetSession(msg.channelType, msg.channelUserId);
-      await adapter.sendMessage(
+      await withTimeout(adapter.sendMessage(
         {channelType: msg.channelType, conversationId: msg.conversationId},
         'Session reset. Send a message to start a new conversation.',
-      );
+      ), 'sendMessage');
       res.status(200).json({ok: true});
       return;
     }
@@ -160,7 +177,7 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
         let delivered = false;
         if (cleanup) {
           try {
-            delivered = await cleanup.finish(fullReply);
+            delivered = await withTimeout(cleanup.finish(fullReply), 'finish');
           } catch (finishErr) {
             logger.error('channel_cleanup_finish_failed', {
               channelType: msg.channelType,
@@ -170,10 +187,10 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
         }
 
         if (!delivered) {
-          await adapter.sendMessage(
+          await withTimeout(adapter.sendMessage(
             {channelType: msg.channelType, conversationId: msg.conversationId},
             fullReply,
-          );
+          ), 'sendMessage');
         }
 
         eventBus.emit({
@@ -194,10 +211,10 @@ export function createChannelsRouter(options: ChannelsRouterOptions): Router {
 
       // Send a user-friendly error message
       try {
-        await adapter.sendMessage(
+        await withTimeout(adapter.sendMessage(
           {channelType: msg.channelType, conversationId: msg.conversationId},
           FALLBACK_ERROR_MESSAGE,
-        );
+        ), 'sendMessage');
       } catch {
         // If even the error message fails, just log — can't do more
         logger.error('channel_error_reply_failed', {

@@ -12,14 +12,15 @@
  * restarts — that's fine for preview and test use cases.
  */
 
-import type {ChannelSessionMapper, ChannelSessionMapResult, ChannelOrigin} from '@amodalai/types';
+import type {ChannelSessionMapper, ChannelSessionMapResult, ChannelOrigin, RuntimeEventPayload} from '@amodalai/types';
 import type {CreateChannelSession} from './channel-session-mapper.js';
 import type {Logger} from '../logger.js';
+import {ChannelSessionError} from './errors.js';
 
 export interface InMemoryChannelSessionMapperOptions {
   logger: Logger;
   eventBus?: {
-    emit(payload: {type: string; [key: string]: unknown}): unknown;
+    emit(payload: RuntimeEventPayload): unknown;
   };
 }
 
@@ -52,7 +53,10 @@ export class InMemoryChannelSessionMapper implements ChannelSessionMapper {
     }
 
     if (!this.createSession) {
-      throw new Error('Channel session mapper: session factory not set. Call setSessionFactory() first.');
+      throw new ChannelSessionError(
+        'Session factory not set. Call setSessionFactory() before handling messages.',
+        {channelType, context: {channelUserId}},
+      );
     }
 
     const channelOrigin: ChannelOrigin = {

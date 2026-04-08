@@ -7,7 +7,7 @@
 import { TypedEventEmitter } from './EventEmitter';
 import { ChatStream } from './ChatStream';
 import type { ChatResponse } from './ChatStream';
-import { createSession, streamChat } from './chat-api';
+import { ChatApiError, createSession, streamChat } from './chat-api';
 import type { ChatUser, ChatMessage, AssistantTextMessage, ToolCallInfo, KBProposalInfo } from '../types';
 import { WidgetEventBus } from '../events/event-bus';
 import type { WidgetEvent, EntityExtractor, ToolExecutedEvent, SkillActivatedEvent, WidgetRenderedEvent, KBProposalEvent } from '../events/types';
@@ -356,7 +356,7 @@ export class ChatClient extends TypedEventEmitter<ClientEvents> {
           break;
         }
         case 'error':
-          throw new Error(event.message);
+          throw new ChatApiError('Stream error', 0, event.message, this.config.serverUrl);
         case 'done':
           break;
         default:

@@ -248,7 +248,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             body: JSON.stringify({ ask_id: askId, answers }),
           });
         } catch {
-          // Non-critical: if this fails the server will time out the ask_user.
+          // Non-critical: server will time out the ask_user on its own.
+          // Nothing actionable for the client — swallow intentionally.
         }
       };
       void doSubmit();

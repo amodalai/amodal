@@ -49,8 +49,13 @@ export async function runConnect(options: ConnectOptions): Promise<number> {
   let isReconnect = false;
   try {
     isReconnect = statSync(packageDir).isDirectory();
-  } catch {
-    // Not installed
+  } catch (err: unknown) {
+    // ENOENT means not installed; any other error is unexpected
+    if (err && typeof err === 'object' && 'code' in err && err.code !== 'ENOENT') {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[connect] Unexpected error checking ${npmName}: ${msg}\n`);
+      return 1;
+    }
   }
 
   // Step 1: Install if fresh

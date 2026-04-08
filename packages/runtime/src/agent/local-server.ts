@@ -391,33 +391,43 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   if (bundle.channels && bundle.channels.length > 0) {
     // Both PGLite and Postgres factories return DrizzleSessionStore which
-    // exposes `db`. Cast through the concrete type safely.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- narrowing to concrete DrizzleSessionStore
-    const storeDb = (sessionStore as import('../session/drizzle-session-store.js').DrizzleSessionStore).db;
+    // exposes `db` for sharing the connection pool with channel mappers.
+    const {DrizzleSessionStore} = await import('../session/drizzle-session-store.js');
+    if (!(sessionStore instanceof DrizzleSessionStore)) {
+      throw new Error('Channels require a Drizzle-backed session store (pglite or postgres)');
+    }
+    const storeDb = sessionStore.db;
     const channelSessionMapper = new DrizzleChannelSessionMapper({
       db: storeDb,
       logger: log,
       eventBus,
     });
 
-    channelsResult = await bootstrapChannels({
-      channels: bundle.channels,
-      repoPath: config.repoPath,
-      packages: bundle.config.packages,
-      sessionMapper: channelSessionMapper,
-      sessionManager,
-      buildSessionComponents: () => buildSessionComponents({
-        bundle,
-        storeBackend: storeBackend ?? null,
-        mcpManager,
+    try {
+      channelsResult = await bootstrapChannels({
+        channels: bundle.channels,
+        repoPath: config.repoPath,
+        packages: bundle.config.packages,
+        sessionMapper: channelSessionMapper,
+        sessionManager,
+        buildSessionComponents: () => buildSessionComponents({
+          bundle,
+          storeBackend: storeBackend ?? null,
+          mcpManager,
+          logger: log,
+          toolExecutor,
+          sessionType: 'chat',
+        }),
+        appId: LOCAL_APP_ID,
+        eventBus,
         logger: log,
-        toolExecutor,
-        sessionType: 'chat',
-      }),
-      appId: LOCAL_APP_ID,
-      eventBus,
-      logger: log,
-    });
+      });
+    } catch (err) {
+      log.warn('channels_load_failed', {
+        error: err instanceof Error ? err.message : String(err),
+        hint: 'Server will start without messaging channels',
+      });
+    }
   }
 
   // -------------------------------------------------------------------------

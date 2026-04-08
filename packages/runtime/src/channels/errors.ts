@@ -34,6 +34,29 @@ export class ChannelPluginError extends AmodalError {
 }
 
 /**
+ * Error in channel session mapping (missing factory, lookup failure).
+ */
+export class ChannelSessionError extends AmodalError {
+  readonly channelType: string;
+
+  constructor(
+    message: string,
+    options: {
+      channelType: string;
+      cause?: unknown;
+      context?: Record<string, unknown>;
+    },
+  ) {
+    super('CHANNEL_SESSION_ERROR', message, {
+      channelType: options.channelType,
+      ...options.context,
+    }, options.cause);
+    this.name = 'ChannelSessionError';
+    this.channelType = options.channelType;
+  }
+}
+
+/**
  * Error validating a channel's config block against its plugin schema.
  */
 export class ChannelConfigError extends AmodalError {
