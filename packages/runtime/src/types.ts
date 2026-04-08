@@ -133,11 +133,23 @@ export interface SSEToolCallStartEvent {
   timestamp: string;
 }
 
+/** A content block in a structured tool result (text or image). */
+export interface SSEToolResultContentBlock {
+  type: 'text' | 'image';
+  text?: string;
+  mimeType?: string;
+  data?: string;
+  isUrl?: boolean;
+}
+
 export interface SSEToolCallResultEvent {
   type: SSEEventType.ToolCallResult;
   tool_id: string;
   status: 'success' | 'error';
+  /** Plain text result (Phase 1 — string tool results). */
   result?: string;
+  /** Structured content blocks with images (Phase 2). When present, supersedes `result`. */
+  content?: SSEToolResultContentBlock[];
   parameters?: Record<string, unknown>;
   duration_ms?: number;
   error?: string;

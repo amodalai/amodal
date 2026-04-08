@@ -55,7 +55,10 @@ export interface SSEToolCallResultEvent {
   type: 'tool_call_result';
   tool_id: string;
   status: 'success' | 'error';
+  /** Plain text result. */
   result?: unknown;
+  /** Structured content blocks (text + images). When present, supersedes `result`. */
+  content?: Array<{type: 'text'; text: string} | {type: 'image'; mimeType: string; data: string; isUrl?: boolean}>;
   parameters?: Record<string, unknown>;
   duration_ms?: number;
   error?: string;

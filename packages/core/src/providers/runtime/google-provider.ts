@@ -171,6 +171,10 @@ interface GeminiPart {
     name?: string;
     args?: Record<string, unknown>;
   };
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -194,16 +198,22 @@ function convertMessages(messages: LLMMessage[]): GeminiContent[] {
       case 'assistant':
         result.push({
           role: 'model',
-          parts: msg.content.map((block) => {
+          parts: msg.content.flatMap((block): Array<Record<string, unknown>> => {
             if (block.type === 'text') {
-              return {text: block.text};
+              return [{text: block.text}];
             }
-            return {
-              functionCall: {
-                name: block.name,
-                args: block.input,
-              },
-            };
+            if (block.type === 'tool_use') {
+              return [{
+                functionCall: {
+                  name: block.name,
+                  args: block.input,
+                },
+              }];
+            }
+            if (block.type === 'image') {
+              return [{inlineData: {mimeType: block.mimeType, data: block.data}}];
+            }
+            return [];
           }),
         });
         break;
@@ -279,6 +289,12 @@ function convertResponseParts(parts: GeminiPart[]): LLMResponseBlock[] {
         id: part.functionCall.id ?? `call_${part.functionCall.name}_${Date.now()}`,
         name: part.functionCall.name,
         input: part.functionCall.args ?? {},
+      });
+    } else if (part.inlineData?.data) {
+      result.push({
+        type: 'image',
+        mimeType: part.inlineData.mimeType,
+        data: part.inlineData.data,
       });
     }
   }

@@ -29,11 +29,31 @@ export interface ToolCall {
   args: Record<string, unknown>;
 }
 
+// ---------------------------------------------------------------------------
+// Tool result content (structured blocks for images, text, etc.)
+// ---------------------------------------------------------------------------
+
+export interface ToolResultTextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface ToolResultImageBlock {
+  type: 'image';
+  mimeType: string;
+  /** base64-encoded data or a URL (when isUrl is true) */
+  data: string;
+  isUrl?: boolean;
+}
+
+export type ToolResultContentBlock = ToolResultTextBlock | ToolResultImageBlock;
+
 export interface ToolResult {
   callId: string;
   toolName: string;
   status: 'success' | 'error';
-  content: string;
+  /** Plain string or structured content blocks (when images are present). */
+  content: string | ToolResultContentBlock[];
 }
 
 // ---------------------------------------------------------------------------

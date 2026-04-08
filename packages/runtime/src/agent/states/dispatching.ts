@@ -96,7 +96,7 @@ export async function handleDispatching(
       tool_id: toolCallId,
       status: result.status,
       duration_ms: Date.now() - startedAt,
-      error: result.content,
+      error: typeof result.content === 'string' ? result.content : undefined,
       timestamp: new Date().toISOString(),
     });
     const executingState = {
@@ -287,7 +287,7 @@ export async function handleDispatching(
     tool_id: toolCallId,
     status: result.status,
     duration_ms: duration,
-    ...(result.status === 'error' ? {error: result.content} : {}),
+    ...(result.status === 'error' ? {error: typeof result.content === 'string' ? result.content : undefined} : {}),
     timestamp: new Date().toISOString(),
   });
 

@@ -265,17 +265,21 @@ function convertMessages(messages: LLMMessage[]): BedrockMessage[] {
       case 'assistant':
         result.push({
           role: 'assistant',
-          content: msg.content.map((block) => {
+          content: msg.content.flatMap((block): Array<Record<string, unknown>> => {
             if (block.type === 'text') {
-              return {text: block.text};
+              return [{text: block.text}];
             }
-            return {
-              toolUse: {
-                toolUseId: block.id,
-                name: block.name,
-                input: block.input,
-              },
-            };
+            if (block.type === 'tool_use') {
+              return [{
+                toolUse: {
+                  toolUseId: block.id,
+                  name: block.name,
+                  input: block.input,
+                },
+              }];
+            }
+            // Skip image blocks — Bedrock doesn't support inline images in assistant messages
+            return [];
           }),
         });
         break;

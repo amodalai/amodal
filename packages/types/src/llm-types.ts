@@ -72,11 +72,19 @@ export interface LLMUsage {
   cacheCreationInputTokens?: number;
 }
 
-export type LLMResponseBlock = LLMTextBlock | LLMToolUseBlock;
+export type LLMResponseBlock = LLMTextBlock | LLMToolUseBlock | LLMImageBlock;
 
 export interface LLMTextBlock {
   type: 'text';
   text: string;
+}
+
+/** An image block returned by the LLM (e.g. Gemini native image generation). */
+export interface LLMImageBlock {
+  type: 'image';
+  mimeType: string;
+  /** base64-encoded image data */
+  data: string;
 }
 
 export interface LLMToolUseBlock {

@@ -220,6 +220,88 @@ describe('createMcpToolDefinition', () => {
     await expect(def.execute({}, ctx)).rejects.toThrow(ConnectionError);
     await expect(def.execute({}, ctx)).rejects.toThrow(/timed out/);
   });
+
+  it('preserves image content blocks as structured output', async () => {
+    const callTool = vi.fn().mockResolvedValue({
+      content: [
+        {type: 'text', text: 'Here is the screenshot'},
+        {type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUg=='},
+      ],
+    });
+
+    const mcpManager = makeMockMcpManager({callTool});
+    const tool: McpDiscoveredTool = {
+      name: 'browser__screenshot',
+      originalName: 'screenshot',
+      serverName: 'browser',
+      description: 'Take screenshot',
+      parameters: {type: 'object'},
+    };
+
+    const def = createMcpToolDefinition(tool, mcpManager, logger);
+    const result = await def.execute({}, makeMockContext());
+
+    // Should return structured content blocks, not a placeholder string
+    expect(result).toEqual({
+      output: [
+        {type: 'text', text: 'Here is the screenshot'},
+        {type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUg=='},
+      ],
+    });
+  });
+
+  it('replaces oversized images with text placeholder', async () => {
+    const largeData = 'x'.repeat(6 * 1024 * 1024); // 6MB — exceeds 5MB limit
+    const callTool = vi.fn().mockResolvedValue({
+      content: [
+        {type: 'text', text: 'result'},
+        {type: 'image', mimeType: 'image/png', data: largeData},
+      ],
+    });
+
+    const mcpManager = makeMockMcpManager({callTool});
+    const tool: McpDiscoveredTool = {
+      name: 'browser__screenshot',
+      originalName: 'screenshot',
+      serverName: 'browser',
+      description: 'Take screenshot',
+      parameters: {type: 'object'},
+    };
+
+    const def = createMcpToolDefinition(tool, mcpManager, logger);
+    const result = await def.execute({}, makeMockContext());
+
+     
+    const blocks = (result as {output: Array<{type: string; text?: string}>}).output;
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toEqual({type: 'text', text: 'result'});
+    expect(blocks[1].type).toBe('text');
+    expect(blocks[1].text).toContain('image too large');
+  });
+
+  it('returns plain string output when no images are present', async () => {
+    const callTool = vi.fn().mockResolvedValue({
+      content: [
+        {type: 'text', text: 'just text'},
+        {type: 'text', text: 'more text'},
+      ],
+    });
+
+    const mcpManager = makeMockMcpManager({callTool});
+    const tool: McpDiscoveredTool = {
+      name: 'server__tool',
+      originalName: 'tool',
+      serverName: 'server',
+      description: 'Do thing',
+      parameters: {type: 'object'},
+    };
+
+    const def = createMcpToolDefinition(tool, mcpManager, logger);
+    const result = await def.execute({}, makeMockContext());
+
+    // No images — should return plain string, not blocks
+    expect(result).toEqual({output: 'just text\nmore text'});
+  });
 });
 
 // ---------------------------------------------------------------------------

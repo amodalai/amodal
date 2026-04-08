@@ -48,6 +48,7 @@ export type {
   LLMResponseBlock,
   LLMTextBlock,
   LLMToolUseBlock,
+  LLMImageBlock,
   LLMToolDefinition,
   RuntimeProvider,
   LLMStreamEvent,
