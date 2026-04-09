@@ -200,21 +200,12 @@ function convertMessages(messages: LLMMessage[]): GeminiContent[] {
         result.push({
           role: 'model',
           parts: msg.content.flatMap((block): Array<Record<string, unknown>> => {
-            if (block.type === 'text') {
-              return [{text: block.text}];
+            switch (block.type) {
+              case 'text': return [{text: block.text}];
+              case 'tool_use': return [{functionCall: {name: block.name, args: block.input}}];
+              case 'image': return [{inlineData: {mimeType: block.mimeType, data: block.data}}];
+              default: { const _exhaustive: never = block; void _exhaustive; return []; }
             }
-            if (block.type === 'tool_use') {
-              return [{
-                functionCall: {
-                  name: block.name,
-                  args: block.input,
-                },
-              }];
-            }
-            if (block.type === 'image') {
-              return [{inlineData: {mimeType: block.mimeType, data: block.data}}];
-            }
-            return [];
           }),
         });
         break;

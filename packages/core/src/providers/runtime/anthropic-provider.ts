@@ -274,19 +274,12 @@ function convertMessages(messages: LLMMessage[]): AnthropicMessage[] {
         result.push({
           role: 'assistant',
           content: msg.content.flatMap((block): Array<Record<string, unknown>> => {
-            if (block.type === 'text') {
-              return [{type: 'text', text: block.text}];
+            switch (block.type) {
+              case 'text': return [{type: 'text', text: block.text}];
+              case 'tool_use': return [{type: 'tool_use', id: block.id, name: block.name, input: block.input}];
+              case 'image': return []; // Anthropic doesn't support inline images in assistant messages
+              default: { const _exhaustive: never = block; void _exhaustive; return []; }
             }
-            if (block.type === 'tool_use') {
-              return [{
-                type: 'tool_use',
-                id: block.id,
-                name: block.name,
-                input: block.input,
-              }];
-            }
-            // Skip image blocks — Anthropic doesn't support inline images in assistant messages
-            return [];
           }),
         });
         break;

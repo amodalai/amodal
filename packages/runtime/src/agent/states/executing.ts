@@ -543,7 +543,7 @@ function extractToolContent(output: unknown): string | ToolResultContentBlock[] 
 
   // Detect structured output from MCP adapter: {output: [...blocks]}
   if ('output' in output) {
-    const inner = (output as {output: unknown}).output;
+    const inner: unknown = output.output;
     if (Array.isArray(inner) && inner.length > 0 && isContentBlockArray(inner)) {
       return inner;
     }
@@ -556,7 +556,7 @@ function extractToolContent(output: unknown): string | ToolResultContentBlock[] 
 
   // {url: "data:image/...;base64,..."} — common pattern from generate_image tools
   if ('url' in output) {
-    const url = (output as {url: unknown}).url;
+    const url: unknown = output.url;
     if (typeof url === 'string') {
       const m = DATA_URI_RE.exec(url);
       if (m) return [{type: 'image', mimeType: m[1], data: m[2]}];

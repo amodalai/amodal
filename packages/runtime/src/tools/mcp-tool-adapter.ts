@@ -26,6 +26,9 @@ import type {Logger} from '@amodalai/core';
 /** Default timeout for MCP tool calls (60 seconds). */
 const MCP_TOOL_TIMEOUT_MS = 60_000;
 
+/** Default MIME type when an MCP image response doesn't specify one. */
+const DEFAULT_IMAGE_MIME_TYPE = 'image/png';
+
 // ---------------------------------------------------------------------------
 // MCP tool → ToolDefinition
 // ---------------------------------------------------------------------------
@@ -117,7 +120,7 @@ export function createMcpToolDefinition(
             } else if (c.type === 'image' && c.data) {
               // Some MCP tools return data as a full data URI; extract the raw base64.
               const dataUriMatch = /^data:([^;]+);base64,(.+)$/.exec(c.data);
-              const mimeType = dataUriMatch ? dataUriMatch[1] : (c.mimeType ?? 'image/png');
+              const mimeType = dataUriMatch ? dataUriMatch[1] : (c.mimeType ?? DEFAULT_IMAGE_MIME_TYPE);
               const rawData = dataUriMatch ? dataUriMatch[2] : c.data;
               blocks.push({type: 'image', mimeType, data: rawData});
             }

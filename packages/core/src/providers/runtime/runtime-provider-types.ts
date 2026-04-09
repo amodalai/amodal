@@ -24,14 +24,15 @@ export type {
 
 import type {LLMUserImagePart} from '@amodalai/types';
 
+/** Default MIME type when an image part doesn't specify one. */
+export const DEFAULT_IMAGE_MIME_TYPE = 'image/png';
+
 /**
  * Normalize an image content part that may use either our LLMUserImagePart
  * field names (data, mimeType) or the Vercel AI SDK ImagePart field names
  * (image, mediaType). Returns consistent {data, mimeType} values.
- *
- * At runtime the part object may carry AI SDK fields that don't exist on
- * our LLMUserImagePart type, so we index into it dynamically.
  */
+
 /**
  * AI SDK ImagePart shape — not imported to avoid adding ai as a dependency to core.
  * Only used for the type guard below.
@@ -48,13 +49,12 @@ function isAISDKImagePart(part: unknown): part is AISDKImagePart {
   return typeof part.image === 'string';
 }
 
-export function normalizeImagePart(part: LLMUserImagePart): {data: string; mimeType: string} {
+export function normalizeImagePart(part: LLMUserImagePart | AISDKImagePart): {data: string; mimeType: string} {
   // Our LLMUserImagePart has `data` + `mimeType`; AI SDK's ImagePart has
   // `image` + `mediaType`. At runtime both shapes flow through the same
   // message array, so we detect which shape we actually received.
-  if (part.data && part.mimeType) return {data: part.data, mimeType: part.mimeType};
   if (isAISDKImagePart(part)) {
-    return {data: part.image, mimeType: part.mediaType ?? 'image/png'};
+    return {data: part.image, mimeType: part.mediaType ?? DEFAULT_IMAGE_MIME_TYPE};
   }
-  return {data: part.data ?? '', mimeType: part.mimeType ?? 'image/png'};
+  return {data: part.data ?? '', mimeType: part.mimeType ?? DEFAULT_IMAGE_MIME_TYPE};
 }

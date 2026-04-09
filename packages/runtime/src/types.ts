@@ -6,6 +6,8 @@
 
 import { z } from 'zod';
 import type { AutomationDefinition } from '@amodalai/core';
+import type { SSEToolResultContentBlock } from '@amodalai/types';
+export type { SSEToolResultTextBlock, SSEToolResultImageBlock, SSEToolResultContentBlock } from '@amodalai/types';
 
 // ---------------------------------------------------------------------------
 // Request schemas
@@ -132,23 +134,6 @@ export interface SSEToolCallStartEvent {
   parameters: Record<string, unknown>;
   timestamp: string;
 }
-
-/** A text block in a structured tool result. */
-export interface SSEToolResultTextBlock {
-  type: 'text';
-  text: string;
-}
-
-/** An image block in a structured tool result. */
-export interface SSEToolResultImageBlock {
-  type: 'image';
-  mimeType: string;
-  data: string;
-  isUrl?: boolean;
-}
-
-/** Discriminated union for structured tool result content. */
-export type SSEToolResultContentBlock = SSEToolResultTextBlock | SSEToolResultImageBlock;
 
 export interface SSEToolCallResultEvent {
   type: SSEEventType.ToolCallResult;

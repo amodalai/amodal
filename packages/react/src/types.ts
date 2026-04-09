@@ -51,7 +51,11 @@ export interface SSEToolCallStartEvent {
   timestamp: string;
 }
 
-/** Mirrored from runtime/src/types.ts — discriminated union for structured tool result content. */
+/**
+ * Structured tool result content blocks.
+ * Canonical definitions are in @amodalai/types (sse-types.ts).
+ * Mirrored here because @amodalai/react has no dependency on @amodalai/types.
+ */
 export interface SSEToolResultTextBlock {
   type: 'text';
   text: string;

@@ -18,6 +18,7 @@ import type {
   LLMToolUseBlock,
   LLMToolDefinition,
 } from './runtime-provider-types.js';
+import {normalizeImagePart, DEFAULT_IMAGE_MIME_TYPE} from './runtime-provider-types.js';
 
 describe('runtime-provider-types', () => {
   it('should allow constructing a user message', () => {
@@ -109,5 +110,32 @@ describe('runtime-provider-types', () => {
       },
     };
     expect(provider.chat).toBeDefined();
+  });
+});
+
+describe('normalizeImagePart', () => {
+  it('should pass through LLMUserImagePart fields', () => {
+    const result = normalizeImagePart({type: 'image', mimeType: 'image/jpeg', data: 'abc123'});
+    expect(result).toEqual({data: 'abc123', mimeType: 'image/jpeg'});
+  });
+
+  it('should normalize AI SDK ImagePart fields', () => {
+    // AI SDK uses `image` + `mediaType` instead of `data` + `mimeType`
+    const aiSdkPart = {type: 'image' as const, image: 'xyz789', mediaType: 'image/webp'};
+    const result = normalizeImagePart(aiSdkPart);
+    expect(result).toEqual({data: 'xyz789', mimeType: 'image/webp'});
+  });
+
+  it('should default mimeType for AI SDK parts without mediaType', () => {
+    const aiSdkPart = {type: 'image' as const, image: 'abc'};
+    const result = normalizeImagePart(aiSdkPart);
+    expect(result).toEqual({data: 'abc', mimeType: DEFAULT_IMAGE_MIME_TYPE});
+  });
+
+  it('should default mimeType for LLM parts with empty mimeType', () => {
+     
+    const part = {type: 'image' as const, data: 'abc', mimeType: undefined} as unknown as Parameters<typeof normalizeImagePart>[0];
+    const result = normalizeImagePart(part);
+    expect(result.mimeType).toBe(DEFAULT_IMAGE_MIME_TYPE);
   });
 });

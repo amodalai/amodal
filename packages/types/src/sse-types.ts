@@ -46,11 +46,31 @@ export interface SSEToolCallStartEvent {
   timestamp: string;
 }
 
+/** A text block in a structured tool result. */
+export interface SSEToolResultTextBlock {
+  type: 'text';
+  text: string;
+}
+
+/** An image block in a structured tool result. */
+export interface SSEToolResultImageBlock {
+  type: 'image';
+  mimeType: string;
+  data: string;
+  isUrl?: boolean;
+}
+
+/** Discriminated union for structured tool result content. */
+export type SSEToolResultContentBlock = SSEToolResultTextBlock | SSEToolResultImageBlock;
+
 export interface SSEToolCallResultEvent {
   type: SSEEventType.ToolCallResult;
   tool_id: string;
   status: 'success' | 'error';
+  /** Plain text result. */
   result?: string;
+  /** Structured content blocks with images. When present, supersedes `result`. */
+  content?: SSEToolResultContentBlock[];
   parameters?: Record<string, unknown>;
   duration_ms?: number;
   error?: string;
