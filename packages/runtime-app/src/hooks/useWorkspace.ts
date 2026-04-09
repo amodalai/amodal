@@ -121,9 +121,16 @@ export function useWorkspace(): WorkspaceState | null {
   const [stored, setStored] = useState<StoredWorkspace | null>(null);
   const [lockedByOtherTab, setLockedByOtherTab] = useState(false);
   const configFetched = useRef(false);
+  const wsConfigRef = useRef<WorkspaceConfig | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
-  // Fetch workspace config from /api/config on mount
+  // Keep ref in sync so callbacks always have latest config
+  useEffect(() => {
+    wsConfigRef.current = wsConfig;
+  }, [wsConfig]);
+
+  // Fetch workspace config on mount, then restore from localStorage if needed.
+  // This ensures pending changes survive Fly machine cold starts.
   useEffect(() => {
     if (configFetched.current) return;
     configFetched.current = true;
@@ -140,8 +147,22 @@ export function useWorkspace(): WorkspaceState | null {
           if (!wsConf.enabled) return;
           if (!wsConf.appId || !wsConf.platformApiUrl) return;
           setWsConfig(wsConf);
+          wsConfigRef.current = wsConf;
           const key = getStorageKey(wsConf.appId);
-          setStored(getStoredWorkspace(key));
+          const existing = getStoredWorkspace(key);
+          setStored(existing);
+
+          // If localStorage has a pending bundle, restore it to the runtime.
+          // The server is idempotent — if /tmp/workspace already matches, it skips.
+          if (existing?.bundle && existing?.headSha) {
+            void fetch('/api/workspace/restore', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bundle: existing.bundle, headSha: existing.headSha }),
+            }).catch(() => {
+              // Restore failed — edits are still in localStorage for next attempt
+            });
+          }
         }
       })
       .catch(() => {
@@ -185,13 +206,14 @@ export function useWorkspace(): WorkspaceState | null {
 
   const onFileSaved = useCallback(
     (workspace: WorkspaceResponse) => {
-      if (!wsConfig) return;
-      const key = getStorageKey(wsConfig.appId);
+      const cfg = wsConfigRef.current;
+      if (!cfg) return;
+      const key = getStorageKey(cfg.appId);
       const current = getStoredWorkspace(key);
 
       const updated: StoredWorkspace = {
-        baseCommitSha: current?.baseCommitSha ?? wsConfig.baseCommitSha,
-        baseBranchName: wsConfig.baseBranchName,
+        baseCommitSha: current?.baseCommitSha ?? cfg.baseCommitSha,
+        baseBranchName: cfg.baseBranchName,
         headSha: workspace.commit.sha,
         bundle: workspace.bundle,
         commits: workspace.commits,
@@ -205,7 +227,7 @@ export function useWorkspace(): WorkspaceState | null {
       // Notify other tabs
       channelRef.current?.postMessage({ type: 'workspace-updated' });
     },
-    [wsConfig],
+    [],
   );
 
   const restore = useCallback(async () => {
