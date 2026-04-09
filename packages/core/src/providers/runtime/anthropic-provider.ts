@@ -15,6 +15,7 @@ import type {
   LLMUsage,
   LLMUserContentPart,
 } from './runtime-provider-types.js';
+import {normalizeImagePart} from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
 
@@ -319,9 +320,10 @@ function formatUserContent(
   if (typeof content === 'string') return content;
   return content.map((part) => {
     if (part.type === 'text') return {type: 'text', text: part.text};
+    const img = normalizeImagePart(part);
     return {
       type: 'image',
-      source: {type: 'base64', media_type: part.mimeType, data: part.data},
+      source: {type: 'base64', media_type: img.mimeType, data: img.data},
     };
   });
 }
