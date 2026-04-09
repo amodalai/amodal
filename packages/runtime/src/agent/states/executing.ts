@@ -34,7 +34,9 @@ import type {
   TransitionResult,
   ToolCall,
   ToolResult,
+  ToolResultContentBlock,
 } from '../loop-types.js';
+import {MAX_IMAGE_BLOCK_SIZE, MAX_TOTAL_IMAGE_SIZE, contentBlocksToString} from '../loop-types.js';
 import {estimateTokenCount} from '../token-estimate.js';
 import {DISPATCH_TOOL_NAME} from '../../tools/dispatch-tool.js';
 
@@ -362,7 +364,9 @@ async function runToolCall(
     const cached = ctx.preExecutionCache.get(call.toolCallId);
     const output = cached ? await cached : await executeTool(call, toolDef, ctx);
 
-    const content = typeof output === 'string' ? output : JSON.stringify(output);
+    // Detect structured content blocks from tools that return images
+    // (e.g. MCP adapter returns {output: ToolResultContentBlock[]}).
+    const content = extractToolContent(output);
 
     // Detect error-as-result pattern: tool returned {error: "..."} without throwing.
     // This happens when tool internals catch errors and return them as data.
@@ -389,7 +393,7 @@ async function runToolCall(
         callId: call.toolCallId,
         toolName: call.toolName,
         status: isErrorResult ? 'error' : 'success',
-        content,
+        content: isErrorResult && typeof content !== 'string' ? contentBlocksToString(content) : content,
       },
       duration,
     };
@@ -424,13 +428,37 @@ function buildToolCallStartEvent(call: ToolCall, timestamp: string): SSEEvent {
   };
 }
 
+/** Max size for tool result content sent via SSE (50KB). */
+const MAX_SSE_RESULT_SIZE = 50_000;
+
 function buildToolCallResultEvent(call: ToolCall, result: ToolResult, duration: number): SSEEvent {
+  // For structured content (images + text), send as content blocks
+  if (result.status === 'success' && Array.isArray(result.content)) {
+    return {
+      type: SSEEventType.ToolCallResult,
+      tool_id: call.toolCallId,
+      status: result.status,
+      duration_ms: duration,
+      content: result.content,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // For plain string results, send truncated text
+  let resultField: string | undefined;
+  if (result.status === 'success' && typeof result.content === 'string') {
+    resultField = result.content.length > MAX_SSE_RESULT_SIZE
+      ? result.content.slice(0, MAX_SSE_RESULT_SIZE) + '\n[... truncated]'
+      : result.content;
+  }
+
   return {
     type: SSEEventType.ToolCallResult,
     tool_id: call.toolCallId,
     status: result.status,
     duration_ms: duration,
-    ...(result.status === 'error' ? {error: result.content} : {}),
+    ...(result.status === 'error' ? {error: typeof result.content === 'string' ? result.content : contentBlocksToString(result.content)} : {}),
+    ...(resultField !== undefined ? {result: resultField} : {}),
     timestamp: new Date().toISOString(),
   };
 }
@@ -490,6 +518,70 @@ export function nextAfterToolResult(
   return transitionAfterQueueEmpty(ctx, effects);
 }
 
+// ---------------------------------------------------------------------------
+// Content extraction helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect structured content blocks from tool output.
+ * MCP adapter returns `{output: ToolResultContentBlock[]}` when images
+ * are present, and `{output: string}` otherwise. Other tools return
+ * strings or JSON-serializable objects.
+ */
+/** Regex to detect a data URI with an image MIME type. */
+const DATA_URI_RE = /^data:(image\/[a-z+]+);base64,(.+)$/s;
+
+function extractToolContent(output: unknown): string | ToolResultContentBlock[] {
+  if (typeof output === 'string') {
+    // A bare data URI string → convert to image block
+    const m = DATA_URI_RE.exec(output);
+    if (m) return [{type: 'image', mimeType: m[1], data: m[2]}];
+    return output;
+  }
+
+  if (typeof output !== 'object' || output === null) return JSON.stringify(output);
+
+  // Detect structured output from MCP adapter: {output: [...blocks]}
+  if ('output' in output) {
+    const inner: unknown = output.output;
+    if (Array.isArray(inner) && inner.length > 0 && isContentBlockArray(inner)) {
+      return inner;
+    }
+    // {output: "data:image/...;base64,..."} — single image in output field
+    if (typeof inner === 'string') {
+      const m = DATA_URI_RE.exec(inner);
+      if (m) return [{type: 'image', mimeType: m[1], data: m[2]}];
+    }
+  }
+
+  // {url: "data:image/...;base64,..."} — common pattern from generate_image tools
+  if ('url' in output) {
+    const url: unknown = output.url;
+    if (typeof url === 'string') {
+      const m = DATA_URI_RE.exec(url);
+      if (m) return [{type: 'image', mimeType: m[1], data: m[2]}];
+    }
+  }
+
+  return JSON.stringify(output);
+}
+
+function hasType(item: unknown): item is {type: string} {
+  return typeof item === 'object' && item !== null && 'type' in item && typeof (item as {type: unknown}).type === 'string';
+}
+
+function isContentBlockArray(arr: unknown[]): arr is ToolResultContentBlock[] {
+  return arr.every((item) =>
+    hasType(item) && (item.type === 'text' || item.type === 'image'),
+  );
+}
+
+// contentBlocksToString imported from loop-types.ts
+
+// ---------------------------------------------------------------------------
+// Snipping
+// ---------------------------------------------------------------------------
+
 /**
  * Smart snipping: if a tool result exceeds maxResultSize, keep the first
  * and last 2K chars with a [snipped] marker in between. This preserves the
@@ -497,6 +589,11 @@ export function nextAfterToolResult(
  * cutting the middle bulk.
  */
 function snipIfOversized(result: ToolResult, ctx: AgentContext): ToolResult {
+  // Structured content: snip text blocks, cap image blocks by size
+  if (Array.isArray(result.content)) {
+    return snipStructuredContent({...result, content: result.content}, ctx);
+  }
+
   if (result.content.length <= ctx.config.maxResultSize) return result;
   const originalSize = result.content.length;
   const keepChars = 2_000;
@@ -513,6 +610,39 @@ function snipIfOversized(result: ToolResult, ctx: AgentContext): ToolResult {
     ...result,
     content: `${head}\n\n[... snipped ${String(originalSize - keepChars * 2)} chars — full output was ${String(originalSize)} chars ...]\n\n${tail}`,
   };
+}
+
+function snipStructuredContent(result: ToolResult & {content: ToolResultContentBlock[]}, ctx: AgentContext): ToolResult {
+  const blocks = result.content;
+  const maxText = ctx.config.maxResultSize;
+  const keepChars = 2_000;
+  let totalImageSize = 0;
+
+  const snipped: ToolResultContentBlock[] = blocks.map((block) => {
+    if (block.type === 'text') {
+      if (block.text.length <= maxText) return block;
+      const head = block.text.slice(0, keepChars);
+      const tail = block.text.slice(-keepChars);
+      return {type: 'text' as const, text: `${head}\n\n[... snipped ...]\n\n${tail}`};
+    }
+
+    // Image block — enforce per-image and total size caps
+    if (block.data.length > MAX_IMAGE_BLOCK_SIZE || totalImageSize + block.data.length > MAX_TOTAL_IMAGE_SIZE) {
+      const sizeMB = (block.data.length / 1024 / 1024).toFixed(1);
+      ctx.logger.info('tool_result_image_dropped', {
+        callId: result.callId,
+        tool: result.toolName,
+        mimeType: block.mimeType,
+        sizeMB,
+        session: ctx.sessionId,
+      });
+      return {type: 'text' as const, text: `[image too large: ${block.mimeType}, ${sizeMB}MB]`};
+    }
+    totalImageSize += block.data.length;
+    return block;
+  });
+
+  return {...result, content: snipped};
 }
 
 /**
@@ -543,13 +673,18 @@ function transitionAfterQueueEmpty(ctx: AgentContext, effects: SSEEvent[]): Tran
  * Build a tool result message in AI SDK format.
  */
 function buildToolResultMessage(result: ToolResult): ModelMessage {
+  // AI SDK expects text content — convert structured blocks to string for LLM context
+  const textValue = typeof result.content === 'string'
+    ? result.content
+    : contentBlocksToString(result.content);
+
   return {
     role: 'tool',
     content: [{
       type: 'tool-result' as const,
       toolCallId: result.callId,
       toolName: result.toolName,
-      output: {type: 'text' as const, value: result.content},
+      output: {type: 'text' as const, value: textValue},
     }],
   };
 }

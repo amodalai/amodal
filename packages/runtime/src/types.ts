@@ -6,6 +6,8 @@
 
 import { z } from 'zod';
 import type { AutomationDefinition } from '@amodalai/core';
+import type { SSEToolResultContentBlock } from '@amodalai/types';
+export type { SSEToolResultTextBlock, SSEToolResultImageBlock, SSEToolResultContentBlock } from '@amodalai/types';
 
 // ---------------------------------------------------------------------------
 // Request schemas
@@ -137,7 +139,10 @@ export interface SSEToolCallResultEvent {
   type: SSEEventType.ToolCallResult;
   tool_id: string;
   status: 'success' | 'error';
+  /** Plain text result (Phase 1 — string tool results). */
   result?: string;
+  /** Structured content blocks with images (Phase 2). When present, supersedes `result`. */
+  content?: SSEToolResultContentBlock[];
   parameters?: Record<string, unknown>;
   duration_ms?: number;
   error?: string;

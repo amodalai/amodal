@@ -14,6 +14,7 @@ import type {
   LLMToolDefinition,
   LLMUserContentPart,
 } from './runtime-provider-types.js';
+import {normalizeImagePart} from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
 
@@ -265,17 +266,13 @@ function convertMessages(messages: LLMMessage[]): BedrockMessage[] {
       case 'assistant':
         result.push({
           role: 'assistant',
-          content: msg.content.map((block) => {
-            if (block.type === 'text') {
-              return {text: block.text};
+          content: msg.content.flatMap((block): Array<Record<string, unknown>> => {
+            switch (block.type) {
+              case 'text': return [{text: block.text}];
+              case 'tool_use': return [{toolUse: {toolUseId: block.id, name: block.name, input: block.input}}];
+              case 'image': return []; // Bedrock doesn't support inline images in assistant messages
+              default: { const _exhaustive: never = block; void _exhaustive; return []; }
             }
-            return {
-              toolUse: {
-                toolUseId: block.id,
-                name: block.name,
-                input: block.input,
-              },
-            };
           }),
         });
         break;
@@ -309,10 +306,11 @@ function formatUserContent(
   if (typeof content === 'string') return [{text: content}];
   return content.map((part) => {
     if (part.type === 'text') return {text: part.text};
+    const img = normalizeImagePart(part);
     return {
       image: {
-        format: part.mimeType.split('/')[1],
-        source: {bytes: Uint8Array.from(atob(part.data), (c) => c.charCodeAt(0))},
+        format: img.mimeType.split('/')[1],
+        source: {bytes: Uint8Array.from(atob(img.data), (c) => c.charCodeAt(0))},
       },
     };
   });

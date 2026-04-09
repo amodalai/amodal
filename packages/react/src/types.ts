@@ -51,11 +51,33 @@ export interface SSEToolCallStartEvent {
   timestamp: string;
 }
 
+/**
+ * Structured tool result content blocks.
+ * Canonical definitions are in @amodalai/types (sse-types.ts).
+ * Mirrored here because @amodalai/react has no dependency on @amodalai/types.
+ */
+export interface SSEToolResultTextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface SSEToolResultImageBlock {
+  type: 'image';
+  mimeType: string;
+  data: string;
+  isUrl?: boolean;
+}
+
+export type SSEToolResultContentBlock = SSEToolResultTextBlock | SSEToolResultImageBlock;
+
 export interface SSEToolCallResultEvent {
   type: 'tool_call_result';
   tool_id: string;
   status: 'success' | 'error';
+  /** Plain text result. */
   result?: unknown;
+  /** Structured content blocks (text + images). When present, supersedes `result`. */
+  content?: SSEToolResultContentBlock[];
   parameters?: Record<string, unknown>;
   duration_ms?: number;
   error?: string;

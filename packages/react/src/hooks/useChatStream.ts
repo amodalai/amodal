@@ -603,7 +603,7 @@ function processEvent(
         toolName: pendingCall?.toolName ?? '',
         parameters: pendingCall?.parameters ?? {},
         status: event.status,
-        result: event.result,
+        result: event.content ?? event.result,
         duration_ms: event.duration_ms,
         error: event.error,
       };
@@ -612,7 +612,7 @@ function processEvent(
         type: 'STREAM_TOOL_CALL_RESULT',
         toolId: event.tool_id,
         status: event.status,
-        result: event.result,
+        result: event.content ?? event.result,
         duration_ms: event.duration_ms,
         error: event.error,
       });

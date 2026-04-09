@@ -14,6 +14,7 @@ import type {
   LLMToolDefinition,
   LLMUserContentPart,
 } from './runtime-provider-types.js';
+import {normalizeImagePart} from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
 
@@ -263,9 +264,10 @@ function formatUserContent(
   if (typeof content === 'string') return content;
   return content.map((part) => {
     if (part.type === 'text') return {type: 'text', text: part.text};
+    const img = normalizeImagePart(part);
     return {
       type: 'image_url',
-      image_url: {url: `data:${part.mimeType};base64,${part.data}`},
+      image_url: {url: `data:${img.mimeType};base64,${img.data}`},
     };
   });
 }

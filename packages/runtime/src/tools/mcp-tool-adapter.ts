@@ -26,6 +26,9 @@ import type {Logger} from '@amodalai/core';
 /** Default timeout for MCP tool calls (60 seconds). */
 const MCP_TOOL_TIMEOUT_MS = 60_000;
 
+/** Default MIME type when an MCP image response doesn't specify one. */
+const DEFAULT_IMAGE_MIME_TYPE = 'image/png';
+
 // ---------------------------------------------------------------------------
 // MCP tool → ToolDefinition
 // ---------------------------------------------------------------------------
@@ -104,11 +107,30 @@ export function createMcpToolDefinition(
           return {error: errorText || 'MCP tool returned an error'};
         }
 
-        // Format the response content
+        // Format the response content — preserve image blocks as structured
+        // content so they can be rendered in the UI instead of being discarded.
+        // Size enforcement is handled by snipIfOversized in executing.ts.
+        const hasImages = result.content.some((c) => c.type === 'image' && c.data);
+
+        if (hasImages) {
+          const blocks: Array<{type: 'text'; text: string} | {type: 'image'; mimeType: string; data: string}> = [];
+          for (const c of result.content) {
+            if (c.type === 'text' && c.text) {
+              blocks.push({type: 'text', text: c.text});
+            } else if (c.type === 'image' && c.data) {
+              // Some MCP tools return data as a full data URI; extract the raw base64.
+              const dataUriMatch = /^data:([^;]+);base64,(.+)$/.exec(c.data);
+              const mimeType = dataUriMatch ? dataUriMatch[1] : (c.mimeType ?? DEFAULT_IMAGE_MIME_TYPE);
+              const rawData = dataUriMatch ? dataUriMatch[2] : c.data;
+              blocks.push({type: 'image', mimeType, data: rawData});
+            }
+          }
+          return {output: blocks};
+        }
+
         const output = result.content
           .map((c) => {
             if (c.type === 'text' && c.text) return c.text;
-            if (c.type === 'image' && c.data) return `[image: ${c.mimeType ?? 'unknown'}]`;
             return `[${c.type}]`;
           })
           .join('\n');

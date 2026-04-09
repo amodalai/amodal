@@ -29,11 +29,47 @@ export interface ToolCall {
   args: Record<string, unknown>;
 }
 
+// ---------------------------------------------------------------------------
+// Tool result content (structured blocks for images, text, etc.)
+// ---------------------------------------------------------------------------
+
+/** Max base64 size for a single image in a tool result (1MB). */
+export const MAX_IMAGE_BLOCK_SIZE = 1_024 * 1_024;
+
+/** Max total base64 image data across all images in a single tool result (5MB). */
+export const MAX_TOTAL_IMAGE_SIZE = 5 * 1_024 * 1_024;
+
+export interface ToolResultTextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface ToolResultImageBlock {
+  type: 'image';
+  mimeType: string;
+  /** base64-encoded data or a URL (when isUrl is true) */
+  data: string;
+  isUrl?: boolean;
+}
+
+export type ToolResultContentBlock = ToolResultTextBlock | ToolResultImageBlock;
+
 export interface ToolResult {
   callId: string;
   toolName: string;
   status: 'success' | 'error';
-  content: string;
+  /** Plain string or structured content blocks (when images are present). */
+  content: string | ToolResultContentBlock[];
+}
+
+/** Convert structured content blocks to a plain string for error messages or LLM context. */
+export function contentBlocksToString(blocks: ToolResultContentBlock[]): string {
+  return blocks
+    .map((b) => {
+      if (b.type === 'text') return b.text;
+      return `[image: ${b.mimeType}]`;
+    })
+    .join('\n');
 }
 
 // ---------------------------------------------------------------------------

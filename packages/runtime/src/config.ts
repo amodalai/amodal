@@ -77,6 +77,21 @@ const PROVIDER_ENV_KEYS: Record<string, string> = {
   bedrock: 'AWS_ACCESS_KEY_ID', // Bedrock uses AWS credential chain
 };
 
+/** Alternative env var names that some SDKs use for the same provider. */
+const PROVIDER_ALT_ENV_KEYS: Record<string, string> = {
+  google: 'GOOGLE_GENERATIVE_AI_API_KEY', // @ai-sdk/google uses this name
+};
+
+/**
+ * Resolve the API key for a provider from the environment.
+ * Checks the canonical env var first, then any SDK-specific alternative.
+ */
+export function resolveProviderApiKey(provider: string): string | undefined {
+  const envKey = PROVIDER_ENV_KEYS[provider] ?? `${provider.toUpperCase()}_API_KEY`;
+  const altEnvKey = PROVIDER_ALT_ENV_KEYS[provider];
+  return process.env[envKey] ?? (altEnvKey ? process.env[altEnvKey] : undefined);
+}
+
 // ---------------------------------------------------------------------------
 // AgentConfig — the unified config type
 // ---------------------------------------------------------------------------
@@ -355,13 +370,15 @@ function validateProviderKey(model: ModelConfig): void {
     return;
   }
 
-  const key = process.env[envKey];
+  const key = resolveProviderApiKey(provider);
   if (!key) {
+    const altEnvKey = PROVIDER_ALT_ENV_KEYS[provider];
+    const checked = altEnvKey ? `${envKey} or ${altEnvKey}` : envKey;
     throw new ConfigError(
       `Provider API key not found`,
       {
         key: `models.main.provider (${provider})`,
-        suggestion: `Set ${envKey} in your .env file or environment.\n  Checked: amodal.json → models.main.credentials\n  Checked: env → ${envKey}`,
+        suggestion: `Set ${envKey} in your .env file or environment.\n  Checked: amodal.json → models.main.credentials\n  Checked: env → ${checked}`,
       },
     );
   }

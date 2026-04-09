@@ -15,6 +15,7 @@ import type {
   LLMUsage,
   LLMUserContentPart,
 } from './runtime-provider-types.js';
+import {normalizeImagePart} from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
 
@@ -272,16 +273,13 @@ function convertMessages(messages: LLMMessage[]): AnthropicMessage[] {
       case 'assistant':
         result.push({
           role: 'assistant',
-          content: msg.content.map((block) => {
-            if (block.type === 'text') {
-              return {type: 'text', text: block.text};
+          content: msg.content.flatMap((block): Array<Record<string, unknown>> => {
+            switch (block.type) {
+              case 'text': return [{type: 'text', text: block.text}];
+              case 'tool_use': return [{type: 'tool_use', id: block.id, name: block.name, input: block.input}];
+              case 'image': return []; // Anthropic doesn't support inline images in assistant messages
+              default: { const _exhaustive: never = block; void _exhaustive; return []; }
             }
-            return {
-              type: 'tool_use',
-              id: block.id,
-              name: block.name,
-              input: block.input,
-            };
           }),
         });
         break;
@@ -315,9 +313,10 @@ function formatUserContent(
   if (typeof content === 'string') return content;
   return content.map((part) => {
     if (part.type === 'text') return {type: 'text', text: part.text};
+    const img = normalizeImagePart(part);
     return {
       type: 'image',
-      source: {type: 'base64', media_type: part.mimeType, data: part.data},
+      source: {type: 'base64', media_type: img.mimeType, data: img.data},
     };
   });
 }

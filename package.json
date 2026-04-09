@@ -10,7 +10,7 @@
   },
   "scripts": {
     "amodal": "node packages/cli/dist/src/main.js",
-    "dev:build": "pnpm --filter @amodalai/amodal run build && pnpm --filter @amodalai/runtime run build && pnpm --filter @amodalai/runtime-app run build",
+    "dev:build": "pnpm run build && pnpm --filter @amodalai/runtime-app run build",
     "build": "pnpm -r --filter '!@amodalai/docs' run build",
     "test": "pnpm -r run test",
     "test:ci": "pnpm -r run test:ci",

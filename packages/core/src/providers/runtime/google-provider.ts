@@ -14,6 +14,7 @@ import type {
   LLMToolDefinition,
   LLMUserContentPart,
 } from './runtime-provider-types.js';
+import {normalizeImagePart} from './runtime-provider-types.js';
 import type {LLMStreamEvent} from './streaming-types.js';
 import {ProviderError, RateLimitError, ProviderTimeoutError} from './provider-errors.js';
 
@@ -171,6 +172,10 @@ interface GeminiPart {
     name?: string;
     args?: Record<string, unknown>;
   };
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -194,16 +199,13 @@ function convertMessages(messages: LLMMessage[]): GeminiContent[] {
       case 'assistant':
         result.push({
           role: 'model',
-          parts: msg.content.map((block) => {
-            if (block.type === 'text') {
-              return {text: block.text};
+          parts: msg.content.flatMap((block): Array<Record<string, unknown>> => {
+            switch (block.type) {
+              case 'text': return [{text: block.text}];
+              case 'tool_use': return [{functionCall: {name: block.name, args: block.input}}];
+              case 'image': return [{inlineData: {mimeType: block.mimeType, data: block.data}}];
+              default: { const _exhaustive: never = block; void _exhaustive; return []; }
             }
-            return {
-              functionCall: {
-                name: block.name,
-                args: block.input,
-              },
-            };
           }),
         });
         break;
@@ -237,7 +239,8 @@ function formatUserParts(
   if (typeof content === 'string') return [{text: content}];
   return content.map((part) => {
     if (part.type === 'text') return {text: part.text};
-    return {inlineData: {mimeType: part.mimeType, data: part.data}};
+    const img = normalizeImagePart(part);
+    return {inlineData: {mimeType: img.mimeType, data: img.data}};
   });
 }
 
@@ -279,6 +282,12 @@ function convertResponseParts(parts: GeminiPart[]): LLMResponseBlock[] {
         id: part.functionCall.id ?? `call_${part.functionCall.name}_${Date.now()}`,
         name: part.functionCall.name,
         input: part.functionCall.args ?? {},
+      });
+    } else if (part.inlineData?.data) {
+      result.push({
+        type: 'image',
+        mimeType: part.inlineData.mimeType,
+        data: part.inlineData.data,
       });
     }
   }

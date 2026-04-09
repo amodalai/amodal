@@ -25,6 +25,9 @@
 
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import type { ToolCallInfo } from '@amodalai/react';
+import { extractImageUrls } from '../utils/extractImageUrls';
+import { ImagePreview } from './ImagePreview';
+import type { ImageSource } from './ImagePreview';
 
 // ---------------------------------------------------------------------------
 // Method color map for the request tool
@@ -125,6 +128,22 @@ function genericSummary(params: Record<string, unknown>): string | null {
 // Component
 // ---------------------------------------------------------------------------
 
+/**
+ * Extract renderable images from a tool call result.
+ * Handles both structured content blocks (Phase 2) and URL detection in strings (Phase 1).
+ */
+function getResultImages(result: ToolCallInfo['result']): ImageSource[] {
+  if (!result) return [];
+  if (typeof result === 'string') return extractImageUrls(result);
+  if (Array.isArray(result)) {
+    return result
+      .filter((b): b is {type: 'image'; mimeType: string; data: string} =>
+        typeof b === 'object' && b !== null && 'type' in b && b.type === 'image')
+      .map((b) => ({mimeType: b.mimeType, data: b.data}));
+  }
+  return [];
+}
+
 interface ToolCallCardProps {
   call: ToolCallInfo;
 }
@@ -140,6 +159,7 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
     const connection = String(params['connection']);
     const method = String(params['method'] ?? 'GET').toUpperCase();
     const endpoint = typeof params['endpoint'] === 'string' ? params['endpoint'] : '';
+    const requestImages = !isRunning ? getResultImages(call.result) : [];
     return (
       <div className="my-1.5 rounded-lg bg-muted border border-border overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2">
@@ -151,12 +171,14 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
           <span className="text-[12px] font-mono text-muted-foreground truncate">{endpoint}</span>
           <Duration ms={call.duration_ms} />
         </div>
+        {requestImages.length > 0 && <ImagePreview images={requestImages} />}
       </div>
     );
   }
 
   // All other tools — compact badge with parameter summary
   const summary = summarizeParams(call.toolName, params);
+  const images = !isRunning ? getResultImages(call.result) : [];
   return (
     <div className="my-1.5 rounded-lg bg-muted border border-border overflow-hidden">
       <div className="flex items-center gap-2 px-3.5 py-2 text-xs font-mono">
@@ -179,6 +201,8 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
           {call.error}
         </div>
       )}
+      {/* Images from tool results */}
+      {images.length > 0 && <ImagePreview images={images} />}
     </div>
   );
 }
