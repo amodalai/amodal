@@ -308,11 +308,9 @@ export function useWorkspace(): WorkspaceState | null {
     setStored(null);
   }, [wsConfig]);
 
-  // Not in hosted mode
-  if (!wsConfig) return null;
-
   // Stale detection: stored workspace base doesn't match current deploy
   const isStale = !!(
+    wsConfig &&
     stored?.baseCommitSha &&
     stored.baseCommitSha !== wsConfig.baseCommitSha &&
     !stored.persistedBranchName // only stale if not yet persisted (persisted changes re-anchor base)
@@ -320,12 +318,16 @@ export function useWorkspace(): WorkspaceState | null {
 
   // Bundle size warning
   const bundleSize = stored?.bundle?.length ?? 0;
-  const warning = bundleSize > BUNDLE_SIZE_WARNING_BYTES
-    ? `Bundle is ${(bundleSize / 1024 / 1024).toFixed(1)}MB — consider persisting to avoid localStorage limits.`
-    : null;
+  const warning =
+    bundleSize > BUNDLE_SIZE_WARNING_BYTES
+      ? `Bundle is ${(bundleSize / 1024 / 1024).toFixed(1)}MB — consider persisting to avoid localStorage limits.`
+      : null;
 
+  // Always return the object so onFileSaved is available even before
+  // the async config fetch completes. isDirty gates on wsConfig so
+  // the WorkspaceBar won't render prematurely in local/OSS mode.
   return {
-    isDirty: (stored?.commits?.length ?? 0) > 0,
+    isDirty: !!wsConfig && (stored?.commits?.length ?? 0) > 0,
     stored,
     persistedBranch: stored?.persistedBranchName ?? null,
     lockedByOtherTab,
