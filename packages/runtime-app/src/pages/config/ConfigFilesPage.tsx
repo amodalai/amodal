@@ -224,7 +224,7 @@ export function ConfigFilesPage() {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
         const data = body && typeof body === 'object' ? body as Record<string, unknown> : {};
         // If hosted mode, store workspace data (bundle + commits)
-        if (data['workspace'] && workspace) {
+        if (data['workspace']) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- workspace shape validated by hosted runtime
           workspace.onFileSaved(data['workspace'] as Parameters<typeof workspace.onFileSaved>[0]);
         }
