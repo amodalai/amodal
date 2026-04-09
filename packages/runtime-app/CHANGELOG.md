@@ -1,5 +1,15 @@
 # @amodalai/runtime-app
 
+## 0.2.5
+
+### Patch Changes
+
+- [#175](https://github.com/amodalai/amodal/pull/175) [`7c2a1b3`](https://github.com/amodalai/amodal/commit/7c2a1b39531ea2cb011bf3a89a7d119440e5b55f) Thanks [@whodatdev](https://github.com/whodatdev)! - Add workspace editing UI for hosted runtime (useWorkspace hook, WorkspaceBar component, persist/restore/discard flow). Inert in local/OSS mode.
+
+- Updated dependencies []:
+  - @amodalai/types@0.2.5
+  - @amodalai/react@0.2.5
+
 ## 0.2.4
 
 ### Patch Changes
