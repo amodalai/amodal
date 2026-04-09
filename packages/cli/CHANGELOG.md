@@ -1,5 +1,19 @@
 # @amodalai/amodal
 
+## 0.2.4
+
+### Patch Changes
+
+- [#172](https://github.com/amodalai/amodal/pull/172) [`9599b4e`](https://github.com/amodalai/amodal/commit/9599b4e840cef07f3b443b0b2d490d2deabcb517) Thanks [@gte620v](https://github.com/gte620v)! - Add image paste support to chat
+
+  Users can paste images from the clipboard into the chat input. Images show as removable thumbnails before sending, then render in the user message bubble. Vision-capable providers (Anthropic, Google, OpenAI) receive the image; non-vision providers strip it with a warning. Images are stored in a separate `image_data` column to avoid JSONB bloat, with automatic rehydration on session load.
+
+- Updated dependencies [[`0132204`](https://github.com/amodalai/amodal/commit/0132204a35f457e067fc5150a219f264a0f0955c), [`9599b4e`](https://github.com/amodalai/amodal/commit/9599b4e840cef07f3b443b0b2d490d2deabcb517)]:
+  - @amodalai/core@0.2.4
+  - @amodalai/runtime@0.2.4
+  - @amodalai/types@0.2.4
+  - @amodalai/runtime-app@0.2.4
+
 ## 0.2.3
 
 ### Patch Changes
