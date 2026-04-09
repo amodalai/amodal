@@ -1,5 +1,15 @@
 # @amodalai/runtime-app
 
+## 0.2.7
+
+### Patch Changes
+
+- [#179](https://github.com/amodalai/amodal/pull/179) [`f889144`](https://github.com/amodalai/amodal/commit/f889144a6501de7592ce4bb6416e1a24938fd756) Thanks [@whodatdev](https://github.com/whodatdev)! - Fix workspace localStorage storage and restore on load. useWorkspace now always returns an object so onFileSaved is available before the async config fetch completes.
+
+- Updated dependencies []:
+  - @amodalai/types@0.2.7
+  - @amodalai/react@0.2.7
+
 ## 0.2.6
 
 ### Patch Changes
