@@ -47,6 +47,7 @@ import type {CompilerConnection, CompilerInput} from '../context/types.js';
 import {createToolContextFactory} from './tool-context-factory.js';
 import type {ToolContextFactoryOptions} from './tool-context-factory.js';
 import {LOCAL_APP_ID} from '../constants.js';
+import {resolveProviderApiKey} from '../config.js';
 import {StoreError} from '../errors.js';
 import {createDispatchTool, DISPATCH_TOOL_NAME} from '../tools/dispatch-tool.js';
 import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-tool.js';
@@ -522,9 +523,8 @@ function resolveApiKey(
     }
   }
 
-  // Fall back to environment variable
-  const envKey = `${modelConfig.provider.toUpperCase()}_API_KEY`;
-  return process.env[envKey];
+  // Fall back to environment variable (checks canonical + alt env var names)
+  return resolveProviderApiKey(modelConfig.provider);
 }
 
 // Re-export constants for use in tests and state handlers
