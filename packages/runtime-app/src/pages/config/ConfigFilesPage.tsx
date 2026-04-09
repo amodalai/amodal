@@ -9,6 +9,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ChevronRight, File, FolderOpen, Folder, Save, Package, Loader2, RefreshCw } from 'lucide-react';
 import { CodeEditor } from '@/components/CodeEditor';
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
+import { useWorkspace } from '@/hooks/useWorkspace';
 import { cn } from '@/lib/utils';
 
 interface FileTreeEntry {
@@ -123,6 +124,7 @@ export function ConfigFilesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+  const workspace = useWorkspace();
 
   // Fetch file tree (initial + refresh when the runtime signals file changes)
   const lastJsonRef = useRef('');
@@ -218,6 +220,14 @@ export function ConfigFilesPage() {
       });
 
       if (res.ok) {
+        const body: unknown = await res.json();
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
+        const data = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+        // If hosted mode, store workspace data (bundle + commits)
+        if (data['workspace'] && workspace) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- workspace shape validated by hosted runtime
+          workspace.onFileSaved(data['workspace'] as Parameters<typeof workspace.onFileSaved>[0]);
+        }
         setSaveStatus('saved');
         setFileData((prev) => prev ? { ...prev, content: editedContent } : prev);
         setEditedContent(null);
@@ -231,7 +241,7 @@ export function ConfigFilesPage() {
     }
 
     setSaving(false);
-  }, [selectedPath, editedContent]);
+  }, [selectedPath, editedContent, workspace]);
 
   // Keyboard shortcut: Cmd/Ctrl+S to save
   useEffect(() => {

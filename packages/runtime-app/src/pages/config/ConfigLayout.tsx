@@ -9,6 +9,8 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { Sun, Moon, Settings, Bot, KeyRound, FileText, ArrowLeft, FolderCode, MessageSquare, PanelRightOpen, PanelRightClose, FlaskConical, Swords } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { useRuntimeConnection } from '@/contexts/RuntimeEventsContext';
+import { useWorkspace } from '@/hooks/useWorkspace';
+import { WorkspaceBar } from '@/components/WorkspaceBar';
 import { AdminChatPanel } from './ConfigChatPage';
 import { cn } from '@/lib/utils';
 
@@ -73,6 +75,17 @@ export function ConfigLayout() {
   const { dark, toggle } = useTheme();
   const connectionStatus = useConnectionStatus();
   const [chatOpen, setChatOpen] = useState(false);
+  const workspace = useWorkspace();
+  const connected = useRuntimeConnection();
+
+  // Restore workspace on reconnect if there are pending changes
+  useEffect(() => {
+    if (connected && workspace?.stored?.bundle) {
+      void workspace.restore();
+    }
+  // Only restore when connection state changes to connected
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
 
   // Listen for requests to open the admin chat panel (e.g. from Feedback synthesis)
   useEffect(() => {
@@ -224,6 +237,10 @@ export function ConfigLayout() {
           </div>
         )}
       </div>
+
+      {workspace?.isDirty && (
+        <WorkspaceBar workspace={workspace} />
+      )}
     </div>
   );
 }
