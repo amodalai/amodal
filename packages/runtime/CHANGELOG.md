@@ -1,5 +1,13 @@
 # @amodalai/runtime
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @amodalai/types@0.2.6
+  - @amodalai/core@0.2.6
+
 ## 0.2.5
 
 ### Patch Changes

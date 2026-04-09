@@ -1,5 +1,15 @@
 # @amodalai/runtime-app
 
+## 0.2.6
+
+### Patch Changes
+
+- [#177](https://github.com/amodalai/amodal/pull/177) [`737c888`](https://github.com/amodalai/amodal/commit/737c888a13e7e0cba4f9cc88b5d99f7300984c48) Thanks [@whodatdev](https://github.com/whodatdev)! - Fix workspace localStorage storage and restore on load. Use a ref for config in onFileSaved to prevent stale closure, and restore pending changes from localStorage on mount.
+
+- Updated dependencies []:
+  - @amodalai/types@0.2.6
+  - @amodalai/react@0.2.6
+
 ## 0.2.5
 
 ### Patch Changes
