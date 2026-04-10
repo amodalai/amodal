@@ -46,6 +46,8 @@ interface PersistResult {
 }
 
 export interface WorkspaceState {
+  /** Whether the workspace has finished initializing (config fetched + restore complete). */
+  ready: boolean;
   /** Whether there are unpersisted commits. */
   isDirty: boolean;
   /** Stored workspace state from localStorage. */
@@ -119,6 +121,7 @@ function clearLocalStorage(storageKey: string): void {
 export function useWorkspace(): WorkspaceState | null {
   const [wsConfig, setWsConfig] = useState<WorkspaceConfig | null>(null);
   const [stored, setStored] = useState<StoredWorkspace | null>(null);
+  const [ready, setReady] = useState(false);
   const [lockedByOtherTab, setLockedByOtherTab] = useState(false);
   const configFetched = useRef(false);
   const wsConfigRef = useRef<WorkspaceConfig | null>(null);
@@ -130,22 +133,23 @@ export function useWorkspace(): WorkspaceState | null {
   }, [wsConfig]);
 
   // Fetch workspace config on mount, then restore from localStorage if needed.
-  // This ensures pending changes survive Fly machine cold starts.
+  // Awaits restore so `ready` is only set after the server has the edits,
+  // allowing the file tree to wait and show restored files after cold start.
   useEffect(() => {
     if (configFetched.current) return;
     configFetched.current = true;
 
-    fetch('/api/config')
-      .then((res) => res.json())
-      .then((data: unknown) => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/config');
+        const data: unknown = await res.json();
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated below
         const obj = data && typeof data === 'object' ? data as Record<string, unknown> : {};
         const ws = obj['workspace'];
         if (ws && typeof ws === 'object' && 'enabled' in ws) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- shape validated above
           const wsConf = ws as WorkspaceConfig;
-          if (!wsConf.enabled) return;
-          if (!wsConf.appId || !wsConf.platformApiUrl) return;
+          if (!wsConf.enabled || !wsConf.appId || !wsConf.platformApiUrl) return;
           setWsConfig(wsConf);
           wsConfigRef.current = wsConf;
           const key = getStorageKey(wsConf.appId);
@@ -153,9 +157,9 @@ export function useWorkspace(): WorkspaceState | null {
           setStored(existing);
 
           // If localStorage has a pending bundle, restore it to the runtime.
-          // The server is idempotent — if /tmp/workspace already matches, it skips.
+          // The server is idempotent — if workspace already matches, it skips.
           if (existing?.bundle && existing?.headSha) {
-            void fetch('/api/workspace/restore', {
+            await fetch('/api/workspace/restore', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ bundle: existing.bundle, headSha: existing.headSha }),
@@ -164,10 +168,12 @@ export function useWorkspace(): WorkspaceState | null {
             });
           }
         }
-      })
-      .catch(() => {
+      } catch {
         // Not in hosted mode or config unavailable
-      });
+      } finally {
+        setReady(true);
+      }
+    })();
   }, []);
 
   // Multi-tab detection via BroadcastChannel
@@ -327,6 +333,7 @@ export function useWorkspace(): WorkspaceState | null {
   // the async config fetch completes. isDirty gates on wsConfig so
   // the WorkspaceBar won't render prematurely in local/OSS mode.
   return {
+    ready,
     isDirty: !!wsConfig && (stored?.commits?.length ?? 0) > 0,
     stored,
     persistedBranch: stored?.persistedBranchName ?? null,
