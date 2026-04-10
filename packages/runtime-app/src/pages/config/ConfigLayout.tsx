@@ -13,6 +13,9 @@ import { useWorkspace } from '@/hooks/useWorkspace';
 import { WorkspaceBar } from '@/components/WorkspaceBar';
 import { AdminChatPanel } from './ConfigChatPage';
 import { cn } from '@/lib/utils';
+import { createLogger } from '@/utils/log';
+
+const log = createLogger('ConfigLayout');
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
 
@@ -81,7 +84,11 @@ export function ConfigLayout() {
   // Restore workspace on reconnect if there are pending changes
   useEffect(() => {
     if (connected && workspace?.stored?.bundle) {
-      void workspace.restore();
+      // restore() can throw on stale base or network failure — log it.
+      // The isStale flag and bundle warning surface the user-facing state.
+      workspace.restore().catch((err: unknown) => {
+        log.warn('workspace_restore_on_reconnect_failed', { err });
+      });
     }
   // Only restore when connection state changes to connected
   // eslint-disable-next-line react-hooks/exhaustive-deps

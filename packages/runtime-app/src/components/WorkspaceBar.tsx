@@ -6,6 +6,9 @@
 
 import { useState } from 'react';
 import type { WorkspaceState } from '../hooks/useWorkspace';
+import { createLogger } from '../utils/log';
+
+const log = createLogger('WorkspaceBar');
 
 interface WorkspaceBarProps {
   workspace: WorkspaceState;
@@ -26,9 +29,11 @@ export function WorkspaceBar({ workspace }: WorkspaceBarProps) {
       setMessage(`Pushed to ${result.branch}`);
       setTimeout(() => setMessage(null), 5000);
     } catch (err) {
+      log.warn('persist_failed', { err });
       setMessage(err instanceof Error ? err.message : 'Persist failed');
+    } finally {
+      setPersisting(false);
     }
-    setPersisting(false);
   }
 
   async function handleDiscard() {
@@ -37,10 +42,12 @@ export function WorkspaceBar({ workspace }: WorkspaceBarProps) {
     setMessage(null);
     try {
       await workspace.discard();
-    } catch {
-      setMessage('Discard failed');
+    } catch (err) {
+      log.warn('discard_failed', { err });
+      setMessage(err instanceof Error ? err.message : 'Discard failed');
+    } finally {
+      setDiscarding(false);
     }
-    setDiscarding(false);
   }
 
   // Locked by another tab — show warning instead of actions
