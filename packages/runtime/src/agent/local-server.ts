@@ -643,8 +643,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     res.json({ok: true});
   }));
 
-  // File browser/editor
-  app.use(createFilesRouter({repoPath: config.repoPath}));
+  // File browser/editor — role-gated. Defaults to "everyone is ops" in
+  // amodal dev; hosted-runtime injects a cloud RoleProvider.
+  app.use(createFilesRouter({
+    repoPath: config.repoPath,
+    roleProvider: config.roleProvider,
+  }));
 
   // Event bus SSE stream (live UI updates)
   app.use(createEventsRouter({bus: eventBus, logger: log}));

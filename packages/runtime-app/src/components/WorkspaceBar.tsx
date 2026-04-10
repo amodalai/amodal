@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { WorkspaceState } from '../hooks/useWorkspace';
 import { createLogger } from '../utils/log';
+import { DeployConfirmModal } from './DeployConfirmModal';
 
 const log = createLogger('WorkspaceBar');
 
@@ -14,20 +15,40 @@ interface WorkspaceBarProps {
   workspace: WorkspaceState;
 }
 
+/**
+ * Deduplicate the file list across all pending commits — a single file edited
+ * twice still appears once in the deploy confirmation.
+ */
+function uniqueFiles(commits: ReadonlyArray<{files: string[]}>): string[] {
+  const seen = new Set<string>();
+  for (const c of commits) {
+    for (const f of c.files) seen.add(f);
+  }
+  return Array.from(seen).sort();
+}
+
 export function WorkspaceBar({ workspace }: WorkspaceBarProps) {
   const [persisting, setPersisting] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const commitCount = workspace.stored?.commits?.length ?? 0;
+  // Read commits via the stored bundle. We depend on the underlying array
+  // identity for memoization (the workspace hook produces a new array on
+  // every save, so referential equality is the right signal here).
+  const storedCommits = workspace.stored?.commits;
+  const commits = useMemo(() => storedCommits ?? [], [storedCommits]);
+  const commitCount = commits.length;
+  const changedFiles = useMemo(() => uniqueFiles(commits), [commits]);
 
-  async function handlePersist() {
+  async function performPersist(): Promise<void> {
     setPersisting(true);
     setMessage(null);
     try {
       const result = await workspace.persist();
       setMessage(`Pushed to ${result.branch}`);
       setTimeout(() => setMessage(null), 5000);
+      setConfirmOpen(false);
     } catch (err) {
       log.warn('persist_failed', { err });
       setMessage(err instanceof Error ? err.message : 'Persist failed');
@@ -113,14 +134,23 @@ export function WorkspaceBar({ workspace }: WorkspaceBarProps) {
           </button>
 
           <button
-            onClick={() => void handlePersist()}
-            disabled={persisting || workspace.isStale}
+            onClick={() => setConfirmOpen(true)}
+            disabled={persisting || workspace.isStale || commitCount === 0}
             className="rounded bg-primary-solid px-3 py-1 text-xs text-white disabled:opacity-50"
           >
-            {persisting ? 'Persisting...' : 'Persist'}
+            {persisting ? 'Deploying...' : 'Deploy'}
           </button>
         </div>
       </div>
+
+      {confirmOpen && (
+        <DeployConfirmModal
+          files={changedFiles}
+          busy={persisting}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={() => void performPersist()}
+        />
+      )}
     </div>
   );
 }
