@@ -1,5 +1,15 @@
 # @amodalai/runtime-app
 
+## 0.2.8
+
+### Patch Changes
+
+- [#181](https://github.com/amodalai/amodal/pull/181) [`e0aed07`](https://github.com/amodalai/amodal/commit/e0aed0786b3f32d6a3482428834384221427cc02) Thanks [@whodatdev](https://github.com/whodatdev)! - Await workspace restore before loading file tree. Adds `ready` state to useWorkspace so ConfigFilesPage waits for localStorage restore to complete before fetching files, preventing stale file tree after server restart.
+
+- Updated dependencies []:
+  - @amodalai/types@0.2.8
+  - @amodalai/react@0.2.8
+
 ## 0.2.7
 
 ### Patch Changes
