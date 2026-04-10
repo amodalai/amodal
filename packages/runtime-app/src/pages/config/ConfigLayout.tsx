@@ -5,11 +5,12 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, Navigate } from 'react-router-dom';
 import { Sun, Moon, Settings, Bot, KeyRound, FileText, ArrowLeft, FolderCode, MessageSquare, PanelRightOpen, PanelRightClose, FlaskConical, Swords } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { useRuntimeConnection } from '@/contexts/RuntimeEventsContext';
 import { useWorkspace } from '@/hooks/useWorkspace';
+import { useMe, hasRole } from '@/hooks/useMe';
 import { WorkspaceBar } from '@/components/WorkspaceBar';
 import { AdminChatPanel } from './ConfigChatPage';
 import { cn } from '@/lib/utils';
@@ -80,6 +81,9 @@ export function ConfigLayout() {
   const [chatOpen, setChatOpen] = useState(false);
   const workspace = useWorkspace();
   const connected = useRuntimeConnection();
+  // Config UI is ops-only. Hook called unconditionally; check happens after
+  // all hooks below to keep hook order stable across renders.
+  const me = useMe();
 
   // Restore workspace on reconnect if there are pending changes
   useEffect(() => {
@@ -100,6 +104,18 @@ export function ConfigLayout() {
     window.addEventListener('admin-chat-open', handler);
     return () => window.removeEventListener('admin-chat-open', handler);
   }, []);
+
+  // Role gate: redirect non-ops users to the chat. We render `null` while
+  // the role check is pending so non-ops users never see a flash of the
+  // config UI before the redirect fires. In `amodal dev` everyone is ops
+  // so the role resolves to ops on first paint and the null render is
+  // basically invisible. Done after all hooks to keep order stable.
+  if (!me.ready) {
+    return null;
+  }
+  if (!hasRole(me.user, 'ops')) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
