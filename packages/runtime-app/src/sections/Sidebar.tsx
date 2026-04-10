@@ -9,6 +9,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { SquarePen, MessageSquare, Database, Zap, FileText, Plug, Sparkles, BookOpen, ChevronRight, Loader2, Cable, Pencil, Trash2 } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
+import { useMe, hasRole } from '@/hooks/useMe';
 import { cn } from '@/lib/utils';
 import type { PageConfig } from 'virtual:amodal-manifest';
 
@@ -207,6 +208,18 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Role-based visibility. In `amodal dev` the user is always `ops` so
+  // everything renders. In hosted contexts admins see content (skills,
+  // knowledge, automations, stores, pages) but not infrastructure
+  // (connections, MCP). End-users see only chat and their own sessions.
+  //
+  // We gate role-conditional sections on `me.ready` AND the role check
+  // so we don't briefly render a "chat only" sidebar for admins/ops while
+  // /api/me is in flight. The sections just appear once the role resolves.
+  const me = useMe();
+  const canSeeContent = me.ready && hasRole(me.user, 'admin');
+  const canSeeInfrastructure = me.ready && hasRole(me.user, 'ops');
+
   useEffect(() => {
     // Try API first (works with pre-built pages), fall back to Vite virtual module
     fetch('/api/pages')
@@ -310,8 +323,8 @@ export function Sidebar() {
           </>
         )}
 
-        {/* Pages */}
-        {devPages.length > 0 && (
+        {/* Pages — admin+ */}
+        {canSeeContent && devPages.length > 0 && (
           <>
             <SectionLabel>Pages</SectionLabel>
             <div className="space-y-0.5">
@@ -325,8 +338,8 @@ export function Sidebar() {
           </>
         )}
 
-        {/* Automations */}
-        {automations.length > 0 && (
+        {/* Automations — admin+ */}
+        {canSeeContent && automations.length > 0 && (
           <>
             <SectionLabel>Automations</SectionLabel>
             {[...automations].sort().map((name) => {
@@ -350,11 +363,13 @@ export function Sidebar() {
         )}
 
         {/* Agent composition — collapsible */}
-        {(totalConnections > 0 || skills.length > 0 || knowledge.length > 0) && (
+        {/* Connections require ops; skills + knowledge require admin */}
+        {((canSeeInfrastructure && totalConnections > 0) || (canSeeContent && (skills.length > 0 || knowledge.length > 0))) && (
           <SectionLabel>Agent</SectionLabel>
         )}
 
-        {totalConnections > 0 && (
+        {/* Connections — ops only */}
+        {canSeeInfrastructure && totalConnections > 0 && (
           <CollapsibleSection label="Connections" icon={<Plug className="h-3.5 w-3.5 shrink-0 text-emerald-500/60" />} count={totalConnections}>
             {connections.map((conn) => (
               <InfoItem key={conn.name} icon={<Plug className="h-3 w-3 shrink-0 text-emerald-500/40" />} label={conn.name} to={`/inspect/connections/${encodeURIComponent(conn.name)}`} status={conn.status} />
@@ -365,7 +380,8 @@ export function Sidebar() {
           </CollapsibleSection>
         )}
 
-        {skills.length > 0 && (
+        {/* Skills — admin+ */}
+        {canSeeContent && skills.length > 0 && (
           <CollapsibleSection label="Skills" icon={<Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500/60" />} count={skills.length}>
             {skills.map((name) => (
               <InfoItem key={name} icon={<Sparkles className="h-3 w-3 shrink-0 text-amber-500/40" />} label={name} to={`/inspect/skills/${encodeURIComponent(name)}`} />
@@ -373,7 +389,8 @@ export function Sidebar() {
           </CollapsibleSection>
         )}
 
-        {knowledge.length > 0 && (
+        {/* Knowledge — admin+ */}
+        {canSeeContent && knowledge.length > 0 && (
           <CollapsibleSection label="Knowledge" icon={<BookOpen className="h-3.5 w-3.5 shrink-0 text-blue-500/60" />} count={knowledge.length}>
             {knowledge.map((name) => (
               <InfoItem key={name} icon={<BookOpen className="h-3 w-3 shrink-0 text-blue-500/40" />} label={name} to={`/inspect/knowledge/${encodeURIComponent(name)}`} />
@@ -381,7 +398,8 @@ export function Sidebar() {
           </CollapsibleSection>
         )}
 
-        {stores.length > 0 && (
+        {/* Entities (stores) — admin+ */}
+        {canSeeContent && stores.length > 0 && (
           <>
             <SectionLabel>Entities</SectionLabel>
             <div className="space-y-0.5">
