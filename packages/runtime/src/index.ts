@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable import/no-internal-modules -- barrel file re-exports from internal modules */
+ 
 
 import { createServer, type ServerInstance } from './server.js';
 import { log } from './logger.js';
@@ -25,6 +25,19 @@ export { createServer } from './server.js';
 export type { ServerInstance, CreateServerOptions } from './server.js';
 export type { ServerConfig } from './types.js';
 export { createAIStreamRouter, type AIStreamRouterOptions } from './routes/ai-stream.js';
+
+// RoleProvider — auth/RBAC abstraction for hosting layers
+export {
+  defaultRoleProvider,
+  requireRole,
+  hasRole,
+  RoleProviderError,
+} from './role-provider.js';
+export type {
+  RoleProvider,
+  RuntimeRole,
+  RuntimeUser,
+} from './role-provider.js';
 
 // Local mode
 export { createLocalServer } from './agent/local-server.js';

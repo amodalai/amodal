@@ -63,6 +63,12 @@ export interface LocalServerConfig {
     content: string;
     signal: AbortSignal;
   }) => Promise<string>;
+  /**
+   * Optional RoleProvider for role-gated routes. In `amodal dev`, defaults to
+   * the everyone-is-ops provider since the developer is the only user.
+   * Self-hosted deployments can plug in their own auth.
+   */
+  roleProvider?: import('../role-provider.js').RoleProvider;
 }
 
 // ---------------------------------------------------------------------------

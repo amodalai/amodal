@@ -24,6 +24,7 @@ See README "Developing from Source" section for linking the CLI to a local build
 
 - PR template is at `.github/pull_request_template.md` — follow it. Use raw markdown (no rendered preview).
 - Changesets: create `.changeset/<name>.md` files directly (the `pnpm changeset` CLI is interactive and won't work here). Published packages: `core`, `runtime`, `react`, `cli`.
+- **Always use `patch` bumps** unless the user explicitly says otherwise. Even for new features or breaking-looking changes — patch by default.
 
 ## Admin agent
 
