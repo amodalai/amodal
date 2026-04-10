@@ -77,6 +77,7 @@ import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
 import {LOCAL_APP_ID} from '../constants.js';
 import {log, createLogger} from '../logger.js';
+import {defaultRoleProvider} from '../role-provider.js';
 import {bootstrapChannels} from '../channels/bootstrap.js';
 import {DrizzleChannelSessionMapper} from '../channels/channel-session-mapper.js';
 import type {ChannelAdapter} from '@amodalai/types';
@@ -479,6 +480,25 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.post('/auth/token', (_req, res) => {
     res.json({token: '', expires_at: null});
   });
+
+  // RoleProvider — defaults to "everyone is ops" for amodal dev.
+  // Self-hosted ISVs can plug in their own provider to gate routes by role.
+  const roleProvider = config.roleProvider ?? defaultRoleProvider;
+
+  // GET /api/me — current user's role. Used by the runtime-app frontend
+  // to decide which nav items / pages to show. In `amodal dev` this always
+  // returns ops.
+  app.get('/api/me', asyncHandler(async (req, res) => {
+    const user = await roleProvider.resolveUser(req);
+    if (!user) {
+      log.warn('api_me_unauthenticated', {path: req.path});
+      res.status(401).json({
+        error: {code: 'unauthenticated', message: 'Authentication required'},
+      });
+      return;
+    }
+    res.json(user);
+  }));
 
   // Unified config endpoint
   app.get('/api/config', (_req, res) => {

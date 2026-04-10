@@ -153,4 +153,55 @@ describe('createLocalServer', () => {
     expect(res.body).toHaveProperty('skills');
     expect(res.body).toHaveProperty('knowledge');
   });
+
+  it('GET /api/me returns ops by default in amodal dev', async () => {
+    const server = await createLocalServer({
+      repoPath: TEST_REPO,
+      port: 0,
+    });
+
+    const {default: request} = await import('supertest');
+    const res = await request(server.app).get('/api/me');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({id: 'local-dev', role: 'ops'});
+  });
+
+  it('GET /api/me uses a custom roleProvider when provided', async () => {
+    const server = await createLocalServer({
+      repoPath: TEST_REPO,
+      port: 0,
+      roleProvider: {
+        async resolveUser() {
+          return {id: 'custom-user', role: 'admin'};
+        },
+      },
+    });
+
+    const {default: request} = await import('supertest');
+    const res = await request(server.app).get('/api/me');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({id: 'custom-user', role: 'admin'});
+  });
+
+  it('GET /api/me returns 401 when custom roleProvider returns null', async () => {
+    const server = await createLocalServer({
+      repoPath: TEST_REPO,
+      port: 0,
+      roleProvider: {
+        async resolveUser() {
+          return null;
+        },
+      },
+    });
+
+    const {default: request} = await import('supertest');
+    const res = await request(server.app).get('/api/me');
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({
+      error: {code: 'unauthenticated', message: 'Authentication required'},
+    });
+  });
 });

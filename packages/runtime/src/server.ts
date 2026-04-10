@@ -30,6 +30,8 @@ import {RuntimeEventBus} from './events/event-bus.js';
 import {createChannelsRouter} from './channels/routes.js';
 import {MessageDedupCache} from './channels/dedup-cache.js';
 import {log, createLogger} from './logger.js';
+import {defaultRoleProvider, type RoleProvider} from './role-provider.js';
+import {asyncHandler} from './routes/route-helpers.js';
 
 export interface ServerInstance {
   app: Express;
@@ -48,6 +50,19 @@ export interface CreateServerOptions {
   fallbackMiddleware?: express.RequestHandler;
   /** Auth middleware for protected routes (injected by hosting layer) */
   authMiddleware?: express.RequestHandler;
+  /**
+   * RoleProvider for role-gated routes (config editing, admin actions, etc).
+   *
+   * Defaults to `defaultRoleProvider` which returns `ops` for all requests —
+   * appropriate for `amodal dev` where the developer is the only user.
+   *
+   * Hosting layers (cloud, self-hosted) should provide their own implementation
+   * that maps the request's auth context to a `user`/`admin`/`ops` role.
+   *
+   * The runtime exposes the resolved role at `GET /api/me` and uses it to
+   * gate config-editing routes via the `requireRole` middleware.
+   */
+  roleProvider?: RoleProvider;
   /** Additional routers to mount (e.g., session history proxy) */
   additionalRouters?: express.Router[];
   /** Factory that builds per-request stream hooks from the auth context */
@@ -145,6 +160,26 @@ export function createServer(options: CreateServerOptions): ServerInstance {
       active_sessions: sessionManager.size,
     });
   });
+
+  // RoleProvider — defaults to "everyone is ops" for amodal dev / backwards compat.
+  // Hosting layers inject their own provider via createServer options.
+  const roleProvider = options.roleProvider ?? defaultRoleProvider;
+
+  // GET /api/me — returns the current user's role.
+  // Used by the runtime-app frontend to decide which nav items / pages to show.
+  // Returns 401 if unauthenticated, otherwise { id, role }.
+  app.get('/api/me', asyncHandler(async (req, res) => {
+    const user = await roleProvider.resolveUser(req);
+    if (!user) {
+      log.warn('api_me_unauthenticated', {path: req.path});
+      res.status(401).json({
+        error: {code: 'unauthenticated', message: 'Authentication required'},
+      });
+      return;
+    }
+    log.debug('api_me_resolved', {user_id: user.id, role: user.role});
+    res.json(user);
+  }));
 
   // Auth middleware for protected routes (injected by hosting layer)
   if (options.authMiddleware) {

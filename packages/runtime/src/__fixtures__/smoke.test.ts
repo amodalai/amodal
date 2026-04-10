@@ -229,6 +229,13 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     expect(body['name']).toBe('smoke-test-agent');
   });
 
+  it('/api/me returns ops in amodal dev', async () => {
+    const res = await fetch(`http://localhost:${AGENT_PORT}/api/me`);
+    const body = await res.json() as Record<string, unknown>;
+    expect(res.status).toBe(200);
+    expect(body).toEqual({id: 'local-dev', role: 'ops'});
+  });
+
   // -------------------------------------------------------------------------
   // 2. System prompt (G9)
   // -------------------------------------------------------------------------
