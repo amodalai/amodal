@@ -144,7 +144,9 @@ export function ConfigFilesPage() {
       .finally(() => { setLoading(false); });
   }, []);
 
-  useEffect(() => { fetchTree(); }, [fetchTree]);
+  // Wait for workspace restore before fetching the file tree so restored
+  // edits appear after a server cold start.
+  useEffect(() => { if (workspace.ready) fetchTree(); }, [fetchTree, workspace.ready]);
   useRuntimeEvents(['files_changed', 'manifest_changed'], () => {
     fetchTree();
   });
