@@ -1,0 +1,32 @@
+{
+  "name": "@amodalai/snapshot-probe",
+  "version": "0.2.8",
+  "description": "Smoke-test package for the release-snapshot workflow. No runtime code — exists purely so the snapshot and release workflows have something non-trivial to publish while verifying the pipeline end-to-end.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amodalai/amodal.git",
+    "directory": "packages/snapshot-probe"
+  },
+  "homepage": "https://github.com/amodalai/amodal",
+  "bugs": {
+    "url": "https://github.com/amodalai/amodal/issues"
+  },
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "node ../../scripts/build_package.js",
+    "typecheck": "tsc --emitDeclarationOnly"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

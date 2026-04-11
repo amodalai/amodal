@@ -1,0 +1,123 @@
+name: Release (snapshot)
+
+# Publishes a "snapshot" prerelease of the amodal monorepo packages to npm
+# under a branch-scoped dist-tag (e.g. `next-feat-vercel-shaped`). Used by
+# cloud/platform-api/hosted-runtime/build-server during development, when
+# they need to consume amodal changes that are NOT yet on main.
+#
+# When to use:
+#   - You are working on a feat/* branch in this repo that changes a
+#     published package (core, runtime, studio, etc.) in a way that cloud
+#     needs to consume before the branch lands on main.
+#   - Example: WS2 of the vercel-shaped refactor adds @amodalai/studio;
+#     cloud/platform-api needs to import it before the whole refactor is
+#     mergeable, so we snapshot-publish studio from feat/vercel-shaped and
+#     cloud pins to the published snapshot.
+#
+# How to trigger:
+#   1. Commit-message marker (automatic, per-push):
+#        Include `[snapshot]` anywhere in the commit message and push to
+#        a feat/* branch. CI picks up the marker and runs this workflow
+#        on the resulting head commit. Same convention as `[skip ci]`.
+#   2. Manual dispatch (GitHub Actions UI):
+#        Go to Actions → Release (snapshot) → Run workflow. Pick the
+#        branch. No commit message change needed.
+#
+# What it publishes:
+#   Runs `pnpm changeset version --snapshot <tag>` which computes a
+#   prerelease version like `0.3.0-next-feat-vercel-shaped-20260411020000`
+#   for every package that has a pending .changeset/*.md entry, then
+#   `pnpm changeset publish --tag <tag>` which publishes them to npm under
+#   the branch-scoped dist-tag (NOT `latest`). This means:
+#     - `npm install @amodalai/studio` still gets the latest real release.
+#     - `npm install @amodalai/studio@next-feat-vercel-shaped` gets the
+#       most recent snapshot from that branch.
+#     - Pinning to an exact snapshot version also works.
+#
+# What it does NOT do:
+#   - Does NOT delete your .changeset/*.md files (snapshot mode is
+#     non-destructive). The real version bump still happens on main.
+#   - Does NOT commit anything back to the branch — the version edits in
+#     package.jsons are CI-local and thrown away after the job ends.
+#   - Does NOT affect the `latest` npm dist-tag. Production installs are
+#     unaffected.
+#   - Does NOT run on main or production branches — just feat/*.
+#
+# Required secrets:
+#   - NPM_TOKEN: same token the main release workflow uses. Must have
+#     publish rights on the @amodalai scope.
+
+on:
+  push:
+    branches: [feat/**]
+  workflow_dispatch:
+    inputs:
+      tag_suffix:
+        description: "Dist-tag suffix (the branch name is used by default)"
+        required: false
+        default: ""
+
+concurrency:
+  # Coalesce rapid pushes to the same branch — only the latest snapshot wins.
+  group: release-snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    # Opt-in: only run when the head commit message contains `[snapshot]`,
+    # or when a maintainer manually triggers the workflow. Everything else
+    # is a no-op so routine feat/* commits do not spam npm.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[snapshot]')
+
+    name: Publish snapshot
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Configure npm auth
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
+
+      - name: Derive snapshot tag from branch name
+        id: tag
+        run: |
+          # Convert `refs/heads/feat/vercel-shaped` → `next-feat-vercel-shaped`.
+          # npm dist-tags cannot contain `/`; we replace slashes with dashes.
+          BRANCH="${GITHUB_REF_NAME//\//-}"
+          SUFFIX_INPUT="${{ github.event.inputs.tag_suffix }}"
+          SUFFIX="${SUFFIX_INPUT:-$BRANCH}"
+          # Normalize: strip any invalid chars, lowercase.
+          CLEAN=$(echo "$SUFFIX" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g')
+          TAG="next-${CLEAN}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Using snapshot dist-tag: ${TAG}"
+
+      - name: Version snapshot
+        # `--snapshot <tag>` produces versions like
+        # `0.3.0-next-feat-vercel-shaped-<timestamp>` for every package that
+        # has a pending changeset entry. Non-destructive — the .changeset
+        # files stay in place so the eventual main release still happens.
+        run: pnpm changeset version --snapshot ${{ steps.tag.outputs.tag }}
+
+      - name: Publish snapshot
+        # `--tag` publishes under the branch-scoped dist-tag, NOT `latest`.
+        # `--no-git-tag` skips the git tag creation (changesets default
+        # behavior would try to push a tag; we don't want that on feat
+        # branches).
+        run: pnpm changeset publish --tag ${{ steps.tag.outputs.tag }} --no-git-tag
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
