@@ -1,0 +1,32 @@
+{
+  "name": "@amodalai/studio",
+  "version": "0.0.1",
+  "description": "Draft workspace + commit-on-publish editor backend for amodal agents",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amodalai/amodal.git",
+    "directory": "packages/studio"
+  },
+  "homepage": "https://github.com/amodalai/amodal",
+  "bugs": {
+    "url": "https://github.com/amodalai/amodal/issues"
+  },
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "node ../../scripts/build_package.js",
+    "typecheck": "tsc --emitDeclarationOnly"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
