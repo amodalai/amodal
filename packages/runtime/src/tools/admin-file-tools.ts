@@ -9,29 +9,113 @@
  *
  * Nine tools:
  *   Read/write single files:
- *   - read_repo_file          — read a file from the agent repo
- *   - write_repo_file         — create or update a file (full rewrite)
- *   - delete_repo_file        — delete a file
- *   - edit_repo_file          — in-place find-and-replace edit (preserves
- *                               the rest of the file)
+ *   - read_repo_file          — read a file from the agent repo (base files
+ *                               on disk only; drafts are not overlaid here
+ *                               per the vercel-shaped plan decision)
+ *   - write_repo_file         — stage a draft via StudioBackend.setDraft
+ *   - delete_repo_file        — drop a pending draft via
+ *                               StudioBackend.deleteDraft (this is NOT a
+ *                               tombstone against the base file; removing a
+ *                               published file from the repo is a publish-
+ *                               time concern handled by the backend)
+ *   - edit_repo_file          — read current content with draft overlay
+ *                               (draft-if-present-else-disk), apply the
+ *                               substitution, stage the result via setDraft
  *   Discovery:
- *   - list_repo_files         — list files in an allowed directory
- *   - glob_repo_files         — find files matching a glob pattern
- *   - grep_repo_files         — regex content search across files
- *   - read_many_repo_files    — batched read of multiple files
+ *   - list_repo_files         — list files in an allowed directory (disk)
+ *   - glob_repo_files         — find files matching a glob pattern (disk)
+ *   - grep_repo_files         — regex content search across files (disk)
+ *   - read_many_repo_files    — batched read of multiple files (disk)
  *   Introspection:
  *   - internal_api            — GET the runtime's own API
  *
  * All tools enforce the same allowed-directory allowlist and never touch
  * sensitive files (.env, amodal.json, package.json, etc.).
+ *
+ * ## StudioBackend injection (WS2 PR 2.7)
+ *
+ * The three mutating tools (`write_repo_file`, `edit_repo_file`,
+ * `delete_repo_file`) route writes through a `StudioBackend` draft workspace
+ * instead of touching the filesystem directly. This is the mechanism that
+ * makes "admin agent edits show up as pending drafts in the Studio editor
+ * indistinguishably from Sally's manual edits" true.
+ *
+ * Injection pattern: option (A) — `backend` and `userId` are passed as
+ * constructor options on `createAdminFileTools` / `registerAdminFileTools`.
+ * We picked this over a `getUserId()` callback or a per-execute context
+ * parameter because (i) it's the smallest change — it does not require
+ * touching the runtime's tool executor; (ii) the admin agent runs single-
+ * user per ephemeral runtime container, so a per-construction userId is
+ * sufficient; (iii) it leaves the `ToolContext` shape untouched, which means
+ * no ripple into non-admin tools or their tests.
+ *
+ * The default `userId` is `'admin-agent-local'`, which matches the plan's
+ * guidance that in local dev "Sally sees admin writes indistinguishably
+ * from her manual edits."
+ *
+ * Default `backend` is `NotImplementedStudioBackend` from `@amodalai/studio`
+ * so existing call sites (notably `session/session-builder.ts`) that have
+ * not yet been rewired in PR 2.8 keep compiling. Any admin-agent draft
+ * operation on the default backend throws `StudioNotImplementedError`,
+ * which surfaces loudly — per CLAUDE.md's "never swallow errors silently"
+ * rule, a missing backend is a configuration bug, not a silent no-op.
  */
 
-import {readFile, writeFile, unlink, mkdir, stat, readdir} from 'node:fs/promises';
+import {readFile, stat, readdir} from 'node:fs/promises';
 import * as path from 'node:path';
 import {z} from 'zod';
 import {glob as globImpl} from 'glob';
+import {log} from '@amodalai/core';
+import {NotImplementedStudioBackend} from '@amodalai/studio';
+import type {StudioBackend} from '@amodalai/studio';
 import {ConfigError} from '../errors.js';
 import type {ToolDefinition, ToolContext, ToolRegistry} from './types.js';
+
+/**
+ * Default userId used when no explicit userId is injected. Local-dev admin
+ * agent is effectively single-user — drafts created by the admin agent land
+ * under this key so the human editor sees them via the same draft overlay.
+ */
+export const DEFAULT_ADMIN_AGENT_USER_ID = 'admin-agent-local';
+
+/**
+ * Read the current content of `relPath` from the draft layer if present,
+ * otherwise from the base file on disk. Used by `edit_repo_file` so that a
+ * second edit sees the result of the first edit (otherwise back-to-back
+ * edits would silently overwrite each other).
+ *
+ * This is intentionally local to this file — not added to the StudioBackend
+ * interface — because it's a composition of existing operations, not a new
+ * contract obligation for every backend.
+ */
+async function readWithDraftOverlay(
+  backend: StudioBackend,
+  userId: string,
+  repoRoot: string,
+  relPath: string,
+  absPath: string,
+): Promise<{content: string} | {error: string}> {
+  const draft = await backend.getDraft(userId, relPath);
+  if (draft !== null) {
+    return {content: draft};
+  }
+  try {
+    const content = await readFile(absPath, 'utf-8');
+    return {content};
+  } catch (err) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by instanceof + 'code' in err
+    const isNotFound = err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT';
+    const msg = isNotFound
+      ? `File not found: ${relPath}`
+      : err instanceof Error
+        ? err.message
+        : String(err);
+    // Silence unused-repoRoot lint — keeping the parameter for symmetry
+    // with other helpers in this file that accept repoRoot for future use.
+    void repoRoot;
+    return {error: msg};
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Path validation
@@ -334,9 +418,13 @@ export function createReadRepoFileTool(repoRoot: string): ToolDefinition {
 // write_repo_file
 // ---------------------------------------------------------------------------
 
-export function createWriteRepoFileTool(repoRoot: string): ToolDefinition {
+export function createWriteRepoFileTool(
+  repoRoot: string,
+  backend: StudioBackend,
+  userId: string,
+): ToolDefinition {
   return {
-    description: 'Create or update a file in the agent repo. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.',
+    description: 'Create or update a file in the agent repo. Writes are staged as pending drafts in the Studio workspace (visible to the human editor for review) and are not committed to git until the user clicks Publish. Allowed directories: skills/, knowledge/, connections/, stores/, pages/, automations/, evals/, agents/, tools/.',
     parameters: z.object({
       path: z.string().min(1).describe('File path relative to repo root'),
       content: z.string().min(1).describe('Full file content to write'),
@@ -352,9 +440,24 @@ export function createWriteRepoFileTool(repoRoot: string): ToolDefinition {
       if (isReadOnlyPath(validation.relative)) {
         return {error: `${validation.relative} is read-only (installed package)`};
       }
-      await mkdir(path.dirname(validation.resolved), {recursive: true});
-      await writeFile(validation.resolved, params.content, 'utf-8');
-      return {written: validation.relative, bytes: params.content.length};
+      try {
+        await backend.setDraft(userId, validation.relative, params.content);
+      } catch (err) {
+        log.error('admin_tool_set_draft_failed', {
+          tool: 'write_repo_file',
+          user_id: userId,
+          file_path: validation.relative,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
+      log.info('admin_tool_set_draft_success', {
+        tool: 'write_repo_file',
+        user_id: userId,
+        file_path: validation.relative,
+        bytes: params.content.length,
+      });
+      return {written: validation.relative, bytes: params.content.length, staged: true};
     },
   };
 }
@@ -363,9 +466,13 @@ export function createWriteRepoFileTool(repoRoot: string): ToolDefinition {
 // delete_repo_file
 // ---------------------------------------------------------------------------
 
-export function createDeleteRepoFileTool(repoRoot: string): ToolDefinition {
+export function createDeleteRepoFileTool(
+  repoRoot: string,
+  backend: StudioBackend,
+  userId: string,
+): ToolDefinition {
   return {
-    description: 'Delete a file from the agent repo. Always confirm with the user before deleting. Same directory restrictions as write_repo_file.',
+    description: 'Revert a pending draft for a file in the agent repo. This drops the staged draft row so the editor falls back to the published base file — it does NOT remove the file from git. Use this when you want to undo an earlier write_repo_file or edit_repo_file call in the same review session. Always confirm with the user before reverting drafts.',
     parameters: z.object({
       path: z.string().min(1).describe('File path relative to repo root'),
     }),
@@ -381,14 +488,22 @@ export function createDeleteRepoFileTool(repoRoot: string): ToolDefinition {
         return {error: `${validation.relative} is read-only (installed package)`};
       }
       try {
-        await unlink(validation.resolved);
-        return {deleted: validation.relative};
+        await backend.deleteDraft(userId, validation.relative);
       } catch (err) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by instanceof + 'code' in err
-        const isNotFound = err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT';
-        const msg = isNotFound ? `File not found: ${validation.relative}` : (err instanceof Error ? err.message : String(err));
-        return {error: msg};
+        log.error('admin_tool_delete_draft_failed', {
+          tool: 'delete_repo_file',
+          user_id: userId,
+          file_path: validation.relative,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
       }
+      log.info('admin_tool_delete_draft_success', {
+        tool: 'delete_repo_file',
+        user_id: userId,
+        file_path: validation.relative,
+      });
+      return {deleted: validation.relative, draft_reverted: true};
     },
   };
 }
@@ -617,9 +732,13 @@ export function createGrepRepoFilesTool(repoRoot: string): ToolDefinition {
 // edit_repo_file
 // ---------------------------------------------------------------------------
 
-export function createEditRepoFileTool(repoRoot: string): ToolDefinition {
+export function createEditRepoFileTool(
+  repoRoot: string,
+  backend: StudioBackend,
+  userId: string,
+): ToolDefinition {
   return {
-    description: 'Replace a specific substring in a repo file in place (preserves everything else). Use this instead of write_repo_file for small edits to large files — it saves context tokens and avoids accidentally dropping content. By default old_string must match EXACTLY ONE occurrence; set allow_multiple=true to replace every occurrence.',
+    description: 'Replace a specific substring in a repo file in place (preserves everything else). Reads the current content with the user\'s pending drafts overlaid on the base file, applies the substitution, and stages the result as a new pending draft. Use this instead of write_repo_file for small edits to large files — it saves context tokens and avoids accidentally dropping content. By default old_string must match EXACTLY ONE occurrence; set allow_multiple=true to replace every occurrence.',
     parameters: z.object({
       path: z.string().min(1).describe('File path relative to repo root.'),
       old_string: z.string().min(1).describe('Exact text to find. Include enough surrounding context to uniquely identify the target.'),
@@ -639,14 +758,20 @@ export function createEditRepoFileTool(repoRoot: string): ToolDefinition {
         return {error: `${validation.relative} is read-only (installed package)`};
       }
 
-      let original: string;
-      try {
-        original = await readFile(validation.resolved, 'utf-8');
-      } catch (err) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by instanceof + 'code' in err
-        const isNotFound = err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT';
-        return {error: isNotFound ? `File not found: ${validation.relative}` : (err instanceof Error ? err.message : String(err))};
+      // Read with draft overlay so back-to-back edits compose — a second
+      // edit must see the result of the first, otherwise we silently
+      // overwrite earlier admin-agent changes in the same session.
+      const overlay = await readWithDraftOverlay(
+        backend,
+        userId,
+        repoRoot,
+        validation.relative,
+        validation.resolved,
+      );
+      if ('error' in overlay) {
+        return {error: overlay.error};
       }
+      const original = overlay.content;
 
       const allowMultiple = params.allow_multiple ?? false;
 
@@ -664,12 +789,31 @@ export function createEditRepoFileTool(repoRoot: string): ToolDefinition {
         ? original.split(params.old_string).join(params.new_string)
         : original.replace(params.old_string, params.new_string);
 
-      await writeFile(validation.resolved, updated, 'utf-8');
+      try {
+        await backend.setDraft(userId, validation.relative, updated);
+      } catch (err) {
+        log.error('admin_tool_set_draft_failed', {
+          tool: 'edit_repo_file',
+          user_id: userId,
+          file_path: validation.relative,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
+      log.info('admin_tool_set_draft_success', {
+        tool: 'edit_repo_file',
+        user_id: userId,
+        file_path: validation.relative,
+        occurrences,
+        bytes_before: original.length,
+        bytes_after: updated.length,
+      });
       return {
         edited: validation.relative,
         occurrences,
         bytes_before: original.length,
         bytes_after: updated.length,
+        staged: true,
       };
     },
   };
@@ -794,15 +938,37 @@ export function createInternalApiTool(getPort: () => number | null): ToolDefinit
 // Register all admin tools
 // ---------------------------------------------------------------------------
 
+/**
+ * Options for `registerAdminFileTools`. `repoRoot` and `getPort` are the
+ * pre-PR-2.7 required args; `backend` and `userId` are the new injection
+ * points for the Studio draft workspace.
+ *
+ * `backend` defaults to `NotImplementedStudioBackend` so call sites that
+ * have not been rewired yet still typecheck. Any actual mutating tool call
+ * against the default backend throws `StudioNotImplementedError`, surfacing
+ * the misconfiguration loudly.
+ *
+ * `userId` defaults to `DEFAULT_ADMIN_AGENT_USER_ID` ("admin-agent-local"),
+ * matching the plan's local-dev single-user assumption.
+ */
+export interface RegisterAdminFileToolsOptions {
+  backend?: StudioBackend;
+  userId?: string;
+}
+
 export function registerAdminFileTools(
   registry: ToolRegistry,
   repoRoot: string,
   getPort: () => number | null,
+  options: RegisterAdminFileToolsOptions = {},
 ): void {
+  const backend = options.backend ?? new NotImplementedStudioBackend();
+  const userId = options.userId ?? DEFAULT_ADMIN_AGENT_USER_ID;
+
   registry.register('read_repo_file', createReadRepoFileTool(repoRoot));
-  registry.register('write_repo_file', createWriteRepoFileTool(repoRoot));
-  registry.register('edit_repo_file', createEditRepoFileTool(repoRoot));
-  registry.register('delete_repo_file', createDeleteRepoFileTool(repoRoot));
+  registry.register('write_repo_file', createWriteRepoFileTool(repoRoot, backend, userId));
+  registry.register('edit_repo_file', createEditRepoFileTool(repoRoot, backend, userId));
+  registry.register('delete_repo_file', createDeleteRepoFileTool(repoRoot, backend, userId));
   registry.register('list_repo_files', createListRepoFilesTool(repoRoot));
   registry.register('glob_repo_files', createGlobRepoFilesTool(repoRoot));
   registry.register('grep_repo_files', createGrepRepoFilesTool(repoRoot));

@@ -266,6 +266,9 @@ importers:
       "@amodalai/core":
         specifier: workspace:*
         version: link:../core
+      "@amodalai/studio":
+        specifier: workspace:*
+        version: link:../studio
       "@amodalai/types":
         specifier: workspace:*
         version: link:../types

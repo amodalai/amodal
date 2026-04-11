@@ -44,6 +44,7 @@
     "@ai-sdk/google": "^3.0.58",
     "@ai-sdk/openai": "^3.0.50",
     "@amodalai/core": "workspace:*",
+    "@amodalai/studio": "workspace:*",
     "@amodalai/types": "workspace:*",
     "@anthropic-ai/sdk": "^0.39.0",
     "@electric-sql/pglite": "^0.3.15",

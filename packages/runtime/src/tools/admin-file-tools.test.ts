@@ -8,6 +8,7 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {PGLiteStudioBackend, NotImplementedStudioBackend} from '@amodalai/studio';
 import {
   createReadRepoFileTool,
   createWriteRepoFileTool,
@@ -20,6 +21,7 @@ import {
   createReadManyRepoFilesTool,
   registerAdminFileTools,
   isAllowedRepoPath,
+  DEFAULT_ADMIN_AGENT_USER_ID,
   LIST_MAX_ENTRIES,
   GREP_MAX_MATCHES,
   READ_MANY_MAX_FILES,
@@ -40,13 +42,18 @@ const mockCtx: ToolContext = {
 };
 
 let repoRoot: string;
+let backend: PGLiteStudioBackend;
+const TEST_USER_ID = DEFAULT_ADMIN_AGENT_USER_ID;
 
-beforeEach(() => {
+beforeEach(async () => {
   repoRoot = mkdtempSync(join(tmpdir(), 'admin-tools-test-'));
   mkdirSync(join(repoRoot, 'skills'), {recursive: true});
   mkdirSync(join(repoRoot, 'knowledge'), {recursive: true});
   mkdirSync(join(repoRoot, 'evals'), {recursive: true});
   mkdirSync(join(repoRoot, 'node_modules', 'test-pkg'), {recursive: true});
+  // In-memory pglite backend — no dataDir, no pre-built pglite instance.
+  backend = new PGLiteStudioBackend({repoPath: repoRoot});
+  await backend.init();
 });
 
 afterEach(() => {
@@ -278,58 +285,112 @@ describe('createReadRepoFileTool', () => {
 });
 
 describe('createWriteRepoFileTool', () => {
-  it('writes a new file', async () => {
-    const tool = createWriteRepoFileTool(repoRoot);
+  it('stages a new file as a draft (does not touch disk)', async () => {
+    const tool = createWriteRepoFileTool(repoRoot, backend, TEST_USER_ID);
     const result = await tool.execute({path: 'knowledge/rules.md', content: '# Rules'}, mockCtx) as Record<string, unknown>;
 
     expect(result['written']).toBe('knowledge/rules.md');
     expect(result['bytes']).toBe(7);
-    expect(readFileSync(join(repoRoot, 'knowledge', 'rules.md'), 'utf-8')).toBe('# Rules');
+    expect(result['staged']).toBe(true);
+
+    // Disk must NOT have been written — drafts are pre-commit state.
+    expect(existsSync(join(repoRoot, 'knowledge', 'rules.md'))).toBe(false);
+
+    // Backend must have a draft row for this (user, path).
+    const draft = await backend.getDraft(TEST_USER_ID, 'knowledge/rules.md');
+    expect(draft).toBe('# Rules');
   });
 
-  it('creates parent directories', async () => {
-    const tool = createWriteRepoFileTool(repoRoot);
-    await tool.execute({path: 'connections/new-api/spec.json', content: '{}'}, mockCtx);
+  it('isolates drafts by userId', async () => {
+    const toolAlice = createWriteRepoFileTool(repoRoot, backend, 'alice');
+    const toolBob = createWriteRepoFileTool(repoRoot, backend, 'bob');
+    await toolAlice.execute({path: 'skills/s.md', content: 'from-alice'}, mockCtx);
+    await toolBob.execute({path: 'skills/s.md', content: 'from-bob'}, mockCtx);
 
-    expect(existsSync(join(repoRoot, 'connections', 'new-api', 'spec.json'))).toBe(true);
+    expect(await backend.getDraft('alice', 'skills/s.md')).toBe('from-alice');
+    expect(await backend.getDraft('bob', 'skills/s.md')).toBe('from-bob');
+  });
+
+  it('overwrites an existing draft on a second write', async () => {
+    const tool = createWriteRepoFileTool(repoRoot, backend, TEST_USER_ID);
+    await tool.execute({path: 'knowledge/rules.md', content: 'first'}, mockCtx);
+    await tool.execute({path: 'knowledge/rules.md', content: 'second'}, mockCtx);
+
+    expect(await backend.getDraft(TEST_USER_ID, 'knowledge/rules.md')).toBe('second');
   });
 
   it('rejects writes to read-only directories', async () => {
-    const tool = createWriteRepoFileTool(repoRoot);
+    const tool = createWriteRepoFileTool(repoRoot, backend, TEST_USER_ID);
     const result = await tool.execute({path: 'node_modules/test-pkg/file.ts', content: 'code'}, mockCtx) as Record<string, unknown>;
 
     expect(result['error']).toContain('read-only');
+    // And no draft should have been staged.
+    expect(await backend.getDraft(TEST_USER_ID, 'node_modules/test-pkg/file.ts')).toBeNull();
+  });
+
+  it('rejects blocked filenames without staging a draft', async () => {
+    const tool = createWriteRepoFileTool(repoRoot, backend, TEST_USER_ID);
+    const result = await tool.execute({path: 'skills/.env', content: 'SECRET=x'}, mockCtx) as Record<string, unknown>;
+
+    expect(result['error']).toBeDefined();
+    expect(await backend.getDraft(TEST_USER_ID, 'skills/.env')).toBeNull();
   });
 
   it('is not readOnly', () => {
-    const tool = createWriteRepoFileTool(repoRoot);
+    const tool = createWriteRepoFileTool(repoRoot, backend, TEST_USER_ID);
     expect(tool.readOnly).toBe(false);
+  });
+
+  it('surfaces backend errors loudly (no silent swallow)', async () => {
+    // NotImplementedStudioBackend throws on every mutation — matches the
+    // PR 2.7 "missing backend is a configuration bug, surface it" contract.
+    const tool = createWriteRepoFileTool(repoRoot, new NotImplementedStudioBackend(), TEST_USER_ID);
+    await expect(
+      tool.execute({path: 'skills/x.md', content: 'y'}, mockCtx),
+    ).rejects.toThrow(/not implemented/i);
   });
 });
 
 describe('createDeleteRepoFileTool', () => {
-  it('deletes an existing file', async () => {
-    writeFileSync(join(repoRoot, 'evals', 'old-test.md'), 'old');
-    const tool = createDeleteRepoFileTool(repoRoot);
+  it('drops a pending draft and does NOT unlink the base file on disk', async () => {
+    // Base file exists on disk AND we have a pending draft for the same path.
+    writeFileSync(join(repoRoot, 'evals', 'old-test.md'), 'base-content');
+    await backend.setDraft(TEST_USER_ID, 'evals/old-test.md', 'draft-content');
 
+    const tool = createDeleteRepoFileTool(repoRoot, backend, TEST_USER_ID);
     const result = await tool.execute({path: 'evals/old-test.md'}, mockCtx) as Record<string, unknown>;
 
     expect(result['deleted']).toBe('evals/old-test.md');
-    expect(existsSync(join(repoRoot, 'evals', 'old-test.md'))).toBe(false);
+    expect(result['draft_reverted']).toBe(true);
+
+    // Draft is gone.
+    expect(await backend.getDraft(TEST_USER_ID, 'evals/old-test.md')).toBeNull();
+
+    // But the base file is still on disk — delete_repo_file is "revert
+    // this pending edit", NOT "remove from git".
+    expect(existsSync(join(repoRoot, 'evals', 'old-test.md'))).toBe(true);
+    expect(readFileSync(join(repoRoot, 'evals', 'old-test.md'), 'utf-8')).toBe('base-content');
   });
 
-  it('returns error for missing file', async () => {
-    const tool = createDeleteRepoFileTool(repoRoot);
-    const result = await tool.execute({path: 'evals/nonexistent.md'}, mockCtx) as Record<string, unknown>;
+  it('is idempotent — deleting a non-existent draft succeeds', async () => {
+    const tool = createDeleteRepoFileTool(repoRoot, backend, TEST_USER_ID);
+    const result = await tool.execute({path: 'evals/nothing-here.md'}, mockCtx) as Record<string, unknown>;
 
-    expect(result['error']).toContain('File not found');
+    expect(result['deleted']).toBe('evals/nothing-here.md');
   });
 
   it('rejects deletes in read-only directories', async () => {
-    const tool = createDeleteRepoFileTool(repoRoot);
+    const tool = createDeleteRepoFileTool(repoRoot, backend, TEST_USER_ID);
     const result = await tool.execute({path: 'node_modules/test-pkg/file.ts'}, mockCtx) as Record<string, unknown>;
 
     expect(result['error']).toContain('read-only');
+  });
+
+  it('surfaces backend errors loudly', async () => {
+    const tool = createDeleteRepoFileTool(repoRoot, new NotImplementedStudioBackend(), TEST_USER_ID);
+    await expect(
+      tool.execute({path: 'skills/x.md'}, mockCtx),
+    ).rejects.toThrow(/not implemented/i);
   });
 });
 
@@ -352,7 +413,7 @@ describe('createInternalApiTool', () => {
 describe('registerAdminFileTools', () => {
   it('registers all 9 admin tools', () => {
     const registry = createToolRegistry();
-    registerAdminFileTools(registry, repoRoot, () => 3000);
+    registerAdminFileTools(registry, repoRoot, () => 3000, {backend, userId: TEST_USER_ID});
 
     expect(registry.names()).toEqual([
       'read_repo_file',
@@ -366,6 +427,21 @@ describe('registerAdminFileTools', () => {
       'internal_api',
     ]);
     expect(registry.size).toBe(9);
+  });
+
+  it('accepts the pre-PR-2.7 three-arg signature and defaults backend to NotImplementedStudioBackend', async () => {
+    // Backward-compat call site (e.g. session/session-builder.ts) still uses
+    // the three-arg form. Registration itself must not throw — the throw
+    // only happens at mutation time when the default backend is invoked.
+    const registry = createToolRegistry();
+    registerAdminFileTools(registry, repoRoot, () => 3000);
+    expect(registry.size).toBe(9);
+
+    const writeTool = registry.get('write_repo_file');
+    expect(writeTool).toBeDefined();
+    await expect(
+      writeTool!.execute({path: 'skills/x.md', content: 'y'}, mockCtx),
+    ).rejects.toThrow(/not implemented/i);
   });
 });
 
@@ -569,9 +645,9 @@ describe('createGrepRepoFilesTool', () => {
 // ---------------------------------------------------------------------------
 
 describe('createEditRepoFileTool', () => {
-  it('replaces a single unique occurrence and reports stats', async () => {
+  it('replaces a single unique occurrence, stages as draft, and leaves disk untouched', async () => {
     writeFileSync(join(repoRoot, 'skills', 'a.md'), '# hello\n\nworld');
-    const tool = createEditRepoFileTool(repoRoot);
+    const tool = createEditRepoFileTool(repoRoot, backend, TEST_USER_ID);
 
     const result = await tool.execute(
       {path: 'skills/a.md', old_string: 'hello', new_string: 'hi'},
@@ -580,12 +656,39 @@ describe('createEditRepoFileTool', () => {
 
     expect(result['edited']).toBe('skills/a.md');
     expect(result['occurrences']).toBe(1);
-    expect(readFileSync(join(repoRoot, 'skills', 'a.md'), 'utf-8')).toBe('# hi\n\nworld');
+    expect(result['staged']).toBe(true);
+
+    // Disk unchanged — the edit went to the draft layer.
+    expect(readFileSync(join(repoRoot, 'skills', 'a.md'), 'utf-8')).toBe('# hello\n\nworld');
+    // Draft contains the edited content.
+    expect(await backend.getDraft(TEST_USER_ID, 'skills/a.md')).toBe('# hi\n\nworld');
   });
 
-  it('fails when old_string is not found', async () => {
+  it('reads with draft overlay so back-to-back edits compose', async () => {
+    // Base file has "alpha beta gamma". First edit → "ALPHA beta gamma".
+    // Second edit must see the result of the first (not the base file),
+    // otherwise it would silently overwrite the first edit.
+    writeFileSync(join(repoRoot, 'skills', 'a.md'), 'alpha beta gamma');
+    const tool = createEditRepoFileTool(repoRoot, backend, TEST_USER_ID);
+
+    await tool.execute(
+      {path: 'skills/a.md', old_string: 'alpha', new_string: 'ALPHA'},
+      mockCtx,
+    );
+    const result2 = await tool.execute(
+      {path: 'skills/a.md', old_string: 'beta', new_string: 'BETA'},
+      mockCtx,
+    ) as Record<string, unknown>;
+
+    expect(result2['edited']).toBe('skills/a.md');
+    // Draft should now have BOTH edits applied — this proves the overlay
+    // read path is wired up correctly.
+    expect(await backend.getDraft(TEST_USER_ID, 'skills/a.md')).toBe('ALPHA BETA gamma');
+  });
+
+  it('fails when old_string is not found (and does not stage a draft)', async () => {
     writeFileSync(join(repoRoot, 'skills', 'a.md'), '# hello');
-    const tool = createEditRepoFileTool(repoRoot);
+    const tool = createEditRepoFileTool(repoRoot, backend, TEST_USER_ID);
 
     const result = await tool.execute(
       {path: 'skills/a.md', old_string: 'missing', new_string: 'x'},
@@ -593,11 +696,12 @@ describe('createEditRepoFileTool', () => {
     ) as Record<string, unknown>;
 
     expect(result['error']).toContain('No occurrences');
+    expect(await backend.getDraft(TEST_USER_ID, 'skills/a.md')).toBeNull();
   });
 
   it('fails when old_string appears multiple times and allow_multiple is false', async () => {
     writeFileSync(join(repoRoot, 'skills', 'a.md'), 'foo foo foo');
-    const tool = createEditRepoFileTool(repoRoot);
+    const tool = createEditRepoFileTool(repoRoot, backend, TEST_USER_ID);
 
     const result = await tool.execute(
       {path: 'skills/a.md', old_string: 'foo', new_string: 'bar'},
@@ -605,12 +709,14 @@ describe('createEditRepoFileTool', () => {
     ) as Record<string, unknown>;
 
     expect(result['error']).toContain('Found 3 occurrences');
+    // Neither disk nor draft should be touched.
     expect(readFileSync(join(repoRoot, 'skills', 'a.md'), 'utf-8')).toBe('foo foo foo');
+    expect(await backend.getDraft(TEST_USER_ID, 'skills/a.md')).toBeNull();
   });
 
-  it('replaces every occurrence when allow_multiple=true', async () => {
+  it('replaces every occurrence when allow_multiple=true (staged as a draft)', async () => {
     writeFileSync(join(repoRoot, 'skills', 'a.md'), 'foo foo foo');
-    const tool = createEditRepoFileTool(repoRoot);
+    const tool = createEditRepoFileTool(repoRoot, backend, TEST_USER_ID);
 
     const result = await tool.execute(
       {path: 'skills/a.md', old_string: 'foo', new_string: 'bar', allow_multiple: true},
@@ -618,12 +724,14 @@ describe('createEditRepoFileTool', () => {
     ) as Record<string, unknown>;
 
     expect(result['occurrences']).toBe(3);
-    expect(readFileSync(join(repoRoot, 'skills', 'a.md'), 'utf-8')).toBe('bar bar bar');
+    // Draft has the rewrite; disk still has the original.
+    expect(await backend.getDraft(TEST_USER_ID, 'skills/a.md')).toBe('bar bar bar');
+    expect(readFileSync(join(repoRoot, 'skills', 'a.md'), 'utf-8')).toBe('foo foo foo');
   });
 
   it('rejects edits to read-only directories', async () => {
     writeFileSync(join(repoRoot, 'node_modules', 'test-pkg', 'file.ts'), 'code');
-    const tool = createEditRepoFileTool(repoRoot);
+    const tool = createEditRepoFileTool(repoRoot, backend, TEST_USER_ID);
 
     const result = await tool.execute(
       {path: 'node_modules/test-pkg/file.ts', old_string: 'code', new_string: 'new'},
@@ -631,6 +739,16 @@ describe('createEditRepoFileTool', () => {
     ) as Record<string, unknown>;
 
     expect(result['error']).toContain('read-only');
+  });
+
+  it('returns "File not found" when neither disk nor draft has the file', async () => {
+    const tool = createEditRepoFileTool(repoRoot, backend, TEST_USER_ID);
+    const result = await tool.execute(
+      {path: 'skills/ghost.md', old_string: 'x', new_string: 'y'},
+      mockCtx,
+    ) as Record<string, unknown>;
+
+    expect(result['error']).toContain('File not found');
   });
 });
 
