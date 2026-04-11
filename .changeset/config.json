@@ -10,7 +10,8 @@
       "@amodalai/react",
       "@amodalai/amodal",
       "@amodalai/runtime-app",
-      "@amodalai/snapshot-probe"
+      "@amodalai/snapshot-probe",
+      "@amodalai/studio"
     ]
   ],
   "linked": [],
