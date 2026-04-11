@@ -83,6 +83,9 @@ export {loadRepoFromDisk} from './local-reader.js';
 export {loadRepoFromPlatform} from './platform-reader.js';
 export {loadRepo} from './repo-loader.js';
 
+// Change detection (used by push webhook router to pick build mode)
+export {isContentOnlyChange} from './change-detection.js';
+
 // Sync utilities
 export {parseOpenAPISpec, fetchAndParseSpec} from './openapi-parser.js';
 export type {ParsedEndpoint, ParsedParameter} from './openapi-parser.js';
