@@ -110,7 +110,7 @@ export async function fireDrainHooks(
   }
 
   if (hooks?.onSessionPersist) {
-    hooks.onSessionPersist(session.id, [], 'completed', {
+    hooks.onSessionPersist(session.id, session.messages, 'completed', {
       model: session.model,
       provider: session.providerName,
     });
