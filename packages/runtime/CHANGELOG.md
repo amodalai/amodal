@@ -1,5 +1,31 @@
 # @amodalai/runtime
 
+## 0.2.9
+
+### Patch Changes
+
+- [#187](https://github.com/amodalai/amodal/pull/187) [`8c7ae14`](https://github.com/amodalai/amodal/commit/8c7ae149dff3167c7dca0f2a26f2401143874090) Thanks [@gte620v](https://github.com/gte620v)! - Add role-gated file access and the foundation for the deploy diff view.
+
+  `/api/files` routes (GET tree, GET file, PUT file) now consult the configured `RoleProvider` and gate access by role:
+  - `ops` can read/write anything in the repo (subject to existing path-traversal checks)
+  - `admin` can read/write only `skills/`, `knowledge/`, and `agents/` directories. Tree response is filtered to those directories.
+  - `user` is denied entirely with 403
+  - Unauthenticated requests get 401
+
+  Default behavior in `amodal dev` is unchanged because the default `RoleProvider` returns `ops` for everyone.
+
+  Adds a new `DiffView` React component plus a `computeLineDiff` LCS-based line-diff utility (no new dependencies). The component is ready to render unified diffs but is not yet wired into a backend diff endpoint — that comes in a follow-up PR (`/api/workspace/diff` in the cloud repo).
+
+  The `WorkspaceBar`'s "Persist" button now opens a `DeployConfirmModal` that lists the files about to be deployed. The actual line-by-line diffs will be added once the workspace diff endpoint exists in cloud.
+
+- [#191](https://github.com/amodalai/amodal/pull/191) [`42a3c0b`](https://github.com/amodalai/amodal/commit/42a3c0bf93d420138fe68c39ed0312e1b9b397a1) Thanks [@whodatdev](https://github.com/whodatdev)! - Pass session messages to onSessionPersist hook instead of empty array
+
+- [#185](https://github.com/amodalai/amodal/pull/185) [`0a8dd80`](https://github.com/amodalai/amodal/commit/0a8dd809b52e2790b13c99b423800deabfe8c970) Thanks [@gte620v](https://github.com/gte620v)! - Add RoleProvider interface for role-based access control. Hosting layers (cloud, self-hosted, `amodal dev`) plug in their own implementation to map requests to `user`/`admin`/`ops` roles. Adds `GET /api/me` endpoint and `requireRole` middleware factory. Default provider returns `ops` for all requests so `amodal dev` and existing deployments work unchanged.
+
+- Updated dependencies []:
+  - @amodalai/types@0.2.9
+  - @amodalai/core@0.2.9
+
 ## 0.2.8
 
 ### Patch Changes
