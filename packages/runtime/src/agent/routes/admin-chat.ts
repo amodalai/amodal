@@ -24,6 +24,7 @@ import {SSEEventType} from '../../types.js';
 import type {SSEEvent} from '../../types.js';
 import {SessionError} from '../../errors.js';
 import {asyncHandler} from '../../routes/route-helpers.js';
+import type {StudioBackend} from '@amodalai/studio';
 
 export interface AdminChatRouterOptions {
   sessionManager: StandaloneSessionManager;
@@ -31,6 +32,18 @@ export interface AdminChatRouterOptions {
   /** The bundle for the current agent repo. */
   getBundle: () => AgentBundle | undefined;
   getPort?: () => number | null;
+  /**
+   * Studio draft workspace backend for the admin agent's file tools. Must be
+   * the SAME instance passed to `createStudioRouter` so admin-agent writes
+   * and HTTP-API writes land in the same draft rows.
+   */
+  studioBackend?: StudioBackend;
+  /**
+   * User ID used when the admin agent writes drafts. Must match the userId
+   * the Studio HTTP API resolves for the same local-dev user (e.g.
+   * `local-dev` from `defaultRoleProvider`).
+   */
+  studioUserId?: string;
 }
 
 function writeSSE(res: Response, event: SSEEvent): void {
@@ -101,6 +114,8 @@ export function createAdminChatRouter(options: AdminChatRouterOptions): Router {
           repoRoot: bundle.origin,
           getPort: options.getPort,
           appId: 'admin',
+          studioBackend: options.studioBackend,
+          studioUserId: options.studioUserId,
         });
 
         session = options.sessionManager.create({

@@ -5,7 +5,7 @@
  */
 
 import {describe, it, expect, vi, beforeEach, afterAll} from 'vitest';
-import {mkdtempSync, rmSync} from 'node:fs';
+import {mkdtempSync, readFileSync, rmSync, existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createLocalServer} from './local-server.js';
@@ -183,6 +183,100 @@ describe('createLocalServer', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({id: 'custom-user', role: 'admin'});
+  });
+
+  // -------------------------------------------------------------------------
+  // Studio routes (PR 2.8) — smoke tests that the router is mounted on the
+  // app returned by createLocalServer and a fresh in-memory pglite backend
+  // round-trips list -> put -> list -> publish correctly.
+  //
+  // We exercise the FULL mounted router (not a standalone createStudioRouter
+  // call) because the single-shared-instance concern in PR 2.8 is exactly
+  // about wiring inside createLocalServer — a standalone router test would
+  // miss any regression where the wiring is duplicated or skipped.
+  // -------------------------------------------------------------------------
+
+  it('GET /api/studio/drafts returns an empty list on a fresh server', async () => {
+    const server = await createLocalServer({
+      repoPath: TEST_REPO,
+      port: 0,
+    });
+    try {
+      const {default: request} = await import('supertest');
+      const res = await request(server.app).get('/api/studio/drafts');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({drafts: []});
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('PUT /api/studio/drafts then GET lists the saved draft', async () => {
+    const server = await createLocalServer({
+      repoPath: TEST_REPO,
+      port: 0,
+    });
+    try {
+      const {default: request} = await import('supertest');
+
+      const putRes = await request(server.app)
+        .put('/api/studio/drafts/skills/test.md')
+        .set('Content-Type', 'application/json')
+        .send({content: 'hello world'});
+      expect(putRes.status).toBe(200);
+      expect(putRes.body).toMatchObject({status: 'ok', filePath: 'skills/test.md'});
+
+      const listRes = await request(server.app).get('/api/studio/drafts');
+      expect(listRes.status).toBe(200);
+      expect(Array.isArray(listRes.body.drafts)).toBe(true);
+      expect(listRes.body.drafts).toHaveLength(1);
+      expect(listRes.body.drafts[0]).toMatchObject({
+        filePath: 'skills/test.md',
+        content: 'hello world',
+      });
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('POST /api/studio/publish writes drafts to disk and returns a local- SHA', async () => {
+    // Use a fresh repo dir for this test — publish writes real files to disk.
+    const publishRepo = mkdtempSync(join(tmpdir(), 'amodal-studio-publish-'));
+    try {
+      const server = await createLocalServer({
+        repoPath: publishRepo,
+        port: 0,
+      });
+      try {
+        const {default: request} = await import('supertest');
+        await request(server.app)
+          .put('/api/studio/drafts/skills/published.md')
+          .set('Content-Type', 'application/json')
+          .send({content: '# published'})
+          .expect(200);
+
+        const publishRes = await request(server.app)
+          .post('/api/studio/publish')
+          .set('Content-Type', 'application/json')
+          .send({commitMessage: 'test publish'});
+        expect(publishRes.status).toBe(200);
+        expect(typeof publishRes.body.commitSha).toBe('string');
+        expect(publishRes.body.commitSha).toMatch(/^local-/);
+
+        const onDisk = join(publishRepo, 'skills', 'published.md');
+        expect(existsSync(onDisk)).toBe(true);
+        expect(readFileSync(onDisk, 'utf-8')).toBe('# published');
+
+        // Drafts should be cleared after publish.
+        const afterRes = await request(server.app).get('/api/studio/drafts');
+        expect(afterRes.status).toBe(200);
+        expect(afterRes.body).toEqual({drafts: []});
+      } finally {
+        await server.stop();
+      }
+    } finally {
+      rmSync(publishRepo, {recursive: true, force: true});
+    }
   });
 
   it('GET /api/me returns 401 when custom roleProvider returns null', async () => {

@@ -38,6 +38,7 @@ import {createCustomToolDefinition} from '../tools/custom-tool-adapter.js';
 import type {CustomToolSessionContext} from '../tools/custom-tool-adapter.js';
 import {registerMcpTools} from '../tools/mcp-tool-adapter.js';
 import {registerAdminFileTools} from '../tools/admin-file-tools.js';
+import type {StudioBackend} from '@amodalai/studio';
 import {
   AccessJsonPermissionChecker,
 } from '../security/permission-checker.js';
@@ -94,6 +95,22 @@ export interface BuildSessionComponentsOptions {
   repoRoot?: string;
   /** Callback to get the server port (for admin internal_api tool). */
   getPort?: () => number | null;
+  /**
+   * Studio draft workspace backend for admin file tools. Optional — when
+   * omitted, admin file tools fall back to the `NotImplementedStudioBackend`
+   * and mutating tool calls throw `StudioNotImplementedError`. Production
+   * call sites (`amodal dev`, platform-api) MUST inject a real backend so
+   * admin-agent writes share a draft workspace with the HTTP API.
+   */
+  studioBackend?: StudioBackend;
+  /**
+   * User ID to associate with admin-agent draft writes. Must match the
+   * userId the Studio HTTP API resolves for the same local-dev user so the
+   * admin agent and the editor UI read and write the same draft rows.
+   * Defaults to `DEFAULT_ADMIN_AGENT_USER_ID` in `admin-file-tools.ts` when
+   * omitted; callers wiring in `studioBackend` should always set this too.
+   */
+  studioUserId?: string;
   /** Session ID for correlation in tool context (default: generated). */
   sessionId?: string;
   /** Optional field scrubber for response sanitization on ctx.request() */
@@ -355,7 +372,15 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // -------------------------------------------------------------------------
 
   if (sessionType === 'admin' && repoRoot) {
-    registerAdminFileTools(registry, repoRoot, getPort ?? (() => null));
+    registerAdminFileTools(
+      registry,
+      repoRoot,
+      getPort ?? (() => null),
+      {
+        backend: opts.studioBackend,
+        userId: opts.studioUserId,
+      },
+    );
   }
 
   // -------------------------------------------------------------------------

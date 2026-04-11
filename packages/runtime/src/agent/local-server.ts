@@ -78,6 +78,18 @@ import type {BuiltPage} from './page-builder.js';
 import {LOCAL_APP_ID} from '../constants.js';
 import {log, createLogger} from '../logger.js';
 import {defaultRoleProvider} from '../role-provider.js';
+import {createPGLiteStudioBackend, createStudioRouter} from '@amodalai/studio';
+import type {PGLiteStudioBackend} from '@amodalai/studio';
+import {createStudioAuthFromRoleProvider} from './studio-auth-adapter.js';
+
+/**
+ * Single userId used by both the Studio HTTP router and the admin agent's
+ * file tools in `amodal dev`. Matches `defaultRoleProvider.resolveUser()`'s
+ * returned `id` so draft rows are shared between the HTTP API (which resolves
+ * the userId from the request via RoleProvider) and the admin agent (which
+ * has no request to resolve from and takes a fixed userId).
+ */
+const STUDIO_LOCAL_USER_ID = 'local-dev';
 import {bootstrapChannels} from '../channels/bootstrap.js';
 import {DrizzleChannelSessionMapper} from '../channels/channel-session-mapper.js';
 import type {ChannelAdapter} from '@amodalai/types';
@@ -650,6 +662,37 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     roleProvider: config.roleProvider,
   }));
 
+  // -------------------------------------------------------------------------
+  // Studio draft workspace (PR 2.8)
+  //
+  // ONE pglite backend instance is constructed here and shared between two
+  // write paths:
+  //   1. the Studio HTTP API mounted below (createStudioRouter)
+  //   2. the admin agent's file tools (registered inside the admin chat's
+  //      buildSessionComponents call — see below)
+  //
+  // Sharing the instance is a correctness requirement, not an optimization:
+  // if the two paths had separate pglite instances, admin-agent writes and
+  // human-editor writes would land in different databases and Sally would
+  // see empty drafts after the admin agent "wrote" a file.
+  //
+  // Default is in-memory (no `pglite` / no `dataDir`), which means drafts
+  // do NOT persist across `amodal dev` restarts. That's acceptable for v1:
+  // local dev convenience, not durable state — durability lives in the
+  // DrizzleStudioBackend for platform-api (PR 2.9).
+  //
+  // The shared userId is `STUDIO_LOCAL_USER_ID` ("local-dev"), which matches
+  // `defaultRoleProvider.resolveUser()`'s return value. Both paths use this
+  // same userId so drafts share rows. Self-hosted deployments that inject a
+  // custom roleProvider also need to supply `studioUserId` — there's no way
+  // to pre-resolve a userId without a request — so until then, those
+  // deployments should not rely on single-user shared drafts.
+  const studioBackend: PGLiteStudioBackend = await createPGLiteStudioBackend({
+    repoPath: config.repoPath,
+  });
+  const studioAuth = createStudioAuthFromRoleProvider(roleProvider);
+  app.use(createStudioRouter({backend: studioBackend, auth: studioAuth}));
+
   // Event bus SSE stream (live UI updates)
   app.use(createEventsRouter({bus: eventBus, logger: log}));
 
@@ -679,12 +722,16 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Task runner
   app.use(createTaskRouter({sessionManager, createTaskSession: createAutomationSessionComponents}));
 
-  // Admin chat (new stack)
+  // Admin chat (new stack) — receives the SAME `studioBackend` instance the
+  // HTTP router uses, so admin-agent draft writes land in the same rows the
+  // /api/studio routes read from (see Studio wiring block above).
   app.use(createAdminChatRouter({
     sessionManager,
     shared,
     getBundle,
     getPort: () => config.port,
+    studioBackend,
+    studioUserId: STUDIO_LOCAL_USER_ID,
   }));
 
   // Inspect
@@ -809,6 +856,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       if (storeBackend) {
         await storeBackend.close();
       }
+
+      // Release the pglite instance owned by the Studio backend. For the
+      // default in-memory backend this is best-effort cleanup — the process
+      // exit would reclaim the memory anyway — but it keeps the test
+      // harness tidy and prepares for future persistent data dirs.
+      await studioBackend.close();
 
       log.info('server_stopped', {});
     },
