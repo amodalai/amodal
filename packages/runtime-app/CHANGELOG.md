@@ -1,5 +1,31 @@
 # @amodalai/runtime-app
 
+## 0.2.9
+
+### Patch Changes
+
+- [#187](https://github.com/amodalai/amodal/pull/187) [`8c7ae14`](https://github.com/amodalai/amodal/commit/8c7ae149dff3167c7dca0f2a26f2401143874090) Thanks [@gte620v](https://github.com/gte620v)! - Add role-gated file access and the foundation for the deploy diff view.
+
+  `/api/files` routes (GET tree, GET file, PUT file) now consult the configured `RoleProvider` and gate access by role:
+  - `ops` can read/write anything in the repo (subject to existing path-traversal checks)
+  - `admin` can read/write only `skills/`, `knowledge/`, and `agents/` directories. Tree response is filtered to those directories.
+  - `user` is denied entirely with 403
+  - Unauthenticated requests get 401
+
+  Default behavior in `amodal dev` is unchanged because the default `RoleProvider` returns `ops` for everyone.
+
+  Adds a new `DiffView` React component plus a `computeLineDiff` LCS-based line-diff utility (no new dependencies). The component is ready to render unified diffs but is not yet wired into a backend diff endpoint — that comes in a follow-up PR (`/api/workspace/diff` in the cloud repo).
+
+  The `WorkspaceBar`'s "Persist" button now opens a `DeployConfirmModal` that lists the files about to be deployed. The actual line-by-line diffs will be added once the workspace diff endpoint exists in cloud.
+
+- [#186](https://github.com/amodalai/amodal/pull/186) [`12fb676`](https://github.com/amodalai/amodal/commit/12fb6767069df36e1267b77b78de8580ab7adea4) Thanks [@gte620v](https://github.com/gte620v)! - Add role-aware sidebar to runtime-app. New `useMe` hook calls the runtime's `/api/me` endpoint and returns the current user's role (`user`, `admin`, or `ops`). The main Sidebar and AppShell now hide ops-only items (connections, MCP servers, config gear) from non-ops users, and admin-only items (skills, knowledge, automations, stores, pages) from end-users. ConfigLayout redirects non-ops users to the chat. In `amodal dev` everyone is `ops` so the UI is unchanged.
+
+- [#183](https://github.com/amodalai/amodal/pull/183) [`d521402`](https://github.com/amodalai/amodal/commit/d521402ab934f491669c62b6b0c98604fab8681b) Thanks [@gte620v](https://github.com/gte620v)! - Harden workspace editing in the runtime-app: fix discard data inconsistency, surface localStorage quota errors, throw on stale-base restore, add fetch timeouts, replace empty catches with logged catches, replace bare Errors with typed WorkspaceError. Add centralized browser logger at utils/log.ts.
+
+- Updated dependencies []:
+  - @amodalai/types@0.2.9
+  - @amodalai/react@0.2.9
+
 ## 0.2.8
 
 ### Patch Changes
