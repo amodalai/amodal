@@ -28,8 +28,14 @@ export {
   createPGLiteStudioBackend,
 } from './backends/pglite.js';
 
-export type {StudioBackendContractHarness} from './backend-contract.js';
-export {runStudioBackendContract} from './backend-contract.js';
+// `backend-contract` is deliberately NOT re-exported from this barrel.
+// `backend-contract.ts` imports vitest at module scope (it's a reusable test
+// helper), and re-exporting it here would pull vitest into any production
+// consumer of `@amodalai/studio` — which breaks `amodal dev`, the CLI, and
+// the runtime, all of which crash on load when vitest's worker state isn't
+// initialized. Downstream test files should import via the dedicated
+// subpath entry: `import { runStudioBackendContract } from '@amodalai/studio/backend-contract';`
+// See `packages/studio/package.json` `exports` field.
 
 export type {
   StudioAuth,
