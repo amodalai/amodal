@@ -458,6 +458,12 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.13)(@types/node@20.19.37)(jiti@1.21.7)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.12.14(@types/node@20.19.37)(typescript@5.9.3))(yaml@2.8.3)
 
+  packages/snapshot-probe:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
   packages/studio:
     dependencies:
       "@amodalai/core":
