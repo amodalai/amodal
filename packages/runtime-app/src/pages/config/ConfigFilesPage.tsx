@@ -10,7 +10,6 @@ import { ChevronRight, File, FolderOpen, Folder, Save, Package, Loader2, Refresh
 import { CodeEditor } from '@/components/CodeEditor';
 import { DraftWorkspaceBar } from '@/components/studio/DraftWorkspaceBar';
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
-import { useWorkspace } from '@/hooks/useWorkspace';
 import { cn } from '@/lib/utils';
 
 interface FileTreeEntry {
@@ -125,7 +124,6 @@ export function ConfigFilesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
-  const workspace = useWorkspace();
 
   // Fetch file tree (initial + refresh when the runtime signals file changes)
   const lastJsonRef = useRef('');
@@ -145,9 +143,10 @@ export function ConfigFilesPage() {
       .finally(() => { setLoading(false); });
   }, []);
 
-  // Wait for workspace restore before fetching the file tree so restored
-  // edits appear after a server cold start.
-  useEffect(() => { if (workspace.ready) fetchTree(); }, [fetchTree, workspace.ready]);
+  // Fetch the tree on mount. Studio drafts never affect the tree structure
+  // (drafts are overlaid at read time by the editor hook, not by the file
+  // tree endpoint), so no workspace-ready gating is needed.
+  useEffect(() => { fetchTree(); }, [fetchTree]);
   useRuntimeEvents(['files_changed', 'manifest_changed'], () => {
     fetchTree();
   });
@@ -223,14 +222,6 @@ export function ConfigFilesPage() {
       });
 
       if (res.ok) {
-        const body: unknown = await res.json();
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
-        const data = body && typeof body === 'object' ? body as Record<string, unknown> : {};
-        // If hosted mode, store workspace data (bundle + commits)
-        if (data['workspace']) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- workspace shape validated by hosted runtime
-          workspace.onFileSaved(data['workspace'] as Parameters<typeof workspace.onFileSaved>[0]);
-        }
         setSaveStatus('saved');
         setFileData((prev) => prev ? { ...prev, content: editedContent } : prev);
         setEditedContent(null);
@@ -244,7 +235,7 @@ export function ConfigFilesPage() {
     }
 
     setSaving(false);
-  }, [selectedPath, editedContent, workspace]);
+  }, [selectedPath, editedContent]);
 
   // Keyboard shortcut: Cmd/Ctrl+S to save
   useEffect(() => {
@@ -355,13 +346,9 @@ export function ConfigFilesPage() {
       </div>
       </div>
       {/*
-        Draft workspace bar (PR 2.6). Mounted here — not replacing the old
-        WorkspaceBar in ConfigLayout, which still renders across all config
-        pages backed by the legacy `useWorkspace` hook. The two bars operate
-        on disjoint data sources (legacy git-bundle workspace vs the new
-        Studio drafts API) and don't conflict in practice: in `amodal dev`
-        the legacy workspace never becomes dirty through the new code path,
-        so its bar stays hidden. PR 5.2 removes the old bar entirely.
+        Draft workspace bar — scoped to the files editor page only. Talks
+        to `/api/studio/*` via useDraftWorkspace. See DraftWorkspaceBar in
+        components/studio/.
       */}
       <DraftWorkspaceBar />
     </div>

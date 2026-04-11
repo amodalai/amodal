@@ -9,14 +9,9 @@ import { NavLink, Outlet, Navigate } from 'react-router-dom';
 import { Sun, Moon, Settings, Bot, KeyRound, FileText, ArrowLeft, FolderCode, MessageSquare, PanelRightOpen, PanelRightClose, FlaskConical, Swords } from 'lucide-react';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { useRuntimeConnection } from '@/contexts/RuntimeEventsContext';
-import { useWorkspace } from '@/hooks/useWorkspace';
 import { useMe, hasRole } from '@/hooks/useMe';
-import { WorkspaceBar } from '@/components/WorkspaceBar';
 import { AdminChatPanel } from './ConfigChatPage';
 import { cn } from '@/lib/utils';
-import { createLogger } from '@/utils/log';
-
-const log = createLogger('ConfigLayout');
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
 
@@ -79,24 +74,9 @@ export function ConfigLayout() {
   const { dark, toggle } = useTheme();
   const connectionStatus = useConnectionStatus();
   const [chatOpen, setChatOpen] = useState(false);
-  const workspace = useWorkspace();
-  const connected = useRuntimeConnection();
   // Config UI is ops-only. Hook called unconditionally; check happens after
   // all hooks below to keep hook order stable across renders.
   const me = useMe();
-
-  // Restore workspace on reconnect if there are pending changes
-  useEffect(() => {
-    if (connected && workspace?.stored?.bundle) {
-      // restore() can throw on stale base or network failure — log it.
-      // The isStale flag and bundle warning surface the user-facing state.
-      workspace.restore().catch((err: unknown) => {
-        log.warn('workspace_restore_on_reconnect_failed', { err });
-      });
-    }
-  // Only restore when connection state changes to connected
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected]);
 
   // Listen for requests to open the admin chat panel (e.g. from Feedback synthesis)
   useEffect(() => {
@@ -261,9 +241,9 @@ export function ConfigLayout() {
         )}
       </div>
 
-      {workspace?.isDirty && (
-        <WorkspaceBar workspace={workspace} />
-      )}
+      {/* Draft workspace bar is mounted inside ConfigFilesPage only,
+          scoped to the files editor — see DraftWorkspaceBar + the
+          useDraftWorkspace hook in packages/studio. */}
     </div>
   );
 }

@@ -47,7 +47,7 @@ export function PublishDialog({ drafts, onConfirm, onCancel }: PublishDialogProp
     textareaRef.current?.focus();
   }, []);
 
-  // Escape to cancel — mirrors DiscardDialog / DeployConfirmModal.
+  // Escape to cancel — mirrors DiscardDialog.
   useEffect(() => {
     const handleKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape' && !busy) onCancel();
