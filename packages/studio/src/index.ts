@@ -30,3 +30,13 @@ export {
 
 export type {StudioBackendContractHarness} from './backend-contract.js';
 export {runStudioBackendContract} from './backend-contract.js';
+
+export type {
+  StudioAuth,
+  StudioAuthResult,
+  StudioRole,
+  StudioUser,
+} from './auth.js';
+
+export type {CreateStudioRouterOptions} from './routes.js';
+export {createStudioRouter} from './routes.js';
