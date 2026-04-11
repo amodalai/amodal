@@ -99,7 +99,16 @@ export function DraftWorkspaceBar({ workspace: injected }: DraftWorkspaceBarProp
       if (!result) {
         // Hook stored an error — check it for the 501 feature_unavailable
         // case and show a friendlier message than the raw fetch text.
-        const storedErr = workspace.error;
+        //
+        // IMPORTANT: read via `getLatestError()` rather than `workspace.error`.
+        // The `workspace` object in this closure was captured at render time,
+        // so its `error` field is the value from that render (null, in the
+        // common case where the user hadn't errored before clicking). React
+        // hasn't re-rendered yet between the await above and this line, so
+        // the destructured `error` isn't updated. `getLatestError` reads a
+        // ref that was synchronously updated in the hook's runRequest catch
+        // block, so it reflects the actual current error.
+        const storedErr = workspace.getLatestError();
         if (storedErr instanceof StudioFetchError && storedErr.status === 501) {
           showStatus('Preview is only available in cloud. Publish to see changes locally.');
           // Clear the error banner so the friendly status is the only thing

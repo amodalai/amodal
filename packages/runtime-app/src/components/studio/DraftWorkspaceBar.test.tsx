@@ -36,11 +36,17 @@ afterEach(() => {
 function makeFakeWorkspace(
   overrides: Partial<UseDraftWorkspace> = {},
 ): UseDraftWorkspace {
+  // Default getLatestError mirrors whatever `error` the override sets, so
+  // tests that pass `error: someErr` get a matching synchronous getter
+  // automatically. Tests can override this explicitly when they need the
+  // ref-based value to differ from the state-based value.
+  const defaultError = overrides.error ?? null;
   return {
     drafts: [],
     count: 0,
     isLoading: false,
     error: null,
+    getLatestError: (): Error | null => defaultError,
     listDrafts: vi.fn(async () => undefined),
     saveDraft: vi.fn(async () => undefined),
     deleteDraft: vi.fn(async () => undefined),
@@ -153,17 +159,23 @@ describe('DraftWorkspaceBar', () => {
   it('shows a friendly message when buildPreview fails with 501 feature_unavailable', async () => {
     const err = new StudioFetchError('feature unavailable', 501, 'feature_unavailable');
     const buildPreview = vi.fn(async () => null);
-    // State after the hook records the error.
+    // The bar reads the post-mutation error via `getLatestError()` rather than
+    // the closure-captured `error` field, so the fake workspace needs to
+    // return `err` from that getter. We intentionally leave `error: null`
+    // here — in production the hook's state `error` is the trailing value
+    // from the previous render, not the just-caught one, and the bar must
+    // rely on the ref-based getter to see the fresh error synchronously.
     const workspace = makeFakeWorkspace({
       drafts: oneDraft,
       count: 1,
       buildPreview,
-      error: err,
+      error: null,
+      getLatestError: (): Error | null => err,
     });
     render(<DraftWorkspaceBar workspace={workspace} />);
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     await waitFor(() => {
-      expect(screen.getByText(/Preview is not available yet/)).toBeDefined();
+      expect(screen.getByText(/Preview is only available in cloud/)).toBeDefined();
     });
   });
 

@@ -177,6 +177,16 @@ export interface UseDraftWorkspace {
   isLoading: boolean;
   /** Most recent error from any operation, or null. Cleared on next successful call. */
   error: Error | null;
+  /**
+   * Synchronously read the most recent error. This is a ref-based getter and
+   * reflects the current value even inside an async callback that has not
+   * yet seen the React re-render triggered by `setError`. Callers that need
+   * to inspect the error *immediately after* awaiting a mutation — e.g. to
+   * distinguish a 501 feature-unavailable from a generic failure — should
+   * use this instead of reading `error` from the closure, which is captured
+   * from the render that scheduled the mutation and is therefore stale.
+   */
+  getLatestError: () => Error | null;
   /** Refetch the draft list. Called internally by the mutations. */
   listDrafts: () => Promise<void>;
   /** Save (upsert) a draft file. Refetches on success. */
@@ -237,6 +247,14 @@ export function useDraftWorkspace(): UseDraftWorkspace {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Mirror of `error` kept in a ref so callbacks can read the latest value
+  // synchronously, without waiting for React to re-render. The `error` state
+  // drives the banner UI (so we still need setState), but that state is only
+  // visible to a caller *after* the next render — which is too late if the
+  // caller is inside the same microtask as the mutation that set the error.
+  // See the `getLatestError` JSDoc on UseDraftWorkspace.
+  const errorRef = useRef<Error | null>(null);
+
   // Track the AbortController for the most recent in-flight request so we can
   // cancel it on unmount. We deliberately only track ONE at a time — if
   // multiple calls overlap, the newer one replaces the older one's controller
@@ -268,6 +286,9 @@ export function useDraftWorkspace(): UseDraftWorkspace {
     ): Promise<T | null> => {
       const controller = new AbortController();
       controllerRef.current = controller;
+      // errorRef mirrors the state update so async callers that await a
+      // mutation can read the latest error synchronously in the same tick.
+      errorRef.current = null;
       if (mountedRef.current) {
         setIsLoading(true);
         setError(null);
@@ -282,6 +303,7 @@ export function useDraftWorkspace(): UseDraftWorkspace {
         }
         const wrapped = err instanceof Error ? err : new Error(String(err));
         log.warn('studio_request_failed', { operation, error: wrapped.message });
+        errorRef.current = wrapped;
         if (mountedRef.current) {
           setError(wrapped);
         }
@@ -402,11 +424,14 @@ export function useDraftWorkspace(): UseDraftWorkspace {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const getLatestError = useCallback((): Error | null => errorRef.current, []);
+
   return {
     drafts,
     count: drafts.length,
     isLoading,
     error,
+    getLatestError,
     listDrafts,
     saveDraft,
     deleteDraft,
