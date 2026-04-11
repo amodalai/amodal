@@ -10,9 +10,61 @@ import rateLimit from 'express-rate-limit';
 import {readdir, readFile, writeFile, stat, mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {asyncHandler} from '../../routes/route-helpers.js';
+import type {RoleProvider, RuntimeRole} from '../../role-provider.js';
+import {defaultRoleProvider, hasRole} from '../../role-provider.js';
+import {createLogger} from '../../logger.js';
+
+const log = createLogger({component: 'files-router'});
+
+/**
+ * Directories an admin can read and write. Anything outside this allowlist
+ * (like `connections/`, `tools/`, `evals/`, `amodal.json`) requires `ops`.
+ *
+ * The admin/ops split mirrors the persona model in the architecture doc:
+ * - admin (Sally) edits *content* — skill prompts, knowledge docs, agent personality
+ * - ops (developers) edit everything including infrastructure
+ */
+const ADMIN_ALLOWED_DIRS = ['skills', 'knowledge', 'agents'];
 
 export interface FilesRouterOptions {
   repoPath: string;
+  /**
+   * RoleProvider for role-gated file access. Defaults to the everyone-is-ops
+   * provider in `amodal dev`. In hosted contexts the cloud provider returns
+   * the actual user role from the platform JWT.
+   */
+  roleProvider?: RoleProvider;
+}
+
+/**
+ * Decide whether a role can access a given file path.
+ *
+ * Rules:
+ *  - `ops` can read/write anything (subject to the existing repo-traversal check)
+ *  - `admin` can read/write files inside ADMIN_ALLOWED_DIRS only
+ *  - `user` cannot access files at all
+ *
+ * Returns null if allowed, or an error code if denied.
+ */
+function checkPathAccess(filePath: string, role: RuntimeRole): 'ok' | 'forbidden' {
+  if (role === 'ops') return 'ok';
+  if (role === 'user') return 'forbidden';
+  // admin: must be inside an allowed top-level directory
+  // path.normalize collapses '..' and '.' segments; we then split on the
+  // OS separator and check the first segment.
+  const normalized = path.normalize(filePath);
+  const firstSegment = normalized.split(path.sep)[0];
+  if (firstSegment && ADMIN_ALLOWED_DIRS.includes(firstSegment)) return 'ok';
+  return 'forbidden';
+}
+
+/**
+ * Filter a file tree to only include directories an admin can access.
+ * Used for the GET /api/files tree response so admins don't see directory
+ * names they can't open. Ops users see the unfiltered tree.
+ */
+function filterTreeForAdmin(tree: FileTreeEntry[]): FileTreeEntry[] {
+  return tree.filter((entry) => ADMIN_ALLOWED_DIRS.includes(entry.name));
 }
 
 interface FileTreeEntry {
@@ -115,6 +167,7 @@ function validateFilePath(repoPath: string, filePath: string): string | null {
 export function createFilesRouter(options: FilesRouterOptions): Router {
   const router = Router();
   const {repoPath} = options;
+  const roleProvider = options.roleProvider ?? defaultRoleProvider;
 
   const filesLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -123,8 +176,88 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
     legacyHeaders: false,
   });
 
+  /**
+   * Resolve the user role for a request. Returns null + sends 401/403 if the
+   * user is unauthenticated or below `user` level. Returns the role on success.
+   *
+   * We always require at least the `user` role to hit the files API — files
+   * are admin/ops surface, end-users have no business here.
+   *
+   * All auth state transitions are logged with structured context so admins
+   * filing "I can't access X" tickets have something to grep.
+   */
+  async function resolveRoleOrDeny(req: Request, res: Response): Promise<RuntimeRole | null> {
+    let user;
+    try {
+      user = await roleProvider.resolveUser(req);
+    } catch (err) {
+      // RoleProvider failures are infrastructure errors. Log with context and
+      // return 500 — we don't want to silently treat a broken provider as
+      // "unauthenticated" because that would leak access if the provider is
+      // misconfigured to throw on errors instead of returning null.
+      log.error('files_role_provider_failed', {
+        path: req.path,
+        method: req.method,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({error: {code: 'role_provider_failed', message: 'Failed to resolve user role'}});
+      return null;
+    }
+
+    if (!user) {
+      log.warn('files_unauthenticated', {path: req.path, method: req.method});
+      res.status(401).json({error: {code: 'unauthenticated', message: 'Authentication required'}});
+      return null;
+    }
+    if (!hasRole(user, 'admin')) {
+      // user role can't access files at all
+      log.warn('files_role_denied', {
+        path: req.path,
+        method: req.method,
+        user_id: user.id,
+        current_role: user.role,
+        required_role: 'admin',
+      });
+      res.status(403).json({
+        error: {
+          code: 'forbidden',
+          message: 'Files API requires admin or ops role',
+          required_role: 'admin',
+          current_role: user.role,
+        },
+      });
+      return null;
+    }
+    return user.role;
+  }
+
+  /**
+   * Send a 403 for a per-path access denial and log the attempt with context.
+   * Used by GET and PUT handlers when an admin tries to access a file outside
+   * ADMIN_ALLOWED_DIRS.
+   */
+  function denyPathAccess(req: Request, res: Response, role: RuntimeRole, filePath: string): void {
+    log.warn('files_path_denied', {
+      path: req.path,
+      method: req.method,
+      file_path: filePath,
+      current_role: role,
+      required_role: 'ops',
+    });
+    res.status(403).json({
+      error: {
+        code: 'forbidden',
+        message: `Path '${filePath}' is not accessible to ${role}`,
+        required_role: 'ops',
+        current_role: role,
+      },
+    });
+  }
+
   /** Get the repo file tree (convention directories + config). */
-  router.get('/api/files', filesLimiter, asyncHandler(async (_req: Request, res: Response) => {
+  router.get('/api/files', filesLimiter, asyncHandler(async (req: Request, res: Response) => {
+    const role = await resolveRoleOrDeny(req, res);
+    if (!role) return;
     try {
       const tree: FileTreeEntry[] = [];
 
@@ -187,19 +320,32 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
         }
       } catch { /* config read or package scan failed, skip packages */ }
 
-      res.json({tree, repoPath});
+      // Filter the tree by role: admins only see directories they can edit.
+      // Ops see the unfiltered tree.
+      const visibleTree = role === 'ops' ? tree : filterTreeForAdmin(tree);
+      res.json({tree: visibleTree, repoPath});
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      log.error('files_tree_failed', {path: req.path, error: msg});
       res.status(500).json({error: {code: 'FILES_FAILED', message: msg}});
     }
   }));
 
   /** Read a file's contents. Checks local repo first, then installed packages. */
   router.get('/api/files/*', filesLimiter, asyncHandler(async (req: Request, res: Response) => {
+    const role = await resolveRoleOrDeny(req, res);
+    if (!role) return;
     try {
       const filePath = req.params[0] ?? '';
       if (!filePath) {
         res.status(400).json({error: {code: 'BAD_REQUEST', message: 'File path required'}});
+        return;
+      }
+
+      // Role gate: admins can only read files inside ADMIN_ALLOWED_DIRS.
+      // Ops can read anything inside the repo.
+      if (checkPathAccess(filePath, role) === 'forbidden') {
+        denyPathAccess(req, res, role, filePath);
         return;
       }
 
@@ -250,16 +396,26 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
       res.json({path: filePath, content, language: extToLanguage(ext), source});
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      log.error('files_read_failed', {file_path: req.params[0] ?? '', error: msg});
       res.status(500).json({error: {code: 'READ_FAILED', message: msg}});
     }
   }));
 
   /** Write a file's contents. Creates parent dirs if needed. */
   router.put('/api/files/*', filesLimiter, asyncHandler(async (req: Request, res: Response) => {
+    const role = await resolveRoleOrDeny(req, res);
+    if (!role) return;
     try {
       const filePath = req.params[0] ?? '';
       if (!filePath) {
         res.status(400).json({error: {code: 'BAD_REQUEST', message: 'File path required'}});
+        return;
+      }
+
+      // Role gate: admins can only write files inside ADMIN_ALLOWED_DIRS.
+      // Ops can write anything inside the repo.
+      if (checkPathAccess(filePath, role) === 'forbidden') {
+        denyPathAccess(req, res, role, filePath);
         return;
       }
 
@@ -281,9 +437,11 @@ export function createFilesRouter(options: FilesRouterOptions): Router {
       await mkdir(path.dirname(resolved), {recursive: true});
       await writeFile(resolved, content, 'utf-8');
 
+      log.info('files_write_succeeded', {file_path: filePath});
       res.json({path: filePath, saved: true});
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      log.error('files_write_failed', {file_path: req.params[0] ?? '', error: msg});
       res.status(500).json({error: {code: 'WRITE_FAILED', message: msg}});
     }
   }));
