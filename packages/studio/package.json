@@ -17,14 +17,21 @@
   "types": "dist/src/index.d.ts",
   "scripts": {
     "build": "node ../../scripts/build_package.js",
-    "typecheck": "tsc --emitDeclarationOnly"
+    "typecheck": "tsc --emitDeclarationOnly",
+    "test": "vitest run",
+    "test:ci": "pnpm --filter @amodalai/core run build && vitest run"
   },
   "files": [
     "dist"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "@amodalai/core": "workspace:*",
+    "@electric-sql/pglite": "^0.3.15"
+  },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3",
+    "vitest": "^3.1.1"
   },
   "engines": {
     "node": ">=20"
