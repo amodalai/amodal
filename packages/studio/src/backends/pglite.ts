@@ -402,14 +402,17 @@ export class PGLiteStudioBackend implements StudioBackend {
   }
 
   /**
-   * Preview is not implemented in PR 2.2 because it requires a running build
-   * server, which local dev does not ship standalone. Will be wired up in
-   * PR 2.8 when `amodal dev` gains a local build server.
+   * Preview is a cloud-only concept. It exists so a publisher can test draft
+   * content in an isolated session without affecting production end-users;
+   * locally there are no end-users and `amodal dev` already hot-reloads the
+   * running agent on every saved file, so there's no meaningful "preview"
+   * separate from "publish then keep editing." Clicking Preview in local dev
+   * surfaces this via a friendlier message in DraftWorkspaceBar.
    */
   async buildPreview(_userId: string): Promise<PreviewResult> {
     throw new StudioFeatureUnavailableError(
       'buildPreview',
-      'not wired in PR 2.2 — will land in PR 2.8 when the backend is mounted into amodal dev with a real build server',
+      'Preview is only available when your agent runs in cloud. In local dev, publish your drafts and amodal dev will hot-reload the agent against the updated files.',
     );
   }
 

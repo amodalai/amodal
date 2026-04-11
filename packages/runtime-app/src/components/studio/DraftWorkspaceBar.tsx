@@ -101,7 +101,12 @@ export function DraftWorkspaceBar({ workspace: injected }: DraftWorkspaceBarProp
         // case and show a friendlier message than the raw fetch text.
         const storedErr = workspace.error;
         if (storedErr instanceof StudioFetchError && storedErr.status === 501) {
-          showStatus('Preview is not available yet (coming with the cloud backend)');
+          showStatus('Preview is only available in cloud. Publish to see changes locally.');
+          // Clear the error banner so the friendly status is the only thing
+          // the user sees. listDrafts() resets `error` at the start of its
+          // request (see useDraftWorkspace runRequest), which is cheap and
+          // keeps the drafts list fresh at the same time.
+          await workspace.listDrafts();
           return;
         }
         // Fall through — the bar already displays `error` inline below.
