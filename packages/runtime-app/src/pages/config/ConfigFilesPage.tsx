@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronRight, File, FolderOpen, Folder, Save, Package, Loader2, RefreshCw } from 'lucide-react';
 import { CodeEditor } from '@/components/CodeEditor';
+import { DraftWorkspaceBar } from '@/components/studio/DraftWorkspaceBar';
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { cn } from '@/lib/utils';
@@ -265,7 +266,8 @@ export function ConfigFilesPage() {
   }
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex flex-col">
+      <div className="flex-1 flex overflow-hidden">
       {/* File tree */}
       <div className="w-[240px] border-r border-border bg-card flex flex-col shrink-0 overflow-hidden">
         <div className="px-3 py-3 border-b border-border">
@@ -351,6 +353,17 @@ export function ConfigFilesPage() {
           </div>
         )}
       </div>
+      </div>
+      {/*
+        Draft workspace bar (PR 2.6). Mounted here — not replacing the old
+        WorkspaceBar in ConfigLayout, which still renders across all config
+        pages backed by the legacy `useWorkspace` hook. The two bars operate
+        on disjoint data sources (legacy git-bundle workspace vs the new
+        Studio drafts API) and don't conflict in practice: in `amodal dev`
+        the legacy workspace never becomes dirty through the new code path,
+        so its bar stays hidden. PR 5.2 removes the old bar entirely.
+      */}
+      <DraftWorkspaceBar />
     </div>
   );
 }
