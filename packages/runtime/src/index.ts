@@ -39,6 +39,20 @@ export type {
   RuntimeUser,
 } from './role-provider.js';
 
+// Preview tokens — HMAC-signed grants for preview snapshot access
+export {
+  signPreviewToken,
+  verifyPreviewToken,
+  PreviewTokenSecretMissingError,
+} from './preview/token.js';
+export type {
+  PreviewTokenPayload,
+  SignPreviewTokenOptions,
+  VerifyPreviewTokenOptions,
+  VerifyPreviewTokenResult,
+  VerifyPreviewTokenFailureReason,
+} from './preview/token.js';
+
 // Local mode
 export { createLocalServer } from './agent/local-server.js';
 export type { LocalServerConfig, AgentChatRequest } from './agent/agent-types.js';
