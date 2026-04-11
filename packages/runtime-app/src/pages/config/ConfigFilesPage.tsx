@@ -10,6 +10,7 @@ import { ChevronRight, File, FolderOpen, Folder, Save, Package, Loader2, Refresh
 import { CodeEditor } from '@/components/CodeEditor';
 import { DraftWorkspaceBar } from '@/components/studio/DraftWorkspaceBar';
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
+import { useDraftWorkspace } from '@/hooks/useDraftWorkspace';
 import { cn } from '@/lib/utils';
 
 interface FileTreeEntry {
@@ -125,6 +126,13 @@ export function ConfigFilesPage() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
+  // Shared draft workspace. One hook instance lives at the page level and
+  // drives both the Save button (see saveFile) and DraftWorkspaceBar at the
+  // bottom of the page. When the Save button calls saveDraft, the hook
+  // refetches on success so the bar's count and Publish/Preview state stay
+  // in sync without a separate event bus.
+  const workspace = useDraftWorkspace();
+
   // Fetch file tree (initial + refresh when the runtime signals file changes)
   const lastJsonRef = useRef('');
   const fetchTree = useCallback(() => {
@@ -207,35 +215,35 @@ export function ConfigFilesPage() {
       .catch(() => {});
   }, [selectedPath]);
 
-  // Save file
+  // Save file → stages an edit into the Studio draft workspace instead of
+  // writing through to disk. The editor shows the optimistically-updated
+  // content right away; the DraftWorkspaceBar below refetches and surfaces
+  // the draft so the user can Preview or Publish. Disk writes only happen
+  // on publish (which, in amodal dev, writes the files directly to the
+  // repo path via PGLiteStudioBackend.publish()).
   const saveFile = useCallback(async () => {
     if (!selectedPath || editedContent === null) return;
 
     setSaving(true);
     setSaveStatus('idle');
 
-    try {
-      const res = await fetch(`/api/files/${selectedPath}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editedContent }),
-      });
+    // Snapshot the content we're saving before awaiting so we don't race
+    // against the next edit if the user keeps typing during the request.
+    const contentToSave = editedContent;
+    await workspace.saveDraft(selectedPath, contentToSave);
 
-      if (res.ok) {
-        setSaveStatus('saved');
-        setFileData((prev) => prev ? { ...prev, content: editedContent } : prev);
-        setEditedContent(null);
-        // Clear "saved" after 2 seconds
-        setTimeout(() => setSaveStatus('idle'), 2000);
-      } else {
-        setSaveStatus('error');
-      }
-    } catch {
+    if (workspace.error !== null) {
       setSaveStatus('error');
+      setSaving(false);
+      return;
     }
 
+    setSaveStatus('saved');
+    setFileData((prev) => prev ? { ...prev, content: contentToSave } : prev);
+    setEditedContent(null);
+    setTimeout(() => setSaveStatus('idle'), 2000);
     setSaving(false);
-  }, [selectedPath, editedContent]);
+  }, [selectedPath, editedContent, workspace]);
 
   // Keyboard shortcut: Cmd/Ctrl+S to save
   useEffect(() => {
@@ -347,10 +355,14 @@ export function ConfigFilesPage() {
       </div>
       {/*
         Draft workspace bar — scoped to the files editor page only. Talks
-        to `/api/studio/*` via useDraftWorkspace. See DraftWorkspaceBar in
-        components/studio/.
+        to `/api/studio/*` via useDraftWorkspace. The hook instance is
+        constructed at the top of this component and threaded in here so
+        that the Save button (which also calls saveDraft on the same
+        instance) and the bar share one state object — mutations from
+        either side refetch a single drafts list and both components
+        re-render consistently.
       */}
-      <DraftWorkspaceBar />
+      <DraftWorkspaceBar workspace={workspace} />
     </div>
   );
 }
