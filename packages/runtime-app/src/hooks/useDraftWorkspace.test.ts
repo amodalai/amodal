@@ -12,7 +12,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { useDraftWorkspace, StudioFetchError, type DraftFile } from './useDraftWorkspace';
+import {
+  useDraftWorkspace,
+  StudioFetchError,
+  StudioResponseParseError,
+  type DraftFile,
+} from './useDraftWorkspace';
 
 const originalFetch = globalThis.fetch;
 
@@ -236,6 +241,87 @@ describe('useDraftWorkspace', () => {
 
     unmount();
     expect(capturedSignal?.aborted).toBe(true);
+  });
+
+  it('surfaces StudioResponseParseError when listDrafts body is not an object', async () => {
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValueOnce(jsonResponse('not-an-object'));
+
+    const { result } = renderHook(() => useDraftWorkspace());
+    await waitFor(() => {
+      expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
+    });
+    expect(result.current.drafts).toEqual([]);
+  });
+
+  it('surfaces StudioResponseParseError when listDrafts drafts field is missing', async () => {
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValueOnce(jsonResponse({ somethingElse: [] }));
+
+    const { result } = renderHook(() => useDraftWorkspace());
+    await waitFor(() => {
+      expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
+    });
+  });
+
+  it('surfaces StudioResponseParseError on a wrongly-shaped draft item — does not silently drop it', async () => {
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    // One well-formed draft + one missing `updatedAt`. Old behavior would
+    // have dropped the second and shown a truncated list; new behavior
+    // surfaces the parse error so the caller sees the truth.
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        drafts: [
+          { filePath: 'skills/a.md', content: 'A', updatedAt: '2026-01-01T00:00:00Z' },
+          { filePath: 'skills/b.md', content: 'B' /* updatedAt missing */ },
+        ],
+      }),
+    );
+
+    const { result } = renderHook(() => useDraftWorkspace());
+    await waitFor(() => {
+      expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
+    });
+    // Drafts stays empty — we do not commit a partial parse to state.
+    expect(result.current.drafts).toEqual([]);
+  });
+
+  it('surfaces StudioResponseParseError when publish body is missing commitSha', async () => {
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ notCommitSha: 'abc123' }));
+
+    const { result } = renderHook(() => useDraftWorkspace());
+    await waitFor(() => {
+      expect(result.current.drafts).toEqual(sampleDrafts);
+    });
+
+    await act(async () => {
+      await result.current.publish('test commit');
+    });
+
+    expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
+    const err = result.current.error;
+    expect(err instanceof StudioResponseParseError && err.operation).toBe('publish');
+  });
+
+  it('surfaces StudioResponseParseError when buildPreview body is missing required fields', async () => {
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ snapshotId: 'x' /* previewToken, expiresAt missing */ }));
+
+    const { result } = renderHook(() => useDraftWorkspace());
+    await waitFor(() => {
+      expect(result.current.drafts).toEqual(sampleDrafts);
+    });
+
+    await act(async () => {
+      await result.current.buildPreview();
+    });
+
+    expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
+    const err = result.current.error;
+    expect(err instanceof StudioResponseParseError && err.operation).toBe('buildPreview');
   });
 
   it('swallows empty-response errors on successful operations', async () => {

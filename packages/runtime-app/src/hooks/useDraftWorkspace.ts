@@ -60,12 +60,42 @@ export interface PreviewResult {
   expiresAt: string;
 }
 
+/**
+ * Error class for malformed responses from Studio's HTTP API. Thrown by the
+ * parse* helpers when the JSON body doesn't match the expected shape.
+ *
+ * Kept distinct from StudioFetchError (which represents a failed HTTP call —
+ * wrong status, network error, etc.) so callers can tell "the server said no"
+ * apart from "the server said yes but sent something unparseable." Both are
+ * subclasses of Error, so a generic `error instanceof Error` check catches
+ * both; and the `operation` field lets callers correlate with the log line
+ * that runRequest emits on failure.
+ *
+ * Defined here (in the hook file) rather than in `@amodalai/studio` because
+ * (a) the hook inlines the DTO shapes for browser-bundle reasons and (b) the
+ * error is semantically about the hook's local parse step, not about the
+ * Studio backend contract.
+ */
+export class StudioResponseParseError extends Error {
+  readonly operation: string;
+  constructor(operation: string, detail: string) {
+    super(`${operation}: malformed response (${detail})`);
+    this.name = 'StudioResponseParseError';
+    this.operation = operation;
+  }
+}
+
 /** Type guard for plain-object shapes used when parsing server JSON. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-/** Parse a PublishResult from an unknown body, returning null if the shape is wrong. */
+/**
+ * Parse a PublishResult from an unknown body. Returns null if the shape is
+ * wrong — the caller is responsible for turning that into a
+ * StudioResponseParseError. Kept as null-return (not throw) because call
+ * sites handle it uniformly with the other parse helpers.
+ */
 function parsePublishResult(body: unknown): PublishResult | null {
   if (!isRecord(body)) return null;
   if (typeof body['commitSha'] !== 'string') return null;
@@ -74,7 +104,7 @@ function parsePublishResult(body: unknown): PublishResult | null {
   return { commitSha: body['commitSha'], commitUrl };
 }
 
-/** Parse a PreviewResult from an unknown body, returning null if the shape is wrong. */
+/** Parse a PreviewResult from an unknown body. Returns null if the shape is wrong. */
 function parsePreviewResult(body: unknown): PreviewResult | null {
   if (!isRecord(body)) return null;
   if (
@@ -91,20 +121,37 @@ function parsePreviewResult(body: unknown): PreviewResult | null {
   };
 }
 
-/** Parse a DraftFile[] from an unknown body, returning an empty array on malformed input. */
+/**
+ * Parse a DraftFile[] from an unknown body. Throws StudioResponseParseError
+ * on any malformed shape — never returns an empty array to mask a parse
+ * failure, never silently drops individual items that don't match. A quiet
+ * empty list would make "the server is returning garbage" indistinguishable
+ * from "the user has no drafts," and a silently-truncated list would show
+ * the user an incomplete view of their own pending edits.
+ */
 function parseDraftList(body: unknown): DraftFile[] {
-  if (!isRecord(body)) return [];
+  if (!isRecord(body)) {
+    throw new StudioResponseParseError('listDrafts', 'body is not an object');
+  }
   const raw = body['drafts'];
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    throw new StudioResponseParseError('listDrafts', '`drafts` is missing or not an array');
+  }
   const out: DraftFile[] = [];
-  for (const item of raw) {
-    if (!isRecord(item)) continue;
+  for (let i = 0; i < raw.length; i++) {
+    const item: unknown = raw[i];
+    if (!isRecord(item)) {
+      throw new StudioResponseParseError('listDrafts', `drafts[${i.toString()}] is not an object`);
+    }
     if (
       typeof item['filePath'] !== 'string' ||
       typeof item['content'] !== 'string' ||
       typeof item['updatedAt'] !== 'string'
     ) {
-      continue;
+      throw new StudioResponseParseError(
+        'listDrafts',
+        `drafts[${i.toString()}] missing or wrongly-typed filePath/content/updatedAt`,
+      );
     }
     out.push({
       filePath: item['filePath'],
@@ -320,7 +367,9 @@ export function useDraftWorkspace(): UseDraftWorkspace {
         if (!res.ok) throw await extractFetchError(res, 'publish');
         const body: unknown = await res.json();
         const parsed = parsePublishResult(body);
-        if (!parsed) throw new Error('publish returned malformed response');
+        if (!parsed) {
+          throw new StudioResponseParseError('publish', 'missing commitSha');
+        }
         return parsed;
       });
       if (result) await listDrafts();
@@ -337,7 +386,12 @@ export function useDraftWorkspace(): UseDraftWorkspace {
       if (!res.ok) throw await extractFetchError(res, 'buildPreview');
       const body: unknown = await res.json();
       const parsed = parsePreviewResult(body);
-      if (!parsed) throw new Error('buildPreview returned malformed response');
+      if (!parsed) {
+        throw new StudioResponseParseError(
+          'buildPreview',
+          'missing snapshotId/previewToken/expiresAt',
+        );
+      }
       return parsed;
     }), [runRequest]);
 
