@@ -1,6 +1,6 @@
 {
   "name": "@amodalai/react",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "description": "React bindings for Amodal agent runtime",
   "license": "MIT",
   "repository": {

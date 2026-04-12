@@ -1,5 +1,15 @@
 # @amodalai/runtime
 
+## 0.2.10
+
+### Patch Changes
+
+- [#192](https://github.com/amodalai/amodal/pull/192) [`8fc217b`](https://github.com/amodalai/amodal/commit/8fc217bebbadb972245e90c066d4410c3d35fed3) Thanks [@whodatdev](https://github.com/whodatdev)! - Add sessionStore option to createServer for hosted session persistence
+
+- Updated dependencies []:
+  - @amodalai/types@0.2.10
+  - @amodalai/core@0.2.10
+
 ## 0.2.9
 
 ### Patch Changes
