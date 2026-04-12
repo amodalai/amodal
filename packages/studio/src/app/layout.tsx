@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import './globals.css';
+
 /**
- * Minimal root layout for the Studio API-only app.
- * No rendered pages — all routes are API endpoints under /api/studio/.
+ * Root layout for the Studio app.
+ * Imports globals.css for Tailwind CSS and design tokens.
  */
 export default function RootLayout({
   children,
