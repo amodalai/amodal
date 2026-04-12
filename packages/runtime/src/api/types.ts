@@ -34,7 +34,7 @@ export interface AgentConfig {
   provider?: LLMProvider;
   /** Provider config override (default: from bundle model config). */
   providerConfig?: ProviderConfig;
-  /** Custom store backend (default: PGLite in .amodal/store-data). */
+  /** Custom store backend (default: Postgres via getDb()). */
   storeBackend?: StoreBackend;
   /** MCP manager (default: created from bundle MCP configs). */
   mcpManager?: McpManager;

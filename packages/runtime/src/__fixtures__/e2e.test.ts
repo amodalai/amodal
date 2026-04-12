@@ -27,7 +27,7 @@ import {describe, it, expect, beforeAll, afterAll} from 'vitest';
 import {z} from 'zod';
 import type {ModelMessage} from 'ai';
 import {StandaloneSessionManager} from '../session/manager.js';
-import {createPGLiteSessionStore} from '../session/pglite-session-store.js';
+import {createPostgresSessionStore} from '../session/postgres-session-store.js';
 import type {DrizzleSessionStore} from '../session/drizzle-session-store.js';
 import {createProvider} from '../providers/create-provider.js';
 import {createToolRegistry} from '../tools/registry.js';
@@ -113,7 +113,7 @@ describe.skipIf(activeTargets.length === 0)('e2e', () => {
   let mgr: StandaloneSessionManager;
 
   beforeAll(async () => {
-    store = await createPGLiteSessionStore({logger});
+    store = await createPostgresSessionStore({logger});
     mgr = new StandaloneSessionManager({logger, store});
     mgr.start();
   });

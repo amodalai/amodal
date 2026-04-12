@@ -7,11 +7,9 @@
 /**
  * Shared Drizzle-ORM SessionStore implementation.
  *
- * One query layer used by both the PGLite factory (local dev,
- * in-process WASM Postgres) and the Postgres factory (hosted runtime,
- * real Postgres). Each factory constructs the underlying db client,
- * runs DDL, and hands the result here along with a table binding and
- * an `onClose` callback for teardown.
+ * Shared Drizzle-ORM SessionStore implementation. The Postgres factory
+ * constructs the underlying db client and hands the result here along
+ * with a table binding and an `onClose` callback for teardown.
  *
  * Mirrors the `DrizzleStoreBackend` pattern introduced in amodal#146.
  *
@@ -25,8 +23,10 @@ import type {PgDatabase, PgQueryResultHKT} from 'drizzle-orm/pg-core';
 import {SessionStoreError} from '../errors.js';
 import type {Logger} from '../logger.js';
 import type {PersistedSession} from './types.js';
- 
-import type {agentSessions} from '../stores/schema.js';
+
+import type {agentSessions} from '@amodalai/db';
+import {notifySessionUpdated} from '@amodalai/db';
+import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 import {
   buildListConditions,
   encodeCursor,
@@ -42,9 +42,7 @@ import type {
 
 /**
  * Table binding type accepted by DrizzleSessionStore. Both backends'
- * table instances (static `agentSessions` for PGLite, dynamic
- * `makeAgentSessionsTable(name)` for Postgres) satisfy this — they
- * share the same column shape, only the SQL name differs.
+ * The `agentSessions` table from `@amodalai/db` satisfies this type.
  */
 export type AgentSessionsTable = typeof agentSessions;
 
@@ -53,11 +51,11 @@ type AnyPgDatabase = PgDatabase<PgQueryResultHKT, Record<string, unknown>>;
 const DEFAULT_LIST_LIMIT = 50;
 
 export interface DrizzleSessionStoreOptions {
-  /** Drizzle database instance (from either `drizzle-orm/pglite` or `drizzle-orm/node-postgres`). */
+  /** Drizzle database instance (from `drizzle-orm/node-postgres`). */
   db: AnyPgDatabase;
   /** Table binding — `agentSessions` (default name) or a dynamic table for custom names. */
   table: AgentSessionsTable;
-  /** Backend name used in log + error context (e.g. 'pglite', 'postgres'). */
+  /** Backend name used in log + error context (e.g. 'postgres'). */
   backendName: string;
   /** Logger for structured events. */
   logger: Logger;
@@ -119,6 +117,17 @@ export class DrizzleSessionStore implements SessionStore {
         operation: 'save',
         cause,
         context: {sessionId: session.id},
+      });
+    }
+
+    // Best-effort NOTIFY so Studio/listeners see session updates in real time.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Drizzle db is NodePgDatabase
+      await notifySessionUpdated(this.db as unknown as NodePgDatabase, {sessionId: session.id});
+    } catch (err) {
+      this.logger.warn('session_notify_failed', {
+        sessionId: session.id,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
 

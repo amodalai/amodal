@@ -178,7 +178,7 @@ export class ToolExecutionError extends AmodalError {
 // ---------------------------------------------------------------------------
 
 /**
- * Error from a store backend operation (PGLite, Postgres, etc.).
+ * Error from a store backend operation (Postgres).
  */
 export class StoreError extends AmodalError {
   readonly store: string;
@@ -267,7 +267,7 @@ export class SessionError extends AmodalError {
 // ---------------------------------------------------------------------------
 
 /**
- * Error from a session store backend operation (PGLite, Postgres, etc.).
+ * Error from a session store backend operation (Postgres).
  * Wraps at the module boundary so callers see a typed error regardless
  * of the underlying backend.
  */

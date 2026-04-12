@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { PGlite } from '@electric-sql/pglite';
+import { eq, and } from 'drizzle-orm';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
+import { getDb, ensureSchema, studioDrafts } from '@amodalai/db';
 import type { StudioBackend } from './backend';
 import type { DraftFile, PublishResult, WorkspaceBundle, WorkspaceFile } from './types';
 import { StudioStorageError, StudioPublishError } from './errors';
@@ -16,16 +18,6 @@ import { logger } from './logger';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const INIT_SQL = `
-CREATE TABLE IF NOT EXISTS studio_drafts (
-  user_id    TEXT        NOT NULL,
-  file_path  TEXT        NOT NULL,
-  content    TEXT        NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, file_path)
-);
-`;
 
 /**
  * Directories to walk when building the workspace bundle.
@@ -72,7 +64,6 @@ async function walkDirectory(dirPath: string, basePath: string): Promise<Workspa
   try {
     entries = await fs.readdir(dirPath);
   } catch (err: unknown) {
-    // Directory doesn't exist — that's fine, not every agent has every directory
     if (isEnoentError(err)) {
       return files;
     }
@@ -92,7 +83,6 @@ async function walkDirectory(dirPath: string, basePath: string): Promise<Workspa
         const content = await fs.readFile(fullPath, 'utf-8');
         files.push({ path: relativePath, content });
       } catch (readErr: unknown) {
-        // Skip files we can't read (binary, permissions, etc.)
         logger.warn('workspace_file_skip', {
           filePath: relativePath,
           reason: readErr instanceof Error ? readErr.message : String(readErr),
@@ -105,33 +95,27 @@ async function walkDirectory(dirPath: string, basePath: string): Promise<Workspa
 }
 
 // ---------------------------------------------------------------------------
-// PGLite backend implementation
+// Drizzle backend implementation
 // ---------------------------------------------------------------------------
 
-interface DraftRow {
-  file_path: string;
-  content: string;
-  updated_at: string;
-}
-
-export class PGLiteStudioBackend implements StudioBackend {
-  private db: PGlite;
+export class DrizzleStudioBackend implements StudioBackend {
+  private db: NodePgDatabase;
   private repoPath: string;
-  private log = logger.child({ backend: 'pglite' });
+  private log = logger.child({ backend: 'drizzle' });
 
-  constructor(options: { repoPath: string; dataDir?: string }) {
+  constructor(options: { repoPath: string }) {
     this.repoPath = options.repoPath;
-    // Use a data directory for persistence, or in-memory if not specified
-    this.db = new PGlite(options.dataDir);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- getDb returns Db which extends NodePgDatabase
+    this.db = getDb() as unknown as NodePgDatabase;
   }
 
   async initialize(): Promise<void> {
     const start = Date.now();
     try {
-      await this.db.exec(INIT_SQL);
+      await ensureSchema(this.db);
       this.log.info('backend_initialized', { durationMs: Date.now() - start });
     } catch (err: unknown) {
-      throw new StudioStorageError('Failed to initialize PGLite database', {
+      throw new StudioStorageError('Failed to initialize database', {
         operation: 'initialize',
         cause: err,
       });
@@ -145,15 +129,21 @@ export class PGLiteStudioBackend implements StudioBackend {
   async listDrafts(userId: string): Promise<DraftFile[]> {
     const start = Date.now();
     try {
-      const result = await this.db.query<DraftRow>(
-        'SELECT file_path, content, updated_at FROM studio_drafts WHERE user_id = $1 ORDER BY file_path',
-        [userId],
-      );
-      this.log.debug('list_drafts', { userId, count: result.rows.length, durationMs: Date.now() - start });
-      return result.rows.map(row => ({
-        filePath: row.file_path,
+      const rows = await this.db
+        .select({
+          filePath: studioDrafts.filePath,
+          content: studioDrafts.content,
+          updatedAt: studioDrafts.updatedAt,
+        })
+        .from(studioDrafts)
+        .where(eq(studioDrafts.userId, userId))
+        .orderBy(studioDrafts.filePath);
+
+      this.log.debug('list_drafts', { userId, count: rows.length, durationMs: Date.now() - start });
+      return rows.map(row => ({
+        filePath: row.filePath,
         content: row.content,
-        updatedAt: typeof row.updated_at === 'string' ? row.updated_at : new Date(row.updated_at).toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
       }));
     } catch (err: unknown) {
       throw new StudioStorageError('Failed to list drafts', {
@@ -167,17 +157,23 @@ export class PGLiteStudioBackend implements StudioBackend {
   async readDraft(userId: string, filePath: string): Promise<DraftFile | null> {
     const start = Date.now();
     try {
-      const result = await this.db.query<DraftRow>(
-        'SELECT file_path, content, updated_at FROM studio_drafts WHERE user_id = $1 AND file_path = $2',
-        [userId, filePath],
-      );
-      this.log.debug('read_draft', { userId, filePath, found: result.rows.length > 0, durationMs: Date.now() - start });
-      if (result.rows.length === 0) return null;
-      const row = result.rows[0];
+      const rows = await this.db
+        .select({
+          filePath: studioDrafts.filePath,
+          content: studioDrafts.content,
+          updatedAt: studioDrafts.updatedAt,
+        })
+        .from(studioDrafts)
+        .where(and(eq(studioDrafts.userId, userId), eq(studioDrafts.filePath, filePath)))
+        .limit(1);
+
+      this.log.debug('read_draft', { userId, filePath, found: rows.length > 0, durationMs: Date.now() - start });
+      if (rows.length === 0) return null;
+      const row = rows[0];
       return {
-        filePath: row.file_path,
+        filePath: row.filePath,
         content: row.content,
-        updatedAt: typeof row.updated_at === 'string' ? row.updated_at : new Date(row.updated_at).toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
       };
     } catch (err: unknown) {
       throw new StudioStorageError('Failed to read draft', {
@@ -191,12 +187,13 @@ export class PGLiteStudioBackend implements StudioBackend {
   async saveDraft(userId: string, filePath: string, content: string): Promise<void> {
     const start = Date.now();
     try {
-      await this.db.query(
-        `INSERT INTO studio_drafts (user_id, file_path, content, updated_at)
-         VALUES ($1, $2, $3, now())
-         ON CONFLICT (user_id, file_path) DO UPDATE SET content = $3, updated_at = now()`,
-        [userId, filePath, content],
-      );
+      await this.db
+        .insert(studioDrafts)
+        .values({ userId, filePath, content, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: [studioDrafts.userId, studioDrafts.filePath],
+          set: { content, updatedAt: new Date() },
+        });
       this.log.debug('save_draft', { userId, filePath, durationMs: Date.now() - start });
     } catch (err: unknown) {
       throw new StudioStorageError('Failed to save draft', {
@@ -210,10 +207,9 @@ export class PGLiteStudioBackend implements StudioBackend {
   async deleteDraft(userId: string, filePath: string): Promise<void> {
     const start = Date.now();
     try {
-      await this.db.query(
-        'DELETE FROM studio_drafts WHERE user_id = $1 AND file_path = $2',
-        [userId, filePath],
-      );
+      await this.db
+        .delete(studioDrafts)
+        .where(and(eq(studioDrafts.userId, userId), eq(studioDrafts.filePath, filePath)));
       this.log.debug('delete_draft', { userId, filePath, durationMs: Date.now() - start });
     } catch (err: unknown) {
       throw new StudioStorageError('Failed to delete draft', {
@@ -227,11 +223,11 @@ export class PGLiteStudioBackend implements StudioBackend {
   async discardAllDrafts(userId: string): Promise<number> {
     const start = Date.now();
     try {
-      const result = await this.db.query<{ count: string }>(
-        'WITH deleted AS (DELETE FROM studio_drafts WHERE user_id = $1 RETURNING *) SELECT count(*)::text AS count FROM deleted',
-        [userId],
-      );
-      const count = parseInt(result.rows[0].count, 10);
+      const deleted = await this.db
+        .delete(studioDrafts)
+        .where(eq(studioDrafts.userId, userId))
+        .returning({ filePath: studioDrafts.filePath });
+      const count = deleted.length;
       this.log.info('discard_all_drafts', { userId, count, durationMs: Date.now() - start });
       return count;
     } catch (err: unknown) {
@@ -315,7 +311,6 @@ export class PGLiteStudioBackend implements StudioBackend {
         const content = await fs.readFile(filePath, 'utf-8');
         files.push({ path: rootFile, content });
       } catch (err: unknown) {
-        // Root file doesn't exist — that's fine
         if (!isEnoentError(err)) {
           logger.warn('workspace_root_file_error', {
             filePath: rootFile,
@@ -338,7 +333,6 @@ export class PGLiteStudioBackend implements StudioBackend {
           }
         }
       } catch {
-        // Invalid JSON in amodal.json — use directory name
         logger.warn('workspace_amodal_json_parse_error', { repoPath: this.repoPath });
       }
     }

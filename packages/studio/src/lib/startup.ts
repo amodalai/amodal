@@ -5,7 +5,7 @@
  */
 
 import type { StudioBackend } from './backend';
-import { PGLiteStudioBackend } from './pglite-backend';
+import { DrizzleStudioBackend } from './drizzle-backend';
 import { logger } from './logger';
 
 // ---------------------------------------------------------------------------
@@ -13,8 +13,6 @@ import { logger } from './logger';
 // ---------------------------------------------------------------------------
 
 const REPO_PATH_ENV_KEY = 'REPO_PATH';
-const PGLITE_DATA_DIR_ENV_KEY = 'PGLITE_DATA_DIR';
-const DEFAULT_PGLITE_DATA_DIR = '.studio-data';
 
 // ---------------------------------------------------------------------------
 // Singleton
@@ -24,11 +22,11 @@ let backendPromise: Promise<StudioBackend> | null = null;
 
 /**
  * Get the singleton StudioBackend instance.
- * Initializes on first call (creates PGLite tables, etc.).
+ * Initializes on first call (runs ensureSchema, etc.).
  *
  * Reads configuration from environment variables:
  * - REPO_PATH: path to the agent's repo directory (required)
- * - PGLITE_DATA_DIR: path for PGLite data storage (defaults to .studio-data)
+ * - DATABASE_URL: Postgres connection string (required, read by @amodalai/db)
  */
 export function getBackend(): Promise<StudioBackend> {
   if (backendPromise) return backendPromise;
@@ -45,11 +43,9 @@ async function initializeBackend(): Promise<StudioBackend> {
     );
   }
 
-  const dataDir = process.env[PGLITE_DATA_DIR_ENV_KEY] ?? DEFAULT_PGLITE_DATA_DIR;
+  logger.info('backend_startup', { repoPath });
 
-  logger.info('backend_startup', { repoPath, dataDir });
-
-  const backend = new PGLiteStudioBackend({ repoPath, dataDir });
+  const backend = new DrizzleStudioBackend({ repoPath });
   await backend.initialize();
 
   return backend;

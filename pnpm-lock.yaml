@@ -285,15 +285,15 @@ importers:
       "@amodalai/core":
         specifier: workspace:*
         version: link:../core
+      "@amodalai/db":
+        specifier: workspace:*
+        version: link:../db
       "@amodalai/types":
         specifier: workspace:*
         version: link:../types
       "@anthropic-ai/sdk":
         specifier: ^0.39.0
         version: 0.39.0
-      "@electric-sql/pglite":
-        specifier: ^0.3.15
-        version: 0.3.16
       "@mozilla/readability":
         specifier: ^0.6.0
         version: 0.6.0
@@ -485,6 +485,9 @@ importers:
 
   packages/studio:
     dependencies:
+      "@amodalai/db":
+        specifier: workspace:*
+        version: link:../db
       "@codemirror/autocomplete":
         specifier: ^6.20.1
         version: 6.20.1
@@ -512,21 +515,24 @@ importers:
       "@codemirror/view":
         specifier: ^6.40.0
         version: 6.40.0
-      "@electric-sql/pglite":
-        specifier: ^0.2.17
-        version: 0.2.17
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.27(postcss@8.5.8)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@electric-sql/pglite@0.3.16)(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(pg@8.20.0)
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@18.3.1)
       next:
         specifier: ^15.3.1
         version: 15.5.15(@opentelemetry/api@1.9.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      pg:
+        specifier: ^8.13.1
+        version: 8.20.0
       postcss:
         specifier: ^8.4.47
         version: 8.5.8
@@ -1397,12 +1403,6 @@ packages:
         integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==,
       }
     engines: { node: ">=18" }
-
-  "@electric-sql/pglite@0.2.17":
-    resolution:
-      {
-        integrity: sha512-qEpKRT2oUaWDH6tjRxLHjdzMqRUGYDnGZlKrnL4dJ77JVMcP2Hpo3NYnOSPKdZdeec57B6QPprCUFg0picx5Pw==,
-      }
 
   "@electric-sql/pglite@0.3.16":
     resolution:
@@ -14664,9 +14664,8 @@ snapshots:
 
   "@csstools/css-tokenizer@3.0.4": {}
 
-  "@electric-sql/pglite@0.2.17": {}
-
-  "@electric-sql/pglite@0.3.16": {}
+  "@electric-sql/pglite@0.3.16":
+    optional: true
 
   "@emnapi/core@1.9.1":
     dependencies:
