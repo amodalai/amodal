@@ -42,9 +42,6 @@ export type {
 // Local mode
 export { createLocalServer } from './agent/local-server.js';
 export type { LocalServerConfig, AgentChatRequest } from './agent/agent-types.js';
-export { ProactiveRunner } from './agent/proactive/proactive-runner.js';
-export type { AutomationInfo, ProactiveRunnerConfig } from './agent/proactive/proactive-runner.js';
-
 // Snapshot mode
 export { createSnapshotServer } from './agent/snapshot-server.js';
 export type { SnapshotServerConfig } from './agent/snapshot-server.js';

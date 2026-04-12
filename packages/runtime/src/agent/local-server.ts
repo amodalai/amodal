@@ -53,19 +53,15 @@ import {ConfigWatcher} from './config-watcher.js';
 import {RuntimeEventBus} from '../events/event-bus.js';
 import {createEventsRouter} from '../events/events-route.js';
 import {wrapStoreBackendWithEvents} from '../events/store-event-wrapper.js';
-import {ProactiveRunner} from './proactive/proactive-runner.js';
 import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createChatRouter} from '../routes/chat.js';
 import {createTaskRouter} from './routes/task.js';
 import {createInspectRouter} from './routes/inspect.js';
 import {createFeedbackRouter} from './routes/feedback.js';
 import {FeedbackStore} from './feedback-store.js';
-import {createAutomationRouter} from './routes/automations.js';
-import {createWebhookRouter} from './routes/webhooks.js';
 import {createStoresRouter} from './routes/stores.js';
 import {createFilesRouter} from './routes/files.js';
 import {createContextRouter} from './routes/context.js';
-import {createEvalRouter} from './routes/evals.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import {asyncHandler} from '../routes/route-helpers.js';
 import type {LocalServerConfig} from './agent-types.js';
@@ -74,7 +70,6 @@ import {createPostgresStoreBackend} from '../stores/postgres-store-backend.js';
 import type {StoreBackend} from '@amodalai/types';
 import {getDb, ensureSchema, closeDb} from '@amodalai/db';
 import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
-import {EvalStore} from './eval-store.js';
 import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
 import {LOCAL_APP_ID} from '../constants.js';
@@ -302,8 +297,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Helper: get current bundle (updated by config watcher)
   const getBundle = (): AgentBundle => bundle;
 
-  // Helper: create automation session components
-  const createAutomationSessionComponents = () => {
+  // Helper: create task session components
+  const createTaskSessionComponents = () => {
     const components = buildSessionComponents({
       bundle,
       storeBackend: storeBackend ?? null,
@@ -322,26 +317,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     });
     return {session, toolContextFactory: components.toolContextFactory};
   };
-
-  // -------------------------------------------------------------------------
-  // Proactive runner
-  // -------------------------------------------------------------------------
-
-  const runner = new ProactiveRunner(bundle, {
-    sessionManager,
-    createSessionComponents: createAutomationSessionComponents,
-    logger: log,
-    webhookSecret: config.webhookSecret,
-    summarizeToolResult: config.summarizeToolResult,
-    onSessionComplete: (session, automationName) => {
-      // Tag the automation name onto metadata so the UI can filter
-      // sessions by automation via /sessions?automation=<name>.
-      session.metadata.automationName = automationName;
-      void sessionManager.persist(session);
-    },
-    eventBus,
-    onAutomationResult: config.onAutomationResult,
-  });
 
   // -------------------------------------------------------------------------
   // Channel plugins (messaging integrations)
@@ -619,10 +594,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Event bus SSE stream (live UI updates)
   app.use(createEventsRouter({bus: eventBus, logger: log}));
 
-  // Evals
-  const evalStore = new EvalStore(LOCAL_APP_ID);
-  app.use(createEvalRouter({getBundle, evalStore, repoPath: config.repoPath, getPort: () => config.port}));
-
   // Feedback
   const feedbackStore = new FeedbackStore({agentId: LOCAL_APP_ID});
   app.use(createFeedbackRouter({feedbackStore}));
@@ -643,14 +614,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   }));
 
   // Task runner
-  app.use(createTaskRouter({sessionManager, createTaskSession: createAutomationSessionComponents}));
+  app.use(createTaskRouter({sessionManager, createTaskSession: createTaskSessionComponents}));
 
   // Inspect
   app.use(createInspectRouter({getBundle, repoPath: config.repoPath}));
-
-  // Automations
-  app.use(createAutomationRouter({runner}));
-  app.use(createWebhookRouter({runner, webhookSecret: config.webhookSecret}));
 
   // Messaging channels
   if (channelsResult) {
@@ -736,8 +703,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     },
 
     async stop(): Promise<void> {
-      runner.stop();
-
       if (watcher) {
         watcher.stop();
         watcher = null;

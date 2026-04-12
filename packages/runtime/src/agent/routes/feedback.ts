@@ -52,31 +52,5 @@ export function createFeedbackRouter(options: FeedbackRouterOptions): Router {
     res.json({ok: true, id: entry.id});
   }));
 
-  /** List all feedback entries */
-  router.get('/api/feedback', asyncHandler(async (req, res) => {
-    const limit = Number(req.query['limit']) || 100;
-    const entries = await options.feedbackStore.list(limit);
-    res.json({entries});
-  }));
-
-  /** Get feedback summary stats */
-  router.get('/api/feedback/summary', asyncHandler(async (_req, res) => {
-    const summary = await options.feedbackStore.summary();
-    res.json(summary);
-  }));
-
-  /** Mark feedback entries as reviewed */
-  router.post('/api/feedback/mark-reviewed', asyncHandler(async (req, res) => {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    const ids = Array.isArray(body['ids']) ? (body['ids'] as unknown[]).map(String) : [];
-    if (ids.length === 0) {
-      res.status(400).json({error: 'ids array is required'});
-      return;
-    }
-    await options.feedbackStore.markReviewed(ids);
-    res.json({ok: true, reviewed: ids.length});
-  }));
-
   return router;
 }
