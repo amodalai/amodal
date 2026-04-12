@@ -330,7 +330,7 @@ DATABASE_URL is required. Start Postgres and configure it:
 
 Then set the connection string:
 
-  echo 'DATABASE_URL=postgres://localhost:5432/amodal' >> ~/.amodal/env
+  echo 'DATABASE_URL=postgres://localhost:5432/amodal' >> ~/.amodal/.env
 
 Or add it to your agent's .env file:
 

@@ -20,8 +20,8 @@ export function resolveEnv(key: string, cwd: string): string | undefined {
   const agentValue = readEnvFile(agentEnvPath, key);
   if (agentValue !== undefined) return agentValue;
 
-  // 2. Global ~/.amodal/env
-  const globalEnvPath = path.join(os.homedir(), '.amodal', 'env');
+  // 2. Global ~/.amodal/.env
+  const globalEnvPath = path.join(os.homedir(), '.amodal', '.env');
   const globalValue = readEnvFile(globalEnvPath, key);
   if (globalValue !== undefined) return globalValue;
 

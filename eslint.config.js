@@ -37,6 +37,7 @@ export default tseslint.config(
       'packages/test-harness/surveillance/dist/**',
       'packages/test-harness/finops/**',
       'packages/platform-api/.next/**',
+      'packages/studio/.next/**',
       'bundle/**',
       'package/bundle/**',
       '.integration-tests/**',
