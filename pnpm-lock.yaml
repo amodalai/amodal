@@ -73,6 +73,9 @@ importers:
       "@amodalai/core":
         specifier: workspace:*
         version: link:../core
+      "@amodalai/db":
+        specifier: workspace:*
+        version: link:../db
       "@amodalai/runtime":
         specifier: workspace:*
         version: link:../runtime

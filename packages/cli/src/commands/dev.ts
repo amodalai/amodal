@@ -16,6 +16,8 @@ import {resolveAdminAgent} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 import {findFreePort} from '../shared/find-free-port.js';
 import {runConnectionPreflight, printPreflightTable} from '../shared/connection-preflight.js';
+import {resolveEnv} from '../shared/env-resolution.js';
+import {getDb, ensureSchema, closeDb} from '@amodalai/db';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -154,6 +156,7 @@ function spawnStudio(opts: {
   port: number;
   runtimePort: number;
   repoPath: string;
+  agentId?: string;
 }): StudioSpawnResult | null {
   // Resolve @amodalai/studio package directory. Try two strategies:
   // 1. Sibling directory relative to the CLI package (works when symlinked from outside)
@@ -191,7 +194,9 @@ function spawnStudio(opts: {
         ...process.env,
         REPO_PATH: opts.repoPath,
         STUDIO_CORS_ORIGINS: `http://localhost:${String(opts.runtimePort)}`,
+        RUNTIME_URL: `http://localhost:${String(opts.runtimePort)}`,
         PORT: String(opts.port),
+        ...(opts.agentId ? {AGENT_ID: opts.agentId} : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
@@ -310,21 +315,72 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
     process.exit(1);
   }
 
-  // Load .env file from the repo root (if present)
-  const envPath = path.join(repoPath, '.env');
-  if (existsSync(envPath)) {
-    const envContent = readFileSync(envPath, 'utf-8');
-    for (const line of envContent.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-      const eqIdx = trimmed.indexOf('=');
-      if (eqIdx === -1) continue;
-      const key = trimmed.slice(0, eqIdx).trim();
-      const value = trimmed.slice(eqIdx + 1).trim();
-      if (key && !(key in process.env)) {
-        process.env[key] = value;
+  // -------------------------------------------------------------------------
+  // Require DATABASE_URL
+  // -------------------------------------------------------------------------
+
+  const databaseUrl = resolveEnv('DATABASE_URL', repoPath);
+  if (!databaseUrl) {
+    log.error('database_url_required', {});
+    process.stderr.write(`
+DATABASE_URL is required. Start Postgres and configure it:
+
+  docker run -d --name amodal-pg -p 5432:5432 \\
+    -e POSTGRES_DB=amodal -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17
+
+Then set the connection string:
+
+  echo 'DATABASE_URL=postgres://localhost:5432/amodal' >> ~/.amodal/env
+
+Or add it to your agent's .env file:
+
+  echo 'DATABASE_URL=postgres://localhost:5432/amodal' >> .env
+
+`);
+    process.exit(1);
+  }
+
+  // Make DATABASE_URL available to child processes (runtime, Studio)
+  process.env['DATABASE_URL'] = databaseUrl;
+
+  // Read agent name from amodal.json for AGENT_ID
+  const amodalJsonPath = path.join(repoPath, 'amodal.json');
+  let agentId: string | undefined;
+  if (existsSync(amodalJsonPath)) {
+    try {
+      const amodalJson: unknown = JSON.parse(readFileSync(amodalJsonPath, 'utf-8'));
+      const parsed = typeof amodalJson === 'object' && amodalJson !== null
+        ? amodalJson
+        : undefined;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse boundary: validated with typeof guard above
+      const nameValue = parsed !== undefined ? (parsed as Record<string, unknown>)['name'] : undefined;
+      if (typeof nameValue === 'string') {
+        agentId = nameValue;
+        process.env['AGENT_ID'] = agentId;
       }
+    } catch (err: unknown) {
+      log.warn('amodal_json_parse_error', {
+        path: amodalJsonPath,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Run schema migrations
+  // -------------------------------------------------------------------------
+
+  try {
+    const migrationDb = getDb(databaseUrl);
+    await ensureSchema(migrationDb);
+    await closeDb(); // Close migration connection — runtime and Studio open their own
+    log.info('schema_migration_complete', {});
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error('schema_migration_failed', {error: msg});
+    process.stderr.write(`[dev] Failed to run database migrations: ${msg}\n`);
+    process.stderr.write('[dev] Is Postgres running and DATABASE_URL correct?\n');
+    process.exit(1);
   }
 
   const host = options.host ?? '0.0.0.0';
@@ -361,6 +417,7 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
       port: studioPort,
       runtimePort,
       repoPath,
+      agentId,
     });
     if (studioResult) {
       managedProcesses.push(studioResult.process);
@@ -434,6 +491,7 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
     if (adminAgentUrl) {
       process.stderr.write(`  Admin Agent: ${adminAgentUrl}\n`);
     }
+    process.stderr.write(`  Database:    ${databaseUrl}\n`);
     process.stderr.write('\n');
 
     // Preflight connection check (non-blocking)

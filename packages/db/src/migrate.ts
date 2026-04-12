@@ -154,7 +154,7 @@ const DDL_STATEMENTS = [
   sql`CREATE INDEX IF NOT EXISTS idx_eval_runs_agent ON eval_runs (agent_id)`,
 ] as const;
 
-export async function ensureSchema(db: NodePgDatabase): Promise<void> {
+export async function ensureSchema<T extends Record<string, unknown> = Record<string, never>>(db: NodePgDatabase<T>): Promise<void> {
   for (const statement of DDL_STATEMENTS) {
     await db.execute(statement);
   }
