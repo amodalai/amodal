@@ -56,7 +56,6 @@ import {wrapStoreBackendWithEvents} from '../events/store-event-wrapper.js';
 import {ProactiveRunner} from './proactive/proactive-runner.js';
 import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createChatRouter} from '../routes/chat.js';
-import {createAdminChatRouter} from './routes/admin-chat.js';
 import {createTaskRouter} from './routes/task.js';
 import {createInspectRouter} from './routes/inspect.js';
 import {createFeedbackRouter} from './routes/feedback.js';
@@ -678,14 +677,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Task runner
   app.use(createTaskRouter({sessionManager, createTaskSession: createAutomationSessionComponents}));
-
-  // Admin chat (new stack)
-  app.use(createAdminChatRouter({
-    sessionManager,
-    shared,
-    getBundle,
-    getPort: () => config.port,
-  }));
 
   // Inspect
   app.use(createInspectRouter({getBundle, repoPath: config.repoPath}));

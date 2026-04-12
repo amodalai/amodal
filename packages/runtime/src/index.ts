@@ -160,15 +160,6 @@ export {
 export { createRequestTool, REQUEST_TOOL_NAME } from './tools/request-tool.js';
 export type { ConnectionsMap, CreateRequestToolOptions } from './tools/request-tool.js';
 
-// Admin file tools
-export {
-  createReadRepoFileTool,
-  createWriteRepoFileTool,
-  createDeleteRepoFileTool,
-  createInternalApiTool,
-  registerAdminFileTools,
-} from './tools/admin-file-tools.js';
-
 // Standalone session manager
 export { StandaloneSessionManager } from './session/manager.js';
 export type {
