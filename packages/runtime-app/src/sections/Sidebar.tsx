@@ -6,12 +6,17 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { SquarePen, MessageSquare, Database, Zap, FileText, Plug, Sparkles, BookOpen, ChevronRight, Loader2, Cable, Pencil, Trash2 } from 'lucide-react';
-import { useRuntimeManifest } from '@/contexts/RuntimeContext';
+import { SquarePen, MessageSquare, FileText, Pencil, Trash2, ExternalLink } from 'lucide-react';
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
-import { useMe, hasRole } from '@/hooks/useMe';
 import { cn } from '@/lib/utils';
+import { createLogger } from '@/utils/log';
 import type { PageConfig } from 'virtual:amodal-manifest';
+
+const log = createLogger('Sidebar');
+
+/** Timeout for the /api/context fetch used to discover the Studio URL. */
+const CONTEXT_FETCH_TIMEOUT_MS = 5_000;
+const CONTEXT_ENDPOINT = '/api/context' as const;
 
 interface SessionSummary {
   id: string;
@@ -120,11 +125,10 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
   );
 }
 
-function NavItem({ to, children, end }: { to: string; children: React.ReactNode; end?: boolean }) {
+function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
   return (
     <NavLink
       to={to}
-      end={end}
       className={({ isActive }) =>
         cn(
           'flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-colors duration-150',
@@ -148,77 +152,42 @@ function SectionLabel({ children, action }: { children: React.ReactNode; action?
   );
 }
 
-function CollapsibleSection({ label, icon, children, count }: { label: string; icon: React.ReactNode; children: React.ReactNode; count: number }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 w-full px-3 py-[7px] rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-      >
-        <ChevronRight className={cn('h-3 w-3 shrink-0 transition-transform', open && 'rotate-90')} />
-        {icon}
-        <span className="flex-1 text-left">{label}</span>
-        <span className="text-[11px] text-gray-400 dark:text-white/45">{String(count)}</span>
-      </button>
-      {open && <div className="ml-3 space-y-0.5">{children}</div>}
-    </div>
-  );
-}
-
-function InfoItem({ icon, label, to, status, badge }: { icon: React.ReactNode; label: string; to: string; status?: 'connected' | 'error' | 'connecting' | 'disconnected' | 'unknown'; badge?: string }) {
-  return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        cn(
-          'flex items-center gap-2.5 px-3 py-[6px] text-[13px] rounded-md transition-colors duration-150',
-          isActive
-            ? 'bg-primary/10 text-primary dark:text-primary'
-            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-muted',
-        )
-      }
-    >
-      {icon}
-      <span className="flex-1 truncate">{label}</span>
-      {badge && (
-        <span className="text-[11px] text-gray-400 dark:text-white/50 tabular-nums bg-gray-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded-full">
-          {badge}
-        </span>
-      )}
-      {status && (
-        <div className={cn('h-1.5 w-1.5 rounded-full shrink-0',
-          status === 'connected' ? 'bg-emerald-400' :
-          status === 'connecting' ? 'bg-amber-400 animate-pulse' :
-          status === 'error' || status === 'disconnected' ? 'bg-red-400' :
-          'bg-gray-400',
-        )} title={status} />
-      )}
-    </NavLink>
-  );
-}
-
 export function Sidebar() {
-  const { stores, connections, mcpServers, skills, automations, knowledge } = useRuntimeManifest();
-  const totalConnections = connections.length + mcpServers.length;
   const [devPages, setDevPages] = useState<PageConfig[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [runningAutomations, setRunningAutomations] = useState<Set<string>>(new Set());
-  const [activeAutomations, setActiveAutomations] = useState<Set<string>>(new Set());
+  const [studioUrl, setStudioUrl] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Role-based visibility. In `amodal dev` the user is always `ops` so
-  // everything renders. In hosted contexts admins see content (skills,
-  // knowledge, automations, stores, pages) but not infrastructure
-  // (connections, MCP). End-users see only chat and their own sessions.
-  //
-  // We gate role-conditional sections on `me.ready` AND the role check
-  // so we don't briefly render a "chat only" sidebar for admins/ops while
-  // /api/me is in flight. The sections just appear once the role resolves.
-  const me = useMe();
-  const canSeeContent = me.ready && hasRole(me.user, 'admin');
-  const canSeeInfrastructure = me.ready && hasRole(me.user, 'ops');
+  // Fetch Studio URL from /api/context
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CONTEXT_FETCH_TIMEOUT_MS);
+
+    void (async () => {
+      try {
+        const res = await fetch(CONTEXT_ENDPOINT, { signal: controller.signal });
+        if (!res.ok) return;
+        const body: unknown = await res.json();
+        if (typeof body === 'object' && body !== null && 'studioUrl' in body) {
+          const url: unknown = (body as Record<string, unknown>)['studioUrl'];
+          if (typeof url === 'string') {
+            setStudioUrl(url);
+          }
+        }
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        log.warn('context_fetch_error', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, []);
 
   useEffect(() => {
     // Try API first (works with pre-built pages), fall back to Vite virtual module
@@ -240,27 +209,6 @@ export function Sidebar() {
           .catch(() => {});
       });
   }, []);
-
-  // Fetch automation state (initial + refresh on bus events)
-  const fetchAutomations = useCallback(() => {
-    fetch('/automations')
-      .then((res) => (res.ok ? res.json() : { automations: [] }))
-      .then((data: unknown) => {
-        if (data && typeof data === 'object' && 'automations' in data) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const autos = (data as Record<string, unknown>)['automations'] as Array<{name: string; running: boolean; lastRun?: string}>;
-          const running = new Set(autos.filter((a) => a.lastRun && (Date.now() - new Date(a.lastRun).getTime()) < 5000).map((a) => a.name));
-          setRunningAutomations(running);
-          setActiveAutomations(new Set(autos.filter((a) => a.running).map((a) => a.name)));
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => { fetchAutomations(); }, [fetchAutomations]);
-  useRuntimeEvents(['automation_triggered', 'automation_completed', 'automation_failed'], () => {
-    fetchAutomations();
-  });
 
   // Fetch session list (initial + refresh on bus events)
   const fetchSessions = useCallback(() => {
@@ -323,8 +271,7 @@ export function Sidebar() {
           </>
         )}
 
-        {/* Pages — admin+ */}
-        {canSeeContent && devPages.length > 0 && (
+        {devPages.length > 0 && (
           <>
             <SectionLabel>Pages</SectionLabel>
             <div className="space-y-0.5">
@@ -337,88 +284,22 @@ export function Sidebar() {
             </div>
           </>
         )}
-
-        {/* Automations — admin+ */}
-        {canSeeContent && automations.length > 0 && (
-          <>
-            <SectionLabel>Automations</SectionLabel>
-            {[...automations].sort().map((name) => {
-              const isActive = activeAutomations.has(name);
-              const isRunning = runningAutomations.has(name);
-              return (
-                <NavItem key={name} to={`/automations/${encodeURIComponent(name)}`}>
-                  {isRunning ? (
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 text-primary animate-spin" />
-                  ) : (
-                    <Zap className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-primary' : 'text-primary/30')} />
-                  )}
-                  <span className={cn('truncate', !isActive && !isRunning && 'opacity-40')}>
-                    {name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                  </span>
-                  {isActive && <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0 ml-auto" />}
-                </NavItem>
-              );
-            })}
-          </>
-        )}
-
-        {/* Agent composition — collapsible */}
-        {/* Connections require ops; skills + knowledge require admin */}
-        {((canSeeInfrastructure && totalConnections > 0) || (canSeeContent && (skills.length > 0 || knowledge.length > 0))) && (
-          <SectionLabel>Agent</SectionLabel>
-        )}
-
-        {/* Connections — ops only */}
-        {canSeeInfrastructure && totalConnections > 0 && (
-          <CollapsibleSection label="Connections" icon={<Plug className="h-3.5 w-3.5 shrink-0 text-emerald-500/60" />} count={totalConnections}>
-            {connections.map((conn) => (
-              <InfoItem key={conn.name} icon={<Plug className="h-3 w-3 shrink-0 text-emerald-500/40" />} label={conn.name} to={`/inspect/connections/${encodeURIComponent(conn.name)}`} status={conn.status} />
-            ))}
-            {mcpServers.map((mcp) => (
-              <InfoItem key={`mcp-${mcp.name}`} icon={<Cable className="h-3 w-3 shrink-0 text-violet-500/40" />} label={mcp.name} to={`/inspect/mcp/${encodeURIComponent(mcp.name)}`} status={mcp.status} badge={mcp.toolCount > 0 ? `${mcp.toolCount} tools` : undefined} />
-            ))}
-          </CollapsibleSection>
-        )}
-
-        {/* Skills — admin+ */}
-        {canSeeContent && skills.length > 0 && (
-          <CollapsibleSection label="Skills" icon={<Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500/60" />} count={skills.length}>
-            {skills.map((name) => (
-              <InfoItem key={name} icon={<Sparkles className="h-3 w-3 shrink-0 text-amber-500/40" />} label={name} to={`/inspect/skills/${encodeURIComponent(name)}`} />
-            ))}
-          </CollapsibleSection>
-        )}
-
-        {/* Knowledge — admin+ */}
-        {canSeeContent && knowledge.length > 0 && (
-          <CollapsibleSection label="Knowledge" icon={<BookOpen className="h-3.5 w-3.5 shrink-0 text-blue-500/60" />} count={knowledge.length}>
-            {knowledge.map((name) => (
-              <InfoItem key={name} icon={<BookOpen className="h-3 w-3 shrink-0 text-blue-500/40" />} label={name} to={`/inspect/knowledge/${encodeURIComponent(name)}`} />
-            ))}
-          </CollapsibleSection>
-        )}
-
-        {/* Entities (stores) — admin+ */}
-        {canSeeContent && stores.length > 0 && (
-          <>
-            <SectionLabel>Entities</SectionLabel>
-            <div className="space-y-0.5">
-              {stores.map((store) => (
-                <NavItem key={store.name} to={`/entities/${store.name}`}>
-                  <Database className="h-4 w-4 shrink-0" />
-                  <span className="flex-1 truncate">{store.entity.name}</span>
-                  {store.documentCount > 0 && (
-                    <span className="text-[11px] text-gray-400 dark:text-white/50 tabular-nums bg-gray-200 dark:bg-white/[0.06] px-1.5 py-0.5 rounded-full">
-                      {store.documentCount.toLocaleString()}
-                    </span>
-                  )}
-                </NavItem>
-              ))}
-            </div>
-          </>
-        )}
-
       </nav>
+
+      {studioUrl && (
+        <div className="border-t border-border px-2 py-3">
+          <a
+            href={studioUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <ExternalLink className="h-4 w-4 shrink-0" />
+            <span className="flex-1">Manage</span>
+            <span className="text-[10px] text-gray-400 dark:text-white/45">&rarr;</span>
+          </a>
+        </div>
+      )}
     </aside>
   );
 }
