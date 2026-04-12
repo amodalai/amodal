@@ -10,6 +10,21 @@ import { StudioError } from './errors';
 import { corsHeaders } from './cors';
 import { logger } from './logger';
 
+// ---------------------------------------------------------------------------
+// Config helpers
+// ---------------------------------------------------------------------------
+
+const AGENT_ID_ENV_KEY = 'AGENT_NAME';
+const DEFAULT_AGENT_ID = 'default';
+
+/**
+ * Get the agent ID from the environment. Falls back to 'default' if unset.
+ * Used by automation and other agent-scoped routes.
+ */
+export function getAgentId(): string {
+  return process.env[AGENT_ID_ENV_KEY] ?? DEFAULT_AGENT_ID;
+}
+
 /**
  * Maps a StudioError (or unknown error) to an appropriate HTTP response.
  * This is the error boundary for all API routes.
