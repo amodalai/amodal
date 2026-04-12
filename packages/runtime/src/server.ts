@@ -104,6 +104,8 @@ export interface CreateServerOptions {
   };
   /** Event bus for channel lifecycle events. If omitted, a minimal one is created. */
   channelEventBus?: RuntimeEventBus;
+  /** Optional session store for persisting sessions across restarts. */
+  sessionStore?: import('./session/store.js').SessionStore;
 }
 
 /**
@@ -118,6 +120,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
   const sessionManager = new StandaloneSessionManager({
     logger: sessionLogger,
     ttlMs: config.sessionTtlMs,
+    ...(options.sessionStore ? {store: options.sessionStore} : {}),
   });
   sessionManager.start();
 
