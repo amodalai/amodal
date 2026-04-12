@@ -199,7 +199,7 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
         <div className="flex items-center gap-2 px-3 py-2">
           <StatusIcon isRunning={isRunning} isError={isError} />
           <span className="text-[13px] font-semibold text-foreground">{connection}</span>
-          <span className={`text-[10px] font-mono font-bold ${METHOD_COLORS[method] ?? 'text-gray-500'}`}>
+          <span className={`text-[10px] font-mono font-bold ${METHOD_COLORS[method] ?? 'text-muted-foreground'}`}>
             {method}
           </span>
           <span className="text-[12px] font-mono text-muted-foreground truncate">{endpoint}</span>
@@ -231,7 +231,7 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
       )}
       {/* Error detail on failed calls */}
       {isError && call.error && (
-        <div className="px-3.5 pb-2 text-[11px] text-red-400 truncate">
+        <div className="px-3.5 pb-2 text-[11px] text-red-500 truncate">
           {call.error}
         </div>
       )}
@@ -243,7 +243,7 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
 
 function StatusIcon({ isRunning, isError }: { isRunning: boolean; isError: boolean }) {
   if (isRunning) return <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />;
-  if (isError) return <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />;
+  if (isError) return <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />;
   return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />;
 }
 

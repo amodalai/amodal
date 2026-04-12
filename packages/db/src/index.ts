@@ -15,7 +15,7 @@
 export * from './schema/index.js';
 
 // Connection
-export { createDbPool, getDb, closeDb } from './connection.js';
+export { createDbPool, getDb, closeDb, DatabaseConfigError } from './connection.js';
 export type { Db, DbSchema } from './connection.js';
 
 // Notifications

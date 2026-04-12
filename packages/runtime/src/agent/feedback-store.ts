@@ -17,6 +17,7 @@ import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 import {randomUUID} from 'node:crypto';
 import {getDb, feedback, notifyFeedbackCreated} from '@amodalai/db';
 import {StoreError} from '../errors.js';
+import {log} from '../logger.js';
 
 export interface FeedbackEntry {
   id: string;
@@ -91,8 +92,11 @@ export class FeedbackStore {
         agentId: this.agentId,
         sessionId: full.sessionId,
       });
-    } catch {
-      // Best-effort notification.
+    } catch (err: unknown) {
+      log.warn('feedback_notify_failed', {
+        feedbackId: id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     return full;
@@ -187,7 +191,9 @@ export class FeedbackStore {
       query: row.query,
       response: row.response,
        
-      toolCalls: row.toolCalls ? (row.toolCalls).map(String) : undefined,
+      toolCalls: Array.isArray(row.toolCalls)
+        ? row.toolCalls.filter((v): v is string => typeof v === 'string')
+        : undefined,
       model: row.model ?? undefined,
       timestamp: row.createdAt.toISOString(),
       reviewedAt: row.reviewedAt?.toISOString(),

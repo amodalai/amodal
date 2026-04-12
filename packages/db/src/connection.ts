@@ -15,6 +15,13 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema/index.js';
 
+export class DatabaseConfigError extends Error {
+  override readonly name = 'DatabaseConfigError';
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 let pool: Pool | null = null;
 let db: NodePgDatabase<typeof schema> | null = null;
 
@@ -29,8 +36,8 @@ export function getDb(url?: string): Db {
   if (db) return db;
   const connectionString = url ?? process.env['DATABASE_URL'];
   if (!connectionString) {
-    throw new Error(
-      'DATABASE_URL is required. Set it in ~/.amodal/env or your agent .env file.',
+    throw new DatabaseConfigError(
+      'DATABASE_URL is required. Set it in ~/.amodal/.env or your agent .env file.',
     );
   }
   pool = createDbPool(connectionString);
