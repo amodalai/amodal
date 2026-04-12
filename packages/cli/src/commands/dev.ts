@@ -35,8 +35,11 @@ const DEFAULT_ADMIN_PORT = 3849;
  * 2. Node module resolution via createRequire (works when installed)
  */
 function resolveStudioDir(): string | null {
+  // scriptDir is packages/cli/dist/src/commands/ at runtime (or packages/cli/src/commands/ in source)
+  // CLI package root is 3 levels up, then ../studio is the sibling package
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-  const siblingCandidate = path.resolve(scriptDir, '..', '..', '..', 'studio');
+  const cliRoot = path.resolve(scriptDir, '..', '..', '..');
+  const siblingCandidate = path.resolve(cliRoot, '..', 'studio');
   if (existsSync(path.join(siblingCandidate, 'package.json'))) {
     return siblingCandidate;
   }
