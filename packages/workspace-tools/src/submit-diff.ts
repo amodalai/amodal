@@ -102,8 +102,13 @@ export async function submitDiff(
     }
   }
 
-  // Submit to studio API
-  const url = new URL('/api/workspace/changes', studioBaseUrl);
+  // Submit to studio API — map workspace change kinds to batch actions
+  const batchChanges = changes.map((c) => ({
+    path: c.path,
+    action: c.kind === 'deleted' ? 'delete' as const : 'upsert' as const,
+    content: c.content,
+  }));
+  const url = new URL('/api/studio/drafts/batch', studioBaseUrl);
 
   let response: Response;
   try {
@@ -111,8 +116,7 @@ export async function submitDiff(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        changes,
-        commitMessage: params.commitMessage,
+        changes: batchChanges,
       }),
       signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
     });

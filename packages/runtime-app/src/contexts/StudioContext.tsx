@@ -23,6 +23,7 @@ import { createLogger } from '../utils/log';
 // ---------------------------------------------------------------------------
 
 const CONTEXT_ENDPOINT = '/api/context' as const;
+const CONTEXT_FETCH_TIMEOUT_MS = 5_000;
 
 /** Type guard for plain-object shapes used when parsing server JSON. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,6 +62,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CONTEXT_FETCH_TIMEOUT_MS);
 
     void (async () => {
       try {
@@ -97,6 +99,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     })();
 
     return () => {
+      clearTimeout(timeoutId);
       controller.abort();
     };
   }, []);

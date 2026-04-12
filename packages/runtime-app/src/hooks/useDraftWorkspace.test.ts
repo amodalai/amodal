@@ -73,8 +73,8 @@ afterEach(() => {
 describe('useDraftWorkspace', () => {
   it('fetches drafts on mount after StudioContext resolves', async () => {
     globalThis.fetch = buildFetchMock(
-      // listDrafts — studio-client expects a flat DraftFile[] array
-      async () => jsonResponse(sampleDrafts),
+      // listDrafts — server returns { drafts: [...] }
+      async () => jsonResponse({ drafts: sampleDrafts }),
     );
 
     const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
@@ -103,11 +103,11 @@ describe('useDraftWorkspace', () => {
   it('saveDraft calls client then refetches drafts', async () => {
     globalThis.fetch = buildFetchMock(
       // 1. initial listDrafts
-      async () => jsonResponse([]),
+      async () => jsonResponse({ drafts: [] }),
       // 2. saveDraft PUT
       async () => jsonResponse({ status: 'ok' }),
       // 3. refetch listDrafts
-      async () => jsonResponse(sampleDrafts),
+      async () => jsonResponse({ drafts: sampleDrafts }),
     );
 
     const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
@@ -127,11 +127,11 @@ describe('useDraftWorkspace', () => {
   it('deleteDraft calls client then refetches', async () => {
     globalThis.fetch = buildFetchMock(
       // 1. initial listDrafts
-      async () => jsonResponse(sampleDrafts),
+      async () => jsonResponse({ drafts: sampleDrafts }),
       // 2. deleteDraft DELETE
       async () => jsonResponse({ status: 'ok' }),
       // 3. refetch listDrafts
-      async () => jsonResponse([]),
+      async () => jsonResponse({ drafts: [] }),
     );
 
     const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
@@ -150,9 +150,9 @@ describe('useDraftWorkspace', () => {
 
   it('discardAll calls client then refetches', async () => {
     globalThis.fetch = buildFetchMock(
-      async () => jsonResponse(sampleDrafts),
+      async () => jsonResponse({ drafts: sampleDrafts }),
       async () => jsonResponse({ status: 'ok' }),
-      async () => jsonResponse([]),
+      async () => jsonResponse({ drafts: [] }),
     );
 
     const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
@@ -171,9 +171,9 @@ describe('useDraftWorkspace', () => {
 
   it('publish calls client and returns the result', async () => {
     globalThis.fetch = buildFetchMock(
-      async () => jsonResponse(sampleDrafts),
+      async () => jsonResponse({ drafts: sampleDrafts }),
       async () => jsonResponse({ commitSha: 'abc1234' }),
-      async () => jsonResponse([]),
+      async () => jsonResponse({ drafts: [] }),
     );
 
     const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
@@ -190,7 +190,7 @@ describe('useDraftWorkspace', () => {
 
   it('buildPreview calls client and returns the preview result', async () => {
     globalThis.fetch = buildFetchMock(
-      async () => jsonResponse(sampleDrafts),
+      async () => jsonResponse({ drafts: sampleDrafts }),
       async () =>
         jsonResponse({
           snapshotId: 'snap-1',
@@ -214,7 +214,7 @@ describe('useDraftWorkspace', () => {
 
   it('stores error with status code from failed preview for 501 handling', async () => {
     globalThis.fetch = buildFetchMock(
-      async () => jsonResponse(sampleDrafts),
+      async () => jsonResponse({ drafts: sampleDrafts }),
       // buildPreview returns 501
       async () => jsonResponse({ error: 'feature_unavailable', message: 'not yet' }, 501),
     );

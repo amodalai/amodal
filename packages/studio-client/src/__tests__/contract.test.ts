@@ -99,7 +99,7 @@ describe('studio-client contract — response shapes match Studio API', () => {
         {filePath: 'amodal.json', content: '{"name":"test"}', updatedAt: '2026-04-10T12:00:00Z'},
       ];
 
-      const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(drafts));
+      const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ drafts }));
       const client = createStudioClient({baseUrl: BASE_URL, fetchImpl: mockFetch});
 
       const result = await client.listDrafts();
@@ -118,7 +118,7 @@ describe('studio-client contract — response shapes match Studio API', () => {
 
     it('getDraft returns file content string', async () => {
       const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(
-        jsonResponse({content: '# Updated Greeting\n\nSay hi warmly.'}),
+        jsonResponse({ draft: { filePath: 'skills/greet.md', content: '# Updated Greeting\n\nSay hi warmly.', updatedAt: '2026-04-11T00:00:00Z' } }),
       );
 
       const client = createStudioClient({baseUrl: BASE_URL, fetchImpl: mockFetch});
@@ -185,7 +185,7 @@ describe('studio-client contract — response shapes match Studio API', () => {
   });
 
   describe('submitDiff sends correct change format', () => {
-    it('serializes added/modified/deleted changes correctly', async () => {
+    it('maps workspace change actions to batch actions for the Studio API', async () => {
       const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(
         new Response(null, {status: 200, statusText: 'OK'}),
       );
@@ -199,21 +199,21 @@ describe('studio-client contract — response shapes match Studio API', () => {
       ]);
 
       expect(mockFetch).toHaveBeenCalledOnce();
-       
+
       const init = mockFetch.mock.calls[0][1] as RequestInit;
       const body = JSON.parse(init.body as string) as {changes: Array<{path: string; action: string; content?: string}>};
 
       expect(body.changes).toHaveLength(3);
 
-      const added = body.changes.find((c) => c.action === 'added');
-      expect(added).toMatchObject({path: 'skills/new.md', action: 'added', content: '# New Skill'});
+      // 'added' and 'modified' map to 'upsert', 'deleted' maps to 'delete'
+      const upserts = body.changes.filter((c) => c.action === 'upsert');
+      expect(upserts).toHaveLength(2);
+      expect(upserts.find((c) => c.path === 'skills/new.md')).toMatchObject({content: '# New Skill'});
+      expect(upserts.find((c) => c.path === 'skills/edit.md')).toMatchObject({content: '# Edited'});
 
-      const modified = body.changes.find((c) => c.action === 'modified');
-      expect(modified).toMatchObject({path: 'skills/edit.md', action: 'modified', content: '# Edited'});
-
-      const deleted = body.changes.find((c) => c.action === 'deleted');
-      expect(deleted).toMatchObject({path: 'skills/old.md', action: 'deleted'});
-      expect(deleted).not.toHaveProperty('content');
+      const deletes = body.changes.filter((c) => c.action === 'delete');
+      expect(deletes).toHaveLength(1);
+      expect(deletes[0]).toMatchObject({path: 'skills/old.md'});
     });
   });
 

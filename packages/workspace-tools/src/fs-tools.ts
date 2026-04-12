@@ -153,9 +153,14 @@ export async function grepFiles(
     let content: string;
     try {
       content = await fs.readFile(fullPath, 'utf-8');
-    } catch {
-      // Skip unreadable files (binary, permission issues)
-      continue;
+    } catch (err: unknown) {
+      if (err instanceof Error && 'code' in err) {
+        const errWithCode = err as { code: unknown };
+        if (errWithCode.code === 'ENOENT' || errWithCode.code === 'EISDIR' || errWithCode.code === 'EACCES') {
+          continue;
+        }
+      }
+      throw err;
     }
 
     const lines = content.split('\n');

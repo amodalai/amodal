@@ -129,15 +129,17 @@ describe('submitDiff', () => {
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain('/api/workspace/changes');
+    expect(url).toContain('/api/studio/drafts/batch');
     expect(options.method).toBe('POST');
 
     const body = JSON.parse(options.body as string) as {
-      changes: unknown[];
-      commitMessage: string;
+      changes: Array<{ path: string; action: string; content?: string }>;
     };
-    expect(body.commitMessage).toBe('test commit');
     expect(body.changes).toBeInstanceOf(Array);
+    // Verify workspace change kinds are mapped to batch actions
+    for (const change of body.changes) {
+      expect(['upsert', 'delete']).toContain(change.action);
+    }
   });
 
   it('throws WorkspaceSubmitError on API failure', async () => {

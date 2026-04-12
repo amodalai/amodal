@@ -45,7 +45,7 @@ describe('createStudioClient', () => {
       const drafts: DraftFile[] = [
         { filePath: 'skills/hello.md', content: '# Hello', updatedAt: '2026-01-01T00:00:00Z' },
       ];
-      const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(drafts));
+      const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ drafts }));
       const client = createStudioClient({ baseUrl: BASE_URL, authToken: AUTH_TOKEN, fetchImpl: mockFetch });
 
       const result = await client.listDrafts();
@@ -61,7 +61,7 @@ describe('createStudioClient', () => {
     });
 
     it('omits Authorization header when no authToken provided', async () => {
-      const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse([]));
+      const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ drafts: [] }));
       const client = createStudioClient({ baseUrl: BASE_URL, fetchImpl: mockFetch });
 
       await client.listDrafts();
@@ -90,7 +90,7 @@ describe('createStudioClient', () => {
   describe('getDraft', () => {
     it('encodes the file path in the URL', async () => {
       const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(
-        jsonResponse({ content: '# Hello' }),
+        jsonResponse({ draft: { filePath: 'skills/hello world.md', content: '# Hello', updatedAt: '2026-01-01T00:00:00Z' } }),
       );
       const client = createStudioClient({ baseUrl: BASE_URL, fetchImpl: mockFetch });
 
@@ -104,7 +104,7 @@ describe('createStudioClient', () => {
 
     it('returns content on success', async () => {
       const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(
-        jsonResponse({ content: '# Hello' }),
+        jsonResponse({ draft: { filePath: 'skills/hello.md', content: '# Hello', updatedAt: '2026-01-01T00:00:00Z' } }),
       );
       const client = createStudioClient({ baseUrl: BASE_URL, fetchImpl: mockFetch });
 
@@ -264,7 +264,13 @@ describe('createStudioClient', () => {
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ changes }),
+          body: JSON.stringify({
+            changes: [
+              { path: 'skills/new.md', action: 'upsert', content: '# New' },
+              { path: 'skills/old.md', action: 'delete' },
+              { path: 'skills/edit.md', action: 'upsert', content: '# Edited' },
+            ],
+          }),
         }),
       );
     });
@@ -282,6 +288,18 @@ describe('createStudioClient', () => {
       const client = createStudioClient({ baseUrl: BASE_URL, fetchImpl: mockFetch });
 
       await expect(client.listDrafts()).rejects.toThrow(StudioResponseParseError);
+    });
+  });
+
+  describe('timeout', () => {
+    it('passes AbortSignal.timeout to every request', async () => {
+      const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ drafts: [] }));
+      const client = createStudioClient({ baseUrl: BASE_URL, fetchImpl: mockFetch, timeoutMs: 5000 });
+
+      await client.listDrafts();
+
+      const callOptions = mockFetch.mock.calls[0]?.[1];
+      expect(callOptions?.signal).toBeDefined();
     });
   });
 });

@@ -37,6 +37,8 @@ export interface StudioClientOptions {
   authToken?: string;
   /** Injectable fetch implementation (defaults to global `fetch`). */
   fetchImpl?: typeof fetch;
+  /** Timeout in milliseconds for each HTTP request (default: 30 000). */
+  timeoutMs?: number;
 }
 
 export interface StudioClient {
@@ -52,11 +54,37 @@ export interface StudioClient {
 }
 
 // ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+interface BatchChange {
+  path: string;
+  action: 'upsert' | 'delete';
+  content?: string;
+}
+
+function mapWorkspaceChangeToBatch(change: WorkspaceChange): BatchChange {
+  switch (change.action) {
+    case 'added':
+    case 'modified':
+      return { path: change.path, action: 'upsert', content: change.content };
+    case 'deleted':
+      return { path: change.path, action: 'delete' };
+    default: {
+      const _exhaustive: never = change.action;
+      return _exhaustive;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 export function createStudioClient(options: StudioClientOptions): StudioClient {
-  const { baseUrl, authToken, fetchImpl = globalThis.fetch } = options;
+  const { baseUrl, authToken, fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
   function headers(json: boolean): Record<string, string> {
     const h: Record<string, string> = {};
@@ -95,22 +123,23 @@ export function createStudioClient(options: StudioClientOptions): StudioClient {
   return {
     async listDrafts(): Promise<DraftFile[]> {
       const reqUrl = url(ROUTES.DRAFTS);
-      const res = await fetchImpl(reqUrl, { method: 'GET', headers: headers(false) });
+      const res = await fetchImpl(reqUrl, { method: 'GET', headers: headers(false), signal: AbortSignal.timeout(timeoutMs) });
       await assertOk(res, reqUrl);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-      return (await parseJson(res, reqUrl)) as DraftFile[];
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response at system boundary
+      const body = (await parseJson(res, reqUrl)) as { drafts: DraftFile[] };
+      return body.drafts;
     },
 
     async getDraft(filePath: string): Promise<string | null> {
       const reqUrl = draftUrl(filePath);
-      const res = await fetchImpl(reqUrl, { method: 'GET', headers: headers(false) });
+      const res = await fetchImpl(reqUrl, { method: 'GET', headers: headers(false), signal: AbortSignal.timeout(timeoutMs) });
       if (res.status === 404) {
         return null;
       }
       await assertOk(res, reqUrl);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-      const data = (await parseJson(res, reqUrl)) as { content: string };
-      return data.content;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response at system boundary
+      const data = (await parseJson(res, reqUrl)) as { draft: DraftFile };
+      return data.draft.content;
     },
 
     async saveDraft(filePath: string, content: string): Promise<void> {
@@ -119,6 +148,7 @@ export function createStudioClient(options: StudioClientOptions): StudioClient {
         method: 'PUT',
         headers: headers(true),
         body: JSON.stringify({ content }),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       await assertOk(res, reqUrl);
     },
@@ -128,6 +158,7 @@ export function createStudioClient(options: StudioClientOptions): StudioClient {
       const res = await fetchImpl(reqUrl, {
         method: 'DELETE',
         headers: headers(false),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       await assertOk(res, reqUrl);
     },
@@ -137,6 +168,7 @@ export function createStudioClient(options: StudioClientOptions): StudioClient {
       const res = await fetchImpl(reqUrl, {
         method: 'POST',
         headers: headers(false),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       await assertOk(res, reqUrl);
     },
@@ -147,9 +179,10 @@ export function createStudioClient(options: StudioClientOptions): StudioClient {
         method: 'POST',
         headers: headers(true),
         body: JSON.stringify({ commitMessage }),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       await assertOk(res, reqUrl);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response at system boundary
       return (await parseJson(res, reqUrl)) as PublishResult;
     },
 
@@ -158,27 +191,30 @@ export function createStudioClient(options: StudioClientOptions): StudioClient {
       const res = await fetchImpl(reqUrl, {
         method: 'POST',
         headers: headers(false),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       await assertOk(res, reqUrl);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response at system boundary
       return (await parseJson(res, reqUrl)) as PreviewResult;
     },
 
     async fetchWorkspaceBundle(agentId?: string): Promise<WorkspaceBundle> {
       const params = agentId ? `?agentId=${encodeURIComponent(agentId)}` : '';
       const reqUrl = url(`${ROUTES.WORKSPACE}${params}`);
-      const res = await fetchImpl(reqUrl, { method: 'GET', headers: headers(false) });
+      const res = await fetchImpl(reqUrl, { method: 'GET', headers: headers(false), signal: AbortSignal.timeout(timeoutMs) });
       await assertOk(res, reqUrl);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response at system boundary
       return (await parseJson(res, reqUrl)) as WorkspaceBundle;
     },
 
     async submitDiff(changes: WorkspaceChange[]): Promise<void> {
+      const batchChanges = changes.map(mapWorkspaceChangeToBatch);
       const reqUrl = url(ROUTES.BATCH);
       const res = await fetchImpl(reqUrl, {
         method: 'POST',
         headers: headers(true),
-        body: JSON.stringify({ changes }),
+        body: JSON.stringify({ changes: batchChanges }),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       await assertOk(res, reqUrl);
     },

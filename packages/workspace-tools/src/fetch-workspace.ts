@@ -60,7 +60,7 @@ export async function fetchWorkspace(
     session_id: sessionId,
   });
 
-  const url = new URL('/api/workspace/bundle', studioBaseUrl);
+  const url = new URL('/api/studio/workspace', studioBaseUrl);
   if (params.agentId) {
     url.searchParams.set('agentId', params.agentId);
   }
