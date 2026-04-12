@@ -321,9 +321,6 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.12
-      node-cron:
-        specifier: ^3.0.3
-        version: 3.0.3
       pg:
         specifier: ^8.13.1
         version: 8.20.0
@@ -337,9 +334,6 @@ importers:
       "@types/express":
         specifier: ^4.17.21
         version: 4.17.25
-      "@types/node-cron":
-        specifier: ^3.0.11
-        version: 3.0.11
       "@types/pg":
         specifier: ^8.11.10
         version: 8.20.0
@@ -5088,12 +5082,6 @@ packages:
     resolution:
       {
         integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==,
-      }
-
-  "@types/node-cron@3.0.11":
-    resolution:
-      {
-        integrity: sha512-0ikrnug3/IyneSHqCBeslAhlK2aBfYek1fGo4bP4QnZPmiqSGRK+Oy7ZMisLWkesffJvQ1cqAcBnJC+8+nxIAg==,
       }
 
   "@types/node-fetch@2.6.13":
@@ -10451,13 +10439,6 @@ packages:
       sass:
         optional: true
 
-  node-cron@3.0.3:
-    resolution:
-      {
-        integrity: sha512-dOal67//nohNgYWb+nWmg5dkFdIwDm8EpeGYMekPMrngV3637lqnX0lbUcCtgibHTz6SEz7DAIjKvKDFYCnO1A==,
-      }
-    engines: { node: ">=6.0.0" }
-
   node-domexception@1.0.0:
     resolution:
       {
@@ -12976,13 +12957,6 @@ packages:
     resolution:
       {
         integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==,
-      }
-    hasBin: true
-
-  uuid@8.3.2:
-    resolution:
-      {
-        integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==,
       }
     hasBin: true
 
@@ -16938,8 +16912,6 @@ snapshots:
 
   "@types/ms@2.1.0": {}
 
-  "@types/node-cron@3.0.11": {}
-
   "@types/node-fetch@2.6.13":
     dependencies:
       "@types/node": 20.19.37
@@ -20766,10 +20738,6 @@ snapshots:
       - "@babel/core"
       - babel-plugin-macros
 
-  node-cron@3.0.3:
-    dependencies:
-      uuid: 8.3.2
-
   node-domexception@1.0.0: {}
 
   node-emoji@2.2.0:
@@ -22536,8 +22504,6 @@ snapshots:
   utils-merge@1.0.1: {}
 
   uuid@11.1.0: {}
-
-  uuid@8.3.2: {}
 
   vary@1.1.2: {}
 
