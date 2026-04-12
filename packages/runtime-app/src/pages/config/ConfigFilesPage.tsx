@@ -8,8 +8,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronRight, File, FolderOpen, Folder, Save, Package, Loader2, RefreshCw } from 'lucide-react';
 import { CodeEditor } from '@/components/CodeEditor';
+import { DraftWorkspaceBar } from '@/components/studio/DraftWorkspaceBar';
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
-import { useWorkspace } from '@/hooks/useWorkspace';
+import { useDraftWorkspace } from '@/hooks/useDraftWorkspace';
 import { cn } from '@/lib/utils';
 
 interface FileTreeEntry {
@@ -124,7 +125,7 @@ export function ConfigFilesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
-  const workspace = useWorkspace();
+  const workspace = useDraftWorkspace();
 
   // Fetch file tree (initial + refresh when the runtime signals file changes)
   const lastJsonRef = useRef('');
@@ -144,9 +145,8 @@ export function ConfigFilesPage() {
       .finally(() => { setLoading(false); });
   }, []);
 
-  // Wait for workspace restore before fetching the file tree so restored
-  // edits appear after a server cold start.
-  useEffect(() => { if (workspace.ready) fetchTree(); }, [fetchTree, workspace.ready]);
+  // Fetch the file tree on mount.
+  useEffect(() => { fetchTree(); }, [fetchTree]);
   useRuntimeEvents(['files_changed', 'manifest_changed'], () => {
     fetchTree();
   });
@@ -207,7 +207,7 @@ export function ConfigFilesPage() {
       .catch(() => {});
   }, [selectedPath]);
 
-  // Save file
+  // Save file — creates a draft in Studio rather than writing directly to the runtime.
   const saveFile = useCallback(async () => {
     if (!selectedPath || editedContent === null) return;
 
@@ -215,28 +215,17 @@ export function ConfigFilesPage() {
     setSaveStatus('idle');
 
     try {
-      const res = await fetch(`/api/files/${selectedPath}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editedContent }),
-      });
-
-      if (res.ok) {
-        const body: unknown = await res.json();
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
-        const data = body && typeof body === 'object' ? body as Record<string, unknown> : {};
-        // If hosted mode, store workspace data (bundle + commits)
-        if (data['workspace']) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- workspace shape validated by hosted runtime
-          workspace.onFileSaved(data['workspace'] as Parameters<typeof workspace.onFileSaved>[0]);
-        }
+      await workspace.saveDraft(selectedPath, editedContent);
+      // If the hook recorded an error, surface it.
+      const err = workspace.getLatestError();
+      if (err) {
+        setSaveStatus('error');
+      } else {
         setSaveStatus('saved');
         setFileData((prev) => prev ? { ...prev, content: editedContent } : prev);
         setEditedContent(null);
         // Clear "saved" after 2 seconds
         setTimeout(() => setSaveStatus('idle'), 2000);
-      } else {
-        setSaveStatus('error');
       }
     } catch {
       setSaveStatus('error');
@@ -340,13 +329,16 @@ export function ConfigFilesPage() {
                 readOnly={isPackageFile}
               />
             </div>
+
+            {/* Draft workspace bar */}
+            <DraftWorkspaceBar workspace={workspace} />
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <Package className="h-8 w-8 text-gray-300 dark:text-white/10 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">Select a file to view or edit</p>
-              <p className="text-xs text-gray-300 dark:text-zinc-700 mt-1">Changes are saved directly to your repo</p>
+              <p className="text-xs text-gray-300 dark:text-zinc-700 mt-1">Changes are saved as drafts — publish when ready</p>
             </div>
           </div>
         )}
