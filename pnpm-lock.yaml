@@ -485,6 +485,9 @@ importers:
 
   packages/studio:
     dependencies:
+      "@amodalai/db":
+        specifier: workspace:*
+        version: link:../db
       "@codemirror/autocomplete":
         specifier: ^6.20.1
         version: 6.20.1

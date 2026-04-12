@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@amodalai/db": "workspace:*",
     "@codemirror/autocomplete": "^6.20.1",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-json": "^6.0.2",

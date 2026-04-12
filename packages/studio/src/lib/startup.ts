@@ -29,6 +29,9 @@ let backendPromise: Promise<StudioBackend> | null = null;
  * Reads configuration from environment variables:
  * - REPO_PATH: path to the agent's repo directory (required)
  * - PGLITE_DATA_DIR: path for PGLite data storage (defaults to .studio-data)
+ * - DATABASE_URL: when set, the Studio also initializes a shared Postgres
+ *   connection (via @amodalai/db) for reading operational data (stores,
+ *   sessions, feedback). Draft storage still uses PGLite.
  */
 export function getBackend(): Promise<StudioBackend> {
   if (backendPromise) return backendPromise;
@@ -51,6 +54,23 @@ async function initializeBackend(): Promise<StudioBackend> {
 
   const backend = new PGLiteStudioBackend({ repoPath, dataDir });
   await backend.initialize();
+
+  // If DATABASE_URL is set, eagerly initialize the shared Postgres
+  // connection so that query modules can use it. This is separate from
+  // the PGLite backend which handles draft storage.
+  if (process.env['DATABASE_URL']) {
+    try {
+      const { getStudioDb } = await import('./db');
+      await getStudioDb();
+      logger.info('postgres_connection_ready');
+    } catch (err: unknown) {
+      // Log but don't block startup — Postgres data features are optional
+      // when developing locally without a database.
+      logger.warn('postgres_connection_failed', {
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   return backend;
 }

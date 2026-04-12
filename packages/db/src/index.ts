@@ -42,3 +42,17 @@ export type { PgListener, PgChannel } from './listen.js';
 
 // Migration
 export { ensureSchema } from './migrate.js';
+
+// Re-export common drizzle-orm operators so downstream packages
+// (like @amodalai/studio) use the same drizzle-orm instance and
+// avoid type conflicts from duplicate installs.
+export {
+  eq,
+  and,
+  or,
+  desc,
+  asc,
+  count,
+  sql,
+  inArray,
+} from 'drizzle-orm';
