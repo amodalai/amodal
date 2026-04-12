@@ -105,7 +105,7 @@ describe('dev command', () => {
     const output = stderrChunks.join('');
     expect(output).toContain('DATABASE_URL is required');
     expect(output).toContain('docker run');
-    expect(output).toContain('~/.amodal/env');
+    expect(output).toContain('~/.amodal/.env');
   });
 
   it('should import without error', async () => {

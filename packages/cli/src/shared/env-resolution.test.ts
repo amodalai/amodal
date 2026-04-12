@@ -45,7 +45,7 @@ describe('resolveEnv', () => {
 
   it('resolves from ~/.amodal/env', () => {
     mkdirSync(path.join(fakeHome, '.amodal'), {recursive: true});
-    writeFileSync(path.join(fakeHome, '.amodal', 'env'), `${TEST_KEY}=global-value\n`);
+    writeFileSync(path.join(fakeHome, '.amodal', '.env'), `${TEST_KEY}=global-value\n`);
     expect(resolveEnv(TEST_KEY, tmpDir)).toBe('global-value');
   });
 
@@ -57,14 +57,14 @@ describe('resolveEnv', () => {
   it('agent .env takes priority over global', () => {
     writeFileSync(path.join(tmpDir, '.env'), `${TEST_KEY}=agent-value\n`);
     mkdirSync(path.join(fakeHome, '.amodal'), {recursive: true});
-    writeFileSync(path.join(fakeHome, '.amodal', 'env'), `${TEST_KEY}=global-value\n`);
+    writeFileSync(path.join(fakeHome, '.amodal', '.env'), `${TEST_KEY}=global-value\n`);
     process.env[TEST_KEY] = 'shell-value';
     expect(resolveEnv(TEST_KEY, tmpDir)).toBe('agent-value');
   });
 
   it('global takes priority over process.env', () => {
     mkdirSync(path.join(fakeHome, '.amodal'), {recursive: true});
-    writeFileSync(path.join(fakeHome, '.amodal', 'env'), `${TEST_KEY}=global-value\n`);
+    writeFileSync(path.join(fakeHome, '.amodal', '.env'), `${TEST_KEY}=global-value\n`);
     process.env[TEST_KEY] = 'shell-value';
     expect(resolveEnv(TEST_KEY, tmpDir)).toBe('global-value');
   });
