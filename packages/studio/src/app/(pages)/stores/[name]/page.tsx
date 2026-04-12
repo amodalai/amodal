@@ -12,6 +12,7 @@
 import { listDocuments } from '@/lib/store-queries';
 import { getAgentId } from '@/lib/config';
 import { StoreDocumentList } from './StoreDocumentList';
+export const dynamic = 'force-dynamic';
 
 export default async function StoreDocumentsPage({
   params,

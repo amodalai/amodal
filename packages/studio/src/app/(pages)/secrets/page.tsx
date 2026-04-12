@@ -6,6 +6,7 @@
 
 import { fetchFromRuntime } from '@/lib/runtime-client';
 import { AgentOffline } from '@/components/AgentOffline';
+export const dynamic = 'force-dynamic';
 
 interface EnvVar {
   name: string;

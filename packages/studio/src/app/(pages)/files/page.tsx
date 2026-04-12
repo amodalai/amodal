@@ -7,6 +7,7 @@
 import { fetchFromRuntime } from '@/lib/runtime-client';
 import { AgentOffline } from '@/components/AgentOffline';
 import { FileEditor } from './FileEditor';
+export const dynamic = 'force-dynamic';
 
 interface FileTreeEntry {
   name: string;

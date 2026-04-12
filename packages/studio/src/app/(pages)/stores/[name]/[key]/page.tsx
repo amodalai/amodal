@@ -11,6 +11,7 @@
 import { getDocument, getDocumentHistory } from '@/lib/store-queries';
 import { getAgentId } from '@/lib/config';
 import { DocumentView } from './DocumentView';
+export const dynamic = 'force-dynamic';
 
 export default async function DocumentDetailPage({
   params,

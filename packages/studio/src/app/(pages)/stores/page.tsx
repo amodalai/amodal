@@ -11,6 +11,7 @@
 import { listStores } from '@/lib/store-queries';
 import { getAgentId } from '@/lib/config';
 import { storePath } from '@/lib/routes';
+export const dynamic = 'force-dynamic';
 
 export default async function StoresPage() {
   const agentId = getAgentId();

@@ -7,6 +7,7 @@
 import { fetchFromRuntime } from '@/lib/runtime-client';
 import { AgentOffline } from '@/components/AgentOffline';
 import { notFound } from 'next/navigation';
+export const dynamic = 'force-dynamic';
 
 type InspectKind = 'connections' | 'mcp' | 'skills' | 'knowledge';
 
@@ -196,6 +197,7 @@ export default async function InspectDetailPage({ params }: PageProps) {
     notFound();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated by VALID_KINDS.has() above
   const validKind = kind as InspectKind;
 
   let detail: Omit<InspectDetail, 'kind'>;

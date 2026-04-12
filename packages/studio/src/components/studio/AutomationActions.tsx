@@ -74,13 +74,14 @@ export function ToggleButton({ name, enabled }: { name: string; enabled: boolean
   const router = useRouter();
 
   const handleToggle = useCallback(() => {
-    startTransition(async () => {
-      const url = enabled ? automationStopUrl(name) : automationStartUrl(name);
-      await fetch(url, {
-        method: 'POST',
-        signal: AbortSignal.timeout(10_000),
+    const url = enabled ? automationStopUrl(name) : automationStartUrl(name);
+    void fetch(url, {
+      method: 'POST',
+      signal: AbortSignal.timeout(10_000),
+    }).then(() => {
+      startTransition(() => {
+        router.refresh();
       });
-      router.refresh();
     });
   }, [name, enabled, router]);
 

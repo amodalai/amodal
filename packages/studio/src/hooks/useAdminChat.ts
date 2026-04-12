@@ -226,10 +226,10 @@ export function useAdminChat(): UseAdminChat {
             }
             case 'tool_call_start': {
               const toolName = typeof evt.data['toolName'] === 'string' ? evt.data['toolName'] : 'unknown';
-              const rawParams = evt.data['parameters'];
+              const rawParams: unknown = evt.data['parameters'];
               const params: Record<string, unknown> =
                 typeof rawParams === 'object' && rawParams !== null
-                  ? Object.assign({}, rawParams)
+                  ? Object.fromEntries(Object.entries(rawParams as Record<string, unknown>)) // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion -- validated object at SSE boundary
                   : {};
               const toolCall: ChatToolCall = { name: toolName, params, status: 'running' };
               setMessages((prev) => {
