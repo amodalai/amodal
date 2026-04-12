@@ -178,6 +178,19 @@ export async function grepFiles(
   return matches;
 }
 
+const GLOB_STAR = '<<GLOB_STAR>>';
+const GLOB_DOUBLE_STAR = '<<GLOB_DOUBLE_STAR>>';
+
+function globToRegex(pattern: string): RegExp {
+  const escaped = pattern
+    .replace(/\*\*/g, GLOB_DOUBLE_STAR)
+    .replace(/\*/g, GLOB_STAR)
+    .replace(/[\\^$+?.()|[\]{}]/g, '\\$&')
+    .replaceAll(GLOB_DOUBLE_STAR, '.*')
+    .replaceAll(GLOB_STAR, '[^/]*');
+  return new RegExp(`^${escaped}$`);
+}
+
 /**
  * Matches files in the sandbox against a glob-like pattern.
  * Supports * (any chars except /) and ** (any path segments).
@@ -188,14 +201,7 @@ export async function globFiles(
 ): Promise<string[]> {
   const allFiles = await walkDir(sandbox.getRoot(), sandbox.getRoot());
 
-  // Convert glob to regex
-  const regexStr = pattern
-    .replace(/\./g, '\\.')
-    .replace(/\*\*/g, '\0')
-    .replace(/\*/g, '[^/]*')
-    .replace(/\0/g, '.*');
-
-  const regex = new RegExp(`^${regexStr}$`);
+  const regex = globToRegex(pattern);
 
   return allFiles.filter(
     (file) => !file.endsWith('/') && regex.test(file),
