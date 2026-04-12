@@ -7,19 +7,15 @@
 /**
  * Shared Drizzle store backend tests.
  *
- * Runs the full behaviour matrix (tenant isolation, concurrent writes,
- * TTL/purge, filter-field validation) against the PGLite-backed factory.
- *
- * A Postgres variant runs only when TEST_POSTGRES_URL is set in the
- * environment — otherwise that `describe` block is skipped. This lets
- * CI stay fast and local devs can opt into the Postgres path.
+ * Runs only when DATABASE_URL is set in the environment. This tests
+ * the real Postgres-backed path via `createPostgresStoreBackend`.
  */
 
 import {describe, it, expect, beforeEach, afterEach} from 'vitest';
 import type {LoadedStore, StoreBackend} from '@amodalai/core';
-import {createPGLiteStoreBackend} from './pglite-store-backend.js';
-import {createPostgresStoreBackend} from './postgres-store-backend.js';
 import {StoreError} from '../errors.js';
+
+const skip = !process.env['DATABASE_URL'];
 
 function makeStore(overrides: Partial<LoadedStore> = {}): LoadedStore {
   return {
@@ -101,15 +97,10 @@ function runSuite(makeBackend: BackendFactory): void {
 
     describe('concurrent writes', () => {
       it('serializes parallel puts to the same key via write queue', async () => {
-        // Fire 20 concurrent puts at the same key. The write queue must
-        // serialize them so each read-modify-write sees the previous
-        // version — final version should be exactly 20.
         const writes = Array.from({length: 20}, (_, i) =>
           backend.put('app', 'test-store', 'same-key', {id: 'same-key', n: i}, {}),
         );
         const results = await Promise.all(writes);
-
-        // All writes reported stored:true
         expect(results.every((r) => r.stored)).toBe(true);
 
         const final = await backend.get('app', 'test-store', 'same-key');
@@ -119,13 +110,10 @@ function runSuite(makeBackend: BackendFactory): void {
 
     describe('purgeExpired', () => {
       it('removes only expired rows and returns the count', async () => {
-        // ttl-store has ttl=1s
         await backend.put('app', 'ttl-store', 'e1', {id: 'e1'}, {});
         await backend.put('app', 'ttl-store', 'e2', {id: 'e2'}, {});
-        // Non-TTL store — should never be purged
         await backend.put('app', 'test-store', 'keep', {id: 'keep'}, {});
 
-        // Wait for TTL to elapse
         await new Promise((r) => setTimeout(r, 1100));
 
         const purged = await backend.purgeExpired('app');
@@ -140,8 +128,6 @@ function runSuite(makeBackend: BackendFactory): void {
         await backend.put('app', 'ttl-store', 'a', {id: 'a'}, {});
         await backend.put('app', 'test-store', 'b', {id: 'b'}, {});
 
-        // put with manual expires_at on test-store via TTL=0 is not exposed;
-        // instead, verify purgeExpired scoped to ttl-store only affects ttl-store.
         await new Promise((r) => setTimeout(r, 1100));
         const purged = await backend.purgeExpired('app', 'ttl-store');
         expect(purged).toBe(1);
@@ -190,12 +176,10 @@ function runSuite(makeBackend: BackendFactory): void {
 
     describe('versioning edge cases', () => {
       it('history respects maxVersions trim', async () => {
-        // versioned-store has history.versions=3
         for (let i = 1; i <= 6; i++) {
           await backend.put('app', 'versioned-store', 'k', {id: 'k', n: i}, {});
         }
         const history = await backend.history('app', 'versioned-store', 'k');
-        // Current version is 6; history should hold the trailing 3 prior versions (3,4,5)
         expect(history).toHaveLength(3);
         expect(history[0].version).toBe(5);
         expect(history[2].version).toBe(3);
@@ -206,59 +190,24 @@ function runSuite(makeBackend: BackendFactory): void {
       it('double-close is safe and ops after close throw StoreError', async () => {
         await backend.put('app', 'test-store', 'k', {id: 'k'}, {});
         await backend.close();
-        // Second close should be a no-op, not throw
         await backend.close();
-        // Operations after close throw StoreError
         await expect(backend.get('app', 'test-store', 'k')).rejects.toBeInstanceOf(StoreError);
         await expect(backend.put('app', 'test-store', 'k', {id: 'k'}, {})).rejects.toBeInstanceOf(StoreError);
-        // The cleanup() in afterEach expects to close a live backend; re-open
-        // via the factory so afterEach doesn't blow up on a double-cleanup.
-        // (It's simpler to just no-op cleanup here by setting a flag — but
-        // the suite-wide afterEach would need the hook. Instead, since
-        // close() is idempotent, let afterEach call it again safely.)
       });
     });
 }
 
 // ---------------------------------------------------------------------------
-// PGLite suite (always runs)
+// Postgres suite (requires DATABASE_URL)
 // ---------------------------------------------------------------------------
 
-describe('DrizzleStoreBackend (PGLite)', () => {
+describe.skipIf(skip)('DrizzleStoreBackend (Postgres)', () => {
   runSuite(async () => {
-    const backend = await createPGLiteStoreBackend(STORES);
-    return {
-      backend,
-      cleanup: () => backend.close(),
-    };
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Postgres suite (opt-in via TEST_POSTGRES_URL env var)
-// ---------------------------------------------------------------------------
-
-const pgUrl = process.env['TEST_POSTGRES_URL'] ?? '';
-const pgDescribe = pgUrl ? describe : describe.skip;
-
-pgDescribe('DrizzleStoreBackend (Postgres, via TEST_POSTGRES_URL)', () => {
-  runSuite(async () => {
-    // Drop any existing tables so every test run starts clean. Use a
-    // dedicated database for TEST_POSTGRES_URL — these DROPs are
-    // destructive and will wipe any store tables in the target DB.
-    const pg = await import('pg');
-    const {Pool: CleanPool} = pg.default ?? pg;
-    const cleanPool = new CleanPool({connectionString: pgUrl});
-    try {
-      await cleanPool.query('DROP TABLE IF EXISTS store_document_versions CASCADE');
-      await cleanPool.query('DROP TABLE IF EXISTS store_documents CASCADE');
-    } finally {
-      await cleanPool.end();
-    }
-
-    const backend = await createPostgresStoreBackend(STORES, {
-      connectionString: pgUrl,
-    });
+    const {createPostgresStoreBackend} = await import('./postgres-store-backend.js');
+    const {ensureSchema, getDb} = await import('@amodalai/db');
+    const db = getDb();
+    await ensureSchema(db as never);
+    const backend = await createPostgresStoreBackend(STORES);
     return {
       backend,
       cleanup: () => backend.close(),

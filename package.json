@@ -15,7 +15,7 @@
     "test": "pnpm -r run test",
     "test:ci": "pnpm -r run test:ci",
     "lint": "eslint . --cache",
-    "typecheck": "pnpm -r run typecheck",
+    "typecheck": "pnpm --filter @amodalai/db run build && pnpm -r run typecheck",
     "bundle": "pnpm -r run build && cd packages/runtime-app && npx vite build --outDir ../../bundle/app && cd ../.. && node esbuild.config.js",
     "clean": "pnpm -r exec rm -rf dist",
     "changeset": "changeset",

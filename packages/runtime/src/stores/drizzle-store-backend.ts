@@ -28,7 +28,8 @@ import type {
   StoreListResult,
 } from '@amodalai/types';
 
-import {storeDocuments, storeDocumentVersions} from './schema.js';
+import {storeDocuments, storeDocumentVersions, notifyStoreUpdated} from '@amodalai/db';
+import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 import {resolveTtl} from './ttl-resolver.js';
 import {StoreError} from '../errors.js';
 import type {Logger} from '../logger.js';
@@ -186,7 +187,7 @@ export class DrizzleStoreBackend implements StoreBackend {
             .set({
               version: newVersion,
               payload,
-              meta: fullMeta,
+              meta: {...fullMeta},
               expiresAt,
               updatedAt: new Date(),
             })
@@ -198,6 +199,7 @@ export class DrizzleStoreBackend implements StoreBackend {
               ),
             );
 
+          await this.notifyStore(appId, store, key);
           return {stored: true, key, version: newVersion, previousVersion: oldVersion};
         }
 
@@ -207,10 +209,11 @@ export class DrizzleStoreBackend implements StoreBackend {
           key,
           version: 1,
           payload,
-          meta: fullMeta,
+          meta: {...fullMeta},
           expiresAt,
         });
 
+        await this.notifyStore(appId, store, key);
         return {stored: true, key, version: 1};
       } catch (err) {
         throw new StoreError('put failed', {store, operation: 'put', context: {appId, key}, cause: err});
@@ -319,6 +322,9 @@ export class DrizzleStoreBackend implements StoreBackend {
           )
           .returning({key: storeDocuments.key});
 
+        if (deleted.length > 0) {
+          await this.notifyStore(appId, store, key);
+        }
         return deleted.length > 0;
       } catch (err) {
         throw new StoreError('delete failed', {store, operation: 'delete', context: {appId, key}, cause: err});
@@ -347,7 +353,8 @@ export class DrizzleStoreBackend implements StoreBackend {
         store: r.store,
         version: r.version,
         payload: r.payload,
-        meta: r.meta,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- DB JSONB → StoreDocumentMeta at module boundary
+        meta: r.meta as unknown as StoreDocumentMeta,
       }));
     } catch (err) {
       throw new StoreError('history failed', {store, operation: 'history', context: {appId, key}, cause: err});
@@ -386,9 +393,23 @@ export class DrizzleStoreBackend implements StoreBackend {
     this.logger.debug('store_backend_closed', {});
   }
 
+  /**
+   * Emit a Postgres NOTIFY on the store_updated channel. Best-effort —
+   * a failure here must not break the write path.
+   */
+  private async notifyStore(appId: string, store: string, key: string): Promise<void> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Drizzle db is always NodePgDatabase in Postgres mode
+      await notifyStoreUpdated(this.db as unknown as NodePgDatabase, {agentId: appId, store, key});
+    } catch (err) {
+      this.logger.warn('store_notify_failed', {store, key, error: err instanceof Error ? err.message : String(err)});
+    }
+  }
+
   private rowToDocument(row: typeof storeDocuments.$inferSelect): StoreDocument {
     const isStale = row.expiresAt ? row.expiresAt <= new Date() : false;
-    const meta: StoreDocumentMeta = {...row.meta, stale: isStale};
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- DB JSONB → StoreDocumentMeta at module boundary
+    const meta: StoreDocumentMeta = {...(row.meta as unknown as StoreDocumentMeta), stale: isStale};
     return {
       key: row.key,
       appId: row.appId,

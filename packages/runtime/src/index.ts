@@ -42,9 +42,6 @@ export type {
 // Local mode
 export { createLocalServer } from './agent/local-server.js';
 export type { LocalServerConfig, AgentChatRequest } from './agent/agent-types.js';
-export { ProactiveRunner } from './agent/proactive/proactive-runner.js';
-export type { AutomationInfo, ProactiveRunnerConfig } from './agent/proactive/proactive-runner.js';
-
 // Snapshot mode
 export { createSnapshotServer } from './agent/snapshot-server.js';
 export type { SnapshotServerConfig } from './agent/snapshot-server.js';
@@ -159,15 +156,6 @@ export {
 // Connection request tool
 export { createRequestTool, REQUEST_TOOL_NAME } from './tools/request-tool.js';
 export type { ConnectionsMap, CreateRequestToolOptions } from './tools/request-tool.js';
-
-// Admin file tools
-export {
-  createReadRepoFileTool,
-  createWriteRepoFileTool,
-  createDeleteRepoFileTool,
-  createInternalApiTool,
-  registerAdminFileTools,
-} from './tools/admin-file-tools.js';
 
 // Standalone session manager
 export { StandaloneSessionManager } from './session/manager.js';

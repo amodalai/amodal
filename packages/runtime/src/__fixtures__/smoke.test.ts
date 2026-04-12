@@ -130,8 +130,6 @@ function allText(events: Array<Record<string, unknown>>): string {
 
 let restServer: ChildProcess | null = null;
 let agentServer: ServerInstance | null = null;
-/** Captures payloads delivered to callback-type targets for assertion. */
-const receivedAutomationResults: Array<Record<string, unknown>> = [];
 
 const skipReason = !smokeTarget
   ? `unknown SMOKE_TARGET "${smokeTargetName}"; known: ${Object.keys(SMOKE_TARGETS).join(', ')}`
@@ -190,9 +188,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
       repoPath: AGENT_DIR,
       port: AGENT_PORT,
       hotReload: false,
-      onAutomationResult: (payload) => {
-        receivedAutomationResults.push(payload as unknown as Record<string, unknown>);
-      },
     });
     await agentServer.start();
     await waitForServer(AGENT_PORT);
@@ -821,20 +816,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   }, TIMEOUT * 3);
 
   // -------------------------------------------------------------------------
-  // 13. Automation trigger
-  // -------------------------------------------------------------------------
-
-  it('triggers automation via API', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/automations`, {signal: AbortSignal.timeout(5000)});
-    const body = await res.json() as {automations: Array<Record<string, unknown>>};
-
-    // Smoke agent doesn't have automations defined in amodal.json,
-    // but the endpoint should still respond
-    expect(res.status).toBe(200);
-    expect(body.automations).toBeDefined();
-  });
-
-  // -------------------------------------------------------------------------
   // 14. Multi-turn tool loop
   // -------------------------------------------------------------------------
 
@@ -1196,22 +1177,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   });
 
   // -------------------------------------------------------------------------
-  // 25. Webhooks — inbound automation trigger
-  // -------------------------------------------------------------------------
-
-  it('rejects webhook for unknown automation with 404', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/webhooks/nonexistent-automation`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({event: 'test'}),
-      signal: AbortSignal.timeout(5000),
-    });
-    expect(res.status).toBe(404);
-    const body = await res.json() as {error: string};
-    expect(body.error).toContain('not found');
-  });
-
-  // -------------------------------------------------------------------------
   // 26. Store REST API — CRUD outside chat
   // -------------------------------------------------------------------------
 
@@ -1276,15 +1241,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const body = await res.json() as {ok: boolean; id: string};
     expect(body.ok).toBe(true);
     expect(body.id).toBeTruthy();
-  });
-
-  it('returns feedback summary stats', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/api/feedback/summary`, {signal: AbortSignal.timeout(5000)});
-    expect(res.status).toBe(200);
-    const body = await res.json() as {total: number; thumbsUp: number; thumbsDown: number};
-    expect(typeof body.total).toBe('number');
-    expect(typeof body.thumbsUp).toBe('number');
-    expect(typeof body.thumbsDown).toBe('number');
   });
 
   it('rejects invalid feedback rating', async () => {
@@ -1375,76 +1331,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
       stream.close();
     }
   }, TIMEOUT);
-
-  it('emits automation_triggered and automation_completed on manual run', async () => {
-    // The automation's registered name is derived from the filename
-    // (automations/test-auto.md → "test-auto"), not the frontmatter.
-    const automationName = 'test-auto';
-    const stream = await openEventStream();
-    try {
-      const runPromise = fetch(
-        `http://localhost:${AGENT_PORT}/automations/${automationName}/run`,
-        {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: '{}',
-          signal: AbortSignal.timeout(TIMEOUT),
-        },
-      );
-
-      const triggered = await stream.waitFor(
-        (e) => e['type'] === 'automation_triggered' && e['name'] === automationName,
-        5000,
-      );
-      expect(triggered['source']).toBeDefined();
-
-      const completed = await stream.waitFor(
-        (e) =>
-          (e['type'] === 'automation_completed' || e['type'] === 'automation_failed') &&
-          e['name'] === automationName,
-        TIMEOUT,
-      );
-      expect(completed['type']).toBe('automation_completed');
-      expect(typeof completed['durationMs']).toBe('number');
-
-      const runRes = await runPromise;
-      expect([200, 500]).toContain(runRes.status);
-    } finally {
-      stream.close();
-    }
-  }, TIMEOUT + 10_000);
-
-  it('delivers automation result via onAutomationResult callback (full chain)', async () => {
-    // This test verifies the full wiring:
-    //   automation runs → DeliveryRouter dispatches callback target →
-    //   LocalServerConfig.onAutomationResult fires with the payload.
-    //
-    // The delivery-callback-test automation has `delivery.targets: [{ type:
-    // 'callback' }]` with a template. When it completes, our onAutomationResult
-    // (configured in beforeAll) should receive the full DeliveryPayload.
-    const before = receivedAutomationResults.length;
-
-    const runRes = await fetch(
-      `http://localhost:${AGENT_PORT}/automations/delivery-callback-test/run`,
-      {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}', signal: AbortSignal.timeout(TIMEOUT)},
-    );
-    expect([200, 500]).toContain(runRes.status);
-
-    // Poll briefly for the callback to fire (delivery happens after runMessage drains)
-    const deadline = Date.now() + 5000;
-    while (receivedAutomationResults.length === before && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-
-    expect(receivedAutomationResults.length).toBeGreaterThan(before);
-    const payload = receivedAutomationResults[receivedAutomationResults.length - 1];
-    expect(payload?.['automation']).toBe('delivery-callback-test');
-    expect(payload?.['status']).toBe('success');
-    // Template renders with {{automation}} built-in; {{count}} should come
-    // from the JSON result (soft-check since LLM output varies slightly).
-    const message = String(payload?.['message'] ?? '');
-    expect(message).toContain('delivery-callback-test');
-  }, TIMEOUT + 10_000);
 
   it('replays buffered events via Last-Event-ID on reconnect', async () => {
     // Produce at least one event, capture its seq, disconnect, reconnect

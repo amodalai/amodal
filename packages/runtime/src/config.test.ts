@@ -148,7 +148,7 @@ describe('loadConfig', () => {
     const dir = makeTempRepo(VALID_CONFIG);
     try {
       const config = loadConfig({ repoPath: dir });
-      expect(config.stores.backend).toBe('pglite');
+      expect(config.stores.backend).toBe('postgres');
       expect(config.stores.dataDir).toBe(join(dir, '.amodal', 'store-data'));
     } finally {
       rmSync(dir, { recursive: true });

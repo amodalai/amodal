@@ -8,13 +8,14 @@
  * Tests for StandaloneSessionManager.
  *
  * Tests session lifecycle: create, persist, resume, destroy, cleanup.
- * Uses a real PGLite-backed store — no mocks for persistence.
+ * Uses a real Postgres-backed store — no mocks for persistence.
  * LLM provider is stubbed since we're testing the manager, not the loop.
+ * Requires DATABASE_URL to be set.
  */
 
 import {describe, it, expect, vi, beforeAll, afterAll} from 'vitest';
 import {StandaloneSessionManager} from './manager.js';
-import {createPGLiteSessionStore} from './pglite-session-store.js';
+import {createPostgresSessionStore} from './postgres-session-store.js';
 import type {DrizzleSessionStore} from './drizzle-session-store.js';
 import type {CreateSessionOptions, TurnUsage} from './types.js';
 import type {LLMProvider, StreamTextResult, StreamEvent, TokenUsage} from '../providers/types.js';
@@ -98,11 +99,13 @@ function makeCreateOpts(overrides: Partial<CreateSessionOptions> = {}): CreateSe
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('StandaloneSessionManager', () => {
+const skip = !process.env['DATABASE_URL'];
+
+describe.skipIf(skip)('StandaloneSessionManager', () => {
   let store: DrizzleSessionStore;
 
   beforeAll(async () => {
-    store = await createPGLiteSessionStore({logger});
+    store = await createPostgresSessionStore({logger});
   });
 
   afterAll(async () => {
@@ -295,7 +298,7 @@ describe('StandaloneSessionManager', () => {
 
   describe('shutdown', () => {
     it('destroys all sessions and closes store', async () => {
-      const shutdownStore = await createPGLiteSessionStore({logger});
+      const shutdownStore = await createPostgresSessionStore({logger});
 
       const mgr = new StandaloneSessionManager({logger, store: shutdownStore});
       mgr.start();

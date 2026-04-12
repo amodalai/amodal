@@ -37,7 +37,6 @@ import {createRequestTool, REQUEST_TOOL_NAME} from '../tools/request-tool.js';
 import {createCustomToolDefinition} from '../tools/custom-tool-adapter.js';
 import type {CustomToolSessionContext} from '../tools/custom-tool-adapter.js';
 import {registerMcpTools} from '../tools/mcp-tool-adapter.js';
-import {registerAdminFileTools} from '../tools/admin-file-tools.js';
 import {
   AccessJsonPermissionChecker,
 } from '../security/permission-checker.js';
@@ -90,10 +89,6 @@ export interface BuildSessionComponentsOptions {
   toolExecutor?: CustomToolExecutor;
   /** Admin agent content (required when sessionType is 'admin'). */
   adminContent?: AdminAgentContent;
-  /** Repo root path (required when sessionType is 'admin' for file tools). */
-  repoRoot?: string;
-  /** Callback to get the server port (for admin internal_api tool). */
-  getPort?: () => number | null;
   /** Session ID for correlation in tool context (default: generated). */
   sessionId?: string;
   /** Optional field scrubber for response sanitization on ctx.request() */
@@ -273,8 +268,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     appId = LOCAL_APP_ID,
     toolExecutor,
     adminContent,
-    repoRoot,
-    getPort,
     sessionId = 'pending',
     fieldScrubber,
   } = opts;
@@ -351,15 +344,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   }
 
   // -------------------------------------------------------------------------
-  // 7. Register admin file tools (admin sessions only)
-  // -------------------------------------------------------------------------
-
-  if (sessionType === 'admin' && repoRoot) {
-    registerAdminFileTools(registry, repoRoot, getPort ?? (() => null));
-  }
-
-  // -------------------------------------------------------------------------
-  // 8. Register present tool
+  // 7. Register present tool
   // -------------------------------------------------------------------------
 
   registry.register(PRESENT_TOOL_NAME, createPresentTool());

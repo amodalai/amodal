@@ -297,7 +297,6 @@ describe('buildSessionComponents', () => {
       const components = buildSessionComponents(makeOpts({
         sessionType: 'admin',
         adminContent,
-        repoRoot: '/tmp/agent',
       }));
 
       // Admin skills should appear in prompt
@@ -305,35 +304,6 @@ describe('buildSessionComponents', () => {
       expect(components.systemPrompt).toContain('Admin skill body');
       // User skills should NOT appear
       expect(components.systemPrompt).not.toContain('revenue-report');
-    });
-
-    it('registers admin file tools', () => {
-      const adminContent: AdminAgentContent = {
-        agentPrompt: null,
-        skills: [],
-        knowledge: [],
-      };
-
-      const components = buildSessionComponents(makeOpts({
-        sessionType: 'admin',
-        adminContent,
-        repoRoot: '/tmp/agent',
-      }));
-
-      const names = components.toolRegistry.names();
-      expect(names).toContain('read_repo_file');
-      expect(names).toContain('write_repo_file');
-      expect(names).toContain('delete_repo_file');
-      expect(names).toContain('internal_api');
-    });
-
-    it('does not register admin file tools for chat sessions', () => {
-      const components = buildSessionComponents(makeOpts());
-
-      const names = components.toolRegistry.names();
-      expect(names).not.toContain('read_repo_file');
-      expect(names).not.toContain('write_repo_file');
-      expect(names).not.toContain('delete_repo_file');
     });
   });
 

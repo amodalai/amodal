@@ -76,3 +76,20 @@ export * from './mcp/index.js';
 // Admin agent
 export * from './admin/index.js';
 export * from './runtime/user-context.js';
+
+// Preview tokens
+export {
+  signPreviewToken,
+  verifyPreviewToken,
+  PreviewTokenSecretMissingError,
+} from './preview/token.js';
+export type {
+  PreviewTokenPayload,
+  SignPreviewTokenOptions,
+  VerifyPreviewTokenOptions,
+  VerifyPreviewTokenResult,
+  VerifyPreviewTokenFailureReason,
+} from './preview/token.js';
+
+// Change detection
+export {isContentOnlyChange} from './repo/change-detection.js';

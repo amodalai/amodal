@@ -1,0 +1,14 @@
+{
+  "name": "fetch_workspace",
+  "description": "Fetches the current workspace files from the studio and sets up a sandbox directory for editing. Must be called before using any filesystem tools. Returns the sandbox path and number of files.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "description": "Optional agent ID to scope the workspace fetch. If omitted, fetches the default workspace."
+      }
+    },
+    "additionalProperties": false
+  }
+}

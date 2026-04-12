@@ -1,0 +1,23 @@
+{
+  "name": "read_file",
+  "description": "Reads the contents of a file from the workspace sandbox. Supports pagination via offset and limit.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Relative path to the file within the workspace."
+      },
+      "offset": {
+        "type": "integer",
+        "description": "Line number to start reading from (0-based). Optional."
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Maximum number of lines to return. Optional."
+      }
+    },
+    "required": ["path"],
+    "additionalProperties": false
+  }
+}

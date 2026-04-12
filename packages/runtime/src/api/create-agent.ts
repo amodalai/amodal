@@ -28,7 +28,9 @@ import {buildSessionComponents} from '../session/session-builder.js';
 import type {SessionComponents} from '../session/session-builder.js';
 import {LocalToolExecutor} from '../agent/tool-executor-local.js';
 import {buildMcpConfigs} from '../agent/mcp-config.js';
-import {createPGLiteStoreBackend} from '../stores/pglite-store-backend.js';
+import {createPostgresStoreBackend} from '../stores/postgres-store-backend.js';
+import {getDb, ensureSchema} from '@amodalai/db';
+import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 import {createLogger} from '../logger.js';
 import {SessionError} from '../errors.js';
 import type {Agent, AgentConfig, AgentSession} from './types.js';
@@ -54,11 +56,15 @@ export async function createAgent(config: AgentConfig): Promise<Agent> {
   // Load bundle
   const bundle = config.bundle ?? await loadRepo({localPath: config.repoPath});
 
+  // Database initialization
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- getDb returns Db which extends NodePgDatabase
+  const db = getDb() as unknown as NodePgDatabase;
+  await ensureSchema(db);
+
   // Store backend
   let storeBackend: StoreBackend | null = config.storeBackend ?? null;
-  if (!storeBackend && bundle.stores.length > 0 && config.repoPath) {
-    const dataDir = `${config.repoPath}/.amodal/store-data`;
-    storeBackend = await createPGLiteStoreBackend(bundle.stores, dataDir);
+  if (!storeBackend && bundle.stores.length > 0) {
+    storeBackend = await createPostgresStoreBackend(bundle.stores);
   }
 
   // Tool executor

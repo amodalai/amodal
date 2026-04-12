@@ -13,6 +13,7 @@
   "references": [
     { "path": "../types" },
     { "path": "../core" },
+    { "path": "../db" },
     { "path": "../runtime" }
   ]
 }

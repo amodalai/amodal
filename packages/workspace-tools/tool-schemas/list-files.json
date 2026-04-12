@@ -1,0 +1,18 @@
+{
+  "name": "list_files",
+  "description": "Lists files and directories in the workspace sandbox.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "dir": {
+        "type": "string",
+        "description": "Relative directory path to list. Defaults to the workspace root."
+      },
+      "recursive": {
+        "type": "boolean",
+        "description": "If true, recursively list all files. Defaults to false."
+      }
+    },
+    "additionalProperties": false
+  }
+}

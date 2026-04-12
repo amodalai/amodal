@@ -12,7 +12,7 @@
  * - Agent loop (3.1) for message execution
  * - Context compiler (3.2) for system prompt building
  * - Tool registry for tool management
- * - PGLite session store for persistence
+ * - Postgres session store for persistence
  *
  * The old `session-manager.ts` remains for the upstream code path
  * until the full migration is complete.
