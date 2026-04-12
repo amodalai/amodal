@@ -1,0 +1,19 @@
+{
+  "name": "write_file",
+  "description": "Writes content to a file in the workspace sandbox. Creates parent directories as needed.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Relative path to the file within the workspace."
+      },
+      "content": {
+        "type": "string",
+        "description": "The full content to write to the file."
+      }
+    },
+    "required": ["path", "content"],
+    "additionalProperties": false
+  }
+}

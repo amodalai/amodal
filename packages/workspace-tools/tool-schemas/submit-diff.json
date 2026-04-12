@@ -1,0 +1,14 @@
+{
+  "name": "submit_diff",
+  "description": "Compares the current sandbox state to the original workspace, computes a changeset (added/modified/deleted files), and submits it to the studio. Must be called after fetch_workspace.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "commitMessage": {
+        "type": "string",
+        "description": "Optional commit message describing the changes."
+      }
+    },
+    "additionalProperties": false
+  }
+}

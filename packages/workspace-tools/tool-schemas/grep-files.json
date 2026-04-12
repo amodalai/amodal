@@ -1,0 +1,23 @@
+{
+  "name": "grep_files",
+  "description": "Searches file contents in the workspace sandbox using a regex pattern.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "pattern": {
+        "type": "string",
+        "description": "Regular expression pattern to search for."
+      },
+      "dir": {
+        "type": "string",
+        "description": "Relative directory path to search within. Defaults to the workspace root."
+      },
+      "case_insensitive": {
+        "type": "boolean",
+        "description": "If true, perform case-insensitive matching. Defaults to false."
+      }
+    },
+    "required": ["pattern"],
+    "additionalProperties": false
+  }
+}
