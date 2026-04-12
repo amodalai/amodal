@@ -95,7 +95,7 @@ async function importPreviewRoute() {
 
 const BASE_URL = 'http://localhost:3850';
 
-function makeRequest(urlPath: string, init?: RequestInit): NextRequest {
+function makeRequest(urlPath: string, init?: ConstructorParameters<typeof NextRequest>[1]): NextRequest {
   return new NextRequest(`${BASE_URL}${urlPath}`, init);
 }
 
