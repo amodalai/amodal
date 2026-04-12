@@ -26,6 +26,32 @@ const DEFAULT_STUDIO_PORT = 3848;
 const DEFAULT_ADMIN_PORT = 3849;
 
 // ---------------------------------------------------------------------------
+// Studio resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Locate the @amodalai/studio package directory. Two strategies:
+ * 1. Sibling directory relative to the CLI package (works when symlinked)
+ * 2. Node module resolution via createRequire (works when installed)
+ */
+function resolveStudioDir(): string | null {
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const siblingCandidate = path.resolve(scriptDir, '..', '..', '..', 'studio');
+  if (existsSync(path.join(siblingCandidate, 'package.json'))) {
+    return siblingCandidate;
+  }
+  const require = createRequire(import.meta.url);
+  try {
+    return path.dirname(require.resolve('@amodalai/studio/package.json'));
+  } catch (err: unknown) {
+    log.debug('studio_resolve_failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Options
 // ---------------------------------------------------------------------------
 
@@ -129,20 +155,7 @@ function spawnStudio(opts: {
   // Resolve @amodalai/studio package directory. Try two strategies:
   // 1. Sibling directory relative to the CLI package (works when symlinked from outside)
   // 2. Node module resolution via createRequire (works when installed as a dependency)
-  let studioDir: string | null = null;
-  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-  const siblingCandidate = path.resolve(scriptDir, '..', '..', '..', 'studio');
-  if (existsSync(path.join(siblingCandidate, 'package.json'))) {
-    studioDir = siblingCandidate;
-  } else {
-    try {
-      const require = createRequire(import.meta.url);
-      const studioPkg = require.resolve('@amodalai/studio/package.json');
-      studioDir = path.dirname(studioPkg);
-    } catch {
-      // Neither resolution strategy found studio
-    }
-  }
+  const studioDir = resolveStudioDir();
   if (!studioDir) {
     log.info('studio_not_available', {
       hint: '@amodalai/studio package not found — Studio subprocess skipped',
