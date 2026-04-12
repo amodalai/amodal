@@ -188,6 +188,25 @@ importers:
         specifier: ^4.80.0
         version: 4.104.0(ws@8.20.0)(zod@3.25.76)
 
+  packages/db:
+    dependencies:
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@electric-sql/pglite@0.3.16)(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(pg@8.20.0)
+      pg:
+        specifier: ^8.13.1
+        version: 8.20.0
+    devDependencies:
+      "@types/pg":
+        specifier: ^8.11.10
+        version: 8.20.0
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@20.19.37)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.12.14(@types/node@20.19.37)(typescript@5.9.3))(yaml@2.8.3)
+
   packages/docs:
     dependencies:
       react:
