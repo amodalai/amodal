@@ -119,7 +119,7 @@ export interface AgentConfig {
 
   /** Store backend configuration */
   readonly stores: {
-    readonly backend: 'pglite' | 'postgres';
+    readonly backend: 'postgres';
     readonly dataDir: string;
     readonly postgresUrl?: string;
   };
@@ -173,7 +173,7 @@ export interface ConfigOverrides {
   /** Override primary model */
   primaryModel?: Partial<ModelConfig>;
   /** Override store backend */
-  storeBackend?: 'pglite' | 'postgres';
+  storeBackend?: 'postgres';
   /** Override store data directory */
   storeDataDir?: string;
   /** Override postgres URL */
@@ -263,7 +263,8 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
     ?? repoConfig.stores?.dataDir
     ?? join(repoPath, '.amodal', 'store-data');
 
-  const storeBackend = overrides?.storeBackend ?? repoConfig.stores?.backend ?? 'pglite';
+  // Always use Postgres — old configs are silently upgraded.
+  const storeBackend = 'postgres' as const;
 
   let postgresUrl = overrides?.postgresUrl ?? repoConfig.stores?.postgresUrl;
   if (postgresUrl && postgresUrl.startsWith('env:')) {

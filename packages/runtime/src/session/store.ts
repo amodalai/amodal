@@ -9,19 +9,16 @@
  *
  * Concrete implementations:
  *   - `DrizzleSessionStore` (./drizzle-session-store.ts) — the single
- *     query layer shared by both backends.
- *   - `createPGLiteSessionStore` (./pglite-session-store.ts) — factory
- *     for local-dev / in-memory PGLite.
+ *     query layer.
  *   - `createPostgresSessionStore` (./postgres-session-store.ts) —
- *     factory for hosted runtime / ISV production.
+ *     factory using the shared `getDb()` from `@amodalai/db`.
  *
- * The Drizzle schema lives in `../stores/schema.ts`, shared with the
- * store document tables.
+ * The Drizzle schema lives in `@amodalai/db`.
  */
 
 import {and, eq, lt, or, gte, lte, sql} from 'drizzle-orm';
 import type {AnyPgColumn} from 'drizzle-orm/pg-core';
-import type {agentSessions} from '../stores/schema.js';
+import type {agentSessions} from '@amodalai/db';
 import {randomUUID} from 'node:crypto';
 import type {PersistedSession, SessionMetadata, ImageDataMap} from './types.js';
 import type {TokenUsage} from '../providers/types.js';
@@ -88,10 +85,9 @@ export interface SessionStoreHooks {
 /**
  * Interface for session persistence backends.
  *
- * One concrete implementation (`DrizzleSessionStore`) with two factories:
- * `createPGLiteSessionStore` for local dev, `createPostgresSessionStore`
- * for hosted runtime / ISV production. Both share the `agentSessions`
- * Drizzle schema and the query helpers in this module.
+ * One concrete implementation (`DrizzleSessionStore`) with a Postgres factory
+ * (`createPostgresSessionStore`). Uses the `agentSessions` Drizzle schema
+ * from `@amodalai/db` and the query helpers in this module.
  */
 export interface SessionStore {
   /** Initialize the backing store (create tables, run migrations). */
@@ -138,7 +134,7 @@ export interface SessionStore {
 }
 
 // ---------------------------------------------------------------------------
-// Shared helpers — used by both PGLite and Postgres implementations
+// Shared helpers
 // ---------------------------------------------------------------------------
 
 /**
@@ -330,6 +326,7 @@ export function rowToPersistedSession(
     });
   }
    
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: imageData shape validated by DB schema
   const imageData = (row.imageData ?? {}) as ImageDataMap;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: array-shape checked above; element shape is not validated
   const rawMessages = row.messages as ModelMessage[];
@@ -338,7 +335,9 @@ export function rowToPersistedSession(
     version: 1,
     id: row.id,
     messages: rehydrateImages(rawMessages, imageData),
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: tokenUsage shape matches DB schema
     tokenUsage: row.tokenUsage as TokenUsage,
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: metadata shape validated by DB schema
     metadata: (row.metadata ?? {}) as SessionMetadata,
     imageData,
     createdAt: row.createdAt,
@@ -360,9 +359,7 @@ export interface AgentSessionsColumns {
 
 /**
  * Build the where-clause fragments for `list()`. Generic over the
- * table's column bindings so both PGLite (static `agentSessions`) and
- * Postgres (dynamic `makeAgentSessionsTable(name)`) pass their own
- * tables without a cast.
+ * table's column bindings.
  *
  * Returns `undefined` when `opts` yields no conditions — drizzle's
  * `.where(undefined)` is a no-op, equivalent to "no filter".

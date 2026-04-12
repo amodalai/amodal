@@ -22,7 +22,6 @@
  */
 
 import {describe, it, expect, beforeEach, afterEach} from 'vitest';
-import {createPGLiteSessionStore} from './pglite-session-store.js';
 import {createPostgresSessionStore} from './postgres-session-store.js';
 import {sessionToRow, rowToPersistedSession} from './store.js';
 import type {SessionStore, SessionStoreHooks} from './store.js';
@@ -350,156 +349,26 @@ function runSuite(makeBackend: BackendFactory): void {
 }
 
 // ---------------------------------------------------------------------------
-// PGLite suite (always runs)
+// Postgres suite (requires DATABASE_URL)
 // ---------------------------------------------------------------------------
 
-describe('PGLite session store', () => {
+const skip = !process.env['DATABASE_URL'];
+
+describe.skipIf(skip)('Postgres session store', () => {
   runSuite(async () => {
-    const store = await createPGLiteSessionStore({logger});
+    const store = await createPostgresSessionStore({logger});
     return {
       store,
       cleanup: () => store.close(),
       makeWithHooks: async (hooks) => {
-        const s = await createPGLiteSessionStore({logger, hooks});
+        const s = await createPostgresSessionStore({logger, hooks});
         return {store: s, cleanup: () => s.close()};
       },
     };
   });
 });
 
-// ---------------------------------------------------------------------------
-// Postgres suite (opt-in via TEST_POSTGRES_URL env var)
-// ---------------------------------------------------------------------------
-
-const pgUrl = process.env['TEST_POSTGRES_URL'] ?? '';
-const pgDescribe = pgUrl ? describe : describe.skip;
-
-pgDescribe('Postgres session store (via TEST_POSTGRES_URL)', () => {
-  const TEST_TABLE = 'test_agent_sessions';
-
-  async function dropTable(name: string): Promise<void> {
-    const pg = await import('pg');
-    const {Pool} = pg.default ?? pg;
-    const pool = new Pool({connectionString: pgUrl});
-    try {
-      await pool.query(`DROP TABLE IF EXISTS ${name} CASCADE`);
-    } finally {
-      await pool.end();
-    }
-  }
-
-  runSuite(async () => {
-    await dropTable(TEST_TABLE);
-    const store = await createPostgresSessionStore({
-      connectionString: pgUrl,
-      tableName: TEST_TABLE,
-      logger,
-    });
-    return {
-      store,
-      cleanup: () => store.close(),
-      makeWithHooks: async (hooks) => {
-        const table = `test_h_${Math.random().toString(36).slice(2, 10)}`;
-        const s = await createPostgresSessionStore({
-          connectionString: pgUrl,
-          tableName: table,
-          logger,
-          hooks,
-        });
-        return {
-          store: s,
-          cleanup: async () => {
-            await s.close();
-            await dropTable(table);
-          },
-        };
-      },
-    };
-  });
-
-  describe('Postgres factory specifics', () => {
-    it('accepts an externally-owned pg.Pool and does not close it', async () => {
-      const localTable = 'test_ext_pool';
-      await dropTable(localTable);
-      const pg = await import('pg');
-      const {Pool} = pg.default ?? pg;
-      const externalPool = new Pool({connectionString: pgUrl});
-      try {
-        const store = await createPostgresSessionStore({
-          pool: externalPool,
-          tableName: localTable,
-          logger,
-        });
-        await store.save(makeSession());
-        await store.close();
-        const {rows} = await externalPool.query(`SELECT COUNT(*) AS c FROM ${localTable}`);
-        expect(Number(rows[0].c)).toBe(1);
-      } finally {
-        await externalPool.end();
-        await dropTable(localTable);
-      }
-    });
-
-    it('close() is idempotent and ops after close throw SessionStoreError', async () => {
-      const localTable = 'test_close_idemp';
-      await dropTable(localTable);
-      const store = await createPostgresSessionStore({
-        connectionString: pgUrl,
-        tableName: localTable,
-        logger,
-      });
-      await store.close();
-      await store.close();
-      await expect(store.save(makeSession())).rejects.toBeInstanceOf(SessionStoreError);
-      await expect(store.load('x')).rejects.toBeInstanceOf(SessionStoreError);
-      await dropTable(localTable);
-    });
-
-    it('rejects invalid tableName at construct time', async () => {
-      await expect(
-        createPostgresSessionStore({
-          connectionString: pgUrl,
-          tableName: 'bad table; DROP',
-          logger,
-        }),
-      ).rejects.toBeInstanceOf(SessionStoreError);
-    });
-
-    it('requires connectionString or pool', async () => {
-      await expect(
-        createPostgresSessionStore({logger}),
-      ).rejects.toBeInstanceOf(SessionStoreError);
-    });
-
-    it('concurrent saves to the same id converge', async () => {
-      const localTable = 'test_concurrent';
-      await dropTable(localTable);
-      const store = await createPostgresSessionStore({
-        connectionString: pgUrl,
-        tableName: localTable,
-        logger,
-      });
-      try {
-        const id = 'concurrent-id';
-        const saves = Array.from({length: 10}, (_, i) =>
-          store.save(makeSession({
-            id,
-            updatedAt: new Date(2026, 0, 1, 0, 0, i),
-            tokenUsage: {inputTokens: i, outputTokens: 0, totalTokens: i},
-          })),
-        );
-        await Promise.all(saves);
-        const loaded = await store.load(id);
-        expect(loaded).not.toBeNull();
-        expect(loaded!.tokenUsage.totalTokens).toBeGreaterThanOrEqual(0);
-        expect(loaded!.tokenUsage.totalTokens).toBeLessThanOrEqual(9);
-      } finally {
-        await store.close();
-        await dropTable(localTable);
-      }
-    });
-  });
-});
+// No longer need the TEST_POSTGRES_URL variant — all tests use DATABASE_URL above.
 
 // ---------------------------------------------------------------------------
 // extractImages / rehydrateImages round-trip tests

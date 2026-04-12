@@ -51,7 +51,7 @@ export class StudioError extends Error {
 // ---------------------------------------------------------------------------
 
 /**
- * Error from the draft storage backend (PGLite, Postgres, etc.).
+ * Error from the draft storage backend (Postgres).
  */
 export class StudioStorageError extends StudioError {
   readonly operation: string;

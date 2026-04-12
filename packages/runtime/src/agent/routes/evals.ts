@@ -178,30 +178,30 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
   });
 
   /** List saved eval runs */
-  router.get('/api/evals/runs', (_req: Request, res: Response) => {
-    const runs = options.evalStore.list();
+  router.get('/api/evals/runs', asyncHandler(async (_req: Request, res: Response) => {
+    const runs = await options.evalStore.list();
     res.json({runs});
-  });
+  }));
 
   /** Get a single eval run */
-  router.get('/api/evals/runs/:id', (req: Request, res: Response) => {
-    const run = options.evalStore.load(req.params['id'] ?? '');
+  router.get('/api/evals/runs/:id', asyncHandler(async (req: Request, res: Response) => {
+    const run = await options.evalStore.load(req.params['id'] ?? '');
     if (!run) {
       res.status(404).json({error: 'Run not found'});
       return;
     }
     res.json(run);
-  });
+  }));
 
   /** Delete an eval run */
-  router.delete('/api/evals/runs/:id', (req: Request, res: Response) => {
-    const deleted = options.evalStore.delete(req.params['id'] ?? '');
+  router.delete('/api/evals/runs/:id', asyncHandler(async (req: Request, res: Response) => {
+    const deleted = await options.evalStore.delete(req.params['id'] ?? '');
     if (!deleted) {
       res.status(404).json({error: 'Run not found'});
       return;
     }
     res.json({ok: true});
-  });
+  }));
 
   /** Run eval suite — SSE stream with full per-eval results */
   router.post('/api/evals/run', asyncHandler(async (req: Request, res: Response) => {
@@ -400,7 +400,7 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     };
 
     const run = buildEvalRun(suiteResult, modelInfo, {orgId: 'local', triggeredBy: 'manual'});
-    options.evalStore.save(run as unknown as Record<string, unknown>); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
+    await options.evalStore.save(run as unknown as Record<string, unknown>); // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
 
     // Suppress unused variable warnings
     void evalSessionId;
@@ -411,11 +411,11 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
   }));
 
   /** Get eval history for a specific eval */
-  router.get('/api/evals/runs/by-eval/:evalName', (req: Request, res: Response) => {
+  router.get('/api/evals/runs/by-eval/:evalName', asyncHandler(async (req: Request, res: Response) => {
     const evalName = req.params['evalName'] ?? '';
-    const entries = options.evalStore.listByEval(evalName);
+    const entries = await options.evalStore.listByEval(evalName);
     res.json({entries});
-  });
+  }));
 
   /** Get arena model config */
   router.get('/api/evals/arena/models', (_req: Request, res: Response) => {
