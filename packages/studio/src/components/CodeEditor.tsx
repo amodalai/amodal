@@ -34,7 +34,7 @@ interface CodeEditorProps {
 
 export function CodeEditor({ value, language, onChange, readOnly = false }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView>();
+  const viewRef = useRef<EditorView>(undefined);
 
   useEffect(() => {
     if (!containerRef.current) return;

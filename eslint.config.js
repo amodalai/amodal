@@ -150,6 +150,9 @@ export default tseslint.config(
             '@codemirror/**',
             'drizzle-orm/**',
             'next/server',
+            'next/navigation',
+            'next/link',
+            'next/image',
           ],
         },
       ],
@@ -518,6 +521,20 @@ export default tseslint.config(
       'prefer-const': ['error', { destructuring: 'all' }],
       'default-case': 'error',
       'no-console': 'error',
+    },
+  },
+  {
+    // Studio uses browser globals (Next.js app)
+    files: ['packages/studio/src/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+      },
+    },
+    rules: {
+      'import/no-default-export': 'off',
+      'no-restricted-imports': 'off',
     },
   },
   // Prettier config must be last
