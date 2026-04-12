@@ -126,13 +126,24 @@ function spawnStudio(opts: {
   runtimePort: number;
   repoPath: string;
 }): StudioSpawnResult | null {
-  // Resolve @amodalai/studio package directory
-  let studioDir: string;
-  try {
-    const require = createRequire(import.meta.url);
-    const studioPkg = require.resolve('@amodalai/studio/package.json');
-    studioDir = path.dirname(studioPkg);
-  } catch {
+  // Resolve @amodalai/studio package directory. Try two strategies:
+  // 1. Sibling directory relative to the CLI package (works when symlinked from outside)
+  // 2. Node module resolution via createRequire (works when installed as a dependency)
+  let studioDir: string | null = null;
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const siblingCandidate = path.resolve(scriptDir, '..', '..', '..', 'studio');
+  if (existsSync(path.join(siblingCandidate, 'package.json'))) {
+    studioDir = siblingCandidate;
+  } else {
+    try {
+      const require = createRequire(import.meta.url);
+      const studioPkg = require.resolve('@amodalai/studio/package.json');
+      studioDir = path.dirname(studioPkg);
+    } catch {
+      // Neither resolution strategy found studio
+    }
+  }
+  if (!studioDir) {
     log.info('studio_not_available', {
       hint: '@amodalai/studio package not found — Studio subprocess skipped',
     });
