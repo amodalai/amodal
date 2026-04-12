@@ -69,6 +69,10 @@ export interface LocalServerConfig {
    * Self-hosted deployments can plug in their own auth.
    */
   roleProvider?: import('../role-provider.js').RoleProvider;
+  /** URL of the Studio service. Defaults to `process.env.STUDIO_URL` or null. */
+  studioUrl?: string;
+  /** URL of the admin agent service. Defaults to `process.env.ADMIN_AGENT_URL` or null. */
+  adminAgentUrl?: string;
 }
 
 // ---------------------------------------------------------------------------

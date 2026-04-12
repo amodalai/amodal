@@ -5,167 +5,43 @@
  */
 
 /**
- * useDraftWorkspace — thin wrapper around the Studio HTTP API.
+ * useDraftWorkspace — thin wrapper around the StudioClient from
+ * `@amodalai/studio-client`.
  *
- * Replaces the older `useWorkspace` hook for the new draft-workspace editor
- * UI (PR 2.6 of the vercel-shaped refactor). Unlike the old hook, this one:
+ * Replaces the older direct-fetch implementation. The transport layer is
+ * now handled by `createStudioClient`; this hook manages React state
+ * (loading, error, draft list) and coordinates refetches after mutations.
  *
- *   - does NOT persist anything to localStorage (drafts live server-side),
- *   - does NOT serialize a git bundle,
- *   - does NOT do any restore/lock-tab dance,
- *   - is just a direct mapping from React state to `/api/studio/*` endpoints.
+ * The Studio URL is resolved from `StudioContext`, which fetches it from
+ * the runtime's `GET /api/context` endpoint on mount.
  *
- * All mutating operations refetch the draft list on success so the consumer's
- * change count stays in sync. No optimistic updates yet — the edit-save
- * roundtrip is fast enough in practice, and optimistic state adds a lot of
- * surface area (rollback on error, reconciliation on refetch, etc.) that we
- * can layer on later if needed.
+ * All mutating operations refetch the draft list on success so the
+ * consumer's change count stays in sync.
  *
  * Errors are surfaced on the `error` field rather than thrown from the
- * returned methods — this keeps the consumer code ("await save; show error
- * if one") simple without forcing every call site into a try/catch.
+ * returned methods.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createStudioClient,
+  StudioFetchError,
+  StudioResponseParseError,
+} from '@amodalai/studio-client';
+import type {
+  DraftFile,
+  PublishResult,
+  PreviewResult,
+  StudioClient,
+} from '@amodalai/studio-client';
+import { useStudioContext } from '../contexts/StudioContext';
 import { createLogger } from '../utils/log';
 
-// ---------------------------------------------------------------------------
-// Types — mirrored from @amodalai/studio's backend contract.
-//
-// We intentionally inline these rather than importing `@amodalai/studio`
-// directly: the studio package pulls in express and other Node-only
-// dependencies, and dragging that into the browser bundle would break vite.
-// These shapes are the HTTP wire format (not internal backend types), so the
-// coupling is only that the server's JSON responses match these interfaces.
-// Contract tests in `packages/studio` are the source of truth for the shapes.
-// ---------------------------------------------------------------------------
-
-export interface DraftFile {
-  /** Repo-relative POSIX path (e.g. `skills/pricing.md`). */
-  filePath: string;
-  /** Full file contents. */
-  content: string;
-  /** ISO-8601 timestamp of the last mutation. */
-  updatedAt: string;
-}
-
-export interface PublishResult {
-  commitSha: string;
-  commitUrl?: string;
-}
-
-export interface PreviewResult {
-  snapshotId: string;
-  previewToken: string;
-  expiresAt: string;
-}
-
-/**
- * Error class for malformed responses from Studio's HTTP API. Thrown by the
- * parse* helpers when the JSON body doesn't match the expected shape.
- *
- * Kept distinct from StudioFetchError (which represents a failed HTTP call —
- * wrong status, network error, etc.) so callers can tell "the server said no"
- * apart from "the server said yes but sent something unparseable." Both are
- * subclasses of Error, so a generic `error instanceof Error` check catches
- * both; and the `operation` field lets callers correlate with the log line
- * that runRequest emits on failure.
- *
- * Defined here (in the hook file) rather than in `@amodalai/studio` because
- * (a) the hook inlines the DTO shapes for browser-bundle reasons and (b) the
- * error is semantically about the hook's local parse step, not about the
- * Studio backend contract.
- */
-export class StudioResponseParseError extends Error {
-  readonly operation: string;
-  constructor(operation: string, detail: string) {
-    super(`${operation}: malformed response (${detail})`);
-    this.name = 'StudioResponseParseError';
-    this.operation = operation;
-  }
-}
-
-/** Type guard for plain-object shapes used when parsing server JSON. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-/**
- * Parse a PublishResult from an unknown body. Returns null if the shape is
- * wrong — the caller is responsible for turning that into a
- * StudioResponseParseError. Kept as null-return (not throw) because call
- * sites handle it uniformly with the other parse helpers.
- */
-function parsePublishResult(body: unknown): PublishResult | null {
-  if (!isRecord(body)) return null;
-  if (typeof body['commitSha'] !== 'string') return null;
-  const commitUrl =
-    typeof body['commitUrl'] === 'string' ? body['commitUrl'] : undefined;
-  return { commitSha: body['commitSha'], commitUrl };
-}
-
-/** Parse a PreviewResult from an unknown body. Returns null if the shape is wrong. */
-function parsePreviewResult(body: unknown): PreviewResult | null {
-  if (!isRecord(body)) return null;
-  if (
-    typeof body['snapshotId'] !== 'string' ||
-    typeof body['previewToken'] !== 'string' ||
-    typeof body['expiresAt'] !== 'string'
-  ) {
-    return null;
-  }
-  return {
-    snapshotId: body['snapshotId'],
-    previewToken: body['previewToken'],
-    expiresAt: body['expiresAt'],
-  };
-}
-
-/**
- * Parse a DraftFile[] from an unknown body. Throws StudioResponseParseError
- * on any malformed shape — never returns an empty array to mask a parse
- * failure, never silently drops individual items that don't match. A quiet
- * empty list would make "the server is returning garbage" indistinguishable
- * from "the user has no drafts," and a silently-truncated list would show
- * the user an incomplete view of their own pending edits.
- */
-function parseDraftList(body: unknown): DraftFile[] {
-  if (!isRecord(body)) {
-    throw new StudioResponseParseError('listDrafts', 'body is not an object');
-  }
-  const raw = body['drafts'];
-  if (!Array.isArray(raw)) {
-    throw new StudioResponseParseError('listDrafts', '`drafts` is missing or not an array');
-  }
-  const out: DraftFile[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    const item: unknown = raw[i];
-    if (!isRecord(item)) {
-      throw new StudioResponseParseError('listDrafts', `drafts[${i.toString()}] is not an object`);
-    }
-    if (
-      typeof item['filePath'] !== 'string' ||
-      typeof item['content'] !== 'string' ||
-      typeof item['updatedAt'] !== 'string'
-    ) {
-      throw new StudioResponseParseError(
-        'listDrafts',
-        `drafts[${i.toString()}] missing or wrongly-typed filePath/content/updatedAt`,
-      );
-    }
-    out.push({
-      filePath: item['filePath'],
-      content: item['content'],
-      updatedAt: item['updatedAt'],
-    });
-  }
-  return out;
-}
+// Re-export types and error classes so existing consumers don't break.
+export { StudioFetchError, StudioResponseParseError };
+export type { DraftFile, PublishResult, PreviewResult };
 
 const log = createLogger('useDraftWorkspace');
-
-/** Base path for the Studio HTTP API. */
-const STUDIO_BASE = '/api/studio';
 
 /** Public return shape for consumers. */
 export interface UseDraftWorkspace {
@@ -202,64 +78,26 @@ export interface UseDraftWorkspace {
 }
 
 /**
- * Error class for failed Studio HTTP calls. Carries `status` (HTTP code) and
- * an optional `code` (the server-side error slug like `feature_unavailable`)
- * so that consumers can pattern-match on them — e.g. the preview button
- * shows a friendlier message for 501 feature_unavailable than for 500.
- */
-export class StudioFetchError extends Error {
-  readonly status: number;
-  readonly code: string | undefined;
-  constructor(message: string, status: number, code?: string) {
-    super(message);
-    this.name = 'StudioFetchError';
-    this.status = status;
-    this.code = code;
-  }
-}
-
-/**
- * Extract a useful error object from a failed fetch. The Studio routes return
- * `{error, message}` JSON on failures — we try to read that shape and fall
- * back to the HTTP status if the body isn't parseable.
- */
-async function extractFetchError(res: Response, operation: string): Promise<StudioFetchError> {
-  let message = `${operation} failed (${res.status.toString()})`;
-  let code: string | undefined;
-  try {
-    const body: unknown = await res.json();
-    if (isRecord(body)) {
-      if (typeof body['message'] === 'string') message = body['message'];
-      if (typeof body['error'] === 'string') code = body['error'];
-    }
-  } catch {
-    // Body wasn't JSON — keep the default message.
-  }
-  return new StudioFetchError(message, res.status, code);
-}
-
-/**
- * React hook wrapping the Studio HTTP API. See `UseDraftWorkspace` for the
- * returned shape.
+ * React hook wrapping the Studio HTTP API via `@amodalai/studio-client`.
+ * See `UseDraftWorkspace` for the returned shape.
+ *
+ * When the Studio URL is not yet resolved (loading from /api/context) or
+ * not configured (null), the hook returns a loading/disabled state with
+ * no-op mutations.
  */
 export function useDraftWorkspace(): UseDraftWorkspace {
+  const { studioUrl, loading: contextLoading } = useStudioContext();
+
   const [drafts, setDrafts] = useState<DraftFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
   // Mirror of `error` kept in a ref so callbacks can read the latest value
-  // synchronously, without waiting for React to re-render. The `error` state
-  // drives the banner UI (so we still need setState), but that state is only
-  // visible to a caller *after* the next render — which is too late if the
-  // caller is inside the same microtask as the mutation that set the error.
-  // See the `getLatestError` JSDoc on UseDraftWorkspace.
+  // synchronously. See the `getLatestError` JSDoc on UseDraftWorkspace.
   const errorRef = useRef<Error | null>(null);
 
   // Track the AbortController for the most recent in-flight request so we can
-  // cancel it on unmount. We deliberately only track ONE at a time — if
-  // multiple calls overlap, the newer one replaces the older one's controller
-  // and the older one completes unchecked (that's fine, it only writes state
-  // via the mountedRef guard below).
+  // cancel it on unmount.
   const controllerRef = useRef<AbortController | null>(null);
   const mountedRef = useRef<boolean>(true);
 
@@ -274,31 +112,33 @@ export function useDraftWorkspace(): UseDraftWorkspace {
     };
   }, []);
 
+  // Create the StudioClient instance whenever the URL changes.
+  const client: StudioClient | null = useMemo(() => {
+    if (!studioUrl) return null;
+    return createStudioClient({ baseUrl: studioUrl });
+  }, [studioUrl]);
+
   /**
    * Wrapper that handles the shared "start loading / clear error / catch /
-   * finally stop loading" scaffolding for every request. The inner function
-   * receives the AbortSignal and returns the parsed result.
+   * finally stop loading" scaffolding for every request.
    */
   const runRequest = useCallback(
     async <T,>(
       operation: string,
-      fn: (signal: AbortSignal) => Promise<T>,
+      fn: () => Promise<T>,
     ): Promise<T | null> => {
       const controller = new AbortController();
       controllerRef.current = controller;
-      // errorRef mirrors the state update so async callers that await a
-      // mutation can read the latest error synchronously in the same tick.
       errorRef.current = null;
       if (mountedRef.current) {
         setIsLoading(true);
         setError(null);
       }
       try {
-        const result = await fn(controller.signal);
+        const result = await fn();
         return result;
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
-          // Unmount or overlapping request — don't surface this as an error.
           return null;
         }
         const wrapped = err instanceof Error ? err : new Error(String(err));
@@ -321,115 +161,79 @@ export function useDraftWorkspace(): UseDraftWorkspace {
   );
 
   const listDrafts = useCallback(async (): Promise<void> => {
-    await runRequest('listDrafts', async (signal) => {
-      const res = await fetch(`${STUDIO_BASE}/drafts`, { signal });
-      if (!res.ok) throw await extractFetchError(res, 'listDrafts');
-      const body: unknown = await res.json();
-      const list = parseDraftList(body);
+    if (!client) return;
+    await runRequest('listDrafts', async () => {
+      const list = await client.listDrafts();
       if (mountedRef.current) setDrafts(list);
       return list;
     });
-  }, [runRequest]);
+  }, [client, runRequest]);
 
   const saveDraft = useCallback(
     async (filePath: string, content: string): Promise<void> => {
-      const ok = await runRequest('saveDraft', async (signal) => {
-        const encoded = filePath.split('/').map(encodeURIComponent).join('/');
-        const res = await fetch(`${STUDIO_BASE}/drafts/${encoded}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
-          signal,
-        });
-        if (!res.ok) throw await extractFetchError(res, 'saveDraft');
+      if (!client) return;
+      const ok = await runRequest('saveDraft', async () => {
+        await client.saveDraft(filePath, content);
         return true;
       });
       if (ok) await listDrafts();
     },
-    [runRequest, listDrafts],
+    [client, runRequest, listDrafts],
   );
 
   const deleteDraft = useCallback(
     async (filePath: string): Promise<void> => {
-      const ok = await runRequest('deleteDraft', async (signal) => {
-        const encoded = filePath.split('/').map(encodeURIComponent).join('/');
-        const res = await fetch(`${STUDIO_BASE}/drafts/${encoded}`, {
-          method: 'DELETE',
-          signal,
-        });
-        if (!res.ok) throw await extractFetchError(res, 'deleteDraft');
+      if (!client) return;
+      const ok = await runRequest('deleteDraft', async () => {
+        await client.deleteDraft(filePath);
         return true;
       });
       if (ok) await listDrafts();
     },
-    [runRequest, listDrafts],
+    [client, runRequest, listDrafts],
   );
 
   const discardAll = useCallback(async (): Promise<void> => {
-    const ok = await runRequest('discardAll', async (signal) => {
-      const res = await fetch(`${STUDIO_BASE}/discard`, {
-        method: 'POST',
-        signal,
-      });
-      if (!res.ok) throw await extractFetchError(res, 'discardAll');
+    if (!client) return;
+    const ok = await runRequest('discardAll', async () => {
+      await client.discardAll();
       return true;
     });
     if (ok) await listDrafts();
-  }, [runRequest, listDrafts]);
+  }, [client, runRequest, listDrafts]);
 
   const publish = useCallback(
     async (commitMessage: string): Promise<PublishResult | null> => {
-      const result = await runRequest('publish', async (signal) => {
-        const res = await fetch(`${STUDIO_BASE}/publish`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ commitMessage }),
-          signal,
-        });
-        if (!res.ok) throw await extractFetchError(res, 'publish');
-        const body: unknown = await res.json();
-        const parsed = parsePublishResult(body);
-        if (!parsed) {
-          throw new StudioResponseParseError('publish', 'missing commitSha');
-        }
-        return parsed;
-      });
+      if (!client) return null;
+      const result = await runRequest('publish', async () => client.publish(commitMessage));
       if (result) await listDrafts();
       return result;
     },
-    [runRequest, listDrafts],
+    [client, runRequest, listDrafts],
   );
 
-  const buildPreview = useCallback(async (): Promise<PreviewResult | null> => runRequest('buildPreview', async (signal) => {
-      const res = await fetch(`${STUDIO_BASE}/preview`, {
-        method: 'POST',
-        signal,
-      });
-      if (!res.ok) throw await extractFetchError(res, 'buildPreview');
-      const body: unknown = await res.json();
-      const parsed = parsePreviewResult(body);
-      if (!parsed) {
-        throw new StudioResponseParseError(
-          'buildPreview',
-          'missing snapshotId/previewToken/expiresAt',
-        );
-      }
-      return parsed;
-    }), [runRequest]);
+  const buildPreview = useCallback(
+    async (): Promise<PreviewResult | null> => {
+      if (!client) return null;
+      return runRequest('buildPreview', async () => client.buildPreview());
+    },
+    [client, runRequest],
+  );
 
-  // Initial fetch on mount.
+  // Initial fetch once the studio client is available.
   useEffect(() => {
-    void listDrafts();
-    // listDrafts is stable (useCallback) — run once on mount.
+    if (client) {
+      void listDrafts();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [client]);
 
   const getLatestError = useCallback((): Error | null => errorRef.current, []);
 
   return {
     drafts,
     count: drafts.length,
-    isLoading,
+    isLoading: isLoading || contextLoading,
     error,
     getLatestError,
     listDrafts,

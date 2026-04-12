@@ -64,6 +64,7 @@ import {createAutomationRouter} from './routes/automations.js';
 import {createWebhookRouter} from './routes/webhooks.js';
 import {createStoresRouter} from './routes/stores.js';
 import {createFilesRouter} from './routes/files.js';
+import {createContextRouter} from './routes/context.js';
 import {createEvalRouter} from './routes/evals.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import {asyncHandler} from '../routes/route-helpers.js';
@@ -497,6 +498,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       return;
     }
     res.json(user);
+  }));
+
+  // Runtime context — tells the SPA where Studio and admin agent live.
+  // Resolved from LocalServerConfig (which reads env vars at the boundary).
+  app.use(createContextRouter({
+    studioUrl: config.studioUrl ?? process.env['STUDIO_URL'] ?? null,
+    adminAgentUrl: config.adminAgentUrl ?? process.env['ADMIN_AGENT_URL'] ?? null,
   }));
 
   // Unified config endpoint

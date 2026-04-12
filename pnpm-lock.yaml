@@ -345,6 +345,9 @@ importers:
       "@amodalai/react":
         specifier: workspace:*
         version: link:../react
+      "@amodalai/studio-client":
+        specifier: workspace:*
+        version: link:../studio-client
       "@amodalai/types":
         specifier: workspace:*
         version: link:../types

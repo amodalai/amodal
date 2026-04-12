@@ -157,7 +157,7 @@ describe('DraftWorkspaceBar', () => {
   });
 
   it('shows a friendly message when buildPreview fails with 501 feature_unavailable', async () => {
-    const err = new StudioFetchError('feature unavailable', 501, 'feature_unavailable');
+    const err = new StudioFetchError('/api/studio/preview', 501, 'Not Implemented', 'feature_unavailable');
     const buildPreview = vi.fn(async () => null);
     // The bar reads the post-mutation error via `getLatestError()` rather than
     // the closure-captured `error` field, so the fake workspace needs to

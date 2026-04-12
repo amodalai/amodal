@@ -5,20 +5,23 @@
  */
 
 /**
- * Tests for useDraftWorkspace. We mock `globalThis.fetch` directly rather
- * than introducing MSW — runtime-app's existing hook tests (see useMe)
- * follow the same pattern and there's no point diverging.
+ * Tests for useDraftWorkspace. The hook now delegates to `@amodalai/studio-client`
+ * and reads the Studio URL from StudioContext. We mock `globalThis.fetch` so
+ * the StudioClient's internal fetch calls are intercepted, and wrap the hook
+ * in a StudioProvider that gets its URL from a mocked /api/context response.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
+import React from 'react';
 import {
   useDraftWorkspace,
   StudioFetchError,
-  StudioResponseParseError,
   type DraftFile,
 } from './useDraftWorkspace';
+import { StudioProvider } from '../contexts/StudioContext';
 
+const STUDIO_URL = 'http://localhost:3848';
 const originalFetch = globalThis.fetch;
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -28,15 +31,37 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function emptyResponse(status: number): Response {
-  return new Response(null, { status });
-}
-
 const sampleDrafts: DraftFile[] = [
   { filePath: 'skills/a.md', content: 'A', updatedAt: '2026-01-01T00:00:00Z' },
 ];
 
+/**
+ * Build a fetch mock that handles the /api/context call first (returning the
+ * Studio URL), then delegates subsequent calls to the provided implementations.
+ */
+function buildFetchMock(...handlers: Array<(url: string, init?: RequestInit) => Promise<Response>>): ReturnType<typeof vi.fn> {
+  let callIndex = 0;
+  return vi.fn((url: string, init?: RequestInit) => {
+    // First call is always /api/context from StudioProvider
+    if (url === '/api/context') {
+      return Promise.resolve(jsonResponse({ studioUrl: STUDIO_URL, adminAgentUrl: null }));
+    }
+    const handler = handlers[callIndex];
+    callIndex++;
+    if (handler) {
+      return handler(url, init);
+    }
+    return Promise.resolve(jsonResponse({ error: 'unexpected call' }, 500));
+  });
+}
+
+/** Wrapper that provides StudioContext to the hook under test. */
+function wrapper({ children }: { children: React.ReactNode }) {
+  return React.createElement(StudioProvider, null, children);
+}
+
 beforeEach(() => {
+  // Default: no-op fetch; individual tests override via buildFetchMock
   globalThis.fetch = vi.fn();
 });
 
@@ -46,48 +71,46 @@ afterEach(() => {
 });
 
 describe('useDraftWorkspace', () => {
-  it('fetches drafts on mount', async () => {
-    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      jsonResponse({ drafts: sampleDrafts }),
+  it('fetches drafts on mount after StudioContext resolves', async () => {
+    globalThis.fetch = buildFetchMock(
+      // listDrafts — studio-client expects a flat DraftFile[] array
+      async () => jsonResponse(sampleDrafts),
     );
 
-    const { result } = renderHook(() => useDraftWorkspace());
+    const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.drafts).toEqual(sampleDrafts);
     });
     expect(result.current.count).toBe(1);
     expect(result.current.error).toBeNull();
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/studio/drafts',
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
   });
 
   it('stores an Error when the initial fetch fails', async () => {
-    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      jsonResponse({ error: 'internal_error', message: 'boom' }, 500),
+    globalThis.fetch = buildFetchMock(
+      // listDrafts returns 500
+      async () => jsonResponse({ error: 'internal_error', message: 'boom' }, 500),
     );
 
-    const { result } = renderHook(() => useDraftWorkspace());
+    const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.error).toBeInstanceOf(Error);
     });
-    expect(result.current.error?.message).toBe('boom');
     expect(result.current.drafts).toEqual([]);
   });
 
-  it('saveDraft PUTs JSON then refetches drafts', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    // 1. initial list
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: [] }));
-    // 2. PUT save
-    fetchMock.mockResolvedValueOnce(jsonResponse({ status: 'ok' }));
-    // 3. refetch
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
+  it('saveDraft calls client then refetches drafts', async () => {
+    globalThis.fetch = buildFetchMock(
+      // 1. initial listDrafts
+      async () => jsonResponse([]),
+      // 2. saveDraft PUT
+      async () => jsonResponse({ status: 'ok' }),
+      // 3. refetch listDrafts
+      async () => jsonResponse(sampleDrafts),
+    );
 
-    const { result } = renderHook(() => useDraftWorkspace());
+    const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
     });
@@ -99,23 +122,19 @@ describe('useDraftWorkspace', () => {
     await waitFor(() => {
       expect(result.current.drafts).toEqual(sampleDrafts);
     });
-
-    // Verify the PUT call shape.
-    const putCall = fetchMock.mock.calls[1];
-    expect(putCall[0]).toBe('/api/studio/drafts/skills/a.md');
-    const putInit = putCall[1] as RequestInit;
-    expect(putInit.method).toBe('PUT');
-    expect(putInit.body).toBe(JSON.stringify({ content: 'A' }));
-    expect((putInit.headers as Record<string, string>)['Content-Type']).toBe('application/json');
   });
 
-  it('deleteDraft DELETEs and refetches', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ status: 'ok' }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: [] }));
+  it('deleteDraft calls client then refetches', async () => {
+    globalThis.fetch = buildFetchMock(
+      // 1. initial listDrafts
+      async () => jsonResponse(sampleDrafts),
+      // 2. deleteDraft DELETE
+      async () => jsonResponse({ status: 'ok' }),
+      // 3. refetch listDrafts
+      async () => jsonResponse([]),
+    );
 
-    const { result } = renderHook(() => useDraftWorkspace());
+    const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
     await waitFor(() => {
       expect(result.current.drafts).toEqual(sampleDrafts);
     });
@@ -127,19 +146,16 @@ describe('useDraftWorkspace', () => {
     await waitFor(() => {
       expect(result.current.drafts).toEqual([]);
     });
-
-    const deleteCall = fetchMock.mock.calls[1];
-    expect(deleteCall[0]).toBe('/api/studio/drafts/skills/a.md');
-    expect((deleteCall[1] as RequestInit).method).toBe('DELETE');
   });
 
-  it('discardAll POSTs and refetches', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ status: 'ok', count: 1 }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: [] }));
+  it('discardAll calls client then refetches', async () => {
+    globalThis.fetch = buildFetchMock(
+      async () => jsonResponse(sampleDrafts),
+      async () => jsonResponse({ status: 'ok' }),
+      async () => jsonResponse([]),
+    );
 
-    const { result } = renderHook(() => useDraftWorkspace());
+    const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
     await waitFor(() => {
       expect(result.current.drafts).toEqual(sampleDrafts);
     });
@@ -151,18 +167,16 @@ describe('useDraftWorkspace', () => {
     await waitFor(() => {
       expect(result.current.drafts).toEqual([]);
     });
-
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/studio/discard');
-    expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe('POST');
   });
 
-  it('publish POSTs the commit message and returns the result', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ commitSha: 'abc1234' }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: [] }));
+  it('publish calls client and returns the result', async () => {
+    globalThis.fetch = buildFetchMock(
+      async () => jsonResponse(sampleDrafts),
+      async () => jsonResponse({ commitSha: 'abc1234' }),
+      async () => jsonResponse([]),
+    );
 
-    const { result } = renderHook(() => useDraftWorkspace());
+    const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
     await waitFor(() => {
       expect(result.current.drafts).toEqual(sampleDrafts);
     });
@@ -172,24 +186,20 @@ describe('useDraftWorkspace', () => {
       publishResult = await result.current.publish('fix typo');
     });
     expect(publishResult).toEqual({ commitSha: 'abc1234' });
-
-    const publishCall = fetchMock.mock.calls[1];
-    expect(publishCall[0]).toBe('/api/studio/publish');
-    expect((publishCall[1] as RequestInit).body).toBe(JSON.stringify({ commitMessage: 'fix typo' }));
   });
 
-  it('buildPreview POSTs and returns the preview result', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        snapshotId: 'snap-1',
-        previewToken: 'tok-xyz',
-        expiresAt: '2099-01-01T00:00:00Z',
-      }),
+  it('buildPreview calls client and returns the preview result', async () => {
+    globalThis.fetch = buildFetchMock(
+      async () => jsonResponse(sampleDrafts),
+      async () =>
+        jsonResponse({
+          snapshotId: 'snap-1',
+          previewToken: 'tok-xyz',
+          expiresAt: '2099-01-01T00:00:00Z',
+        }),
     );
 
-    const { result } = renderHook(() => useDraftWorkspace());
+    const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
     await waitFor(() => {
       expect(result.current.drafts).toEqual(sampleDrafts);
     });
@@ -202,14 +212,14 @@ describe('useDraftWorkspace', () => {
     expect(previewResult!.previewToken).toBe('tok-xyz');
   });
 
-  it('stores error status code from failed preview for 501 handling', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: 'feature_unavailable', message: 'not yet' }, 501),
+  it('stores error with status code from failed preview for 501 handling', async () => {
+    globalThis.fetch = buildFetchMock(
+      async () => jsonResponse(sampleDrafts),
+      // buildPreview returns 501
+      async () => jsonResponse({ error: 'feature_unavailable', message: 'not yet' }, 501),
     );
 
-    const { result } = renderHook(() => useDraftWorkspace());
+    const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
     await waitFor(() => {
       expect(result.current.drafts).toEqual(sampleDrafts);
     });
@@ -223,126 +233,24 @@ describe('useDraftWorkspace', () => {
     expect(err instanceof StudioFetchError && err.status).toBe(501);
   });
 
-  it('aborts in-flight requests on unmount', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    let capturedSignal: AbortSignal | undefined;
-    fetchMock.mockImplementationOnce((_url: string, init: RequestInit) => {
-      capturedSignal = init.signal ?? undefined;
-      return new Promise<Response>(() => {
-        // never resolves — we're testing abort
-      });
+  it('returns loading state when StudioContext has no URL', async () => {
+    // Mock /api/context to return no studioUrl
+    globalThis.fetch = vi.fn(async (url: string) => {
+      if (url === '/api/context') {
+        return jsonResponse({ studioUrl: null, adminAgentUrl: null });
+      }
+      return jsonResponse({ error: 'unexpected' }, 500);
     });
 
-    const { unmount } = renderHook(() => useDraftWorkspace());
-    // Give the effect a tick to start the fetch.
-    await waitFor(() => {
-      expect(capturedSignal).toBeDefined();
-    });
+    const { result } = renderHook(() => useDraftWorkspace(), { wrapper });
 
-    unmount();
-    expect(capturedSignal?.aborted).toBe(true);
-  });
-
-  it('surfaces StudioResponseParseError when listDrafts body is not an object', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse('not-an-object'));
-
-    const { result } = renderHook(() => useDraftWorkspace());
-    await waitFor(() => {
-      expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
-    });
-    expect(result.current.drafts).toEqual([]);
-  });
-
-  it('surfaces StudioResponseParseError when listDrafts drafts field is missing', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse({ somethingElse: [] }));
-
-    const { result } = renderHook(() => useDraftWorkspace());
-    await waitFor(() => {
-      expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
-    });
-  });
-
-  it('surfaces StudioResponseParseError on a wrongly-shaped draft item — does not silently drop it', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    // One well-formed draft + one missing `updatedAt`. Old behavior would
-    // have dropped the second and shown a truncated list; new behavior
-    // surfaces the parse error so the caller sees the truth.
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        drafts: [
-          { filePath: 'skills/a.md', content: 'A', updatedAt: '2026-01-01T00:00:00Z' },
-          { filePath: 'skills/b.md', content: 'B' /* updatedAt missing */ },
-        ],
-      }),
-    );
-
-    const { result } = renderHook(() => useDraftWorkspace());
-    await waitFor(() => {
-      expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
-    });
-    // Drafts stays empty — we do not commit a partial parse to state.
-    expect(result.current.drafts).toEqual([]);
-  });
-
-  it('surfaces StudioResponseParseError when publish body is missing commitSha', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ notCommitSha: 'abc123' }));
-
-    const { result } = renderHook(() => useDraftWorkspace());
-    await waitFor(() => {
-      expect(result.current.drafts).toEqual(sampleDrafts);
-    });
-
-    await act(async () => {
-      await result.current.publish('test commit');
-    });
-
-    expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
-    const err = result.current.error;
-    expect(err instanceof StudioResponseParseError && err.operation).toBe('publish');
-  });
-
-  it('surfaces StudioResponseParseError when buildPreview body is missing required fields', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ snapshotId: 'x' /* previewToken, expiresAt missing */ }));
-
-    const { result } = renderHook(() => useDraftWorkspace());
-    await waitFor(() => {
-      expect(result.current.drafts).toEqual(sampleDrafts);
-    });
-
-    await act(async () => {
-      await result.current.buildPreview();
-    });
-
-    expect(result.current.error).toBeInstanceOf(StudioResponseParseError);
-    const err = result.current.error;
-    expect(err instanceof StudioResponseParseError && err.operation).toBe('buildPreview');
-  });
-
-  it('swallows empty-response errors on successful operations', async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: [] }));
-    // HEAD-style empty body on save — unlikely for Studio, but should not crash.
-    fetchMock.mockResolvedValueOnce(emptyResponse(200));
-    fetchMock.mockResolvedValueOnce(jsonResponse({ drafts: sampleDrafts }));
-
-    const { result } = renderHook(() => useDraftWorkspace());
+    // Wait for context to resolve
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    await act(async () => {
-      await result.current.saveDraft('skills/a.md', 'A');
-    });
-
-    await waitFor(() => {
-      expect(result.current.drafts).toEqual(sampleDrafts);
-    });
+    // No drafts fetched since there's no studio URL
+    expect(result.current.drafts).toEqual([]);
     expect(result.current.error).toBeNull();
   });
 });
