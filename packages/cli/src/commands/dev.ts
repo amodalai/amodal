@@ -126,15 +126,15 @@ function spawnStudio(opts: {
   runtimePort: number;
   repoPath: string;
 }): StudioSpawnResult | null {
-  // Resolve @amodalai/studio-app package directory
+  // Resolve @amodalai/studio package directory
   let studioDir: string;
   try {
     const require = createRequire(import.meta.url);
-    const studioPkg = require.resolve('@amodalai/studio-app/package.json');
+    const studioPkg = require.resolve('@amodalai/studio/package.json');
     studioDir = path.dirname(studioPkg);
   } catch {
     log.info('studio_not_available', {
-      hint: '@amodalai/studio-app package not found — Studio subprocess skipped',
+      hint: '@amodalai/studio package not found — Studio subprocess skipped',
     });
     return null;
   }
@@ -149,7 +149,7 @@ function spawnStudio(opts: {
     nextBin = studioRequire.resolve('next/dist/bin/next');
   } catch {
     log.info('studio_next_not_found', {
-      hint: 'next binary not resolvable from @amodalai/studio-app — Studio subprocess skipped',
+      hint: 'next binary not resolvable from @amodalai/studio — Studio subprocess skipped',
     });
     return null;
   }

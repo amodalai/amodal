@@ -464,7 +464,7 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
-  packages/studio-app:
+  packages/studio:
     dependencies:
       "@electric-sql/pglite":
         specifier: ^0.2.17
