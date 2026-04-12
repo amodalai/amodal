@@ -13,5 +13,9 @@
     "src/agent/multi-lang-tools-e2e.test.ts",
     "src/agent/tool-build-e2e.test.ts"
   ],
-  "references": [{ "path": "../types" }, { "path": "../core" }]
+  "references": [
+    { "path": "../types" },
+    { "path": "../core" },
+    { "path": "../db" }
+  ]
 }

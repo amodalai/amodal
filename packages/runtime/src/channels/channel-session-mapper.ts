@@ -19,7 +19,7 @@ import type {PgDatabase, PgQueryResultHKT} from 'drizzle-orm/pg-core';
 
 import type {ChannelSessionMapper, ChannelSessionMapResult, ChannelOrigin, RuntimeEventPayload} from '@amodalai/types';
 import type {Logger} from '../logger.js';
-import {channelSessions} from '../stores/schema.js';
+import {channelSessions} from '@amodalai/db';
 import {ChannelSessionError} from './errors.js';
 
 type AnyPgDatabase = PgDatabase<PgQueryResultHKT, Record<string, unknown>>;

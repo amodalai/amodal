@@ -53,26 +53,23 @@ import {ConfigWatcher} from './config-watcher.js';
 import {RuntimeEventBus} from '../events/event-bus.js';
 import {createEventsRouter} from '../events/events-route.js';
 import {wrapStoreBackendWithEvents} from '../events/store-event-wrapper.js';
-import {ProactiveRunner} from './proactive/proactive-runner.js';
 import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createChatRouter} from '../routes/chat.js';
 import {createTaskRouter} from './routes/task.js';
 import {createInspectRouter} from './routes/inspect.js';
 import {createFeedbackRouter} from './routes/feedback.js';
 import {FeedbackStore} from './feedback-store.js';
-import {createAutomationRouter} from './routes/automations.js';
-import {createWebhookRouter} from './routes/webhooks.js';
 import {createStoresRouter} from './routes/stores.js';
 import {createFilesRouter} from './routes/files.js';
 import {createContextRouter} from './routes/context.js';
-import {createEvalRouter} from './routes/evals.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import {asyncHandler} from '../routes/route-helpers.js';
 import type {LocalServerConfig} from './agent-types.js';
 import type {ServerInstance} from '../server.js';
-import {createPGLiteStoreBackend} from '../stores/pglite-store-backend.js';
+import {createPostgresStoreBackend} from '../stores/postgres-store-backend.js';
 import type {StoreBackend} from '@amodalai/types';
-import {EvalStore} from './eval-store.js';
+import {getDb, ensureSchema, closeDb} from '@amodalai/db';
+import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
 import {LOCAL_APP_ID} from '../constants.js';
@@ -197,70 +194,27 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   const toolExecutor = bundle.tools.length > 0 ? new LocalToolExecutor() : undefined;
 
   // -------------------------------------------------------------------------
+  // Database initialization (shared Postgres via @amodalai/db)
+  // -------------------------------------------------------------------------
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- getDb returns Db which extends NodePgDatabase
+  const db = getDb() as unknown as NodePgDatabase;
+  await ensureSchema(db);
+  log.info('database_schema_ready', {});
+
+  // -------------------------------------------------------------------------
   // Store backend
   // -------------------------------------------------------------------------
 
   let storeBackend: StoreBackend | undefined;
-  let storeBackendType = 'none';
+  const storeBackendType = bundle.stores.length > 0 ? 'postgres' : 'none';
   if (bundle.stores.length > 0) {
-    const storeConfig = bundle.config.stores;
-    const backend = storeConfig?.backend ?? 'pglite';
-
-    if (backend === 'postgres' && storeConfig?.postgresUrl) {
-      const connUrl = resolveEnvRef(storeConfig.postgresUrl) ?? '';
-      if (!connUrl) {
-        log.error('store_postgres_url_missing', {configured: storeConfig.postgresUrl});
-      } else {
-        try {
-          const pgModPath = ['..', 'stores', 'postgres-store-backend.js'].join('/');
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic import for optional postgres backend
-          const mod = await import(pgModPath).catch(() => null) as {createPostgresStoreBackend?: (stores: typeof bundle.stores, url: string) => Promise<StoreBackend>} | null;
-          if (mod?.createPostgresStoreBackend) {
-            storeBackend = await mod.createPostgresStoreBackend(bundle.stores, connUrl);
-            storeBackendType = 'postgres';
-            log.info('store_backend_ready', {type: 'postgres', storeCount: bundle.stores.length});
-          } else {
-            log.error('store_postgres_unavailable', {hint: 'install @amodalai/store-postgres'});
-          }
-        } catch (err) {
-          log.error('store_postgres_failed', {error: err instanceof Error ? err.message : String(err)});
-          log.info('store_fallback_pglite', {});
-        }
-      }
-    }
-
-    // Default: PGLite
-    if (!storeBackend) {
-      const dataDir = storeConfig?.dataDir ?? `${config.repoPath}/.amodal/store-data`;
-
-      // Check for lock file — another instance may be using this data dir.
-      // Lock file lives in the PARENT dir (not inside dataDir) so it doesn't
-      // conflict with PGLite's own PostgreSQL data files (e.g. postmaster.pid).
-      const lockPath = `${dataDir}.lock`;
-      try {
-        const {readFileSync, writeFileSync, mkdirSync, unlinkSync} = await import('node:fs');
-        const path = await import('node:path');
-        mkdirSync(path.dirname(dataDir), {recursive: true});
-        try {
-          const existing = readFileSync(lockPath, 'utf-8').trim();
-          try { process.kill(Number(existing), 0); log.warn('store_lock_conflict', {pid: existing}); }
-          catch { /* PID not running — stale lock, safe to overwrite */ }
-        } catch { /* No lock file exists — first run */ }
-        writeFileSync(lockPath, String(process.pid));
-        const lockCleanup = lockPath;
-        process.on('exit', () => { try { unlinkSync(lockCleanup); } catch { /* exit handler — can't log */ } });
-      } catch (err: unknown) {
-        log.warn('store_lock_setup_failed', {dataDir, error: err instanceof Error ? err.message : String(err)});
-      }
-
-      try {
-        storeBackend = await createPGLiteStoreBackend(bundle.stores, dataDir);
-        storeBackendType = 'pglite';
-        log.info('store_backend_ready', {type: 'pglite', storeCount: bundle.stores.length, dataDir});
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : (typeof err === 'object' ? JSON.stringify(err) : String(err));
-        log.error('store_backend_init_failed', {error: errMsg, dataDir});
-      }
+    try {
+      storeBackend = await createPostgresStoreBackend(bundle.stores);
+      log.info('store_backend_ready', {type: 'postgres', storeCount: bundle.stores.length});
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      log.error('store_backend_init_failed', {error: errMsg});
     }
   }
 
@@ -343,8 +297,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Helper: get current bundle (updated by config watcher)
   const getBundle = (): AgentBundle => bundle;
 
-  // Helper: create automation session components
-  const createAutomationSessionComponents = () => {
+  // Helper: create task session components
+  const createTaskSessionComponents = () => {
     const components = buildSessionComponents({
       bundle,
       storeBackend: storeBackend ?? null,
@@ -365,37 +319,17 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   };
 
   // -------------------------------------------------------------------------
-  // Proactive runner
-  // -------------------------------------------------------------------------
-
-  const runner = new ProactiveRunner(bundle, {
-    sessionManager,
-    createSessionComponents: createAutomationSessionComponents,
-    logger: log,
-    webhookSecret: config.webhookSecret,
-    summarizeToolResult: config.summarizeToolResult,
-    onSessionComplete: (session, automationName) => {
-      // Tag the automation name onto metadata so the UI can filter
-      // sessions by automation via /sessions?automation=<name>.
-      session.metadata.automationName = automationName;
-      void sessionManager.persist(session);
-    },
-    eventBus,
-    onAutomationResult: config.onAutomationResult,
-  });
-
-  // -------------------------------------------------------------------------
   // Channel plugins (messaging integrations)
   // -------------------------------------------------------------------------
 
   let channelsResult: {adapters: Map<string, ChannelAdapter>; router: import('express').Router} | null = null;
 
   if (bundle.channels && bundle.channels.length > 0) {
-    // Both PGLite and Postgres factories return DrizzleSessionStore which
+    // The Postgres factory returns DrizzleSessionStore which
     // exposes `db` for sharing the connection pool with channel mappers.
     const {DrizzleSessionStore} = await import('../session/drizzle-session-store.js');
     if (!(sessionStore instanceof DrizzleSessionStore)) {
-      throw new Error('Channels require a Drizzle-backed session store (pglite or postgres)');
+      throw new Error('Channels require a Drizzle-backed session store (postgres)');
     }
     const storeDb = sessionStore.db;
     const channelSessionMapper = new DrizzleChannelSessionMapper({
@@ -660,12 +594,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Event bus SSE stream (live UI updates)
   app.use(createEventsRouter({bus: eventBus, logger: log}));
 
-  // Evals
-  const evalStore = new EvalStore(config.repoPath);
-  app.use(createEvalRouter({getBundle, evalStore, repoPath: config.repoPath, getPort: () => config.port}));
-
   // Feedback
-  const feedbackStore = new FeedbackStore(config.repoPath);
+  const feedbackStore = new FeedbackStore({agentId: LOCAL_APP_ID});
   app.use(createFeedbackRouter({feedbackStore}));
 
   // Chat routes (new stack) — persistence is handled inside runMessage /
@@ -684,14 +614,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   }));
 
   // Task runner
-  app.use(createTaskRouter({sessionManager, createTaskSession: createAutomationSessionComponents}));
+  app.use(createTaskRouter({sessionManager, createTaskSession: createTaskSessionComponents}));
 
   // Inspect
   app.use(createInspectRouter({getBundle, repoPath: config.repoPath}));
-
-  // Automations
-  app.use(createAutomationRouter({runner}));
-  app.use(createWebhookRouter({runner, webhookSecret: config.webhookSecret}));
 
   // Messaging channels
   if (channelsResult) {
@@ -777,8 +703,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     },
 
     async stop(): Promise<void> {
-      runner.stop();
-
       if (watcher) {
         watcher.stop();
         watcher = null;
@@ -808,6 +732,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       if (storeBackend) {
         await storeBackend.close();
       }
+
+      await closeDb();
 
       log.info('server_stopped', {});
     },

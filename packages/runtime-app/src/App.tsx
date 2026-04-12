@@ -9,7 +9,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AmodalProvider } from '@amodalai/react';
 import { RuntimeProvider } from '@/contexts/RuntimeContext';
 import { RuntimeEventsProvider } from '@/contexts/RuntimeEventsContext';
-import { StudioProvider } from '@/contexts/StudioContext';
 import { router } from '@/router';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -45,13 +44,11 @@ function AppContent() {
 
   return (
     <AmodalProvider runtimeUrl={RUNTIME_URL} getToken={getToken}>
-      <StudioProvider>
-        <RuntimeEventsProvider runtimeUrl={RUNTIME_URL}>
-          <RuntimeProvider runtimeUrl={RUNTIME_URL}>
-            <RouterProvider router={router} />
-          </RuntimeProvider>
-        </RuntimeEventsProvider>
-      </StudioProvider>
+      <RuntimeEventsProvider runtimeUrl={RUNTIME_URL}>
+        <RuntimeProvider runtimeUrl={RUNTIME_URL}>
+          <RouterProvider router={router} />
+        </RuntimeProvider>
+      </RuntimeEventsProvider>
     </AmodalProvider>
   );
 }

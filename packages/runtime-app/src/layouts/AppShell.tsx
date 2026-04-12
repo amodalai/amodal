@@ -6,12 +6,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Sun, Moon, Settings } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Sun, Moon } from 'lucide-react';
 import { Sidebar } from '@/sections/Sidebar';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { useRuntimeConnection } from '@/contexts/RuntimeEventsContext';
-import { useMe, hasRole } from '@/hooks/useMe';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
 
@@ -55,11 +53,6 @@ export function AppShell() {
   const { name, model } = useRuntimeManifest();
   const { dark, toggle } = useTheme();
   const connectionStatus = useConnectionStatus();
-  // Config (Settings gear) is ops-only — admins and users don't see infra config.
-  // Gate on `me.ready` AND the role so we don't flash the gear before /api/me
-  // resolves to a non-ops role.
-  const me = useMe();
-  const canSeeConfig = me.ready && hasRole(me.user, 'ops');
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
@@ -80,15 +73,6 @@ export function AppShell() {
               </>
             )}
           </div>
-          {canSeeConfig && (
-            <Link
-              to="/config"
-              className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              title="Configuration"
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </Link>
-          )}
         </div>
         <div className="flex items-center gap-3">
           <button

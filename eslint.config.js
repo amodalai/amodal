@@ -37,6 +37,7 @@ export default tseslint.config(
       'packages/test-harness/surveillance/dist/**',
       'packages/test-harness/finops/**',
       'packages/platform-api/.next/**',
+      'packages/studio/.next/**',
       'bundle/**',
       'package/bundle/**',
       '.integration-tests/**',
@@ -150,6 +151,9 @@ export default tseslint.config(
             '@codemirror/**',
             'drizzle-orm/**',
             'next/server',
+            'next/navigation',
+            'next/link',
+            'next/image',
           ],
         },
       ],
@@ -518,6 +522,20 @@ export default tseslint.config(
       'prefer-const': ['error', { destructuring: 'all' }],
       'default-case': 'error',
       'no-console': 'error',
+    },
+  },
+  {
+    // Studio uses browser globals (Next.js app)
+    files: ['packages/studio/src/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+      },
+    },
+    rules: {
+      'import/no-default-export': 'off',
+      'no-restricted-imports': 'off',
     },
   },
   // Prettier config must be last

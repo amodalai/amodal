@@ -224,7 +224,7 @@ export function createToolContextFactory(
           session: opts.sessionId,
         });
 
-        // Race against abort signal so a hung PGLite doesn't block forever
+        // Race against abort signal so a hung database doesn't block forever
         await Promise.race([
           opts.storeBackend.put(opts.appId, storeName, key, payload, {}),
           new Promise<never>((_resolve, reject) => {

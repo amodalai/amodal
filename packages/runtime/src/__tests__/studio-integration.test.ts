@@ -38,6 +38,23 @@ const {mockLoadRepo, mockSetupSession, mockPrepareExploreConfig, mockPlanModeMan
   mockPlanModeManager: vi.fn(),
 }));
 
+// Mock @amodalai/db so tests don't need a real Postgres connection
+vi.mock('@amodalai/db', () => ({
+  getDb: vi.fn(() => ({})),
+  ensureSchema: vi.fn(async () => {}),
+  closeDb: vi.fn(async () => {}),
+  agentSessions: {},
+  channelSessions: {},
+  storeDocuments: {},
+  storeDocumentVersions: {},
+  feedback: {},
+  evalRuns: {},
+  studioDrafts: {},
+  notifyStoreUpdated: vi.fn(async () => {}),
+  notifySessionUpdated: vi.fn(async () => {}),
+  notifyFeedbackCreated: vi.fn(async () => {}),
+}));
+
 vi.mock('@amodalai/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@amodalai/core')>();
   return {

@@ -10,7 +10,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createLocalServer} from './local-server.js';
 
-// Use a real temp dir so PGLite session store can create its data files.
+// Use a real temp dir for the test repo path.
 const TEST_REPO = mkdtempSync(join(tmpdir(), 'amodal-server-test-'));
 afterAll(() => { rmSync(TEST_REPO, {recursive: true, force: true}); });
 
@@ -20,6 +20,23 @@ const {mockLoadRepo, mockSetupSession, mockPrepareExploreConfig, mockPlanModeMan
   mockSetupSession: vi.fn(),
   mockPrepareExploreConfig: vi.fn(),
   mockPlanModeManager: vi.fn(),
+}));
+
+// Mock @amodalai/db so tests don't need a real Postgres connection
+vi.mock('@amodalai/db', () => ({
+  getDb: vi.fn(() => ({})),
+  ensureSchema: vi.fn(async () => {}),
+  closeDb: vi.fn(async () => {}),
+  agentSessions: {},
+  channelSessions: {},
+  storeDocuments: {},
+  storeDocumentVersions: {},
+  feedback: {},
+  evalRuns: {},
+  studioDrafts: {},
+  notifyStoreUpdated: vi.fn(async () => {}),
+  notifySessionUpdated: vi.fn(async () => {}),
+  notifyFeedbackCreated: vi.fn(async () => {}),
 }));
 
 vi.mock('@amodalai/core', async (importOriginal) => {
