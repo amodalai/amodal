@@ -21,7 +21,7 @@ import {
   notifyAutomationStarted,
   notifyAutomationCompleted,
 } from '@amodalai/db';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import type { NodePgDatabase } from '@amodalai/db';
 import { getStudioDb } from './db';
 import { logger } from './logger';
 

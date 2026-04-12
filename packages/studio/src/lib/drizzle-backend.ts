@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { eq, and } from 'drizzle-orm';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { getDb, ensureSchema, studioDrafts } from '@amodalai/db';
+import { eq, and, getDb, ensureSchema, studioDrafts } from '@amodalai/db';
+import type { NodePgDatabase } from '@amodalai/db';
 import type { StudioBackend } from './backend';
 import type { DraftFile, PublishResult, WorkspaceBundle, WorkspaceFile } from './types';
 import { StudioStorageError, StudioPublishError } from './errors';

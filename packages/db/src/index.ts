@@ -56,3 +56,5 @@ export {
   sql,
   inArray,
 } from 'drizzle-orm';
+
+export type { NodePgDatabase } from 'drizzle-orm/node-postgres';
