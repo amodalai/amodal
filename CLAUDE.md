@@ -26,6 +26,19 @@ See README "Developing from Source" section for linking the CLI to a local build
 - Changesets: create `.changeset/<name>.md` files directly (the `pnpm changeset` CLI is interactive and won't work here). Published packages: `core`, `runtime`, `react`, `cli`.
 - **Always use `patch` bumps** unless the user explicitly says otherwise. Even for new features or breaking-looking changes — patch by default.
 
+### Adding a new workspace package
+
+If a new `packages/*` package will be imported (directly or transitively) by any published package — currently `@amodalai/types`, `@amodalai/core`, `@amodalai/runtime`, `@amodalai/react`, `@amodalai/amodal`, `@amodalai/runtime-app`, `@amodalai/snapshot-probe` — then **the new package itself must be publishable**. Otherwise `pnpm publish` will happily push the public package with a `workspace:*` ref rewritten to a version that doesn't exist on npm, and installs will fail with `ERR_PNPM_FETCH_404` on the private dep. This is what broke `@amodalai/amodal@0.3.0` with `@amodalai/db`.
+
+A publishable package needs:
+
+- `private: false` (or the field omitted)
+- `license`, `repository`, `homepage`, `bugs`, and `files: ["dist"]` in `package.json`
+- A version that matches the `fixed` group in `.changeset/config.json`
+- An entry added to the `fixed` array in `.changeset/config.json` so it versions in lockstep with the rest of the public packages
+
+CI enforces this invariant via `scripts/check-publishable-deps.js` (run as part of `pnpm lint`): if any public workspace package depends on a private workspace package, the lint job fails with the list of violations. If you genuinely need an internal-only package (tests, tooling, build utilities), make sure no published package imports from it.
+
 ## Admin agent
 
 - Package source: `agent-admin` directory in the [amodalai/packages](https://github.com/amodalai/packages) repo

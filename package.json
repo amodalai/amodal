@@ -14,7 +14,7 @@
     "build": "pnpm -r --filter '!@amodalai/docs' run build",
     "test": "pnpm -r run test",
     "test:ci": "pnpm -r run test:ci",
-    "lint": "eslint . --cache",
+    "lint": "eslint . --cache && node scripts/check-publishable-deps.js",
     "typecheck": "pnpm --filter @amodalai/db run build && pnpm -r run typecheck",
     "bundle": "pnpm -r run build && cd packages/runtime-app && npx vite build --outDir ../../bundle/app && cd ../.. && node esbuild.config.js",
     "clean": "pnpm -r exec rm -rf dist",
