@@ -1,10 +1,23 @@
 {
   "name": "@amodalai/db",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.3.0",
+  "description": "Shared Drizzle schema and Postgres connection singleton for amodal runtime and Studio",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amodalai/amodal.git",
+    "directory": "packages/db"
+  },
+  "homepage": "https://github.com/amodalai/amodal",
+  "bugs": {
+    "url": "https://github.com/amodalai/amodal/issues"
+  },
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
