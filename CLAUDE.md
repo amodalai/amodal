@@ -28,7 +28,7 @@ See README "Developing from Source" section for linking the CLI to a local build
 
 ### Adding a new workspace package
 
-If a new `packages/*` package will be imported (directly or transitively) by any published package — currently `@amodalai/types`, `@amodalai/core`, `@amodalai/runtime`, `@amodalai/react`, `@amodalai/amodal`, `@amodalai/runtime-app`, `@amodalai/snapshot-probe` — then **the new package itself must be publishable**. Otherwise `pnpm publish` will happily push the public package with a `workspace:*` ref rewritten to a version that doesn't exist on npm, and installs will fail with `ERR_PNPM_FETCH_404` on the private dep. This is what broke `@amodalai/amodal@0.3.0` with `@amodalai/db`.
+If a new `packages/*` package will be imported (directly or transitively) by any published package — currently `@amodalai/types`, `@amodalai/core`, `@amodalai/runtime`, `@amodalai/react`, `@amodalai/amodal`, `@amodalai/runtime-app`, `@amodalai/snapshot-probe` — then **the new package itself must be publishable**. Otherwise `pnpm publish` rewrites the `workspace:*` ref to a version that doesn't exist on npm, and installs fail with `ERR_PNPM_FETCH_404` on the private dep.
 
 A publishable package needs:
 
