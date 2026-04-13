@@ -1,7 +1,7 @@
 ---
 "@amodalai/core": minor
 "@amodalai/runtime": minor
-"@amodalai/cli": minor
+"@amodalai/amodal": minor
 "@amodalai/studio": minor
 ---
 
