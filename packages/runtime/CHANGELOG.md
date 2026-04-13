@@ -1,5 +1,19 @@
 # @amodalai/runtime
 
+## 0.3.0
+
+### Minor Changes
+
+- [#194](https://github.com/amodalai/amodal/pull/194) [`13723ff`](https://github.com/amodalai/amodal/commit/13723ff5be1e9983a1a66c697ec352d3a2dbfcd7) Thanks [@gte620v](https://github.com/gte620v)! - Studio standalone: separate Studio into its own Next.js service, strip admin code from runtime, add workspace tools, update CLI to spawn Studio + admin agent subprocesses
+
+- [#194](https://github.com/amodalai/amodal/pull/194) [`13723ff`](https://github.com/amodalai/amodal/commit/13723ff5be1e9983a1a66c697ec352d3a2dbfcd7) Thanks [@gte620v](https://github.com/gte620v)! - Studio admin UI: move all admin/config/stores/automations/evals/feedback to Studio. Runtime-app is now chat + pages only. Postgres required (no PGLite). DATABASE_URL configuration via ~/.amodal/env or agent .env.
+
+### Patch Changes
+
+- Updated dependencies [[`13723ff`](https://github.com/amodalai/amodal/commit/13723ff5be1e9983a1a66c697ec352d3a2dbfcd7), [`13723ff`](https://github.com/amodalai/amodal/commit/13723ff5be1e9983a1a66c697ec352d3a2dbfcd7)]:
+  - @amodalai/core@0.3.0
+  - @amodalai/types@0.3.0
+
 ## 0.2.10
 
 ### Patch Changes
