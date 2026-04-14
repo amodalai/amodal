@@ -11,7 +11,8 @@
       "@amodalai/amodal",
       "@amodalai/runtime-app",
       "@amodalai/snapshot-probe",
-      "@amodalai/db"
+      "@amodalai/db",
+      "@amodalai/studio"
     ]
   ],
   "linked": [],

@@ -491,7 +491,14 @@ Or add it to your agent's .env file:
     if (adminAgentUrl) {
       process.stderr.write(`  Admin Agent: ${adminAgentUrl}\n`);
     }
-    process.stderr.write(`  Database:    ${databaseUrl}\n`);
+    // Redact credentials from the connection string before printing.
+    // Show host + db name so the operator knows which database is in use,
+    // but never print the password portion.
+    const redactedUrl = databaseUrl.replace(
+      /\/\/([^:]+):([^@]+)@/,
+      '//$1:***@',
+    );
+    process.stderr.write(`  Database:    ${redactedUrl}\n`);
     process.stderr.write('\n');
 
     // Preflight connection check (non-blocking)
