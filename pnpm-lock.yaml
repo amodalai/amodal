@@ -82,6 +82,9 @@ importers:
       "@amodalai/runtime-app":
         specifier: workspace:*
         version: link:../runtime-app
+      "@amodalai/studio":
+        specifier: workspace:*
+        version: link:../studio
       "@amodalai/types":
         specifier: workspace:*
         version: link:../types
