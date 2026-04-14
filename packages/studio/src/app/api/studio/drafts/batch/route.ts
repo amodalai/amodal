@@ -33,7 +33,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   try {
     const user = await getUser(req);
-    const backend = await getBackend();
+    const backend = await getBackend(req);
     const body: unknown = await req.json();
 
     // Validate request shape

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   try {
     const user = await getUser(req);
-    const backend = await getBackend();
+    const backend = await getBackend(req);
     const drafts = await backend.listDrafts(user.userId);
     return NextResponse.json({ drafts }, { headers: corsHeaders(req) });
   } catch (err: unknown) {

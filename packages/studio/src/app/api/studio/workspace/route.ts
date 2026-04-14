@@ -21,7 +21,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (corsResponse) return corsResponse;
 
   try {
-    const backend = await getBackend();
+    const backend = await getBackend(req);
     const workspace = await backend.getWorkspace();
     return NextResponse.json(workspace, { headers: corsHeaders(req) });
   } catch (err: unknown) {

@@ -13,16 +13,32 @@ import type { StudioUser } from './types';
 
 /**
  * Authentication interface for the studio.
- *
- * Phase 1 (local dev) always returns a fixed local-dev user.
- * Future phases will read a session cookie or token from the request.
+ * Implement this to provide custom user resolution (e.g. JWT verification).
+ * The default implementation returns a fixed local-dev user.
  */
 export interface StudioAuth {
   getUser(req: NextRequest): Promise<StudioUser>;
 }
 
 // ---------------------------------------------------------------------------
-// Local dev auth (Phase 1)
+// Auth provider override
+// ---------------------------------------------------------------------------
+
+let authProvider: StudioAuth | null = null;
+
+/**
+ * Set a custom auth provider. When set, {@link getUser} delegates to it
+ * instead of the default local-dev auth.
+ *
+ * Call once at application startup (e.g. in a Next.js instrumentation hook).
+ * Pass `null` to revert to the default local-dev behavior.
+ */
+export function setAuthProvider(provider: StudioAuth | null): void {
+  authProvider = provider;
+}
+
+// ---------------------------------------------------------------------------
+// Local dev auth (default)
 // ---------------------------------------------------------------------------
 
 const LOCAL_DEV_USER: StudioUser = {
@@ -40,8 +56,11 @@ const localDevAuth = new LocalDevAuth();
 
 /**
  * Get the authenticated user from the request.
- * Phase 1: always returns the local-dev user.
+ *
+ * If a custom auth provider has been set via {@link setAuthProvider},
+ * delegates to it. Otherwise returns the local-dev user.
  */
 export async function getUser(req: NextRequest): Promise<StudioUser> {
-  return localDevAuth.getUser(req);
+  const provider = authProvider ?? localDevAuth;
+  return provider.getUser(req);
 }
