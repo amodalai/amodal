@@ -1,5 +1,15 @@
 # @amodalai/studio
 
+## 0.3.8
+
+### Patch Changes
+
+- [#215](https://github.com/amodalai/amodal/pull/215) [`1a17706`](https://github.com/amodalai/amodal/commit/1a177063cffe0d11417b09ceccf35bd69f986199) Thanks [@whodatdev](https://github.com/whodatdev)! - Add lib type declarations to the published package. The build now runs tsc alongside esbuild so `dist-server/` contains both the bundled server JS and `.d.ts` files for the lib barrel. Adds `main`, `types`, and `exports` fields to package.json so `import { ... } from '@amodalai/studio'` resolves types correctly.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.8
+  - @amodalai/db@0.3.8
+
 ## 0.3.7
 
 ### Patch Changes
