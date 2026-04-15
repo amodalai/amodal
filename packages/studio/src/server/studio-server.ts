@@ -39,7 +39,7 @@ async function main(): Promise<void> {
   // Middleware
   // ---------------------------------------------------------------------------
 
-  app.use(corsMiddleware);
+  app.use('/api', corsMiddleware);
   app.use(express.json({ limit: '10mb' }));
   app.use(express.text({ limit: '10mb' }));
 

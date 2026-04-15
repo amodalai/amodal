@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useStudioConfig } from '../App';
+import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { AgentOffline } from '@/components/AgentOffline';
 
 // ---------------------------------------------------------------------------
@@ -19,7 +19,7 @@ interface ConfigModel {
 }
 
 interface ConfigData {
-  models?: ConfigModel[];
+  models?: Record<string, { provider: string; model: string }> | ConfigModel[];
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,12 @@ export function ModelsPage() {
   if (error) return <AgentOffline page="models" />;
   if (!config) return null;
 
-  const models = config.models ?? [];
+  const rawModels = config.models;
+  const models: ConfigModel[] = Array.isArray(rawModels)
+    ? rawModels
+    : rawModels
+      ? Object.entries(rawModels).map(([purpose, m]) => ({ ...m, purpose }))
+      : [];
 
   return (
     <div className="space-y-6">

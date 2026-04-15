@@ -19,7 +19,7 @@ feedbackRouter.get('/api/studio/feedback', asyncHandler(async (req, res) => {
   }
 
   const entries = await listFeedback(agentId);
-  res.json(entries);
+  res.json({ entries });
 }));
 
 // Get feedback summary for an agent
@@ -31,7 +31,7 @@ feedbackRouter.get('/api/studio/feedback/summary', asyncHandler(async (req, res)
   }
 
   const summary = await getFeedbackSummary(agentId);
-  res.json(summary);
+  res.json({ summary });
 }));
 
 // Mark feedback entries as reviewed

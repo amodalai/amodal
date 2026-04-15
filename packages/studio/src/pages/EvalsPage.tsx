@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useStudioConfig } from '../App';
+import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { EvalSuiteList } from '@/components/views/EvalSuiteList';
 
 // ---------------------------------------------------------------------------

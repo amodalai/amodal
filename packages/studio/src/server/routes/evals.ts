@@ -20,7 +20,7 @@ evalsRouter.get('/api/studio/evals', asyncHandler(async (req, res) => {
   }
 
   const suites = await listEvalSuites(agentId);
-  res.json(suites);
+  res.json({ suites });
 }));
 
 // Get a single eval suite
@@ -33,7 +33,7 @@ evalsRouter.get('/api/studio/evals/:id', asyncHandler(async (req, res) => {
     return;
   }
 
-  res.json(suite);
+  res.json({ suite });
 }));
 
 // Run an eval suite
@@ -55,5 +55,5 @@ evalsRouter.post('/api/studio/evals/:id/run', asyncHandler(async (req, res) => {
 evalsRouter.get('/api/studio/evals/:id/results', asyncHandler(async (req, res) => {
   const id = String(req.params['id'] ?? '');
   const runs = await listEvalRuns(id);
-  res.json(runs);
+  res.json({ runs });
 }));

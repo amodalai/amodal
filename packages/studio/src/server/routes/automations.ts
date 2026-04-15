@@ -22,7 +22,7 @@ export const automationsRouter = Router();
 automationsRouter.get('/api/studio/automations', asyncHandler(async (_req, res) => {
   const agentId = getAgentId();
   const automations = await listAutomations(agentId);
-  res.json(automations);
+  res.json({ automations });
 }));
 
 // Create or update an automation

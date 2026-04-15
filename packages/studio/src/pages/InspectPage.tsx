@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
-import { useStudioConfig } from '../App';
+import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { AgentOffline } from '@/components/AgentOffline';
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useStudioConfig } from '../App';
+import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { AgentOffline } from '@/components/AgentOffline';
 
 // ---------------------------------------------------------------------------

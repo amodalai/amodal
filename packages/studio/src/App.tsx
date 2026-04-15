@@ -4,38 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { ThemeProvider } from './components/ThemeProvider';
 import { StudioEventsProvider } from './contexts/StudioEventsContext';
+import { StudioConfigContext } from './contexts/StudioConfigContext';
+import type { StudioConfig } from './contexts/StudioConfigContext';
 import { router } from './router';
-
-interface StudioConfig {
-  agentName: string;
-  runtimeUrl: string;
-  agentId: string;
-}
-
-const StudioConfigContext = createContext<StudioConfig>({
-  agentName: 'Agent',
-  runtimeUrl: 'http://localhost:3847',
-  agentId: 'default',
-});
-
-export function useStudioConfig(): StudioConfig {
-  return useContext(StudioConfigContext);
-}
 
 export function App() {
   const [config, setConfig] = useState<StudioConfig | null>(null);
 
   useEffect(() => {
     fetch('/api/studio/config')
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
       .then((r) => r.json() as Promise<StudioConfig>)
       .then(setConfig)
       .catch(() => {
-        // Fallback to defaults if config endpoint not ready
         setConfig({
           agentName: 'Agent',
           runtimeUrl: 'http://localhost:3847',
@@ -44,7 +29,7 @@ export function App() {
       });
   }, []);
 
-  if (!config) return null; // Loading
+  if (!config) return null;
 
   return (
     <StudioConfigContext.Provider value={config}>

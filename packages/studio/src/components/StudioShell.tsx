@@ -6,7 +6,7 @@
 
 import { useLocation, Link } from 'react-router-dom';
 import { useTheme } from './ThemeProvider';
-import { useStudioConfig } from '../App';
+import { useStudioConfig } from '../contexts/StudioConfigContext';
 import {
   LayoutDashboard,
   FileCode,

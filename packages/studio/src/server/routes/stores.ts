@@ -23,7 +23,7 @@ storesRouter.get('/api/studio/stores/:name/documents', asyncHandler(async (req, 
   const agentId = getAgentId();
   const name = String(req.params['name'] ?? '');
   const documents = await listDocuments(agentId, name);
-  res.json(documents);
+  res.json({ documents });
 }));
 
 // Get a single document with history

@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { StoreDocumentList } from '@/components/views/StoreDocumentList';
-import { useStudioConfig } from '../App';
+import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { apiStoreDocumentsPath } from '@/lib/routes';
 
 // ---------------------------------------------------------------------------
