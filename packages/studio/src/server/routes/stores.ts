@@ -15,7 +15,7 @@ export const storesRouter = Router();
 storesRouter.get('/api/studio/stores', asyncHandler(async (_req, res) => {
   const agentId = getAgentId();
   const stores = await listStores(agentId);
-  res.json(stores);
+  res.json({ stores });
 }));
 
 // List documents in a store

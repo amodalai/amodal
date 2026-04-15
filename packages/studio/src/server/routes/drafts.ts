@@ -18,7 +18,7 @@ draftsRouter.get('/api/studio/drafts', asyncHandler(async (req, res) => {
   const user = await getUser(req);
   const backend = await getBackend();
   const drafts = await backend.listDrafts(user.userId);
-  res.json(drafts);
+  res.json({ drafts });
 }));
 
 // Batch operations — must be before the wildcard routes
