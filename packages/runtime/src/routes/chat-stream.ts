@@ -71,6 +71,7 @@ export function createChatStreamRouter(
           deployId: body.deploy_id,
           auth,
           maxSessionTokens: body.max_session_tokens,
+          pinnedModel: body.model,
           onSessionBuild: options.onSessionBuild,
         });
 

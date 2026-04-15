@@ -77,12 +77,13 @@ async function waitForServer(port: number, maxMs = 15_000): Promise<void> {
 async function chat(
   message: string,
   sessionId?: string,
-  opts?: {maxSessionTokens?: number; images?: Array<{mimeType: string; data: string}>},
+  opts?: {maxSessionTokens?: number; images?: Array<{mimeType: string; data: string}>; model?: {provider: string; model: string}},
 ): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
   const body: Record<string, unknown> = {message};
   if (sessionId) body['session_id'] = sessionId;
   if (opts?.maxSessionTokens !== undefined) body['max_session_tokens'] = opts.maxSessionTokens;
   if (opts?.images?.length) body['images'] = opts.images;
+  if (opts?.model) body['model'] = opts.model;
 
   const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
     method: 'POST',
@@ -266,6 +267,31 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const usage = done?.['usage'] as Record<string, unknown> | undefined;
     expect(usage?.['input_tokens']).toBeGreaterThan(0);
     expect(usage?.['output_tokens']).toBeGreaterThan(0);
+  }, TIMEOUT);
+
+  // -------------------------------------------------------------------------
+  // 3b. Model override
+  // -------------------------------------------------------------------------
+
+  // Find a second provider to override to (different from the primary smoke target)
+  const overrideTarget = Object.entries(SMOKE_TARGETS).find(
+    ([name, t]) => name !== smokeTargetName && process.env[t.apiKeyEnv],
+  );
+
+  it.skipIf(!overrideTarget)('accepts model override in chat request', async () => {
+    const [, target] = overrideTarget!;
+    const {events} = await chat('Reply with exactly one word: hello', undefined, {
+      model: {provider: target.provider, model: target.model},
+    });
+
+    const init = findEvent(events, 'init');
+    const done = findEvent(events, 'done');
+    expect(init).toBeDefined();
+    expect(done).toBeDefined();
+
+    // The model in the done event should match the override
+    const usage = done?.['usage'] as Record<string, unknown> | undefined;
+    expect(usage?.['input_tokens']).toBeGreaterThan(0);
   }, TIMEOUT);
 
   // -------------------------------------------------------------------------

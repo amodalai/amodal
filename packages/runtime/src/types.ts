@@ -44,6 +44,11 @@ export const ChatRequestSchema = z.object({
    * this is a session-wide cumulative total across all turns.
    */
   max_session_tokens: z.number().int().positive().optional(),
+  /** Model override — pin this session to a specific provider/model */
+  model: z.object({
+    provider: z.string().min(1),
+    model: z.string().min(1),
+  }).optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;

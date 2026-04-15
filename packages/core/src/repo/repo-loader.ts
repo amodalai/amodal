@@ -18,11 +18,13 @@ import {loadRepoFromPlatform} from './platform-reader.js';
  */
 export async function loadRepo(options: RepoLoadOptions): Promise<AgentBundle> {
   if (options.localPath) {
-    return loadRepoFromDisk(options.localPath);
+    return loadRepoFromDisk(options.localPath, {skipEnvResolution: options.skipEnvResolution});
   }
 
   if (options.platformUrl && options.platformApiKey) {
-    return loadRepoFromPlatform(options.platformUrl, options.platformApiKey);
+    return loadRepoFromPlatform(options.platformUrl, options.platformApiKey, {
+      skipEnvResolution: options.skipEnvResolution,
+    });
   }
 
   throw new RepoError(

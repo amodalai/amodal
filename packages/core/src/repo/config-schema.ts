@@ -159,9 +159,18 @@ export const AmodalConfigSchema = z.object({
 export type AmodalConfig = z.infer<typeof AmodalConfigSchema>;
 
 /**
- * Parse and validate a config JSON string. Resolves env: references.
+ * Options for parseConfigJson.
  */
-export function parseConfigJson(jsonString: string): AmodalConfig {
+export interface ParseConfigOptions {
+  /** Skip env: resolution — use at build time when credentials aren't available */
+  skipEnvResolution?: boolean;
+}
+
+/**
+ * Parse and validate a config JSON string. Resolves env: references
+ * unless skipEnvResolution is set.
+ */
+export function parseConfigJson(jsonString: string, options?: ParseConfigOptions): AmodalConfig {
   let raw: unknown;
   try {
     raw = JSON.parse(jsonString);
@@ -170,13 +179,17 @@ export function parseConfigJson(jsonString: string): AmodalConfig {
   }
 
   let resolved: unknown;
-  try {
-    resolved = resolveEnvValues(raw);
-  } catch (err) {
-    if (err instanceof RepoError) {
-      throw err;
+  if (options?.skipEnvResolution) {
+    resolved = raw;
+  } else {
+    try {
+      resolved = resolveEnvValues(raw);
+    } catch (err) {
+      if (err instanceof RepoError) {
+        throw err;
+      }
+      throw new RepoError('CONFIG_PARSE_FAILED', 'Failed to resolve env values', err);
     }
-    throw new RepoError('CONFIG_PARSE_FAILED', 'Failed to resolve env values', err);
   }
 
   try {

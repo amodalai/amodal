@@ -16,7 +16,7 @@ export {
   resolveEnvValue,
   resolveEnvValues,
 } from './config-schema.js';
-export type {AmodalConfig, ModelConfig} from './config-schema.js';
+export type {AmodalConfig, ModelConfig, ParseConfigOptions} from './config-schema.js';
 export {
   AccessConfigSchema,
   AlternativeLookupSchema,
@@ -80,7 +80,9 @@ export {loadTools, isToolHandlerDefinition} from './tool-loader.js';
 
 // Readers
 export {loadRepoFromDisk} from './local-reader.js';
+export type {LoadRepoFromDiskOptions} from './local-reader.js';
 export {loadRepoFromPlatform} from './platform-reader.js';
+export type {LoadRepoFromPlatformOptions} from './platform-reader.js';
 export {loadRepo} from './repo-loader.js';
 
 // Sync utilities

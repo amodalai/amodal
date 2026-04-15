@@ -92,6 +92,57 @@ jobs:
 
             console.log(`Created release ${tag}`);
 
+  # Post-publish smoke test — install from npm and verify it works
+  npm-smoke-test:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: npm smoke test
+    runs-on: ubuntu-latest
+    needs: [release]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: amodal
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready" --health-interval=5s --health-timeout=5s --health-retries=5
+    steps:
+      - name: Install from npm
+        run: npm install -g @amodalai/amodal@latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create test agent
+        run: |
+          mkdir -p /tmp/smoke-agent
+          echo '{"name":"ci-smoke","version":"1.0.0","models":{"main":{"provider":"anthropic","model":"claude-sonnet-4-20250514"}}}' > /tmp/smoke-agent/amodal.json
+
+      - name: Start Studio server
+        run: |
+          cd /tmp/smoke-agent
+          PORT=3848 REPO_PATH=/tmp/smoke-agent RUNTIME_URL=http://localhost:3847 \
+            DATABASE_URL=postgresql://localhost:5432/amodal \
+            node $(npm root -g)/@amodalai/studio/dist-server/studio-server.js &
+          # Wait for Studio
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3848/api/studio/config > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+
+      - name: Verify Studio endpoints
+        run: |
+          set -e
+          echo "--- Config ---"
+          curl -sf http://localhost:3848/api/studio/config | jq .
+          echo "--- SPA ---"
+          test "$(curl -sf -o /dev/null -w '%{http_code}' http://localhost:3848/)" = "200"
+          echo "--- Stores ---"
+          curl -sf http://localhost:3848/api/studio/stores | jq .
+          echo "--- Drafts ---"
+          curl -sf http://localhost:3848/api/studio/drafts | jq .
+          echo "All checks passed"
+
   # Manual snapshot releases for testing pre-release builds
   snapshot:
     if: github.event_name == 'workflow_dispatch'

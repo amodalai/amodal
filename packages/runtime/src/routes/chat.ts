@@ -62,6 +62,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         deployId: body.deploy_id,
         auth,
         maxSessionTokens: body.max_session_tokens,
+        pinnedModel: body.model,
       });
 
       const controller = new AbortController();

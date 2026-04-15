@@ -53,7 +53,7 @@ export function CodeEditor({ value, language, onChange, readOnly = false }: Code
       EditorView.theme({
         '&': { height: '100%', fontSize: '13px' },
         '.cm-scroller': { overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace' },
-        '.cm-gutters': { backgroundColor: '#0f0f17', borderRight: '1px solid rgba(255,255,255,0.06)' },
+        '.cm-gutters': { backgroundColor: 'hsl(var(--background))', borderRight: '1px solid hsl(var(--border))' },
         '.cm-content': { padding: '8px 0' },
       }),
     ];

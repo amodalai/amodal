@@ -149,10 +149,16 @@ async function loadEvals(repoPath: string): Promise<LoadedEval[]> {
   return results;
 }
 
+/** Options for loadRepoFromDisk. */
+export interface LoadRepoFromDiskOptions {
+  /** Skip env: resolution — use at build time when credentials aren't available */
+  skipEnvResolution?: boolean;
+}
+
 /**
  * Load the full amodal repo from disk.
  */
-export async function loadRepoFromDisk(repoPath: string): Promise<AgentBundle> {
+export async function loadRepoFromDisk(repoPath: string, options?: LoadRepoFromDiskOptions): Promise<AgentBundle> {
   const absolutePath = path.resolve(repoPath);
 
   // Verify the path exists
@@ -168,7 +174,7 @@ export async function loadRepoFromDisk(repoPath: string): Promise<AgentBundle> {
     configPath,
     `Missing amodal.json in ${absolutePath}`,
   );
-  const config = parseConfig(configJson);
+  const config = parseConfig(configJson, {skipEnvResolution: options?.skipEnvResolution});
 
   // Resolve all packages: local repo + installed packages (local wins)
   const resolved = await resolveAllPackages({repoPath: absolutePath, config});
