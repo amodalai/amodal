@@ -1,5 +1,22 @@
 # @amodalai/runtime
 
+## 0.3.6
+
+### Patch Changes
+
+- [#211](https://github.com/amodalai/amodal/pull/211) [`9b661e1`](https://github.com/amodalai/amodal/commit/9b661e19200336f2c39872399382dc9f72852f36) Thanks [@gte620v](https://github.com/gte620v)! - Add session-level model override to POST /chat
+
+  Accepts an optional `model: { provider, model }` field in the chat request
+  body. When set, the session uses the specified model instead of the agent's
+  configured default. This enables evals and arena to run the same input
+  against different models by creating separate sessions with different
+  model overrides.
+
+- Updated dependencies [[`9b661e1`](https://github.com/amodalai/amodal/commit/9b661e19200336f2c39872399382dc9f72852f36)]:
+  - @amodalai/types@0.3.6
+  - @amodalai/core@0.3.6
+  - @amodalai/db@0.3.6
+
 ## 0.3.5
 
 ### Patch Changes

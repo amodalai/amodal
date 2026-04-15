@@ -1,5 +1,20 @@
 # @amodalai/core
 
+## 0.3.6
+
+### Patch Changes
+
+- [#211](https://github.com/amodalai/amodal/pull/211) [`9b661e1`](https://github.com/amodalai/amodal/commit/9b661e19200336f2c39872399382dc9f72852f36) Thanks [@gte620v](https://github.com/gte620v)! - Add skipEnvResolution option to loadRepo for build-time usage
+
+  When loading an agent repo at build time (e.g. in the cloud build server),
+  `env:VAR_NAME` references in amodal.json don't need to be resolved because
+  credentials aren't available. The new `skipEnvResolution` flag on
+  `RepoLoadOptions` skips env resolution and passes raw config values through
+  to schema validation.
+
+- Updated dependencies [[`9b661e1`](https://github.com/amodalai/amodal/commit/9b661e19200336f2c39872399382dc9f72852f36)]:
+  - @amodalai/types@0.3.6
+
 ## 0.3.5
 
 ### Patch Changes

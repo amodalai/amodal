@@ -1,5 +1,18 @@
 # @amodalai/studio
 
+## 0.3.6
+
+### Patch Changes
+
+- [#209](https://github.com/amodalai/amodal/pull/209) [`8b8e310`](https://github.com/amodalai/amodal/commit/8b8e3102f679d89939015f6698bb014a64b09d35) Thanks [@gte620v](https://github.com/gte620v)! - Fix file editor crash and draft workspace API calls
+  - listDrafts: API returns `{ drafts: [] }` not bare array — fix deserialization
+  - saveDraft: put file path in URL (`PUT /drafts/{path}`) not request body
+  - discardAll: use `POST /discard` endpoint, not `DELETE /drafts`
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.6
+  - @amodalai/db@0.3.6
+
 ## 0.3.5
 
 ### Patch Changes
