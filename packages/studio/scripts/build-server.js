@@ -23,5 +23,3 @@ await build({
   packages: 'external',
   // Let the source code handle __dirname/require via its own imports
 });
-
-process.stdout.write('Studio server bundled to dist-server/studio-server.js\n');
