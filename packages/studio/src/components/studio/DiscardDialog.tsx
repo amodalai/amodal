@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-''/**
+/**
  * DiscardDialog — confirmation modal for "discard all unpublished changes."
  *
  * The "discard" button is styled with red-500/600 (raw Tailwind) per the

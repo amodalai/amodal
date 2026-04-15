@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-''/**
+/**
  * Shared tool-call card. Renders an inline badge for each tool invocation
  * with a contextual summary of the key parameters.
  *
