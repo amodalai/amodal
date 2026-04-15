@@ -250,4 +250,20 @@ describe('parseConfigJson', () => {
       expect((err as RepoError).code).toBe('ENV_NOT_SET');
     }
   });
+
+  it('keeps env: values as literals when skipEnvResolution is set', () => {
+    delete process.env['NONEXISTENT'];
+    const json = JSON.stringify({
+      name: 'test',
+      version: '1.0.0',
+      models: {
+        main: {provider: 'anthropic', model: 'env:NONEXISTENT'},
+      },
+    });
+    // Without flag — throws
+    expect(() => parseConfigJson(json)).toThrow(RepoError);
+    // With flag — succeeds, keeps the literal
+    const config = parseConfigJson(json, {skipEnvResolution: true});
+    expect(config.models?.['main']?.model).toBe('env:NONEXISTENT');
+  });
 });
