@@ -1,5 +1,13 @@
 # @amodalai/runtime-app
 
+## 0.3.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.4
+  - @amodalai/react@0.3.4
+
 ## 0.3.3
 
 ### Patch Changes

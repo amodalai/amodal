@@ -1,5 +1,26 @@
 # @amodalai/amodal
 
+## 0.3.4
+
+### Patch Changes
+
+- [#206](https://github.com/amodalai/amodal/pull/206) [`988bb5e`](https://github.com/amodalai/amodal/commit/988bb5ec9995f3dbc53087b9a61063fe18fefaf0) Thanks [@gte620v](https://github.com/gte620v)! - Replace Next.js with Vite SPA + Express server
+
+  Studio no longer depends on Next.js. The UI is now a Vite-built SPA and the backend is a lightweight Express server bundled with esbuild. This fixes the SWC binary resolution issue that broke Studio when installed via `npm install -g @amodalai/amodal`.
+  - Package size: 396 KB compressed (was ~37 MB with Next.js standalone)
+  - Server startup: ~25ms (was ~3s with `next dev`)
+  - No native binaries, no SWC, no platform-specific dependencies
+  - Local dev preserved: `tsx src/server/studio-server.ts` with Vite dev proxy
+  - Architecture unchanged: Studio remains a separate process from Runtime
+
+- Updated dependencies [[`5e0e062`](https://github.com/amodalai/amodal/commit/5e0e0627b920845645e8a741febe5d6358692b08), [`988bb5e`](https://github.com/amodalai/amodal/commit/988bb5ec9995f3dbc53087b9a61063fe18fefaf0)]:
+  - @amodalai/studio@0.3.4
+  - @amodalai/types@0.3.4
+  - @amodalai/core@0.3.4
+  - @amodalai/runtime@0.3.4
+  - @amodalai/runtime-app@0.3.4
+  - @amodalai/db@0.3.4
+
 ## 0.3.3
 
 ### Patch Changes
