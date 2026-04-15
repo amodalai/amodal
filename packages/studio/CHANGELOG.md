@@ -1,5 +1,19 @@
 # @amodalai/studio
 
+## 0.3.5
+
+### Patch Changes
+
+- [#207](https://github.com/amodalai/amodal/pull/207) [`291e0da`](https://github.com/amodalai/amodal/commit/291e0dab26cc9a184d57c29c86a5d4deae8bdab2) Thanks [@gte620v](https://github.com/gte620v)! - Fix Studio pages to match v0.2.x runtime-app features
+
+  Port pricing table, model arena, token breakdown, markdown rendering, admin
+  chat panel, eval loading, and correct runtime API field mappings from the old
+  runtime-app into Studio.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.5
+  - @amodalai/db@0.3.5
+
 ## 0.3.4
 
 ### Patch Changes
