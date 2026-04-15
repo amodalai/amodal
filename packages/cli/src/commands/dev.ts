@@ -176,9 +176,9 @@ function spawnStudio(opts: {
     ...(opts.agentId ? {AGENT_ID: opts.agentId} : {}),
   };
 
-  // Pre-built server (npm install): dist-server/server/studio-server.js
+  // Pre-built server (npm install): dist-server/studio-server.js
   // Source mode (monorepo dev): src/server/studio-server.ts via tsx
-  const prebuiltEntry = path.join(studioDir, 'dist-server', 'server', 'studio-server.js');
+  const prebuiltEntry = path.join(studioDir, 'dist-server', 'studio-server.js');
   const sourceEntry = path.join(studioDir, 'src', 'server', 'studio-server.ts');
 
   let spawnArgs: string[];
