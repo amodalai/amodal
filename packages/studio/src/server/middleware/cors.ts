@@ -21,6 +21,12 @@ export function corsMiddleware(req: Request, res: Response, next: NextFunction):
   const origin = req.headers.origin;
   if (!origin) { next(); return; }
 
+  // Allow same-origin requests — the browser includes Origin on non-simple
+  // methods (PUT, DELETE) even for same-origin fetches.
+  const host = req.headers.host;
+  if (host && origin === `http://${host}`) { next(); return; }
+  if (host && origin === `https://${host}`) { next(); return; }
+
   const allowedOrigins = getAllowedOrigins();
   if (!allowedOrigins.includes(origin)) {
     res.status(403).json({ error: 'Origin not allowed' });

@@ -26,6 +26,7 @@ const log = createBrowserLogger('useDraftWorkspace');
 // ---------------------------------------------------------------------------
 
 const DRAFTS_API = '/api/studio/drafts';
+const DISCARD_API = '/api/studio/discard';
 const PUBLISH_API = '/api/studio/publish';
 const PREVIEW_API = '/api/studio/preview';
 
@@ -145,19 +146,19 @@ export function useDraftWorkspace(): UseDraftWorkspace {
 
   const listDrafts = useCallback(async (): Promise<void> => {
     await runRequest('listDrafts', async () => {
-      const list = await apiFetch<DraftFile[]>(DRAFTS_API);
-      if (mountedRef.current) setDrafts(list);
-      return list;
+      const response = await apiFetch<{ drafts: DraftFile[] }>(DRAFTS_API);
+      if (mountedRef.current) setDrafts(response.drafts);
+      return response.drafts;
     });
   }, [runRequest]);
 
   const saveDraft = useCallback(
     async (filePath: string, content: string): Promise<void> => {
       const ok = await runRequest('saveDraft', async () => {
-        await apiFetch<unknown>(DRAFTS_API, {
+        await apiFetch<unknown>(`${DRAFTS_API}/${encodeURIComponent(filePath)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filePath, content }),
+          body: JSON.stringify({ content }),
         });
         return true;
       });
@@ -181,7 +182,7 @@ export function useDraftWorkspace(): UseDraftWorkspace {
 
   const discardAll = useCallback(async (): Promise<void> => {
     const ok = await runRequest('discardAll', async () => {
-      await apiFetch<unknown>(DRAFTS_API, { method: 'DELETE' });
+      await apiFetch<unknown>(DISCARD_API, { method: 'POST' });
       return true;
     });
     if (ok) await listDrafts();
