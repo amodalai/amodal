@@ -23,7 +23,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   try {
     const user = await getUser(req);
-    const backend = await getBackend();
+    const backend = await getBackend(req);
 
     logger.info('publish_started', { userId: user.userId });
     const result = await backend.publishDrafts(user.userId);

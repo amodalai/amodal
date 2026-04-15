@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, routeParams: RouteParams): Promise<R
   try {
     const validatedPath = await extractFilePath(routeParams);
     const user = await getUser(req);
-    const backend = await getBackend();
+    const backend = await getBackend(req);
     const draft = await backend.readDraft(user.userId, validatedPath);
 
     if (!draft) {
@@ -62,7 +62,7 @@ export async function PUT(req: NextRequest, routeParams: RouteParams): Promise<R
   try {
     const validatedPath = await extractFilePath(routeParams);
     const user = await getUser(req);
-    const backend = await getBackend();
+    const backend = await getBackend(req);
 
     let content: string;
     const contentType = req.headers.get('content-type') ?? '';
@@ -105,7 +105,7 @@ export async function DELETE(req: NextRequest, routeParams: RouteParams): Promis
   try {
     const validatedPath = await extractFilePath(routeParams);
     const user = await getUser(req);
-    const backend = await getBackend();
+    const backend = await getBackend(req);
     await backend.deleteDraft(user.userId, validatedPath);
     return NextResponse.json({ ok: true }, { headers: corsHeaders(req) });
   } catch (err: unknown) {
