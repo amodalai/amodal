@@ -68,6 +68,8 @@ export interface ResolveSessionOptions {
    * a new session; resumed sessions keep the budget set at creation.
    */
   maxSessionTokens?: number;
+  /** Model override — takes precedence over bundle config for new sessions */
+  pinnedModel?: {provider: string; model: string};
   /**
    * Hook called after session components are built but before the session
    * is created. Allows the hosting layer to enhance components — e.g.,
@@ -110,6 +112,7 @@ function buildComponents(
   opts: {
     sessionType?: SessionType;
     sessionId?: string;
+    pinnedModel?: {provider: string; model: string};
   },
 ): SessionComponents {
   return buildSessionComponents({
@@ -121,6 +124,7 @@ function buildComponents(
     fieldScrubber: shared.fieldScrubber,
     sessionType: opts.sessionType,
     sessionId: opts.sessionId,
+    pinnedModel: opts.pinnedModel,
   });
 }
 
@@ -181,6 +185,7 @@ export async function resolveSession(
     const components = await enhance(buildComponents(bundle, shared, {
       sessionType: opts.sessionType,
       sessionId,
+      pinnedModel: opts.pinnedModel,
     }));
 
     const resumed = await sessionManager.resume(sessionId, {
@@ -206,6 +211,7 @@ export async function resolveSession(
 
   const components = await enhance(buildComponents(bundle, shared, {
     sessionType: opts.sessionType,
+    pinnedModel: opts.pinnedModel,
   }));
 
   const session = sessionManager.create({

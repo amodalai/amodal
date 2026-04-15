@@ -142,9 +142,16 @@ async function loadPlatformConnection(
 /**
  * Load the full amodal repo from the platform API.
  */
+/** Options for loadRepoFromPlatform. */
+export interface LoadRepoFromPlatformOptions {
+  /** Skip env: resolution — use at build time when credentials aren't available */
+  skipEnvResolution?: boolean;
+}
+
 export async function loadRepoFromPlatform(
   apiUrl: string,
   apiKey: string,
+  options?: LoadRepoFromPlatformOptions,
 ): Promise<AgentBundle> {
   // Normalize URL — strip trailing slashes
   let baseUrl = apiUrl;
@@ -155,7 +162,7 @@ export async function loadRepoFromPlatform(
   if (configText === null) {
     throw new RepoError('CONFIG_NOT_FOUND', 'Config not found on platform');
   }
-  const config = parseConfig(configText);
+  const config = parseConfig(configText, {skipEnvResolution: options?.skipEnvResolution});
 
   // Fetch directory tree
   const tree = await fetchJson<RepoTree>(baseUrl, '/api/repo/tree', apiKey);

@@ -55,6 +55,11 @@ export const AIStreamRequestSchema = z.object({
    * session. Distinct from the LLM-API per-call max_tokens.
    */
   max_session_tokens: z.number().int().positive().optional(),
+  /** Model override — pin this session to a specific provider/model */
+  model: z.object({
+    provider: z.string().min(1),
+    model: z.string().min(1),
+  }).optional(),
 });
 
 export type AIStreamRequest = z.infer<typeof AIStreamRequestSchema>;
@@ -459,6 +464,7 @@ export function createAIStreamRouter(options: AIStreamRouterOptions): Router {
           deployId: body.deploy_id,
           auth,
           maxSessionTokens: body.max_session_tokens,
+          pinnedModel: body.model,
           onSessionBuild: options.onSessionBuild,
         });
 

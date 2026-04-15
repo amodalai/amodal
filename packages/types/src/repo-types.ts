@@ -132,4 +132,6 @@ export interface RepoLoadOptions {
   localPath?: string;
   platformUrl?: string;
   platformApiKey?: string;
+  /** Skip env: resolution — use at build time when credentials aren't available */
+  skipEnvResolution?: boolean;
 }
