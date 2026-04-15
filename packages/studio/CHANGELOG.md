@@ -1,5 +1,14 @@
 # @amodalai/studio
 
+## 0.3.3
+
+### Patch Changes
+
+- [#202](https://github.com/amodalai/amodal/pull/202) [`80ebcd7`](https://github.com/amodalai/amodal/commit/80ebcd743eaa0b2785be866d0a7f484c78c5828a) Thanks [@whodatdev](https://github.com/whodatdev)! - Publish @amodalai/studio as a public package. Add `setBackendFactory()` and `setAuthProvider()` extension points so external deployments can inject per-request backends and custom auth. Add barrel export for lib modules (backend interface, types, auth/startup hooks, errors, draft-path validation). Update all route handlers to pass request to `getBackend(req)` for factory resolution.
+
+- Updated dependencies []:
+  - @amodalai/db@0.3.3
+
 ## 0.3.2
 
 ### Patch Changes

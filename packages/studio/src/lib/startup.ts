@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type { Request } from 'express';
 import type { StudioBackend } from './backend';
 import { DrizzleStudioBackend } from './drizzle-backend';
 import { logger } from './logger';
@@ -15,20 +16,57 @@ import { logger } from './logger';
 const REPO_PATH_ENV_KEY = 'REPO_PATH';
 
 // ---------------------------------------------------------------------------
-// Singleton
+// Backend factory override
+// ---------------------------------------------------------------------------
+
+/**
+ * A function that creates a StudioBackend for a given request.
+ * Allows external deployments to inject per-request backends
+ * (e.g. scoped to a specific agent or user context).
+ */
+export type BackendFactory = (req: Request) => Promise<StudioBackend>;
+
+let backendFactory: BackendFactory | null = null;
+
+/**
+ * Set a custom backend factory. When set, {@link getBackend} uses this
+ * factory instead of the default singleton DrizzleStudioBackend.
+ *
+ * Call once at application startup (e.g. in a Next.js instrumentation hook).
+ * Pass `null` to revert to the default singleton behavior.
+ */
+export function setBackendFactory(factory: BackendFactory | null): void {
+  backendFactory = factory;
+}
+
+// ---------------------------------------------------------------------------
+// Singleton (default local-dev backend)
 // ---------------------------------------------------------------------------
 
 let backendPromise: Promise<StudioBackend> | null = null;
 
 /**
- * Get the singleton StudioBackend instance.
- * Initializes on first call (runs ensureSchema, etc.).
+ * Get the StudioBackend instance for a request.
  *
- * Reads configuration from environment variables:
+ * If a custom {@link BackendFactory} has been set via {@link setBackendFactory},
+ * it is called with the request to produce a per-request backend.
+ *
+ * Otherwise falls back to the singleton DrizzleStudioBackend, initialized
+ * from environment variables:
  * - REPO_PATH: path to the agent's repo directory (required)
  * - DATABASE_URL: Postgres connection string (required, read by @amodalai/db)
  */
-export function getBackend(): Promise<StudioBackend> {
+export function getBackend(req?: Request): Promise<StudioBackend> {
+  if (backendFactory) {
+    if (!req) {
+      throw new Error(
+        'BackendFactory is set but no request was provided to getBackend(). ' +
+          'Pass the Request so the factory can resolve the correct backend.',
+      );
+    }
+    return backendFactory(req);
+  }
+
   if (backendPromise) return backendPromise;
 
   backendPromise = initializeBackend();

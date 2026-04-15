@@ -1,12 +1,16 @@
 {
   "name": "@amodalai/studio",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Agent editor — draft workspace, file browser, and publish flow for amodal agents",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/amodalai/amodal.git",
     "directory": "packages/studio"
+  },
+  "homepage": "https://github.com/amodalai/amodal",
+  "bugs": {
+    "url": "https://github.com/amodalai/amodal/issues"
   },
   "type": "module",
   "files": [
@@ -16,7 +20,7 @@
   "scripts": {
     "dev": "tsx src/server/studio-server.ts",
     "build": "vite build && node scripts/build-server.js",
-    "start": "node dist-server/server/studio-server.js",
+    "start": "node dist-server/studio-server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

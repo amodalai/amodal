@@ -4,14 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type { Request } from 'express';
-import type { StudioUser } from '../../lib/types.js';
-
-const LOCAL_DEV_USER: StudioUser = {
-  userId: 'local-dev',
-  displayName: 'Local Developer',
-};
-
-export async function getUser(_req: Request): Promise<StudioUser> {
-  return LOCAL_DEV_USER;
-}
+// Re-export from the canonical auth module so server routes and external
+// consumers (cloud-studio) use the same auth provider with setAuthProvider().
+export { getUser } from '../../lib/auth.js';
