@@ -1,5 +1,15 @@
 # @amodalai/studio
 
+## 0.3.7
+
+### Patch Changes
+
+- [#213](https://github.com/amodalai/amodal/pull/213) [`9190ac3`](https://github.com/amodalai/amodal/commit/9190ac30540d7d2991c17b555f9c4ea8b2011607) Thanks [@whodatdev](https://github.com/whodatdev)! - Extract `createStudioApp()` from the Studio server entry point. Returns the Express app with all middleware and routes mounted but without calling `listen()`. Allows external deployments to use Studio as a serverless handler or embed it in a custom server.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.7
+  - @amodalai/db@0.3.7
+
 ## 0.3.6
 
 ### Patch Changes
