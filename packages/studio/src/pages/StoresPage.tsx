@@ -6,6 +6,8 @@
 
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Database } from 'lucide-react';
+import { AgentOffline } from '@/components/AgentOffline';
 import { storePath } from '@/lib/routes';
 
 // ---------------------------------------------------------------------------
@@ -24,6 +26,7 @@ interface StoreInfo {
 export function StoresPage() {
   const [stores, setStores] = useState<StoreInfo[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/studio/stores', { signal: AbortSignal.timeout(5_000) })
@@ -33,13 +36,14 @@ export function StoresPage() {
         return r.json() as Promise<{ stores: StoreInfo[] }>;
       })
       .then((d) => setStores(d.stores))
-      .catch(() => {
-        // Stores may not be available
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => setLoaded(true));
   }, []);
 
   if (!loaded) return null;
+  if (error) return <AgentOffline page="stores" detail={error} />;
 
   return (
     <div>
@@ -58,7 +62,13 @@ export function StoresPage() {
           </Link>
         ))}
         {stores.length === 0 && (
-          <p className="text-muted-foreground">No stores configured.</p>
+          <div className="text-center py-16 border border-border border-dashed rounded-lg">
+            <Database className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No store data yet.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Stores are populated when your agent writes documents during chat sessions.
+            </p>
+          </div>
         )}
       </div>
     </div>

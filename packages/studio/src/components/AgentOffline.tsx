@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function AgentOffline({ page }: { page: string }) {
+export function AgentOffline({ page, detail }: { page: string; detail?: string }) {
   return (
     <div className="flex items-center justify-center min-h-[50vh]">
       <div className="text-center">
@@ -12,6 +12,9 @@ export function AgentOffline({ page }: { page: string }) {
         <p className="mt-2 text-muted-foreground">
           The runtime is not reachable. The {page} page requires a running agent.
         </p>
+        {detail && (
+          <p className="mt-1 text-xs text-muted-foreground font-mono">{detail}</p>
+        )}
       </div>
     </div>
   );

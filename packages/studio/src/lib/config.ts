@@ -35,9 +35,9 @@ export function getAgentId(): string {
   return process.env[AGENT_ID_ENV_KEY] ?? DEFAULT_AGENT_ID;
 }
 
-/** Returns the agent display name from AGENT_NAME env var. */
+/** Returns the agent display name. Prefers AGENT_NAME, falls back to AGENT_ID. */
 export function getAgentName(): string {
-  return process.env[AGENT_NAME_ENV_KEY] ?? DEFAULT_AGENT_NAME;
+  return process.env[AGENT_NAME_ENV_KEY] ?? process.env[AGENT_ID_ENV_KEY] ?? DEFAULT_AGENT_NAME;
 }
 
 /** Returns the runtime URL from RUNTIME_URL env var. */

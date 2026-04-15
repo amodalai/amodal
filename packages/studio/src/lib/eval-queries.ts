@@ -65,6 +65,34 @@ export async function getEvalRun(id: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Create or update an eval suite from a disk definition.
+ * Uses the suite name + agentId as the natural key (id = `${agentId}:${name}`).
+ */
+export async function upsertEvalSuite(
+  agentId: string,
+  name: string,
+  config: Record<string, unknown>,
+): Promise<void> {
+  const db = await getStudioDb();
+  const id = `${agentId}:${name}`;
+  const now = new Date();
+
+  await db
+    .insert(evalSuites)
+    .values({
+      id,
+      agentId,
+      name,
+      config,
+      createdAt: now,
+    })
+    .onConflictDoUpdate({
+      target: evalSuites.id,
+      set: { name, config },
+    });
+}
+
 /** Shape for inserting a new eval run. */
 export interface NewEvalRun {
   id: string;

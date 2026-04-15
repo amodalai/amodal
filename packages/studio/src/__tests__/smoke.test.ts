@@ -227,4 +227,95 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
 
     expect(res.status).toBe(403);
   });
+
+  // -------------------------------------------------------------------------
+  // Config response shape
+  // -------------------------------------------------------------------------
+
+  test('GET /api/studio/config returns agentId from env', async () => {
+    const res = await fetch(`${baseUrl}/api/studio/config`);
+    const body = (await res.json()) as Record<string, unknown>;
+    // AGENT_ID is set in the test server env
+    expect(typeof body['agentId']).toBe('string');
+    expect(typeof body['agentName']).toBe('string');
+    expect(typeof body['runtimeUrl']).toBe('string');
+  });
+
+  // -------------------------------------------------------------------------
+  // Automations
+  // -------------------------------------------------------------------------
+
+  test('GET /api/studio/automations returns wrapped object', async () => {
+    const res = await fetch(`${baseUrl}/api/studio/automations`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toHaveProperty('automations');
+    expect(Array.isArray(body['automations'])).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Evals
+  // -------------------------------------------------------------------------
+
+  test('GET /api/studio/evals returns wrapped suites', async () => {
+    const res = await fetch(`${baseUrl}/api/studio/evals?agentId=test`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toHaveProperty('suites');
+    expect(Array.isArray(body['suites'])).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Feedback
+  // -------------------------------------------------------------------------
+
+  test('GET /api/studio/feedback returns wrapped entries', async () => {
+    const res = await fetch(`${baseUrl}/api/studio/feedback?agentId=test`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toHaveProperty('entries');
+    expect(Array.isArray(body['entries'])).toBe(true);
+  });
+
+  test('GET /api/studio/feedback/summary returns wrapped summary', async () => {
+    const res = await fetch(`${baseUrl}/api/studio/feedback/summary?agentId=test`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toHaveProperty('summary');
+  });
+
+  // -------------------------------------------------------------------------
+  // Workspace
+  // -------------------------------------------------------------------------
+
+  test('GET /api/studio/workspace returns workspace bundle', async () => {
+    const res = await fetch(`${baseUrl}/api/studio/workspace`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toHaveProperty('agentId');
+    expect(body).toHaveProperty('files');
+  });
+
+  // -------------------------------------------------------------------------
+  // Discard
+  // -------------------------------------------------------------------------
+
+  test('POST /api/studio/discard returns discarded count', async () => {
+    const res = await fetch(`${baseUrl}/api/studio/discard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toHaveProperty('discarded');
+  });
+
+  // -------------------------------------------------------------------------
+  // 404 for unknown API routes
+  // -------------------------------------------------------------------------
+
+  test('GET /api/studio/nonexistent returns 404', async () => {
+    const res = await fetch(`${baseUrl}/api/studio/nonexistent`);
+    expect(res.status).toBe(404);
+  });
 });

@@ -4,50 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useEffect } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { AgentOffline } from '@/components/AgentOffline';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface ConfigModel {
-  provider: string;
-  model: string;
-  purpose?: string;
-}
-
-interface ConfigData {
-  name: string;
-  version?: string;
-  description?: string;
-  repoPath?: string;
-  models?: ConfigModel[];
-}
+import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export function AgentPage() {
-  const { runtimeUrl } = useStudioConfig();
-  const [config, setConfig] = useState<ConfigData | null>(null);
-  const [error, setError] = useState(false);
+  const { config, error, loading } = useRuntimeConfig();
 
-  useEffect(() => {
-    fetch(`${runtimeUrl}/api/config`, { signal: AbortSignal.timeout(5_000) })
-      .then((r) => {
-        if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
-        return r.json() as Promise<ConfigData>;
-      })
-      .then(setConfig)
-      .catch(() => setError(true));
-  }, [runtimeUrl]);
+  if (error) return <AgentOffline page="agent" detail={error} />;
+  if (loading || !config) return null;
 
-  if (error) return <AgentOffline page="agent" />;
-  if (!config) return null;
+  const modelEntries = config.models ? Object.entries(config.models) : [];
 
   return (
     <div className="space-y-6">
@@ -80,7 +50,7 @@ export function AgentPage() {
         </dl>
       </div>
 
-      {config.models && config.models.length > 0 && (
+      {modelEntries.length > 0 && (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
@@ -96,11 +66,11 @@ export function AgentPage() {
               </tr>
             </thead>
             <tbody>
-              {config.models.map((m, i) => (
-                <tr key={i} className="border-b border-border last:border-0">
+              {modelEntries.map(([purpose, m]) => (
+                <tr key={purpose} className="border-b border-border last:border-0">
                   <td className="px-4 py-2 text-foreground">{m.provider}</td>
                   <td className="px-4 py-2 font-mono text-foreground">{m.model}</td>
-                  <td className="px-4 py-2 text-muted-foreground">{m.purpose ?? '—'}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{purpose}</td>
                 </tr>
               ))}
             </tbody>
