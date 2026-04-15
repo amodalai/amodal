@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type { NextRequest } from 'next/server';
+import type { Request } from 'express';
 import type { StudioUser } from './types';
 
 // ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ import type { StudioUser } from './types';
  * The default implementation returns a fixed local-dev user.
  */
 export interface StudioAuth {
-  getUser(req: NextRequest): Promise<StudioUser>;
+  getUser(req: Request): Promise<StudioUser>;
 }
 
 // ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ let authProvider: StudioAuth | null = null;
  * Set a custom auth provider. When set, {@link getUser} delegates to it
  * instead of the default local-dev auth.
  *
- * Call once at application startup (e.g. in a Next.js instrumentation hook).
+ * Call once at application startup.
  * Pass `null` to revert to the default local-dev behavior.
  */
 export function setAuthProvider(provider: StudioAuth | null): void {
@@ -47,7 +47,7 @@ const LOCAL_DEV_USER: StudioUser = {
 };
 
 class LocalDevAuth implements StudioAuth {
-  async getUser(_req: NextRequest): Promise<StudioUser> {
+  async getUser(_req: Request): Promise<StudioUser> {
     return LOCAL_DEV_USER;
   }
 }
@@ -60,7 +60,7 @@ const localDevAuth = new LocalDevAuth();
  * If a custom auth provider has been set via {@link setAuthProvider},
  * delegates to it. Otherwise returns the local-dev user.
  */
-export async function getUser(req: NextRequest): Promise<StudioUser> {
+export async function getUser(req: Request): Promise<StudioUser> {
   const provider = authProvider ?? localDevAuth;
   return provider.getUser(req);
 }

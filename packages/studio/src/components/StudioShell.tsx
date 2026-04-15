@@ -4,11 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-'use client';
-
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
+import { useLocation, Link } from 'react-router-dom';
 import { useTheme } from './ThemeProvider';
+import { useStudioConfig } from '../contexts/StudioConfigContext';
 import {
   LayoutDashboard,
   FileCode,
@@ -28,8 +26,6 @@ import {
 import type { LucideIcon } from 'lucide-react';
 
 interface Props {
-  agentName: string;
-  runtimeUrl: string;
   children: React.ReactNode;
 }
 
@@ -60,7 +56,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
   return (
     <Link
-      href={item.href}
+      to={item.href}
       className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
         active
           ? 'bg-primary/10 text-primary font-medium'
@@ -73,8 +69,9 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-export function StudioShell({ agentName, runtimeUrl, children }: Props) {
-  const pathname = usePathname();
+export function StudioShell({ children }: Props) {
+  const { pathname } = useLocation();
+  const { agentName, runtimeUrl } = useStudioConfig();
   const { dark, toggle } = useTheme();
 
   const isActive = (href: string) =>

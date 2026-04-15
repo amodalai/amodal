@@ -1,0 +1,60 @@
+/**
+ * @license
+ * Copyright 2026 Amodal Labs, Inc.
+ * SPDX-License-Identifier: MIT
+ */
+
+import { createBrowserRouter, Outlet } from 'react-router-dom';
+import { StudioShell } from './components/StudioShell';
+import { OverviewPage } from './pages/OverviewPage';
+import { AgentPage } from './pages/AgentPage';
+import { ChatPage } from './pages/ChatPage';
+import { FilesPage } from './pages/FilesPage';
+import { InspectPage } from './pages/InspectPage';
+import { ModelsPage } from './pages/ModelsPage';
+import { PromptPage } from './pages/PromptPage';
+import { SecretsPage } from './pages/SecretsPage';
+import { SystemPage } from './pages/SystemPage';
+import { StoresPage } from './pages/StoresPage';
+import { StoreDocumentsPage } from './pages/StoreDocumentsPage';
+import { DocumentViewPage } from './pages/DocumentViewPage';
+import { AutomationsPage } from './pages/AutomationsPage';
+import { AutomationDetailPage } from './pages/AutomationDetailPage';
+import { EvalsPage } from './pages/EvalsPage';
+import { FeedbackPage } from './pages/FeedbackPage';
+import { ArenaPage } from './pages/ArenaPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+
+function Layout() {
+  return (
+    <StudioShell>
+      <Outlet />
+    </StudioShell>
+  );
+}
+
+export const router = createBrowserRouter([
+  {
+    element: <Layout />,
+    children: [
+      { path: '/', element: <OverviewPage /> },
+      { path: '/agent', element: <AgentPage /> },
+      { path: '/files', element: <FilesPage /> },
+      { path: '/stores', element: <StoresPage /> },
+      { path: '/stores/:name', element: <StoreDocumentsPage /> },
+      { path: '/stores/:name/:key', element: <DocumentViewPage /> },
+      { path: '/automations', element: <AutomationsPage /> },
+      { path: '/automations/:name', element: <AutomationDetailPage /> },
+      { path: '/evals', element: <EvalsPage /> },
+      { path: '/feedback', element: <FeedbackPage /> },
+      { path: '/chat', element: <ChatPage /> },
+      { path: '/arena', element: <ArenaPage /> },
+      { path: '/prompt', element: <PromptPage /> },
+      { path: '/secrets', element: <SecretsPage /> },
+      { path: '/models', element: <ModelsPage /> },
+      { path: '/system', element: <SystemPage /> },
+      { path: '/inspect/:kind/:name', element: <InspectPage /> },
+      { path: '*', element: <NotFoundPage /> },
+    ],
+  },
+]);

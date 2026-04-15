@@ -13,22 +13,14 @@
     "url": "https://github.com/amodalai/amodal/issues"
   },
   "type": "module",
-  "main": "dist/src/lib/index.js",
-  "types": "dist/src/lib/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/src/lib/index.d.ts",
-      "import": "./dist/src/lib/index.js"
-    }
-  },
   "files": [
-    "dist"
+    "dist",
+    "dist-server"
   ],
   "scripts": {
-    "dev": "next dev --port 3850",
-    "build": "node ../../scripts/build_package.js",
-    "build:app": "next build",
-    "start": "next start --port 3850",
+    "dev": "tsx src/server/studio-server.ts",
+    "build": "vite build && node scripts/build-server.js",
+    "start": "node dist-server/studio-server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -45,21 +37,26 @@
     "@codemirror/view": "^6.40.0",
     "autoprefixer": "^10.4.20",
     "clsx": "^2.1.1",
+    "express": "^5.1.0",
     "lucide-react": "^0.469.0",
-    "next": "^15.3.1",
     "pg": "^8.13.1",
     "postcss": "^8.4.47",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-router-dom": "^7.6.1",
     "tailwind-merge": "^2.6.0",
     "tailwindcss": "^3.4.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@types/node": "^20.11.0",
     "@types/pg": "^8.11.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.5.2",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.3",
+    "vite": "^6.3.5",
     "vitest": "^3.2.1"
   }
 }

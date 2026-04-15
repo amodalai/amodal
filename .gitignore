@@ -2,6 +2,7 @@
 node_modules/
 dist/
 dist-dev/
+dist-server/
 .next/
 bundle/
 *.tsbuildinfo

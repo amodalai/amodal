@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-'use client';
-
 /**
  * DiscardDialog — confirmation modal for "discard all unpublished changes."
  *

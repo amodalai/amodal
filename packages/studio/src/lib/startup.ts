@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type { NextRequest } from 'next/server';
+import type { Request } from 'express';
 import type { StudioBackend } from './backend';
 import { DrizzleStudioBackend } from './drizzle-backend';
 import { logger } from './logger';
@@ -24,7 +24,7 @@ const REPO_PATH_ENV_KEY = 'REPO_PATH';
  * Allows external deployments to inject per-request backends
  * (e.g. scoped to a specific agent or user context).
  */
-export type BackendFactory = (req: NextRequest) => Promise<StudioBackend>;
+export type BackendFactory = (req: Request) => Promise<StudioBackend>;
 
 let backendFactory: BackendFactory | null = null;
 
@@ -56,12 +56,12 @@ let backendPromise: Promise<StudioBackend> | null = null;
  * - REPO_PATH: path to the agent's repo directory (required)
  * - DATABASE_URL: Postgres connection string (required, read by @amodalai/db)
  */
-export function getBackend(req?: NextRequest): Promise<StudioBackend> {
+export function getBackend(req?: Request): Promise<StudioBackend> {
   if (backendFactory) {
     if (!req) {
       throw new Error(
         'BackendFactory is set but no request was provided to getBackend(). ' +
-          'Pass the NextRequest so the factory can resolve the correct backend.',
+          'Pass the Request so the factory can resolve the correct backend.',
       );
     }
     return backendFactory(req);

@@ -50,8 +50,6 @@ export {
 // Draft path validation
 export { validateDraftPath } from './draft-path.js';
 
-// Route helpers
-export { errorResponse } from './route-helpers.js';
-
-// CORS
-export { handleCors, corsHeaders } from './cors.js';
+// Logger
+export { logger } from './logger.js';
+export type { Logger } from './logger.js';

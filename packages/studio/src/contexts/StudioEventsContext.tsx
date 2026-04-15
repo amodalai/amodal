@@ -9,8 +9,6 @@
  * endpoint and dispatches events to subscribers.
  */
 
-'use client';
-
 import { createContext, useContext, useEffect, useRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
 

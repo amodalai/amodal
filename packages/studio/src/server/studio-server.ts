@@ -1,0 +1,120 @@
+/**
+ * @license
+ * Copyright 2026 Amodal Labs, Inc.
+ * SPDX-License-Identifier: MIT
+ */
+
+import express from 'express';
+import path from 'node:path';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { logger } from '../lib/logger.js';
+import { corsMiddleware } from './middleware/cors.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { initEventBridge } from '../lib/event-bridge.js';
+import { closePgListener } from '../lib/pg-listener.js';
+import { configRouter } from './routes/config.js';
+import { workspaceRouter } from './routes/workspace.js';
+import { draftsRouter } from './routes/drafts.js';
+import { publishRouter } from './routes/publish.js';
+import { discardRouter } from './routes/discard.js';
+import { previewRouter } from './routes/preview.js';
+import { storesRouter } from './routes/stores.js';
+import { automationsRouter } from './routes/automations.js';
+import { evalsRouter } from './routes/evals.js';
+import { feedbackRouter } from './routes/feedback.js';
+import { eventsRouter } from './routes/events.js';
+import { adminChatRouter } from './routes/admin-chat.js';
+import { runtimeProxyRouter } from './routes/runtime-proxy.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const DEFAULT_PORT = 3848;
+
+async function main(): Promise<void> {
+  const port = parseInt(process.env['PORT'] ?? String(DEFAULT_PORT), 10);
+  const app = express();
+
+  // ---------------------------------------------------------------------------
+  // Middleware
+  // ---------------------------------------------------------------------------
+
+  app.use('/api', corsMiddleware);
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.text({ limit: '10mb' }));
+
+  // ---------------------------------------------------------------------------
+  // API routes
+  // ---------------------------------------------------------------------------
+
+  app.use(configRouter);
+  app.use(workspaceRouter);
+  app.use(draftsRouter);
+  app.use(publishRouter);
+  app.use(discardRouter);
+  app.use(previewRouter);
+  app.use(storesRouter);
+  app.use(automationsRouter);
+  app.use(evalsRouter);
+  app.use(feedbackRouter);
+  app.use(eventsRouter);
+  app.use(adminChatRouter);
+  app.use(runtimeProxyRouter);
+
+  // ---------------------------------------------------------------------------
+  // Static files + SPA catch-all (production)
+  // ---------------------------------------------------------------------------
+
+  // In source: __dirname is src/server → ../../dist
+  // When bundled: __dirname is dist-server → ../dist
+  // Use process.cwd() as fallback since the CLI sets cwd to studioDir
+  const distDir = existsSync(path.resolve(__dirname, '..', '..', 'dist', 'index.html'))
+    ? path.resolve(__dirname, '..', '..', 'dist')
+    : path.resolve(__dirname, '..', 'dist');
+  if (existsSync(path.join(distDir, 'index.html'))) {
+    app.use(express.static(distDir));
+    app.get('{*path}', (req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        next();
+        return;
+      }
+      res.sendFile(path.join(distDir, 'index.html'));
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Error handler (must be last)
+  // ---------------------------------------------------------------------------
+
+  app.use(errorHandler);
+
+  // ---------------------------------------------------------------------------
+  // Start
+  // ---------------------------------------------------------------------------
+
+  await initEventBridge();
+
+  const server = app.listen(port, 'localhost', () => {
+    logger.info('studio_server_started', { port });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Graceful shutdown
+  // ---------------------------------------------------------------------------
+
+  const shutdown = async (signal: string): Promise<void> => {
+    logger.info('studio_server_shutdown', { signal });
+    await closePgListener();
+    server.close();
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+}
+
+main().catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  logger.error('studio_server_fatal', { error: message });
+  process.exit(1);
+});

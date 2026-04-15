@@ -15,8 +15,6 @@
  * consumer's change count stays in sync.
  */
 
-'use client';
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DraftFile, PublishResult, PreviewResult } from '@/lib/types';
 import { createBrowserLogger } from '@/lib/browser-logger';

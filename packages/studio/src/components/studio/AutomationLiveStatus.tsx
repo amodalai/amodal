@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-'use client';
-
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useStudioEvents } from '@/contexts/StudioEventsContext';
 import { RotateCw } from 'lucide-react';
 
@@ -26,11 +23,16 @@ function isObjectWithName(value: unknown): value is { name: unknown; status?: un
 /**
  * Subscribes to SSE events for automation_started / automation_completed
  * and shows a "Running..." indicator when the named automation is active.
- * Triggers a router refresh on completion to update the run history.
+ * Calls onComplete when the automation finishes to allow the parent to refetch.
  */
-export function AutomationLiveStatus({ name }: { name: string }) {
+export function AutomationLiveStatus({
+  name,
+  onComplete,
+}: {
+  name: string;
+  onComplete?: () => void;
+}) {
   const [running, setRunning] = useState(false);
-  const router = useRouter();
 
   useStudioEvents(
     ['automation_started', 'automation_completed'],
@@ -45,10 +47,10 @@ export function AutomationLiveStatus({ name }: { name: string }) {
         } else {
           // automation_completed event
           setRunning(false);
-          router.refresh();
+          onComplete?.();
         }
       },
-      [name, router],
+      [name, onComplete],
     ),
   );
 

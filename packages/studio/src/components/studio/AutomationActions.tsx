@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-'use client';
-
-import { useCallback, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useState } from 'react';
 import { Play, Square, RotateCw } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -32,9 +29,8 @@ function automationStopUrl(name: string): string {
 // Run Now button
 // ---------------------------------------------------------------------------
 
-export function RunNowButton({ name }: { name: string }) {
+export function RunNowButton({ name, onComplete }: { name: string; onComplete?: () => void }) {
   const [pending, setPending] = useState(false);
-  const router = useRouter();
 
   const handleClick = useCallback(async () => {
     setPending(true);
@@ -43,11 +39,11 @@ export function RunNowButton({ name }: { name: string }) {
         method: 'POST',
         signal: AbortSignal.timeout(10_000),
       });
-      router.refresh();
+      onComplete?.();
     } finally {
       setPending(false);
     }
-  }, [name, router]);
+  }, [name, onComplete]);
 
   return (
     <button
@@ -69,21 +65,31 @@ export function RunNowButton({ name }: { name: string }) {
 // Start / Stop toggle
 // ---------------------------------------------------------------------------
 
-export function ToggleButton({ name, enabled }: { name: string; enabled: boolean }) {
-  const [isPending, startTransition] = useTransition();
-  const router = useRouter();
+export function ToggleButton({
+  name,
+  enabled,
+  onComplete,
+}: {
+  name: string;
+  enabled: boolean;
+  onComplete?: () => void;
+}) {
+  const [isPending, setIsPending] = useState(false);
 
   const handleToggle = useCallback(() => {
     const url = enabled ? automationStopUrl(name) : automationStartUrl(name);
+    setIsPending(true);
     void fetch(url, {
       method: 'POST',
       signal: AbortSignal.timeout(10_000),
-    }).then(() => {
-      startTransition(() => {
-        router.refresh();
+    })
+      .then(() => {
+        onComplete?.();
+      })
+      .finally(() => {
+        setIsPending(false);
       });
-    });
-  }, [name, enabled, router]);
+  }, [name, enabled, onComplete]);
 
   if (enabled) {
     return (

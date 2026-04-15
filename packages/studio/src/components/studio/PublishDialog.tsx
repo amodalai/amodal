@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-'use client';
-
 /**
  * PublishDialog — modal for committing staged drafts to the agent's git repo.
  *

@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-'use client';
-
 /**
  * DraftWorkspaceBar — pinned bar at the bottom of the files editor showing
  * the draft count and Discard / Preview / Publish actions.

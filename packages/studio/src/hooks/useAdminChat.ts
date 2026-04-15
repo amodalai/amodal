@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-'use client';
-
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createBrowserLogger } from '@/lib/browser-logger';
 
