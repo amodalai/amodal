@@ -16,7 +16,7 @@ import type { FormEvent } from 'react';
 import { Send, Square, Bot, AlertCircle, Loader2, RotateCcw } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { useChatStream, streamSSE } from '@amodalai/react';
-import type { ChatMessage, ContentBlock, SSEEvent } from '@amodalai/react';
+import type { ChatMessage, ContentBlock, SSEEvent, ToolCallInfo } from '@amodalai/react';
 import { ToolCallCard } from '../ToolCallCard';
 
 // ---------------------------------------------------------------------------
@@ -88,7 +88,7 @@ function AssistantBlocks({ blocks, compact }: { blocks: ContentBlock[]; compact:
           case 'tool_calls':
             return (
               <div key={`tc-${String(i)}`}>
-                {block.calls.map((call) => <ToolCallCard key={call.toolId} call={call} />)}
+                {block.calls.map((call: ToolCallInfo) => <ToolCallCard key={call.toolId} call={call} />)}
               </div>
             );
           default:
@@ -236,7 +236,7 @@ export function AdminChat({ compact = true }: { compact?: boolean }) {
           </div>
         )}
 
-        {stream.messages.map((msg) => {
+        {stream.messages.map((msg: ChatMessage) => {
           if (msg.type === 'user') {
             return (
               <div key={msg.id} className="mb-4 flex justify-end">

@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Database } from 'lucide-react';
+import { AgentOffline } from '@/components/AgentOffline';
 import { storePath } from '@/lib/routes';
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,7 @@ interface StoreInfo {
 export function StoresPage() {
   const [stores, setStores] = useState<StoreInfo[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/studio/stores', { signal: AbortSignal.timeout(5_000) })
@@ -34,13 +36,14 @@ export function StoresPage() {
         return r.json() as Promise<{ stores: StoreInfo[] }>;
       })
       .then((d) => setStores(d.stores))
-      .catch(() => {
-        // Stores may not be available
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => setLoaded(true));
   }, []);
 
   if (!loaded) return null;
+  if (error) return <AgentOffline page="stores" detail={error} />;
 
   return (
     <div>

@@ -60,11 +60,11 @@ interface KnowledgeDetail {
 
 type DetailData = ConnectionDetail | McpDetail | SkillDetail | KnowledgeDetail;
 
-const kindConfig: Record<InspectKind, { icon: typeof Plug; color: string; label: string }> = {
-  connections: { icon: Plug, color: 'emerald', label: 'REST Connection' },
-  mcp: { icon: Cable, color: 'violet', label: 'MCP Server' },
-  skills: { icon: Sparkles, color: 'amber', label: 'Skill' },
-  knowledge: { icon: BookOpen, color: 'blue', label: 'Knowledge' },
+const kindConfig: Record<InspectKind, { icon: typeof Plug; iconClass: string; badgeClass: string; label: string }> = {
+  connections: { icon: Plug, iconClass: 'text-emerald-500', badgeClass: 'bg-emerald-500/10 text-emerald-600', label: 'REST Connection' },
+  mcp: { icon: Cable, iconClass: 'text-violet-500', badgeClass: 'bg-violet-500/10 text-violet-600', label: 'MCP Server' },
+  skills: { icon: Sparkles, iconClass: 'text-amber-500', badgeClass: 'bg-amber-500/10 text-amber-600', label: 'Skill' },
+  knowledge: { icon: BookOpen, iconClass: 'text-blue-500', badgeClass: 'bg-blue-500/10 text-blue-600', label: 'Knowledge' },
 };
 
 function ConnectionView({ data }: { data: ConnectionDetail }) {
@@ -321,11 +321,11 @@ export function InspectPage() {
       {/* Header */}
       <div className="border-b border-border px-6 py-4">
         <div className="flex items-center gap-2">
-          <Icon className={`h-4 w-4 text-${config.color}-500`} />
+          <Icon className={`h-4 w-4 ${config.iconClass}`} />
           <h1 className="text-lg font-semibold text-foreground">{displayName}</h1>
         </div>
         <div className="flex items-center gap-3 mt-1">
-          <span className={`text-[11px] px-2 py-0.5 rounded-full bg-${config.color}-100 dark:bg-${config.color}-500/10 text-${config.color}-700 dark:text-${config.color}-400 font-medium`}>
+          <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${config.badgeClass}`}>
             {config.label}
           </span>
           {'location' in data && data.location && (

@@ -44,7 +44,7 @@ function categoryLabel(cat: string): string {
 export function PromptPage() {
   const { runtimeUrl } = useStudioConfig();
   const [data, setData] = useState<PromptData | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const navigate = useNavigate();
 
@@ -56,10 +56,10 @@ export function PromptPage() {
         return res.json() as Promise<PromptData>;
       })
       .then(setData)
-      .catch(() => setError(true));
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   }, [runtimeUrl]);
 
-  if (error) return <AgentOffline page="prompt" />;
+  if (error) return <AgentOffline page="prompt" detail={error} />;
   if (!data) return null;
 
   // Aggregate by category
