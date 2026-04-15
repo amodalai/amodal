@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-'use client';
-
-/**
+''/**
  * Renders a row of image thumbnails from tool results.
  * Accepts URL strings or base64 data objects.
  * Clicking an image opens it full-size in a new tab.

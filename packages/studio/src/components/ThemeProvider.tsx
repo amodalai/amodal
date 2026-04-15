@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-'use client';
-
 import { createContext, useContext, useEffect, useState } from 'react';
 
 interface ThemeContextValue {

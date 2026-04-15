@@ -158,9 +158,6 @@ function spawnStudio(opts: {
   repoPath: string;
   agentId?: string;
 }): StudioSpawnResult | null {
-  // Resolve @amodalai/studio package directory. Try two strategies:
-  // 1. Sibling directory relative to the CLI package (works when symlinked from outside)
-  // 2. Node module resolution via createRequire (works when installed as a dependency)
   const studioDir = resolveStudioDir();
   if (!studioDir) {
     log.info('studio_not_available', {
@@ -169,17 +166,43 @@ function spawnStudio(opts: {
     return null;
   }
 
-  // Resolve the `next` binary from the studio-app's dependency tree.
-  // In pnpm the binary may live in the package's own node_modules or in a
-  // hoisted location; createRequire resolves correctly in both cases.
-  let nextBin: string;
-  try {
+  const studioEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    REPO_PATH: opts.repoPath,
+    STUDIO_CORS_ORIGINS: `http://localhost:${String(opts.runtimePort)}`,
+    RUNTIME_URL: `http://localhost:${String(opts.runtimePort)}`,
+    PORT: String(opts.port),
+    HOSTNAME: 'localhost',
+    ...(opts.agentId ? {AGENT_ID: opts.agentId} : {}),
+  };
+
+  // Pre-built server (npm install): dist-server/server/studio-server.js
+  // Source mode (monorepo dev): src/server/studio-server.ts via tsx
+  const prebuiltEntry = path.join(studioDir, 'dist-server', 'server', 'studio-server.js');
+  const sourceEntry = path.join(studioDir, 'src', 'server', 'studio-server.ts');
+
+  let spawnArgs: string[];
+
+  if (existsSync(prebuiltEntry)) {
+    log.info('studio_prebuilt', {path: prebuiltEntry});
+    spawnArgs = [prebuiltEntry];
+  } else if (existsSync(sourceEntry)) {
+    // Resolve tsx from the studio package's dependency tree
     const studioRequire = createRequire(path.join(studioDir, 'package.json'));
-    // next/dist/bin/next is the actual CLI entrypoint
-    nextBin = studioRequire.resolve('next/dist/bin/next');
-  } catch {
-    log.info('studio_next_not_found', {
-      hint: 'next binary not resolvable from @amodalai/studio — Studio subprocess skipped',
+    let tsxBin: string;
+    try {
+      tsxBin = studioRequire.resolve('tsx/dist/cli.mjs');
+    } catch {
+      log.info('studio_tsx_not_found', {
+        hint: 'tsx not resolvable from @amodalai/studio — Studio subprocess skipped',
+      });
+      return null;
+    }
+    log.info('studio_dev_mode', {tsxBin, entry: sourceEntry});
+    spawnArgs = [tsxBin, sourceEntry];
+  } else {
+    log.info('studio_entry_not_found', {
+      hint: 'Neither dist-server nor src/server found — Studio subprocess skipped',
     });
     return null;
   }
@@ -187,17 +210,10 @@ function spawnStudio(opts: {
   const studioUrl = `http://localhost:${String(opts.port)}`;
   const child = spawn(
     process.execPath,
-    [nextBin, 'dev', '--port', String(opts.port)],
+    spawnArgs,
     {
       cwd: studioDir,
-      env: {
-        ...process.env,
-        REPO_PATH: opts.repoPath,
-        STUDIO_CORS_ORIGINS: `http://localhost:${String(opts.runtimePort)}`,
-        RUNTIME_URL: `http://localhost:${String(opts.runtimePort)}`,
-        PORT: String(opts.port),
-        ...(opts.agentId ? {AGENT_ID: opts.agentId} : {}),
-      },
+      env: studioEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
