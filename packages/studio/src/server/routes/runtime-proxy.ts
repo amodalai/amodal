@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../route-helpers.js';
 import { logger } from '../../lib/logger.js';
+import { getRuntimeUrl } from '../../lib/config.js';
 
 const RUNTIME_PROXY_TIMEOUT_MS = 5_000;
 
@@ -14,7 +15,7 @@ export const runtimeProxyRouter = Router();
 
 // Proxy the file tree root
 runtimeProxyRouter.get('/api/runtime/files', asyncHandler(async (_req, res) => {
-  const runtimeUrl = process.env['RUNTIME_URL'];
+  const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) {
     res.status(503).json({ error: { code: 'RUNTIME_URL_NOT_CONFIGURED', message: 'RUNTIME_URL not configured' } });
     return;
@@ -38,7 +39,7 @@ runtimeProxyRouter.get('/api/runtime/files', asyncHandler(async (_req, res) => {
 // Proxy file tree with path
 runtimeProxyRouter.get('/api/runtime/files/{*filePath}', asyncHandler(async (req, res) => {
   const filePath = String(req.params['filePath'] ?? '');
-  const runtimeUrl = process.env['RUNTIME_URL'];
+  const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) {
     res.status(503).json({ error: { code: 'RUNTIME_URL_NOT_CONFIGURED', message: 'RUNTIME_URL not configured' } });
     return;

@@ -7,13 +7,14 @@
 import { Router } from 'express';
 import { asyncHandler } from '../route-helpers.js';
 import { logger } from '../../lib/logger.js';
+import { getAdminAgentUrl } from '../../lib/config.js';
 
 const ADMIN_CHAT_TIMEOUT_MS = 300_000;
 
 export const adminChatRouter = Router();
 
 adminChatRouter.post('/api/studio/admin-chat/stream', asyncHandler(async (req, res) => {
-  const adminUrl = process.env['ADMIN_AGENT_URL'];
+  const adminUrl = getAdminAgentUrl();
   if (!adminUrl) {
     res.status(503).json({
       error: { code: 'ADMIN_AGENT_NOT_CONFIGURED', message: 'Admin agent not configured' },
@@ -79,7 +80,11 @@ adminChatRouter.post('/api/studio/admin-chat/stream', asyncHandler(async (req, r
       res.end();
     });
     req.on('close', () => {
-      reader.cancel().catch(() => { /* client disconnected */ });
+      reader.cancel().catch((err: unknown) => {
+        logger.debug('admin_chat_reader_cancel', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     });
   } else {
     res.end();

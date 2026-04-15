@@ -6,13 +6,14 @@
 
 import { Router } from 'express';
 import { asyncHandler } from '../route-helpers.js';
+import { getAgentId, getAgentName, getRuntimeUrl } from '../../lib/config.js';
 
 export const configRouter = Router();
 
 configRouter.get('/api/studio/config', asyncHandler(async (_req, res) => {
   res.json({
-    agentName: process.env['AGENT_NAME'] ?? 'default',
-    runtimeUrl: process.env['RUNTIME_URL'] ?? '',
-    agentId: process.env['AGENT_ID'] ?? 'default',
+    agentName: getAgentName(),
+    runtimeUrl: getRuntimeUrl(),
+    agentId: getAgentId(),
   });
 }));
