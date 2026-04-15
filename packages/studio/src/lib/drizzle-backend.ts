@@ -97,15 +97,21 @@ async function walkDirectory(dirPath: string, basePath: string): Promise<Workspa
 // Drizzle backend implementation
 // ---------------------------------------------------------------------------
 
+export interface DrizzleStudioBackendOptions {
+  repoPath: string;
+  /** Override DATABASE_URL env var. Used in cloud to scope to per-agent databases. */
+  databaseUrl?: string;
+}
+
 export class DrizzleStudioBackend implements StudioBackend {
   private db: NodePgDatabase;
   private repoPath: string;
   private log = logger.child({ backend: 'drizzle' });
 
-  constructor(options: { repoPath: string }) {
+  constructor(options: DrizzleStudioBackendOptions) {
     this.repoPath = options.repoPath;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- getDb returns Db which extends NodePgDatabase
-    this.db = getDb() as unknown as NodePgDatabase;
+    this.db = getDb(options.databaseUrl) as unknown as NodePgDatabase;
   }
 
   async initialize(): Promise<void> {
