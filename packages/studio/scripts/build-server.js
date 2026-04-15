@@ -5,12 +5,17 @@
  */
 
 /**
- * Bundle the Studio Express server into a single file using esbuild.
- * Output: dist-server/studio-server.js
+ * Bundle the Studio Express server + lib into dist-server/.
+ *
+ * 1. esbuild bundles the server entry point into a single JS file
+ * 2. tsc emits declaration files (.d.ts) for the lib modules so
+ *    external consumers (e.g. cloud-studio) get type checking
  */
 
 import { build } from 'esbuild';
+import { execSync } from 'node:child_process';
 
+// Bundle the Express server
 await build({
   entryPoints: ['src/server/studio-server.ts'],
   outfile: 'dist-server/studio-server.js',
@@ -19,7 +24,9 @@ await build({
   target: 'node20',
   format: 'esm',
   sourcemap: true,
-  // Keep runtime deps external — they'll be in node_modules
   packages: 'external',
-  // Let the source code handle __dirname/require via its own imports
 });
+
+// Emit declaration files for the lib barrel into dist-server/
+// so `import { ... } from '@amodalai/studio'` resolves types.
+execSync('npx tsc --build tsconfig.build.json', { stdio: 'inherit' });

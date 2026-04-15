@@ -7,20 +7,19 @@
     "noImplicitReturns": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "sourceMap": true,
     "declaration": true,
+    "sourceMap": true,
     "composite": true,
-    "incremental": true,
     "allowSyntheticDefaultImports": true,
     "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "target": "es2022",
     "jsx": "preserve",
-    "outDir": "dist",
+    "outDir": "dist-server",
     "types": ["node"]
   },
   "include": ["src/lib/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts"],
+  "exclude": ["node_modules", "dist", "dist-server", "src/**/*.test.ts"],
   "references": [{ "path": "../db" }]
 }

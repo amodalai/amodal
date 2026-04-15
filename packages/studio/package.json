@@ -13,6 +13,17 @@
     "url": "https://github.com/amodalai/amodal/issues"
   },
   "type": "module",
+  "main": "dist-server/src/lib/index.js",
+  "types": "dist-server/src/lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-server/src/lib/index.d.ts",
+      "import": "./dist-server/src/lib/index.js"
+    },
+    "./server": {
+      "import": "./dist-server/studio-server.js"
+    }
+  },
   "files": [
     "dist",
     "dist-server"
