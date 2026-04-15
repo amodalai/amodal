@@ -51,8 +51,8 @@ export async function fetchFromRuntime<T>(path: string): Promise<T> {
 
   const res = await fetch(url, {
     signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-    cache: 'no-store',
-  });
+    next: { revalidate: 0 },
+  } as RequestInit);
 
   const duration = Date.now() - start;
 
