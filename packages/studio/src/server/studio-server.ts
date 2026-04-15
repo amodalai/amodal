@@ -13,6 +13,9 @@ import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { initEventBridge } from '../lib/event-bridge.js';
 import { closePgListener } from '../lib/pg-listener.js';
+import { loadEvalsFromDisk } from '../lib/eval-loader.js';
+import { getBackend } from '../lib/startup.js';
+import { getAgentId } from '../lib/config.js';
 import { configRouter } from './routes/config.js';
 import { workspaceRouter } from './routes/workspace.js';
 import { draftsRouter } from './routes/drafts.js';
@@ -93,6 +96,28 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
 
   await initEventBridge();
+
+  // -------------------------------------------------------------------------
+  // Load eval suites from disk into Postgres
+  // -------------------------------------------------------------------------
+
+  const repoPath = process.env['REPO_PATH'];
+  if (repoPath) {
+    // Ensure backend (and therefore schema) is initialized before loading evals
+    await getBackend();
+    const agentId = getAgentId();
+    try {
+      const loaded = await loadEvalsFromDisk(repoPath, agentId);
+      if (loaded > 0) {
+        logger.info('eval_suites_loaded_at_startup', { agentId, loaded });
+      }
+    } catch (err: unknown) {
+      logger.warn('eval_suites_load_failed', {
+        agentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   const server = app.listen(port, 'localhost', () => {
     logger.info('studio_server_started', { port });

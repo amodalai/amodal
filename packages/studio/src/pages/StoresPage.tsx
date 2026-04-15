@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Database } from 'lucide-react';
 import { storePath } from '@/lib/routes';
 
 // ---------------------------------------------------------------------------
@@ -58,7 +59,13 @@ export function StoresPage() {
           </Link>
         ))}
         {stores.length === 0 && (
-          <p className="text-muted-foreground">No stores configured.</p>
+          <div className="text-center py-16 border border-border border-dashed rounded-lg">
+            <Database className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No store data yet.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Stores are populated when your agent writes documents during chat sessions.
+            </p>
+          </div>
         )}
       </div>
     </div>

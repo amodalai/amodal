@@ -8,7 +8,6 @@ import { createBrowserRouter, Outlet } from 'react-router-dom';
 import { StudioShell } from './components/StudioShell';
 import { OverviewPage } from './pages/OverviewPage';
 import { AgentPage } from './pages/AgentPage';
-import { ChatPage } from './pages/ChatPage';
 import { FilesPage } from './pages/FilesPage';
 import { InspectPage } from './pages/InspectPage';
 import { ModelsPage } from './pages/ModelsPage';
@@ -47,7 +46,6 @@ export const router = createBrowserRouter([
       { path: '/automations/:name', element: <AutomationDetailPage /> },
       { path: '/evals', element: <EvalsPage /> },
       { path: '/feedback', element: <FeedbackPage /> },
-      { path: '/chat', element: <ChatPage /> },
       { path: '/arena', element: <ArenaPage /> },
       { path: '/prompt', element: <PromptPage /> },
       { path: '/secrets', element: <SecretsPage /> },
