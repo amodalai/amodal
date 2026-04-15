@@ -30,12 +30,14 @@ interface PromptData {
   contributions: Contribution[];
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  connection: '#10b981',
-  knowledge: '#3b82f6',
-  skill: '#f59e0b',
-  system: '#6b7280',
+/** Tailwind bg classes for prompt category colors (semantic status colors per CLAUDE.md). */
+const CATEGORY_BG: Record<string, string> = {
+  connection: 'bg-emerald-500',
+  knowledge: 'bg-blue-500',
+  skill: 'bg-amber-500',
+  system: 'bg-muted-foreground/50',
 };
+const DEFAULT_CATEGORY_BG = 'bg-muted-foreground/30';
 
 function categoryLabel(cat: string): string {
   return cat.charAt(0).toUpperCase() + cat.slice(1);
@@ -107,8 +109,8 @@ export function PromptPage() {
             return (
               <div
                 key={cat.name}
-                style={{ width: `${String(Math.max(w, 0.3))}%`, backgroundColor: CATEGORY_COLORS[cat.category] ?? '#94a3b8' }}
-                className="h-full"
+                style={{ width: `${String(Math.max(w, 0.3))}%` }}
+                className={`h-full ${CATEGORY_BG[cat.category] ?? DEFAULT_CATEGORY_BG}`}
                 title={`${cat.name}: ${cat.value.toLocaleString()} tokens`}
               />
             );
@@ -124,10 +126,10 @@ export function PromptPage() {
             const pct = promptTokens > 0 ? Math.round((cat.value / promptTokens) * 100) : 0;
             return (
               <div key={cat.name} className="flex items-center gap-3">
-                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.category] ?? '#94a3b8' }} />
+                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${CATEGORY_BG[cat.category] ?? DEFAULT_CATEGORY_BG}`} />
                 <div className="w-28 text-xs text-muted-foreground font-medium">{cat.name}</div>
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${String(pct)}%`, backgroundColor: CATEGORY_COLORS[cat.category] ?? '#94a3b8' }} />
+                  <div className={`h-full rounded-full ${CATEGORY_BG[cat.category] ?? DEFAULT_CATEGORY_BG}`} style={{ width: `${String(pct)}%` }} />
                 </div>
                 <div className="w-16 text-right text-xs text-muted-foreground tabular-nums">{cat.value.toLocaleString()}</div>
                 <div className="w-8 text-right text-xs text-muted-foreground tabular-nums">{pct}%</div>
@@ -158,21 +160,15 @@ export function PromptPage() {
             );
             return (
               <div key={c.name} className="flex items-center gap-3">
-                <div
-                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: CATEGORY_COLORS[c.category] ?? '#94a3b8' }}
-                />
+                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${CATEGORY_BG[c.category] ?? DEFAULT_CATEGORY_BG}`} />
                 {nameEl}
                 <span className="text-[10px] text-muted-foreground w-16 truncate" title={c.category}>
                   {categoryLabel(c.category)}
                 </span>
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${String(pct)}%`,
-                      backgroundColor: CATEGORY_COLORS[c.category] ?? '#94a3b8',
-                    }}
+                    className={`h-full rounded-full ${CATEGORY_BG[c.category] ?? DEFAULT_CATEGORY_BG}`}
+                    style={{ width: `${String(pct)}%` }}
                   />
                 </div>
                 <div className="w-16 text-right text-xs text-muted-foreground tabular-nums">
