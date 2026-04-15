@@ -34,8 +34,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_PORT = 3848;
 
-async function main(): Promise<void> {
-  const port = parseInt(process.env['PORT'] ?? String(DEFAULT_PORT), 10);
+// ---------------------------------------------------------------------------
+// App factory
+// ---------------------------------------------------------------------------
+
+export interface CreateStudioAppOptions {
+  /** Whether to serve the Vite SPA static files. Defaults to true. */
+  serveStaticFiles?: boolean;
+}
+
+/**
+ * Create the Studio Express app with all middleware and routes mounted.
+ * Does NOT call `listen()` — the caller is responsible for starting the server.
+ *
+ * Used by:
+ * - `main()` below for local dev (`amodal studio` / `amodal dev`)
+ * - Cloud deployments that need the Express app as a serverless handler
+ */
+export function createStudioApp(options: CreateStudioAppOptions = {}): express.Express {
+  const { serveStaticFiles = true } = options;
   const app = express();
 
   // ---------------------------------------------------------------------------
@@ -68,21 +85,23 @@ async function main(): Promise<void> {
   // Static files + SPA catch-all (production)
   // ---------------------------------------------------------------------------
 
-  // In source: __dirname is src/server → ../../dist
-  // When bundled: __dirname is dist-server → ../dist
-  // Use process.cwd() as fallback since the CLI sets cwd to studioDir
-  const distDir = existsSync(path.resolve(__dirname, '..', '..', 'dist', 'index.html'))
-    ? path.resolve(__dirname, '..', '..', 'dist')
-    : path.resolve(__dirname, '..', 'dist');
-  if (existsSync(path.join(distDir, 'index.html'))) {
-    app.use(express.static(distDir));
-    app.get('{*path}', (req, res, next) => {
-      if (req.path.startsWith('/api/')) {
-        next();
-        return;
-      }
-      res.sendFile(path.join(distDir, 'index.html'));
-    });
+  if (serveStaticFiles) {
+    // In source: __dirname is src/server → ../../dist
+    // When bundled: __dirname is dist-server → ../dist
+    // Use process.cwd() as fallback since the CLI sets cwd to studioDir
+    const distDir = existsSync(path.resolve(__dirname, '..', '..', 'dist', 'index.html'))
+      ? path.resolve(__dirname, '..', '..', 'dist')
+      : path.resolve(__dirname, '..', 'dist');
+    if (existsSync(path.join(distDir, 'index.html'))) {
+      app.use(express.static(distDir));
+      app.get('{*path}', (req, res, next) => {
+        if (req.path.startsWith('/api/')) {
+          next();
+          return;
+        }
+        res.sendFile(path.join(distDir, 'index.html'));
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -91,9 +110,16 @@ async function main(): Promise<void> {
 
   app.use(errorHandler);
 
-  // ---------------------------------------------------------------------------
-  // Start
-  // ---------------------------------------------------------------------------
+  return app;
+}
+
+// ---------------------------------------------------------------------------
+// Local dev entry point
+// ---------------------------------------------------------------------------
+
+async function main(): Promise<void> {
+  const port = parseInt(process.env['PORT'] ?? String(DEFAULT_PORT), 10);
+  const app = createStudioApp();
 
   await initEventBridge();
 
