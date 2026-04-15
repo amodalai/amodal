@@ -24,4 +24,4 @@ await build({
   // Let the source code handle __dirname/require via its own imports
 });
 
-console.log('Studio server bundled to dist-server/studio-server.js');
+process.stdout.write('Studio server bundled to dist-server/studio-server.js\n');
