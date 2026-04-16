@@ -1,5 +1,20 @@
 # @amodalai/studio
 
+## 0.3.11
+
+### Patch Changes
+
+- [#212](https://github.com/amodalai/amodal/pull/212) [`2687d26`](https://github.com/amodalai/amodal/commit/2687d2684a75868ce7d89fd1b0b2aad3cb7da6b7) Thanks [@gte620v](https://github.com/gte620v)! - Add databaseUrl option to DrizzleStudioBackend for cloud multi-tenant usage
+
+  Cloud-studio needs to create per-request backends scoped to different
+  agent databases. The new optional `databaseUrl` constructor parameter
+  overrides the `DATABASE_URL` env var, enabling the `setBackendFactory()`
+  hook to connect to the correct per-agent Neon database.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.11
+  - @amodalai/db@0.3.11
+
 ## 0.3.10
 
 ### Patch Changes
