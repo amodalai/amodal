@@ -35,6 +35,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT = 3848;
 
 // ---------------------------------------------------------------------------
+// Re-exports for cloud-studio (so everything is available from ./server)
+// ---------------------------------------------------------------------------
+
+export { setAuthProvider, getUser } from '../lib/auth.js';
+export type { StudioAuth } from '../lib/auth.js';
+export { setBackendFactory, getBackend, resetBackend } from '../lib/startup.js';
+export type { BackendFactory } from '../lib/startup.js';
+export { DrizzleStudioBackend } from '../lib/drizzle-backend.js';
+export type { DrizzleStudioBackendOptions } from '../lib/drizzle-backend.js';
+export { StudioError, StudioPublishError, StudioStorageError, StudioPathError, StudioFeatureUnavailableError } from '../lib/errors.js';
+export type { StudioUser, DraftFile, PublishResult, WorkspaceBundle } from '../lib/types.js';
+export { logger } from '../lib/logger.js';
+
+// ---------------------------------------------------------------------------
 // App factory
 // ---------------------------------------------------------------------------
 
