@@ -118,28 +118,32 @@ jobs:
           mkdir -p /tmp/smoke-agent
           echo '{"name":"ci-smoke","version":"1.0.0","models":{"main":{"provider":"anthropic","model":"claude-sonnet-4-20250514"}}}' > /tmp/smoke-agent/amodal.json
 
-      - name: Start Studio server
+      - name: Start amodal dev
         run: |
           cd /tmp/smoke-agent
-          PORT=3848 REPO_PATH=/tmp/smoke-agent RUNTIME_URL=http://localhost:3847 \
-            DATABASE_URL=postgresql://localhost:5432/amodal \
-            node $(npm root -g)/@amodalai/studio/dist-server/studio-server.js &
-          # Wait for Studio
+          DATABASE_URL=postgresql://localhost:5432/amodal amodal dev &
+          # Wait for both runtime and Studio to start
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:3848/api/studio/config > /dev/null 2>&1; then break; fi
+            if curl -sf http://localhost:3847/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:3848/api/studio/config > /dev/null 2>&1; then
+              break
+            fi
             sleep 1
           done
 
-      - name: Verify Studio endpoints
+      - name: Verify endpoints
         run: |
           set -e
-          echo "--- Config ---"
+          echo "--- Runtime health ---"
+          curl -sf http://localhost:3847/health
+          echo ""
+          echo "--- Studio config ---"
           curl -sf http://localhost:3848/api/studio/config | jq .
-          echo "--- SPA ---"
+          echo "--- Studio SPA ---"
           test "$(curl -sf -o /dev/null -w '%{http_code}' http://localhost:3848/)" = "200"
-          echo "--- Stores ---"
+          echo "--- Studio stores ---"
           curl -sf http://localhost:3848/api/studio/stores | jq .
-          echo "--- Drafts ---"
+          echo "--- Studio drafts ---"
           curl -sf http://localhost:3848/api/studio/drafts | jq .
           echo "All checks passed"
 
