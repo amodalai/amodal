@@ -16,7 +16,7 @@ import type { ReactNode } from 'react';
 // Types
 // ---------------------------------------------------------------------------
 
-const STUDIO_EVENT_TYPES = [
+export const STUDIO_EVENT_TYPES = [
   'store_updated',
   'session_updated',
   'feedback_created',
@@ -24,11 +24,11 @@ const STUDIO_EVENT_TYPES = [
   'automation_completed',
 ] as const;
 
-type StudioEventType = (typeof STUDIO_EVENT_TYPES)[number];
+export type StudioEventType = (typeof STUDIO_EVENT_TYPES)[number];
 
-type EventHandler = (payload: unknown) => void;
+export type EventHandler = (payload: unknown) => void;
 
-interface StudioEventsContextValue {
+export interface StudioEventsContextValue {
   subscribe(types: StudioEventType[], handler: EventHandler): () => void;
 }
 
@@ -42,7 +42,7 @@ const SSE_ENDPOINT = '/api/studio/events';
 // Context
 // ---------------------------------------------------------------------------
 
-const StudioEventsContext = createContext<StudioEventsContextValue>({
+export const StudioEventsContext = createContext<StudioEventsContextValue>({
   subscribe: () => () => {},
 });
 
