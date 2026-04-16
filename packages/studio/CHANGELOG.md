@@ -1,5 +1,15 @@
 # @amodalai/studio
 
+## 0.3.10
+
+### Patch Changes
+
+- [#219](https://github.com/amodalai/amodal/pull/219) [`795fbcb`](https://github.com/amodalai/amodal/commit/795fbcb6ae15915dc90c9ac34f9047ee7bc63a3a) Thanks [@whodatdev](https://github.com/whodatdev)! - Ship `src/` in the published package and add subpath exports for the App component, events context, config context, and styles. Allows external deployments to Vite-build their own SPA entry point that wraps the OSS Studio App with custom providers.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.10
+  - @amodalai/db@0.3.10
+
 ## 0.3.9
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @amodalai/core
 
+## 0.3.10
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.10
+
 ## 0.3.9
 
 ### Patch Changes
