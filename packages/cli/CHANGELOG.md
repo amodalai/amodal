@@ -1,5 +1,17 @@
 # @amodalai/amodal
 
+## 0.3.9
+
+### Patch Changes
+
+- Updated dependencies [[`08036ef`](https://github.com/amodalai/amodal/commit/08036ef84100310124f2a52d0e7810d1ce59fdc2)]:
+  - @amodalai/studio@0.3.9
+  - @amodalai/types@0.3.9
+  - @amodalai/core@0.3.9
+  - @amodalai/runtime@0.3.9
+  - @amodalai/runtime-app@0.3.9
+  - @amodalai/db@0.3.9
+
 ## 0.3.8
 
 ### Patch Changes
