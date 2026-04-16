@@ -1,5 +1,15 @@
 # @amodalai/studio
 
+## 0.3.9
+
+### Patch Changes
+
+- [#217](https://github.com/amodalai/amodal/pull/217) [`08036ef`](https://github.com/amodalai/amodal/commit/08036ef84100310124f2a52d0e7810d1ce59fdc2) Thanks [@whodatdev](https://github.com/whodatdev)! - Export the events context, types, and hook from StudioEventsContext so external deployments can provide their own real-time events implementation. Make the App component accept an optional `eventsProvider` prop to swap the default SSE provider.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.9
+  - @amodalai/db@0.3.9
+
 ## 0.3.8
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@amodalai/studio",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Agent editor — draft workspace, file browser, and publish flow for amodal agents",
   "license": "MIT",
   "repository": {
