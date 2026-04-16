@@ -4,45 +4,43 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { asyncHandler } from '../route-helpers.js';
+import { Hono } from 'hono';
 import { logger } from '../../lib/logger.js';
 import { getRuntimeUrl } from '../../lib/config.js';
 
 const RUNTIME_PROXY_TIMEOUT_MS = 5_000;
 
-export const runtimeProxyRouter = Router();
+export const runtimeProxyRoutes = new Hono();
 
 // Proxy the file tree root
-runtimeProxyRouter.get('/api/runtime/files', asyncHandler(async (_req, res) => {
+runtimeProxyRoutes.get('/api/runtime/files', async (c) => {
   const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) {
-    res.status(503).json({ error: { code: 'RUNTIME_URL_NOT_CONFIGURED', message: 'RUNTIME_URL not configured' } });
-    return;
+    return c.json({ error: { code: 'RUNTIME_URL_NOT_CONFIGURED', message: 'RUNTIME_URL not configured' } }, 503);
   }
 
   try {
     const upstream = await fetch(`${runtimeUrl}/api/files`, {
       signal: AbortSignal.timeout(RUNTIME_PROXY_TIMEOUT_MS),
     });
-    res.status(upstream.status);
-    res.setHeader('Content-Type', upstream.headers.get('Content-Type') ?? 'application/json');
     const body = await upstream.text();
-    res.send(body);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- upstream HTTP status is always valid
+    return c.text(body, upstream.status as import('hono/utils/http-status').ContentfulStatusCode, {
+      'Content-Type': upstream.headers.get('Content-Type') ?? 'application/json',
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error('runtime_proxy_error', { path: '/api/files', error: message });
-    res.status(502).json({ error: { code: 'RUNTIME_UNREACHABLE', message: 'Failed to reach runtime' } });
+    return c.json({ error: { code: 'RUNTIME_UNREACHABLE', message: 'Failed to reach runtime' } }, 502);
   }
-}));
+});
 
 // Proxy file tree with path
-runtimeProxyRouter.get('/api/runtime/files/{*filePath}', asyncHandler(async (req, res) => {
-  const filePath = String(req.params['filePath'] ?? '');
+runtimeProxyRoutes.get('/api/runtime/files/*', async (c) => {
+  const filePath = c.req.param('*') ?? '';
   const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) {
-    res.status(503).json({ error: { code: 'RUNTIME_URL_NOT_CONFIGURED', message: 'RUNTIME_URL not configured' } });
-    return;
+    return c.json({ error: { code: 'RUNTIME_URL_NOT_CONFIGURED', message: 'RUNTIME_URL not configured' } }, 503);
   }
 
   const upstreamPath = filePath ? `/api/files/${filePath}` : '/api/files';
@@ -51,13 +49,14 @@ runtimeProxyRouter.get('/api/runtime/files/{*filePath}', asyncHandler(async (req
     const upstream = await fetch(`${runtimeUrl}${upstreamPath}`, {
       signal: AbortSignal.timeout(RUNTIME_PROXY_TIMEOUT_MS),
     });
-    res.status(upstream.status);
-    res.setHeader('Content-Type', upstream.headers.get('Content-Type') ?? 'application/json');
     const body = await upstream.text();
-    res.send(body);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- upstream HTTP status is always valid
+    return c.text(body, upstream.status as import('hono/utils/http-status').ContentfulStatusCode, {
+      'Content-Type': upstream.headers.get('Content-Type') ?? 'application/json',
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error('runtime_proxy_error', { path: upstreamPath, error: message });
-    res.status(502).json({ error: { code: 'RUNTIME_UNREACHABLE', message: 'Failed to reach runtime' } });
+    return c.json({ error: { code: 'RUNTIME_UNREACHABLE', message: 'Failed to reach runtime' } }, 502);
   }
-}));
+});

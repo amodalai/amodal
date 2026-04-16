@@ -4,15 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { asyncHandler } from '../route-helpers.js';
+import { Hono } from 'hono';
 import { StudioFeatureUnavailableError } from '../../lib/errors.js';
 
-export const previewRouter = Router();
+export const previewRoutes = new Hono();
 
-previewRouter.post('/api/studio/preview', asyncHandler(async (_req, _res) => {
+previewRoutes.post('/api/studio/preview', async () => {
   throw new StudioFeatureUnavailableError(
     'preview',
     'Preview is not available in local development mode. Publish directly instead.',
   );
-}));
+});

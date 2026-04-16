@@ -4,16 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { asyncHandler } from '../route-helpers.js';
+import { Hono } from 'hono';
 import { getUser } from '../middleware/auth.js';
 import { getBackend } from '../../lib/startup.js';
 
-export const discardRouter = Router();
+export const discardRoutes = new Hono();
 
-discardRouter.post('/api/studio/discard', asyncHandler(async (req, res) => {
-  const user = await getUser(req);
+discardRoutes.post('/api/studio/discard', async (c) => {
+  const user = await getUser(c.req.raw);
   const backend = await getBackend();
   const discarded = await backend.discardAllDrafts(user.userId);
-  res.json({ discarded });
-}));
+  return c.json({ discarded });
+});

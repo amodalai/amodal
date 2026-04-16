@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { asyncHandler } from '../route-helpers.js';
+import { Hono } from 'hono';
 import { getBackend } from '../../lib/startup.js';
 
-export const workspaceRouter = Router();
+export const workspaceRoutes = new Hono();
 
-workspaceRouter.get('/api/studio/workspace', asyncHandler(async (_req, res) => {
+workspaceRoutes.get('/api/studio/workspace', async (c) => {
   const backend = await getBackend();
   const workspace = await backend.getWorkspace();
-  res.json(workspace);
-}));
+  return c.json(workspace);
+});

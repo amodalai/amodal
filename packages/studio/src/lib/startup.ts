@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type { Request } from 'express';
 import type { StudioBackend } from './backend';
 import { DrizzleStudioBackend } from './drizzle-backend';
 import { logger } from './logger';

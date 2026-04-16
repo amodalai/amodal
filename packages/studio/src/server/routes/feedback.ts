@@ -4,51 +4,46 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { asyncHandler } from '../route-helpers.js';
+import { Hono } from 'hono';
 import { listFeedback, getFeedbackSummary, markFeedbackReviewed } from '../../lib/feedback-queries.js';
 
-export const feedbackRouter = Router();
+export const feedbackRoutes = new Hono();
 
 // List feedback for an agent
-feedbackRouter.get('/api/studio/feedback', asyncHandler(async (req, res) => {
-  const agentId = String(req.query['agentId'] ?? '');
+feedbackRoutes.get('/api/studio/feedback', async (c) => {
+  const agentId = c.req.query('agentId') ?? '';
   if (!agentId) {
-    res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'agentId query parameter is required' } });
-    return;
+    return c.json({ error: { code: 'BAD_REQUEST', message: 'agentId query parameter is required' } }, 400);
   }
 
   const entries = await listFeedback(agentId);
-  res.json({ entries });
-}));
+  return c.json({ entries });
+});
 
 // Get feedback summary for an agent
-feedbackRouter.get('/api/studio/feedback/summary', asyncHandler(async (req, res) => {
-  const agentId = String(req.query['agentId'] ?? '');
+feedbackRoutes.get('/api/studio/feedback/summary', async (c) => {
+  const agentId = c.req.query('agentId') ?? '';
   if (!agentId) {
-    res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'agentId query parameter is required' } });
-    return;
+    return c.json({ error: { code: 'BAD_REQUEST', message: 'agentId query parameter is required' } }, 400);
   }
 
   const summary = await getFeedbackSummary(agentId);
-  res.json({ summary });
-}));
+  return c.json({ summary });
+});
 
 // Mark feedback entries as reviewed
-feedbackRouter.post('/api/studio/feedback/mark-reviewed', asyncHandler(async (req, res) => {
-  const body = req.body as unknown;
+feedbackRoutes.post('/api/studio/feedback/mark-reviewed', async (c) => {
+  const body = await c.req.json() as unknown;
 
   if (typeof body !== 'object' || body === null || !('ids' in body)) {
-    res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Request body must include "ids" array' } });
-    return;
+    return c.json({ error: { code: 'BAD_REQUEST', message: 'Request body must include "ids" array' } }, 400);
   }
 
   const { ids } = body as { ids: unknown };
   if (!Array.isArray(ids) || !ids.every((id): id is string => typeof id === 'string')) {
-    res.status(400).json({ error: { code: 'BAD_REQUEST', message: '"ids" must be an array of strings' } });
-    return;
+    return c.json({ error: { code: 'BAD_REQUEST', message: '"ids" must be an array of strings' } }, 400);
   }
 
   await markFeedbackReviewed(ids);
-  res.json({ ok: true });
-}));
+  return c.json({ ok: true });
+});

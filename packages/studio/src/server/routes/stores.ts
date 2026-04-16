@@ -4,33 +4,32 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { asyncHandler } from '../route-helpers.js';
+import { Hono } from 'hono';
 import { getAgentId } from '../../lib/config.js';
 import { listStores, listDocuments, getDocument, getDocumentHistory } from '../../lib/store-queries.js';
 
-export const storesRouter = Router();
+export const storesRoutes = new Hono();
 
 // List all stores
-storesRouter.get('/api/studio/stores', asyncHandler(async (_req, res) => {
+storesRoutes.get('/api/studio/stores', async (c) => {
   const agentId = getAgentId();
   const stores = await listStores(agentId);
-  res.json({ stores });
-}));
+  return c.json({ stores });
+});
 
 // List documents in a store
-storesRouter.get('/api/studio/stores/:name/documents', asyncHandler(async (req, res) => {
+storesRoutes.get('/api/studio/stores/:name/documents', async (c) => {
   const agentId = getAgentId();
-  const name = String(req.params['name'] ?? '');
+  const name = c.req.param('name');
   const documents = await listDocuments(agentId, name);
-  res.json({ documents });
-}));
+  return c.json({ documents });
+});
 
 // Get a single document with history
-storesRouter.get('/api/studio/stores/:name/documents/:key', asyncHandler(async (req, res) => {
+storesRoutes.get('/api/studio/stores/:name/documents/:key', async (c) => {
   const agentId = getAgentId();
-  const name = String(req.params['name'] ?? '');
-  const key = String(req.params['key'] ?? '');
+  const name = c.req.param('name');
+  const key = c.req.param('key');
 
   const [document, history] = await Promise.all([
     getDocument(agentId, name, key),
@@ -38,9 +37,8 @@ storesRouter.get('/api/studio/stores/:name/documents/:key', asyncHandler(async (
   ]);
 
   if (!document) {
-    res.status(404).json({ error: { code: 'NOT_FOUND', message: `Document not found: ${name}/${key}` } });
-    return;
+    return c.json({ error: { code: 'NOT_FOUND', message: `Document not found: ${name}/${key}` } }, 404);
   }
 
-  res.json({ document, history });
-}));
+  return c.json({ document, history });
+});
