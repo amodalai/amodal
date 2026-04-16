@@ -121,7 +121,7 @@ jobs:
       - name: Start amodal dev
         run: |
           cd /tmp/smoke-agent
-          DATABASE_URL=postgresql://localhost:5432/amodal amodal dev &
+          DATABASE_URL=postgresql://postgres@localhost:5432/amodal amodal dev &
           # Wait for both runtime and Studio to start
           for i in $(seq 1 30); do
             if curl -sf http://localhost:3847/health > /dev/null 2>&1 && \
