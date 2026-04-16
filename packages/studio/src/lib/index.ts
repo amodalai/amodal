@@ -15,6 +15,7 @@
 // Backend interface + default implementation
 export type { StudioBackend } from './backend.js';
 export { DrizzleStudioBackend } from './drizzle-backend.js';
+export type { DrizzleStudioBackendOptions } from './drizzle-backend.js';
 
 // Types
 export type {
