@@ -1,6 +1,6 @@
 {
   "name": "@amodalai/types",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Shared type definitions for the Amodal agent runtime",
   "license": "MIT",
   "repository": {
