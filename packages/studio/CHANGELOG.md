@@ -1,5 +1,19 @@
 # @amodalai/studio
 
+## 0.3.12
+
+### Patch Changes
+
+- [#223](https://github.com/amodalai/amodal/pull/223) [`470e205`](https://github.com/amodalai/amodal/commit/470e205075257cd6a9f20ca5c7e8cff4d0f03f0e) Thanks [@gte620v](https://github.com/gte620v)! - Re-export lib functions from ./server entry point for cloud-studio
+
+  The ./server export now re-exports setAuthProvider, setBackendFactory,
+  DrizzleStudioBackend, logger, and error classes so cloud-studio can
+  import everything from one working esbuild bundle entry point.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.12
+  - @amodalai/db@0.3.12
+
 ## 0.3.11
 
 ### Patch Changes
