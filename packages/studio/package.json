@@ -22,11 +22,16 @@
     },
     "./server": {
       "import": "./dist-server/studio-server.js"
-    }
+    },
+    "./app": "./src/App.tsx",
+    "./events": "./src/contexts/StudioEventsContext.tsx",
+    "./config": "./src/contexts/StudioConfigContext.tsx",
+    "./styles": "./src/index.css"
   },
   "files": [
     "dist",
-    "dist-server"
+    "dist-server",
+    "src"
   ],
   "scripts": {
     "dev": "tsx src/server/studio-server.ts",
