@@ -64,6 +64,62 @@ jobs:
       - run: pnpm audit --audit-level=critical --registry=https://registry.npmjs.org
         continue-on-error: true
 
+  package-smoke:
+    name: Package smoke test
+    runs-on: ubuntu-latest
+    needs: [build]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: amodal
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready" --health-interval=5s --health-timeout=5s --health-retries=5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+        with:
+          node-version: "22"
+      - run: pnpm build
+
+      # Pack all publishable packages — pnpm rewrites workspace:* to real versions
+      - name: Pack tarballs
+        run: |
+          pnpm -r --filter '!@amodalai/docs' --filter '!@amodalai/test-utils' pack --pack-destination /tmp/tarballs
+
+      # Install CLI tarball (pulls in studio + other deps from sibling tarballs)
+      - name: Install from tarballs
+        run: |
+          mkdir -p /tmp/smoke-agent && cd /tmp/smoke-agent
+          npm init -y > /dev/null 2>&1
+          npm install /tmp/tarballs/amodalai-amodal-*.tgz /tmp/tarballs/amodalai-studio-*.tgz /tmp/tarballs/amodalai-core-*.tgz /tmp/tarballs/amodalai-runtime-*.tgz /tmp/tarballs/amodalai-types-*.tgz /tmp/tarballs/amodalai-db-*.tgz /tmp/tarballs/amodalai-react-*.tgz /tmp/tarballs/amodalai-runtime-app-*.tgz /tmp/tarballs/amodalai-snapshot-probe-*.tgz
+
+      # Create test agent and run amodal dev
+      - name: Start amodal dev
+        run: |
+          cd /tmp/smoke-agent
+          echo '{"name":"ci-smoke","version":"1.0.0","models":{"main":{"provider":"anthropic","model":"claude-sonnet-4-20250514"}}}' > amodal.json
+          DATABASE_URL=postgresql://postgres@localhost:5432/amodal npx amodal dev &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3847/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:3848/api/studio/config > /dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Verify endpoints
+        run: |
+          set -e
+          curl -sf http://localhost:3847/health
+          curl -sf http://localhost:3848/api/studio/config | jq .
+          test "$(curl -sf -o /dev/null -w '%{http_code}' http://localhost:3848/)" = "200"
+          curl -sf http://localhost:3848/api/studio/stores | jq .
+          curl -sf http://localhost:3848/api/studio/drafts | jq .
+          echo "Package smoke test passed"
+
   docs:
     name: Docs Build
     runs-on: ubuntu-latest
