@@ -20,6 +20,9 @@ import type {ServerInstance} from '../server.js';
 import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
 import {loadTestEnv, defaultTargetName} from './test-env.js';
 import {VISION_PROVIDERS} from '../providers/types.js';
+import {getDb, agentMemory} from '@amodalai/db';
+import {sql} from 'drizzle-orm';
+import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 
 // Pull API keys out of <repo-root>/.env.test (gitignored). Missing keys
 // cause the describe block below to skip with a reason.
@@ -158,6 +161,9 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     amodalConfig['models'] = {
       main: {provider: smokeTarget.provider, model: smokeTarget.model},
     };
+    // Enable agent memory so the memory smoke test can verify the full pipeline.
+    amodalConfig['memory'] = {enabled: true};
+
     // Enable web_search + fetch_url tools when a Google API key is available.
     // Key resolution happens in the core config parser via env: prefix.
     if (process.env['GOOGLE_API_KEY']) {
@@ -307,6 +313,37 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
 
     expect(responseText).toContain('SMOKE7742');
   }, TIMEOUT * 2);
+
+  // -------------------------------------------------------------------------
+  // 4b. Agent memory — injected into system prompt from DB
+  // -------------------------------------------------------------------------
+
+  it('agent responds with facts only present in memory', async () => {
+    // Seed the memory table directly — avoids depending on the LLM to call
+    // update_memory (non-deterministic). The server already migrated the
+    // schema, so the table exists. getDb() returns the same singleton the
+    // server is using.
+     
+    const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
+    const MEMORY_SENTINEL = 'MEMORY_SMOKE_SENTINEL_XK92';
+    await db
+      .insert(agentMemory)
+      .values({id: 1, content: `The user's favorite color is ${MEMORY_SENTINEL}.`, updatedAt: sql`NOW()`})
+      .onConflictDoUpdate({
+        target: agentMemory.id,
+        set: {content: `The user's favorite color is ${MEMORY_SENTINEL}.`, updatedAt: sql`NOW()`},
+      });
+
+    // New session — memory is loaded fresh from the DB during session creation.
+    const {events} = await chat(
+      'What is my favorite color? Reply with just the color value, nothing else.',
+    );
+    const responseText = allText(events);
+    expect(responseText).toContain(MEMORY_SENTINEL);
+
+    // Clean up — remove memory so other tests start clean
+    await db.delete(agentMemory);
+  }, TIMEOUT);
 
   // -------------------------------------------------------------------------
   // 5. Tool call — store
