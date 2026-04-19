@@ -558,7 +558,65 @@ describe('compileContext', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 18. Store contributions use accurate per-store estimates
+  // 18. Memory section
+  // -------------------------------------------------------------------------
+
+  it('includes memory section when memory content is provided', () => {
+    const result = compileContext({
+      name: 'Agent',
+      memory: 'User prefers dark mode. Timezone: PST.',
+    });
+
+    expect(result.systemPrompt).toContain('## Memory');
+    expect(result.systemPrompt).toContain('User prefers dark mode. Timezone: PST.');
+  });
+
+  it('omits memory section when memory is undefined', () => {
+    const result = compileContext({name: 'Agent'});
+
+    expect(result.systemPrompt).not.toContain('## Memory');
+  });
+
+  it('omits memory section when memory is empty string', () => {
+    const result = compileContext({name: 'Agent', memory: ''});
+
+    expect(result.systemPrompt).not.toContain('## Memory');
+  });
+
+  it('memory section appears between knowledge and stores', () => {
+    const result = compileContext({
+      name: 'Agent',
+      knowledge: [makeKnowledge()],
+      memory: 'User prefers dark mode.',
+      stores: [makeStore()],
+      connections: [makeConnection()],
+    });
+    const prompt = result.systemPrompt;
+
+    const knowledgeIndex = prompt.indexOf('## Knowledge Base');
+    const memoryIndex = prompt.indexOf('## Memory');
+    const storesIndex = prompt.indexOf('## Data Stores');
+    const connectionsIndex = prompt.indexOf('## Connected systems');
+
+    expect(memoryIndex).toBeGreaterThan(knowledgeIndex);
+    expect(memoryIndex).toBeLessThan(connectionsIndex);
+    expect(memoryIndex).toBeLessThan(storesIndex);
+  });
+
+  it('memory contribution has category "memory"', () => {
+    const result = compileContext({
+      name: 'Agent',
+      memory: 'Some memory content here.',
+    });
+
+    const memoryContrib = result.contributions.find((c) => c.category === 'memory');
+    expect(memoryContrib).toBeDefined();
+    expect(memoryContrib!.name).toBe('Memory');
+    expect(memoryContrib!.tokens).toBeGreaterThan(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // 19. Store contributions use accurate per-store estimates
   // -------------------------------------------------------------------------
 
   it('store contributions do not include section header overhead', () => {

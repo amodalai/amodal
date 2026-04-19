@@ -27,6 +27,24 @@ import type {Logger} from '../logger.js';
 
 export const UPDATE_MEMORY_TOOL_NAME = 'update_memory';
 
+/** Timeout for memory database operations (read + write). */
+const MEMORY_DB_TIMEOUT_MS = 5_000;
+
+/** Race a promise against a timeout signal so a hung DB doesn't block forever. */
+function withDbTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  const signal = AbortSignal.timeout(MEMORY_DB_TIMEOUT_MS);
+  return new Promise<T>((resolve, reject) => {
+    signal.addEventListener('abort', () => {
+      reject(new StoreError(`Memory DB operation timed out: ${label}`, {
+        store: 'agent_memory',
+        operation: label,
+        context: {timeoutMs: MEMORY_DB_TIMEOUT_MS},
+      }));
+    });
+    promise.then(resolve, reject);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Memory read helper (used by session builder)
 // ---------------------------------------------------------------------------
@@ -38,11 +56,14 @@ export const UPDATE_MEMORY_TOOL_NAME = 'update_memory';
 export async function loadMemoryContent(
   db: NodePgDatabase<Record<string, unknown>>,
 ): Promise<string> {
-  const rows = await db
-    .select({content: agentMemory.content})
-    .from(agentMemory)
-    .where(eq(agentMemory.id, 1))
-    .limit(1);
+  const rows = await withDbTimeout(
+    db
+      .select({content: agentMemory.content})
+      .from(agentMemory)
+      .where(eq(agentMemory.id, 1))
+      .limit(1),
+    'load',
+  );
 
   if (rows.length === 0) {
     return '';
@@ -82,20 +103,23 @@ export function createUpdateMemoryTool(
       const startMs = Date.now();
 
       try {
-        await db
-          .insert(agentMemory)
-          .values({
-            id: 1,
-            content: params.content,
-            updatedAt: sql`NOW()`,
-          })
-          .onConflictDoUpdate({
-            target: agentMemory.id,
-            set: {
+        await withDbTimeout(
+          db
+            .insert(agentMemory)
+            .values({
+              id: 1,
               content: params.content,
               updatedAt: sql`NOW()`,
-            },
-          });
+            })
+            .onConflictDoUpdate({
+              target: agentMemory.id,
+              set: {
+                content: params.content,
+                updatedAt: sql`NOW()`,
+              },
+            }),
+          'upsert',
+        );
 
         const durationMs = Date.now() - startMs;
         logger.info('memory_updated', {

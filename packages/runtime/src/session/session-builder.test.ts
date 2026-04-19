@@ -21,6 +21,7 @@
 import {describe, it, expect, vi} from 'vitest';
 import {buildSessionComponents, PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME} from './session-builder.js';
 import type {BuildSessionComponentsOptions} from './session-builder.js';
+import {UPDATE_MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import type {AgentBundle, LoadedConnection, LoadedStore, LoadedTool, LoadedSkill, LoadedKnowledge} from '@amodalai/types';
 import type {AdminAgentContent} from '@amodalai/core';
 import {createLogger} from '../logger.js';
@@ -365,6 +366,108 @@ describe('buildSessionComponents', () => {
         {} as never,
       );
       expect(result).toEqual({widget: 'entity-card', data: {name: 'Test'}, rendered: true});
+    });
+  });
+
+  describe('agent memory', () => {
+    function makeMemoryBundle(memoryConfig?: {enabled: boolean; editableBy?: 'any' | 'admin' | 'none'}) {
+      return makeBundle({
+        config: {
+          name: 'test-agent',
+          version: '1.0.0',
+          description: 'A test agent',
+          models: {main: {provider: 'anthropic', model: 'claude-sonnet-4-20250514'}},
+          memory: memoryConfig,
+        },
+      });
+    }
+
+    // Minimal mock db — just needs to exist for tool registration
+    const mockMemoryDb = {} as never;
+
+    it('registers update_memory when memory enabled and editableBy is any', () => {
+      const bundle = makeMemoryBundle({enabled: true, editableBy: 'any'});
+      const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
+
+      expect(components.toolRegistry.names()).toContain(UPDATE_MEMORY_TOOL_NAME);
+    });
+
+    it('registers update_memory when memory enabled with default editableBy', () => {
+      const bundle = makeMemoryBundle({enabled: true});
+      const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
+
+      expect(components.toolRegistry.names()).toContain(UPDATE_MEMORY_TOOL_NAME);
+    });
+
+    it('does NOT register update_memory when editableBy is none', () => {
+      const bundle = makeMemoryBundle({enabled: true, editableBy: 'none'});
+      const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
+
+      expect(components.toolRegistry.names()).not.toContain(UPDATE_MEMORY_TOOL_NAME);
+    });
+
+    it('does NOT register update_memory when editableBy is admin and session is not admin', () => {
+      const bundle = makeMemoryBundle({enabled: true, editableBy: 'admin'});
+      const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
+
+      expect(components.toolRegistry.names()).not.toContain(UPDATE_MEMORY_TOOL_NAME);
+    });
+
+    it('registers update_memory when editableBy is admin and session is admin', () => {
+      const bundle = makeMemoryBundle({enabled: true, editableBy: 'admin'});
+      const components = buildSessionComponents(makeOpts({
+        bundle,
+        memoryDb: mockMemoryDb,
+        sessionType: 'admin',
+      }));
+
+      expect(components.toolRegistry.names()).toContain(UPDATE_MEMORY_TOOL_NAME);
+    });
+
+    it('does NOT register update_memory when memory not enabled', () => {
+      const bundle = makeMemoryBundle({enabled: false});
+      const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
+
+      expect(components.toolRegistry.names()).not.toContain(UPDATE_MEMORY_TOOL_NAME);
+    });
+
+    it('does NOT register update_memory when no memoryDb provided', () => {
+      const bundle = makeMemoryBundle({enabled: true});
+      const components = buildSessionComponents(makeOpts({bundle}));
+
+      expect(components.toolRegistry.names()).not.toContain(UPDATE_MEMORY_TOOL_NAME);
+    });
+
+    it('includes memory content in system prompt when provided', () => {
+      const bundle = makeMemoryBundle({enabled: true});
+      const components = buildSessionComponents(makeOpts({
+        bundle,
+        memoryDb: mockMemoryDb,
+        memoryContent: 'User prefers dark mode.',
+      }));
+
+      expect(components.systemPrompt).toContain('User prefers dark mode.');
+    });
+
+    it('includes memory instructions when memory is editable', () => {
+      const bundle = makeMemoryBundle({enabled: true});
+      const components = buildSessionComponents(makeOpts({
+        bundle,
+        memoryDb: mockMemoryDb,
+      }));
+
+      expect(components.systemPrompt).toContain('## Memory Instructions');
+      expect(components.systemPrompt).toContain('update_memory tool');
+    });
+
+    it('does NOT include memory instructions when editableBy is none', () => {
+      const bundle = makeMemoryBundle({enabled: true, editableBy: 'none'});
+      const components = buildSessionComponents(makeOpts({
+        bundle,
+        memoryDb: mockMemoryDb,
+      }));
+
+      expect(components.systemPrompt).not.toContain('## Memory Instructions');
     });
   });
 

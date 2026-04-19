@@ -198,7 +198,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // -------------------------------------------------------------------------
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- getDb returns Db which extends NodePgDatabase
-  const db = getDb() as unknown as NodePgDatabase;
+  const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
   await ensureSchema(db);
   log.info('database_schema_ready', {});
 
@@ -294,8 +294,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     toolExecutor,
     // Provide the DB handle for the memory tool when memory is enabled.
     // The db singleton is already initialized above (getDb + ensureSchema).
-     
-    ...(bundle.config.memory?.enabled ? {memoryDb: db as NodePgDatabase<Record<string, unknown>>} : {}),
+    ...(bundle.config.memory?.enabled ? {memoryDb: db} : {}),
   };
 
   // Helper: get current bundle (updated by config watcher)
