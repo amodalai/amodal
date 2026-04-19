@@ -51,6 +51,7 @@ import {StoreError} from '../errors.js';
 import {createDispatchTool, DISPATCH_TOOL_NAME} from '../tools/dispatch-tool.js';
 import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-tool.js';
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
+import {createUpdateMemoryTool, UPDATE_MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import type {Logger} from '../logger.js';
 
 // ---------------------------------------------------------------------------
@@ -93,6 +94,18 @@ export interface BuildSessionComponentsOptions {
   sessionId?: string;
   /** Optional field scrubber for response sanitization on ctx.request() */
   fieldScrubber?: FieldScrubber;
+  /**
+   * Pre-loaded memory content. When memory is enabled in the bundle config,
+   * the caller loads the blob from the database and passes it here. The
+   * builder injects it into the compiler input and registers the
+   * update_memory tool.
+   */
+  memoryContent?: string;
+  /**
+   * Database handle for the memory tool (required when memory is enabled
+   * and editableBy is not 'none'). The tool upserts directly via Drizzle.
+   */
+  memoryDb?: import('drizzle-orm/node-postgres').NodePgDatabase<Record<string, unknown>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +283,8 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     adminContent,
     sessionId = 'pending',
     fieldScrubber,
+    memoryContent,
+    memoryDb,
   } = opts;
 
   // -------------------------------------------------------------------------
@@ -380,6 +395,27 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   }
 
   // -------------------------------------------------------------------------
+  // 10b. Register update_memory tool (if memory is enabled and editable)
+  // -------------------------------------------------------------------------
+
+  const memoryConfig = bundle.config.memory;
+  const memoryEnabled = memoryConfig?.enabled === true;
+  const memoryEditable = memoryEnabled
+    && memoryConfig.editableBy !== 'none'
+    && (memoryConfig.editableBy !== 'admin' || sessionType === 'admin');
+
+  if (memoryEditable && memoryDb) {
+    registry.register(UPDATE_MEMORY_TOOL_NAME, createUpdateMemoryTool(memoryDb, logger));
+    logger.info('memory_tool_registered', {editableBy: memoryConfig.editableBy ?? 'any'});
+  } else if (memoryEnabled) {
+    logger.info('memory_tool_not_registered', {
+      reason: !memoryDb ? 'no_db' : 'not_editable',
+      editableBy: memoryConfig.editableBy ?? 'any',
+      sessionType,
+    });
+  }
+
+  // -------------------------------------------------------------------------
   // 11. Build permission checker (session-level)
   // -------------------------------------------------------------------------
 
@@ -428,9 +464,19 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
         schema: s.entity.schema,
       },
     })),
+    ...(memoryEnabled && memoryContent ? {memory: memoryContent} : {}),
   };
 
   const compiled = compileContext(compilerInput);
+
+  // Inject memory management instructions when memory is enabled
+  if (memoryEnabled && memoryEditable) {
+    compiled.systemPrompt += '\n\n## Memory Instructions\n\n' +
+      'You have persistent memory for this user. It appears in your context under "Memory." ' +
+      'When the user tells you a preference, correction, or important fact, update it using the update_memory tool. ' +
+      'Keep the memory concise and organized — summarize rather than append. Remove outdated entries. ' +
+      'The memory should read like notes a colleague left for you.';
+  }
 
   if (compiled.warnings.length > 0) {
     for (const warning of compiled.warnings) {
@@ -513,4 +559,4 @@ function resolveApiKey(
 }
 
 // Re-export constants for use in tests and state handlers
-export {PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME, DISPATCH_TOOL_NAME};
+export {PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME, DISPATCH_TOOL_NAME, UPDATE_MEMORY_TOOL_NAME};

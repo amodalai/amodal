@@ -14,11 +14,13 @@
 
 import type {AgentBundle, CustomToolExecutor, StoreBackend} from '@amodalai/types';
 import type {McpManager, FieldScrubber} from '@amodalai/core';
+import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 import type {StandaloneSessionManager} from '../session/manager.js';
 import type {Session} from '../session/types.js';
 import type {ToolContext} from '../tools/types.js';
 import type {SessionComponents, SessionType} from '../session/session-builder.js';
 import {buildSessionComponents} from '../session/session-builder.js';
+import {loadMemoryContent} from '../tools/memory-tool.js';
 import type {AuthContext} from '../middleware/auth.js';
 import {SessionError} from '../errors.js';
 import type {Logger} from '../logger.js';
@@ -47,6 +49,8 @@ export interface SharedResources {
   logger: Logger;
   toolExecutor?: CustomToolExecutor;
   fieldScrubber?: FieldScrubber;
+  /** Database handle for memory tool (when memory is enabled). */
+  memoryDb?: NodePgDatabase<Record<string, unknown>>;
 }
 
 /** Result of session resolution — includes the tool context factory for wiring into runMessage. */
@@ -106,7 +110,7 @@ export async function resolveBundle(
 // Internal: build components + wire factory
 // ---------------------------------------------------------------------------
 
-function buildComponents(
+async function buildComponents(
   bundle: AgentBundle,
   shared: SharedResources,
   opts: {
@@ -114,7 +118,15 @@ function buildComponents(
     sessionId?: string;
     pinnedModel?: {provider: string; model: string};
   },
-): SessionComponents {
+): Promise<SessionComponents> {
+  // Load memory content if memory is enabled and a DB is available
+  let memoryContent: string | undefined;
+  const memoryDb = shared.memoryDb;
+  if (bundle.config.memory?.enabled && memoryDb) {
+    memoryContent = await loadMemoryContent(memoryDb);
+    shared.logger.info('memory_loaded', {contentLength: memoryContent.length});
+  }
+
   return buildSessionComponents({
     bundle,
     storeBackend: shared.storeBackend,
@@ -125,6 +137,8 @@ function buildComponents(
     sessionType: opts.sessionType,
     sessionId: opts.sessionId,
     pinnedModel: opts.pinnedModel,
+    memoryContent: memoryContent || undefined,
+    memoryDb,
   });
 }
 
@@ -182,11 +196,12 @@ export async function resolveSession(
 
   // 2. Resume from store (with dedup handled by StandaloneSessionManager)
   if (sessionId && bundle) {
-    const components = await enhance(buildComponents(bundle, shared, {
+    const rawComponents = await buildComponents(bundle, shared, {
       sessionType: opts.sessionType,
       sessionId,
       pinnedModel: opts.pinnedModel,
-    }));
+    });
+    const components = await enhance(rawComponents);
 
     const resumed = await sessionManager.resume(sessionId, {
       provider: components.provider,
@@ -209,10 +224,11 @@ export async function resolveSession(
     });
   }
 
-  const components = await enhance(buildComponents(bundle, shared, {
+  const rawComponents = await buildComponents(bundle, shared, {
     sessionType: opts.sessionType,
     pinnedModel: opts.pinnedModel,
-  }));
+  });
+  const components = await enhance(rawComponents);
 
   const session = sessionManager.create({
     provider: components.provider,

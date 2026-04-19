@@ -152,6 +152,13 @@ const DDL_STATEMENTS = [
   )`,
   sql`CREATE INDEX IF NOT EXISTS idx_eval_runs_suite ON eval_runs (suite_id)`,
   sql`CREATE INDEX IF NOT EXISTS idx_eval_runs_agent ON eval_runs (agent_id)`,
+
+  // --- agent_memory ---
+  sql`CREATE TABLE IF NOT EXISTS agent_memory (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    content TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
 ] as const;
 
 export async function ensureSchema<T extends Record<string, unknown> = Record<string, never>>(db: NodePgDatabase<T>): Promise<void> {

@@ -292,6 +292,10 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     mcpManager,
     logger: log,
     toolExecutor,
+    // Provide the DB handle for the memory tool when memory is enabled.
+    // The db singleton is already initialized above (getDb + ensureSchema).
+     
+    ...(bundle.config.memory?.enabled ? {memoryDb: db as NodePgDatabase<Record<string, unknown>>} : {}),
   };
 
   // Helper: get current bundle (updated by config watcher)

@@ -85,6 +85,9 @@ export interface CompilerInput {
   /** Store definitions loaded from stores/. */
   stores?: CompilerStore[];
 
+  /** Agent memory content (loaded from agent_memory table). */
+  memory?: string;
+
   /** Automation context — prompt and constraints when running as an automation. */
   automationContext?: string;
 
@@ -111,6 +114,6 @@ export interface CompilerOutput {
 
 export interface CompilerContribution {
   name: string;
-  category: 'system' | 'connection' | 'skill' | 'knowledge' | 'store';
+  category: 'system' | 'connection' | 'skill' | 'knowledge' | 'store' | 'memory';
   tokens: number;
 }
