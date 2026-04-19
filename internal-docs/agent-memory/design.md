@@ -3,7 +3,7 @@
 ## Status
 
 Phase 1 shipped (single-row text blob, `update_memory` tool).
-Phase 2 designed below — entry-level storage, session search, Studio API, chat app UI.
+Phase 2 designed below — entry-level storage, session search, chat app UI.
 
 ## Context
 
@@ -15,66 +15,64 @@ Phase 1 stores memory as a single text blob that the agent overwrites entirely o
 - No session search — the agent can't recall past conversations it didn't explicitly save
 - No user visibility — users can't see or manage what the agent remembers
 
-Hermes (NousResearch) ships a three-layer memory system that's driven a lot of their popularity. Their key ideas: entry-level operations, session search via FTS, frozen prompt snapshots, nudge/flush for proactive saving, and user-facing memory management. We don't need all of it, but we need the core pieces.
+Hermes (NousResearch) ships a three-layer memory system that's driven a lot of their popularity. Their key ideas worth adopting: entry-level operations (not blob overwrite), session search via FTS, nudge/flush for proactive saving, and character budgets. See appendix for full comparison.
 
 ## Phase 2 Design
 
+### Architecture: Direct Postgres via @amodalai/db
+
+Memory follows the same data access pattern as stores, sessions, and feedback: direct Postgres via the shared `getDb()` singleton from `@amodalai/db`. Both the runtime and Studio read/write the same tables through Drizzle ORM.
+
+```
+┌──────────────────────┐    ┌──────────────────────┐
+│ RUNTIME              │    │ STUDIO               │
+│                      │    │                      │
+│ memory tool ─────┐   │    │ memory UI ────────┐  │
+│ session search ──┤   │    │ memory routes ────┤  │
+│ prompt injection─┤   │    │                   │  │
+└──────────────────┤───┘    └───────────────────┤──┘
+                   │                            │
+            ┌──────▼────────────────────────────▼──┐
+            │ @amodalai/db  ·  getDb() singleton   │
+            └──────────────────┬───────────────────┘
+                               │
+            ┌──────────────────▼───────────────────┐
+            │            POSTGRES                   │
+            │  agent_memory_entries (appId-scoped)  │
+            │  agent_sessions (already exists)      │
+            └──────────────────────────────────────┘
+```
+
+Tenant isolation uses `appId` WHERE clauses, same as stores. This has known limitations (no RLS, no schema-per-tenant) but matches the current model for all mutable data. When infra moves to DB-per-tenant (Neon branching or similar), memory comes along for free.
+
+**Note:** The vercel-shaped architecture doc states "no shared databases — each service owns its storage and exposes HTTP APIs." The current codebase doesn't follow this yet for anything (stores, sessions, feedback all use shared DB). Memory follows the pattern that exists today. When the codebase migrates to API-based data access, memory migrates with it.
+
+**Known architectural debt:** The shared-DB model with application-level `appId` filtering has no defense in depth — a missing WHERE clause leaks data across tenants. There is no Postgres RLS, no schema-per-tenant, no DB-per-tenant. This is a problem for all mutable data (stores, sessions, feedback, memory), not just memory. It needs to be addressed before scaling to multi-tenant cloud with untrusted tenants. Options: Postgres RLS policies on `app_id`, Neon database branching (DB-per-tenant with scale-to-zero), or migrating to the intended API-based architecture where each service owns its storage. This is a cross-cutting infrastructure decision that should be made once for all data, not piecemeal per feature.
+
 ### Storage: Entry-per-row
 
-Replace the single-row `agent_memory` table with an `agent_memory_entries` table:
+Replace the single-row `agent_memory` table with `agent_memory_entries`:
 
 ```sql
 CREATE TABLE agent_memory_entries (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id   TEXT NOT NULL,
+  app_id     TEXT NOT NULL,
   content    TEXT NOT NULL,
-  category   TEXT,                          -- optional: 'preference', 'fact', 'correction'
+  category   TEXT,              -- 'preference', 'fact', 'correction', or NULL
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_memory_agent ON agent_memory_entries (agent_id);
+CREATE INDEX idx_memory_app ON agent_memory_entries (app_id);
 CREATE INDEX idx_memory_search ON agent_memory_entries
   USING GIN (to_tsvector('english', content));
 ```
 
-This table lives in **Studio's Postgres**, not the runtime DB. Memory is mutable user data that must persist across deploys — same category as sessions, stores, feedback.
+Scoped by `app_id` — same column name and semantics as `store_documents.app_id`.
 
-### Architecture: Studio API, not direct DB
+### Memory Tool
 
-The runtime does NOT connect to the memory DB directly. Instead:
-
-```
-[Runtime] --HTTP--> [Studio API] --SQL--> [Postgres]
-    |                    |
-    |                    +-- /api/studio/memory (CRUD + search)
-    |
-    +-- memory tool (thin HTTP client, like web_search tool)
-```
-
-**Why API instead of direct DB:**
-
-- Runtime stays stateless — no DB credentials needed
-- Chat app UI hits the same endpoints for the memory panel
-- Clean module boundary — Studio owns the schema, runtime just calls
-- Third-party deployments can swap in their own memory backend
-- Same pattern as `web_search` tool (ctx.searchProvider) and `request` tool (ctx.request)
-
-### Studio API Endpoints
-
-```
-GET    /api/studio/memory?agentId=X              -- list all entries
-POST   /api/studio/memory                        -- add entry
-PATCH  /api/studio/memory/:id                    -- update entry
-DELETE /api/studio/memory/:id                    -- delete entry
-GET    /api/studio/memory/search?q=X&agentId=X   -- full-text search
-```
-
-All endpoints return JSON. The list endpoint returns entries with IDs so the UI and agent can reference them.
-
-### Memory Tool (Runtime)
-
-Replace the single `update_memory` tool with a `memory` tool that supports multiple actions:
+Replace `update_memory` with a `memory` tool supporting granular operations:
 
 ```typescript
 const MemoryParamsSchema = z.object({
@@ -87,16 +85,18 @@ const MemoryParamsSchema = z.object({
 
 **Actions:**
 
-- `add` — saves a new entry. Rejects if total entries exceed budget (configurable, default ~20 entries or ~4,000 chars total). Returns the new entry with its ID.
-- `remove` — deletes an entry by ID. The agent gets IDs from `list` or `search`.
-- `list` — returns all entries as a numbered list with IDs. This is what powers "tell me my memories."
-- `search` — full-text search across entries. Returns matching entries with snippets.
+- `add` — insert a new entry. Rejects if total entries exceed budget. Returns the new entry with its ID.
+- `remove` — delete an entry by ID. The agent gets IDs from `list` or `search`.
+- `list` — return all entries as a numbered list with IDs. Powers "tell me my memories."
+- `search` — full-text search across entries via `to_tsquery`. Returns matching entries with snippets.
 
-The tool is a thin HTTP client that calls the Studio API. It's wired via a `MemoryClient` injected through the tool context, same pattern as `SearchProvider` for web search.
+The tool uses the DB handle from `SharedResources` (same as store tools use `storeBackend`). Implemented as a Drizzle query layer in `packages/runtime/src/tools/memory-tool.ts`, replacing the current single-row implementation.
+
+**Budget enforcement:** configurable `maxEntries` (default 50) and `maxTotalChars` (default 8,000). The `add` action checks current count and total size before inserting. On exceed, returns a structured error telling the agent to remove stale entries first.
 
 ### Session Search
 
-Add a `search_sessions` tool that searches across past conversation history:
+Add a `search_sessions` tool that searches past conversation history:
 
 ```typescript
 const SessionSearchParamsSchema = z.object({
@@ -105,19 +105,21 @@ const SessionSearchParamsSchema = z.object({
 });
 ```
 
-This hits a Studio API endpoint:
+Implementation: Postgres full-text search against the `agent_sessions` table's message content. The sessions table already exists with full message history. Add a GIN index on message content for FTS:
 
+```sql
+-- on the messages JSONB column, extract text content for search
+CREATE INDEX idx_sessions_messages_fts ON agent_sessions
+  USING GIN (to_tsvector('english', messages::text));
 ```
-GET /api/studio/sessions/search?q=X&agentId=X
-```
 
-Studio runs `ts_query` against the session messages table (which already exists). Returns snippets with 1 message of surrounding context, session timestamps, and session IDs.
+Returns: matching snippets with 1 message of surrounding context, session timestamp, session ID. Scoped by `app_id`.
 
-This is the "wow" feature — "remember that API migration we discussed last week?" actually works.
+This is the "wow" feature — "remember that API migration we discussed last week?" works because the agent can search all past conversations, not just what it explicitly saved to memory.
 
 ### System Prompt Injection
 
-At session start, the runtime calls `GET /api/studio/memory?agentId=X` and injects all entries into the system prompt as a numbered list:
+At session start, load all entries via `SELECT * FROM agent_memory_entries WHERE app_id = $1 ORDER BY created_at` and inject into the system prompt:
 
 ```
 ## Memory
@@ -131,46 +133,45 @@ IDs are included so the agent can reference them in `remove` calls.
 
 ### Mid-Session Visibility
 
-When the agent calls `memory.add` or `memory.remove`, the tool response includes the updated entry list. The LLM sees this in the conversation context and can use the new facts immediately — no need to mutate the system prompt mid-session.
+The system prompt memory section is frozen at session start (good for prefix caching). But when the agent calls `memory.add` or `memory.remove` mid-session, the tool response includes the full updated entry list. The LLM sees this in the conversation context and can use new facts immediately.
 
-This matches Hermes's "frozen snapshot" approach: the system prompt section stays stable (good for prefix caching), but the agent has full awareness of changes through tool responses.
+This means: if a user says "I don't work on Fridays" and the agent saves it, the agent knows that fact for the rest of the session (from the tool response) AND for all future sessions (from the prompt injection). No system prompt mutation needed.
 
 ### Nudge System (Proactive Saving)
 
-Every N turns (configurable, default 10), inject a lightweight system message:
+Every N turns (configurable via `nudgeInterval`, default 10), inject a lightweight system message:
 
-> "Check: has the user shared any preferences, corrections, or important facts in recent messages? If so, save them to memory using the memory tool."
+> "Check: has the user shared any preferences, corrections, or important facts in recent messages? If so, save them to memory."
 
-This normalizes save behavior across models. Some models are proactive about memory; some aren't. The nudge makes it consistent.
+Also: **flush before context loss** — when `budget_exceeded` is about to terminate the loop, give the agent one final turn to save anything important from the session.
 
-Also add a **flush on context loss**: before `budget_exceeded` terminates the loop, give the agent one turn to save anything important.
+This normalizes save behavior across models. Some models proactively call `memory.add`; others don't unless prompted.
 
-### Chat App UI (runtime-app)
+### Chat App UI
 
-Add a "Memory" panel accessible from the sidebar, same level as "Sessions":
+Memory is surfaced in the chat app (runtime-app) as a first-class panel, same level as Sessions in the sidebar.
 
-- **List view** — shows all memory entries with timestamps, edit/delete buttons
-- **Add** — manual entry form
-- **Edit** — inline editing of any entry
+**User-facing features:**
+
+- **List view** — all memory entries with timestamps, edit/delete buttons
+- **Inline edit** — click to edit any entry directly
 - **Delete** — single entry or bulk delete
-- **Search** — search bar that filters entries
+- **Search** — filter entries by keyword
 
-All operations hit the Studio API directly from the frontend. No agent involved for manual management.
+**Conversational management (via the agent):**
 
-The agent can also manage memory conversationally:
+- "Tell me my memories" → agent calls `memory.list`
+- "Delete memory about dark mode" → agent calls `memory.search` then `memory.remove`
+- "Remember that I prefer TypeScript" → agent calls `memory.add`
 
-- "Tell me my memories" → agent calls `memory.list`, renders as a numbered list
-- "Delete memory 3" → agent calls `memory.remove` with the entry ID
-- "Remember that I prefer TypeScript over JavaScript" → agent calls `memory.add`
+The UI reads/writes the same Postgres table directly (through the runtime's existing API routes or new `/api/memory` routes). No separate backend needed.
 
 ### Agent Instructions
-
-System prompt guidance for memory behavior:
 
 ```
 ## Memory Instructions
 
-You have persistent memory for this user. Entries appear in your context under "Memory."
+You have persistent memory. Entries appear in your context under "Memory."
 
 **When to save:**
 - User states a preference ("I prefer...", "I like...", "Don't...")
@@ -185,22 +186,12 @@ You have persistent memory for this user. Entries appear in your context under "
 
 **When to remove:**
 - User explicitly asks to forget something
-- You learn a fact that contradicts an existing entry — remove the old one, add the new one
+- A new fact contradicts an existing entry — remove the old one, add the new one
 
 **When to search sessions:**
 - User references a past conversation ("remember when we...", "last time...")
 - You need context from prior work to answer accurately
 ```
-
-### Migration Path from Phase 1
-
-1. Add the `agent_memory_entries` table to Studio's DB
-2. Migrate existing single-row blobs: split by newline/paragraph into entries
-3. Add Studio API endpoints
-4. Replace the runtime `update_memory` tool with the new `memory` tool
-5. Add `search_sessions` tool
-6. Add UI panel
-7. Drop the old `agent_memory` table
 
 ### Config
 
@@ -217,8 +208,35 @@ You have persistent memory for this user. Entries appear in your context under "
 }
 ```
 
+### Migration Path from Phase 1
+
+1. Add `agent_memory_entries` table to `@amodalai/db` schema and migration
+2. Migrate existing single-row blobs: split by sentence/paragraph into entries
+3. Replace `update_memory` tool with multi-action `memory` tool
+4. Add `search_sessions` tool
+5. Add memory routes to runtime for the UI
+6. Add UI panel to runtime-app
+7. Drop old `agent_memory` table
+
 ### Open Questions
 
-1. **Categories** — should entries have optional categories (preference, fact, correction)? Useful for filtering in the UI but adds complexity to the tool schema. Leaning yes.
-2. **Per-user vs per-agent** — in multi-user scenarios, should memory be scoped per user? Currently it's per-agent-instance (per database). Multi-user scoping needs a user ID column.
-3. **Rate limiting** — should we limit how often the agent can write to memory per session? Prevents runaway saving loops.
+1. **Per-user memory** — currently scoped by `appId` (per-agent-instance). Multi-user agents need per-user scoping, which requires threading user ID from the auth middleware through to the tool context. New plumbing — defer until multi-user is a real requirement.
+2. **Categories** — optional entry categories (preference, fact, correction) are useful for UI filtering but add complexity to the tool schema. Leaning yes but not blocking.
+3. **Rate limiting** — should we cap writes per session to prevent runaway save loops? Probably yes (e.g., max 10 writes per session).
+
+## Appendix: Hermes Comparison
+
+| Aspect             | Amodal Phase 2                                 | Hermes                                                |
+| ------------------ | ---------------------------------------------- | ----------------------------------------------------- |
+| Storage            | Entry-per-row in Postgres                      | Two flat files (MEMORY.md, USER.md) with § delimiters |
+| Operations         | add / remove / list / search                   | add / replace / remove (substring matching)           |
+| Size control       | maxEntries + maxTotalChars                     | Per-file character budgets (2,200 / 1,375)            |
+| Prompt injection   | Frozen snapshot at session start               | Same — frozen snapshot                                |
+| Mid-session        | Updated entry list in tool response            | Same — tool response shows live state                 |
+| Proactive saving   | Nudge every N turns + flush on budget_exceeded | Nudge every N turns + flush on /new, /reset, exit     |
+| Session search     | Postgres FTS on existing sessions table        | SQLite FTS5 on messages table                         |
+| User management    | Chat app UI + conversational via agent         | CLI only                                              |
+| Tenant isolation   | appId WHERE clause (same as stores)            | Single-user (file-based)                              |
+| External providers | None (MCP for that)                            | Plugin system (Honcho, Mem0, etc.)                    |
+
+Key things we skip: two-file split (over-engineered), external provider plugins (we have MCP), content injection scanning (later concern).
