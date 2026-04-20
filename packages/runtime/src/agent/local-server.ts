@@ -68,7 +68,7 @@ import type {LocalServerConfig} from './agent-types.js';
 import type {ServerInstance} from '../server.js';
 import {createPostgresStoreBackend} from '../stores/postgres-store-backend.js';
 import type {StoreBackend} from '@amodalai/types';
-import {getDb, ensureSchema, closeDb, eq, sql, storeDocuments, storeDocumentVersions, agentMemoryEntries} from '@amodalai/db';
+import {getDb, ensureSchema, closeDb, eq, sql, agentMemoryEntries} from '@amodalai/db';
 import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
@@ -210,11 +210,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // hardcoded 'local' value; now we use the agent name for alignment with
   // Studio and cloud. This is safe in local dev (all 'local' data belongs
   // to this instance) and a no-op in cloud (no 'local' rows exist).
+  // Uses conflict-safe SQL to avoid unique constraint violations on re-runs.
   if (appId !== DEFAULT_APP_ID) {
-    await db.update(storeDocuments).set({appId}).where(eq(storeDocuments.appId, 'local'));
-    await db.update(storeDocumentVersions).set({appId}).where(eq(storeDocumentVersions.appId, 'local'));
+    await db.execute(sql`UPDATE store_documents SET app_id = ${appId} WHERE app_id = 'local' AND NOT EXISTS (SELECT 1 FROM store_documents sd2 WHERE sd2.app_id = ${appId} AND sd2.store = store_documents.store AND sd2.key = store_documents.key)`);
+    await db.execute(sql`DELETE FROM store_documents WHERE app_id = 'local'`);
+    await db.execute(sql`UPDATE store_document_versions SET app_id = ${appId} WHERE app_id = 'local'`);
     await db.update(agentMemoryEntries).set({appId}).where(eq(agentMemoryEntries.appId, 'local'));
-    // Sessions store appId in metadata JSONB — use raw sql for the jsonb_set
     await db.execute(
       sql`UPDATE agent_sessions SET metadata = jsonb_set(metadata, '{appId}', to_jsonb(${appId}::text)) WHERE metadata->>'appId' = 'local'`,
     );

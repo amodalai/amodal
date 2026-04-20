@@ -239,6 +239,7 @@ export async function resolveSession(
     systemPrompt: components.systemPrompt,
     toolContextFactory: components.toolContextFactory,
     maxSessionTokens: opts.maxSessionTokens,
+    appId: shared.appId,
   });
 
   return {session, toolContextFactory: components.toolContextFactory};

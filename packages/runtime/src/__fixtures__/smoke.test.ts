@@ -323,10 +323,12 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     // the schema, so the table exists. getDb() returns the same singleton.
      
     const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
+    // The agent name from amodal.json is used as appId (matches runtime behavior).
+    const AGENT_NAME = 'smoke-test-agent';
     const MEMORY_SENTINEL = 'MEMORY_SMOKE_SENTINEL_XK92';
     await db
       .insert(agentMemoryEntries)
-      .values({appId: 'local', content: `The user's favorite color is ${MEMORY_SENTINEL}.`});
+      .values({appId: AGENT_NAME, content: `The user's favorite color is ${MEMORY_SENTINEL}.`});
 
     // New session — memory entries are loaded fresh from the DB during session creation.
     const {events} = await chat(
@@ -336,7 +338,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     expect(responseText).toContain(MEMORY_SENTINEL);
 
     // Clean up — remove memory entries so other tests start clean
-    await db.delete(agentMemoryEntries).where(eq(agentMemoryEntries.appId, 'local'));
+    await db.delete(agentMemoryEntries).where(eq(agentMemoryEntries.appId, AGENT_NAME));
   }, TIMEOUT);
 
   // -------------------------------------------------------------------------
@@ -830,7 +832,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const found = listBody.sessions.find((s) => s['id'] === sessionId);
     expect(found).toBeDefined();
     if (!found) throw new Error('unreachable');
-    expect(found['appId']).toBe('local');
+    expect(found['appId']).toBe('smoke-test-agent');
     expect(typeof found['summary']).toBe('string');
     expect(String(found['summary']).length).toBeGreaterThan(0);
     expect(typeof found['createdAt']).toBe('number');
