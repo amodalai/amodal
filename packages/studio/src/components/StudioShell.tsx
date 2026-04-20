@@ -29,6 +29,7 @@ import {
   FileText,
   PanelRightOpen,
   PanelRightClose,
+  Brain,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAgentInventory } from '../hooks/useAgentInventory';
@@ -50,6 +51,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { href: '/evals', label: 'Evals', icon: FlaskConical },
   { href: '/arena', label: 'Arena', icon: FlaskConical },
   { href: '/feedback', label: 'Feedback', icon: MessageSquare },
+  { href: '/memory', label: 'Memory', icon: Brain },
 ];
 
 const SECONDARY_NAV: readonly NavItem[] = [

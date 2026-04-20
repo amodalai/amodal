@@ -149,6 +149,23 @@ export const AmodalConfigSchema = z.object({
       })),
     })
     .optional(),
+  /** Agent memory configuration. */
+  memory: z
+    .object({
+      /** Whether memory is enabled. */
+      enabled: z.boolean(),
+      /** Who can call the memory tool: 'any' (default), 'admin', or 'none'. */
+      editableBy: z.enum(['any', 'admin', 'none']).optional(),
+      /** Maximum number of memory entries (default: 50). */
+      maxEntries: z.number().int().positive().optional(),
+      /** Maximum total characters across all entries (default: 8000). */
+      maxTotalChars: z.number().int().positive().optional(),
+      /** Nudge interval — prompt agent to save every N turns (default: 10, 0 to disable). */
+      nudgeInterval: z.number().int().min(0).optional(),
+      /** Enable session search tool (default: true). */
+      sessionSearch: z.boolean().optional(),
+    })
+    .optional(),
   /**
    * Messaging channel configurations, keyed by channel type.
    * Each channel's config block is validated by the plugin's own Zod schema

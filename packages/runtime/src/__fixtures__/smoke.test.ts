@@ -15,11 +15,13 @@
 import {describe, it, expect, beforeAll, afterAll} from 'vitest';
 import {fork, type ChildProcess} from 'node:child_process';
 import {resolve} from 'node:path';
-import {readFileSync, writeFileSync, rmSync, readdirSync} from 'node:fs';
+import {readFileSync, writeFileSync, rmSync} from 'node:fs';
 import type {ServerInstance} from '../server.js';
 import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
 import {loadTestEnv, defaultTargetName} from './test-env.js';
 import {VISION_PROVIDERS} from '../providers/types.js';
+import {getDb, agentMemoryEntries, eq} from '@amodalai/db';
+import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 
 // Pull API keys out of <repo-root>/.env.test (gitignored). Missing keys
 // cause the describe block below to skip with a reason.
@@ -158,6 +160,9 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     amodalConfig['models'] = {
       main: {provider: smokeTarget.provider, model: smokeTarget.model},
     };
+    // Enable agent memory so the memory smoke test can verify the full pipeline.
+    amodalConfig['memory'] = {enabled: true};
+
     // Enable web_search + fetch_url tools when a Google API key is available.
     // Key resolution happens in the core config parser via env: prefix.
     if (process.env['GOOGLE_API_KEY']) {
@@ -309,6 +314,69 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   }, TIMEOUT * 2);
 
   // -------------------------------------------------------------------------
+  // 4b. Agent memory — injected into system prompt from DB
+  // -------------------------------------------------------------------------
+
+  it('agent responds with facts only present in memory', async () => {
+    // Seed the memory entries table directly — avoids depending on the LLM
+    // to call memory.add (non-deterministic). The server already migrated
+    // the schema, so the table exists. getDb() returns the same singleton.
+     
+    const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
+    // The agent name from amodal.json is used as appId (matches runtime behavior).
+    const AGENT_NAME = 'smoke-test-agent';
+    const MEMORY_SENTINEL = 'MEMORY_SMOKE_SENTINEL_XK92';
+    await db
+      .insert(agentMemoryEntries)
+      .values({appId: AGENT_NAME, content: `The user's favorite color is ${MEMORY_SENTINEL}.`});
+
+    // New session — memory entries are loaded fresh from the DB during session creation.
+    const {events} = await chat(
+      'What is my favorite color? Reply with just the color value, nothing else.',
+    );
+    const responseText = allText(events);
+    expect(responseText).toContain(MEMORY_SENTINEL);
+
+    // Clean up — remove memory entries so other tests start clean
+    await db.delete(agentMemoryEntries).where(eq(agentMemoryEntries.appId, AGENT_NAME));
+  }, TIMEOUT);
+
+  it('memory round-trip: agent writes entry, next session reads it', async () => {
+    // Ask the agent to remember a unique fact. The agent should call memory.add.
+    const ROUND_TRIP_SENTINEL = 'ROUNDTRIP_CODE_7749';
+    const first = await chat(
+      `Please remember this exact code for me: ${ROUND_TRIP_SENTINEL}. Save it to memory using the memory tool with action "add".`,
+    );
+
+    // Verify the agent called the memory tool
+    const toolCalls = findEvents(first.events, 'tool_call_start');
+    const memoryCall = toolCalls.find((e) => e['tool_name'] === 'memory');
+    expect(memoryCall).toBeDefined();
+
+    // Verify the entry was written with the correct appId
+     
+    const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
+    const AGENT_NAME = 'smoke-test-agent';
+    const rows = await db
+      .select({appId: agentMemoryEntries.appId, content: agentMemoryEntries.content})
+      .from(agentMemoryEntries)
+      .where(eq(agentMemoryEntries.appId, AGENT_NAME));
+    const match = rows.find((r) => r.content.includes(ROUND_TRIP_SENTINEL));
+    expect(match).toBeDefined();
+    expect(match?.appId).toBe(AGENT_NAME);
+
+    // New session — the agent should know the code from memory without being told
+    const second = await chat(
+      'What code did I ask you to remember? Reply with just the code, nothing else.',
+    );
+    const responseText = allText(second.events);
+    expect(responseText).toContain(ROUND_TRIP_SENTINEL);
+
+    // Clean up
+    await db.delete(agentMemoryEntries).where(eq(agentMemoryEntries.appId, AGENT_NAME));
+  }, TIMEOUT * 3);
+
+  // -------------------------------------------------------------------------
   // 5. Tool call — store
   // -------------------------------------------------------------------------
 
@@ -365,281 +433,12 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     expect(errorResult).toBeDefined();
   }, TIMEOUT);
 
-  // -------------------------------------------------------------------------
-  // 8. Eval run
-  // -------------------------------------------------------------------------
-
-  it('runs eval and returns results', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/api/evals/run`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({evalNames: ['basic-eval']}),
-      signal: AbortSignal.timeout(60_000),
-    });
-
-    const text = await res.text();
-    const events: Array<Record<string, unknown>> = [];
-    for (const line of text.split('\n')) {
-      if (!line.startsWith('data: ')) continue;
-      try { events.push(JSON.parse(line.slice(6)) as Record<string, unknown>); } catch { /* skip */ }
-    }
-
-    const complete = findEvent(events, 'eval_complete');
-    expect(complete).toBeDefined();
-    expect(complete?.['passed']).toBe(true);
-  }, 60_000);
+  // Tests for eval run, admin chat, admin file discovery, and admin
+  // pagination were removed — those routes moved to Studio. See
+  // packages/studio/src/__tests__/smoke.test.ts for Studio-side coverage.
 
   // -------------------------------------------------------------------------
-  // 9. Admin chat — reads repo files
-  // -------------------------------------------------------------------------
-
-  it('admin agent can read skill files', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message: 'Read the test-skill skill file and tell me what it says. Be brief.'}),
-      signal: AbortSignal.timeout(TIMEOUT),
-    });
-
-    const text = await res.text();
-    const events = parseSSE(text);
-
-    const init = findEvent(events, 'init');
-    expect(init).toBeDefined();
-
-    // Admin agent should use read_repo_file tool
-    const toolStarts = findEvents(events, 'tool_call_start');
-    const readTool = toolStarts.find((e) => e['tool_name'] === 'read_repo_file');
-    expect(readTool).toBeDefined();
-
-    // The matching result should be a success — validates the full
-    // tool_call_start → execute → tool_call_result SSE round-trip.
-    const toolResults = findEvents(events, 'tool_call_result');
-    const readResult = toolResults.find((e) => e['tool_id'] === readTool?.['tool_id']);
-    expect(readResult).toBeDefined();
-    expect(readResult?.['status']).toBe('success');
-
-    const responseText = allText(events);
-    expect(responseText.toLowerCase()).toContain('test');
-  }, TIMEOUT);
-
-  // End-to-end: the "reduce emojis in formatting rules" scenario from the
-  // admin-agent regression. Before the discovery + edit tools existed, the
-  // agent guessed wrong paths and often created a new skill file instead
-  // of editing the existing knowledge doc. With list_repo_files /
-  // glob_repo_files / grep_repo_files / edit_repo_file available, it
-  // should discover knowledge/formatting-rules.md and edit it in place.
-  it('admin agent discovers and edits the right file (emoji-reduction scenario)', async () => {
-    const formattingRulesPath = resolve(AGENT_DIR, 'knowledge', 'formatting-rules.md');
-    const emojiHeavyBody = [
-      '# Formatting Rules 🎨',
-      '',
-      'Use emojis liberally to make the output more engaging! 🎉🎉🎉',
-      '',
-      '## Tone 💬',
-      '',
-      "Drop a 🚀 when celebrating a win, a 🔥 when highlighting risk, and a ✨ when introducing a new feature. Don't hold back! 🙌",
-      '',
-      'Every bullet point should start with an emoji. 📝 Every heading should have one too. 🏷️',
-      '',
-      '## Examples 📚',
-      '- ✅ "Deployment succeeded 🎉"',
-      '- ❌ "Deployment failed 💥"',
-      '',
-    ].join('\n');
-    const emojiCount = (s: string): number => (s.match(/\p{Emoji_Presentation}/gu) ?? []).length;
-    const initialEmojis = emojiCount(emojiHeavyBody);
-    expect(initialEmojis).toBeGreaterThan(5);
-
-    writeFileSync(formattingRulesPath, emojiHeavyBody);
-
-    // Snapshot skills/ so we can assert the agent didn't create a bogus skill.
-    const skillsDir = resolve(AGENT_DIR, 'skills');
-    const skillsBefore = new Set(readdirSync(skillsDir));
-
-    try {
-      const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          message:
-            'I want to use emojis less often in my formatting rules. Find where they are defined in my repo and reduce the emoji guidance — remove most emoji usage from the instructions, keep the document but make it plain text. Work carefully: first look around to find the right file, then edit it in place. Do not create any new skills.',
-        }),
-        signal: AbortSignal.timeout(TIMEOUT * 2),
-      });
-
-      const text = await res.text();
-      const events = parseSSE(text);
-      const toolStarts = findEvents(events, 'tool_call_start');
-      const toolNames = toolStarts.map((e) => String(e['tool_name']));
-
-      // Discovery: the agent should have used at least one of the new
-      // discovery tools to find formatting-rules.md instead of guessing.
-      const usedDiscovery = toolNames.some(
-        (n) => n === 'list_repo_files' || n === 'glob_repo_files' || n === 'grep_repo_files',
-      );
-      expect(usedDiscovery).toBe(true);
-
-      // Action: should edit in place, NOT rewrite the whole file or create
-      // a new skill. We allow either edit_repo_file (preferred) or
-      // write_repo_file targeting the same path (acceptable).
-      const editedInPlace = toolNames.includes('edit_repo_file');
-      const rewroteFile = toolNames.includes('write_repo_file');
-      expect(editedInPlace || rewroteFile).toBe(true);
-
-      // Regression guard: agent must NOT have created a new skill.
-      const skillsAfter = new Set(readdirSync(skillsDir));
-      const newSkills = [...skillsAfter].filter((s) => !skillsBefore.has(s));
-      expect(newSkills).toEqual([]);
-
-      // Outcome: the file should still exist and contain significantly
-      // fewer emojis than before.
-      const after = readFileSync(formattingRulesPath, 'utf-8');
-      expect(after.length).toBeGreaterThan(0);
-      const afterEmojis = emojiCount(after);
-      expect(afterEmojis).toBeLessThan(initialEmojis);
-    } finally {
-      // Clean up — remove the formatting-rules.md fixture regardless of pass/fail.
-      rmSync(formattingRulesPath, {force: true});
-    }
-  }, TIMEOUT * 2);
-
-  // Pagination end-to-end: drop a 3000-line file with a sentinel on line
-  // 2800, ask the admin agent to report what's there verbatim. The default
-  // read cap is 2000 lines, so the agent MUST either paginate via offset
-  // or use grep. Verifies the new line_start/line_end/total_lines/
-  // truncated response shape is actually usable by a real LLM.
-  it('admin agent paginates a long file to reach content past the default cap', async () => {
-    const bigFilePath = resolve(AGENT_DIR, 'knowledge', 'big-file.md');
-    // Sentinel must be distinct enough that the agent can quote it back.
-    const SENTINEL = 'TARGET:CONTENT:ABCD1234:the-answer-is-42';
-    const TARGET_LINE = 2800;
-    const TOTAL_LINES = 3000;
-    const body = Array.from({length: TOTAL_LINES}, (_, i) => {
-      const n = i + 1;
-      return n === TARGET_LINE ? `line ${String(n)}: ${SENTINEL}` : `line ${String(n)}: filler`;
-    }).join('\n');
-    writeFileSync(bigFilePath, body);
-
-    try {
-      const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          message:
-            `I just added a long file at knowledge/big-file.md. Tell me exactly what's on line ${String(TARGET_LINE)} — report the full line content verbatim. Just give me the line, no summary.`,
-        }),
-        signal: AbortSignal.timeout(TIMEOUT * 2),
-      });
-
-      const text = await res.text();
-      const events = parseSSE(text);
-      const toolStarts = findEvents(events, 'tool_call_start');
-      const toolNames = toolStarts.map((e) => String(e['tool_name']));
-
-      // The agent needs to touch the file — either read_repo_file or
-      // grep_repo_files would work to find the target line.
-      const touchedFile = toolNames.some(
-        (n) => n === 'read_repo_file' || n === 'grep_repo_files',
-      );
-      expect(touchedFile).toBe(true);
-
-      // If the agent used read_repo_file, at least one call must have
-      // specified an offset/limit that covers line 2800 (the default
-      // 2000-line window doesn't reach it, so the agent HAS to adapt).
-      const readCalls = toolStarts.filter((e) => e['tool_name'] === 'read_repo_file');
-      if (readCalls.length > 0) {
-        const usedPagination = readCalls.some((e) => {
-          const params = e['parameters'] as Record<string, unknown> | undefined;
-          if (!params) return false;
-          const offset = typeof params['offset'] === 'number' ? params['offset'] : 1;
-          const limit = typeof params['limit'] === 'number' ? params['limit'] : 2000;
-          // Covers line TARGET_LINE if offset <= TARGET_LINE AND
-          // offset + limit - 1 >= TARGET_LINE.
-          return offset <= TARGET_LINE && offset + limit - 1 >= TARGET_LINE;
-        });
-        expect(usedPagination).toBe(true);
-      }
-
-      // Hard assertion: the response contains the sentinel verbatim.
-      const responseText = allText(events);
-      expect(responseText).toContain(SENTINEL);
-    } finally {
-      rmSync(bigFilePath, {force: true});
-    }
-  }, TIMEOUT * 2);
-
-  // Multi-chunk pagination: sentinels spread across a 5000-line file so no
-  // single default read (2000 lines) can cover all of them. Verifies the
-  // agent either (a) chains multiple reads following the truncated: true
-  // signal, or (b) uses grep. Either is acceptable — what matters is that
-  // the agent finds content past the default window.
-  it('admin agent finds content scattered across a long file via pagination or grep', async () => {
-    const bigFilePath = resolve(AGENT_DIR, 'knowledge', 'scatter.md');
-    const MARKER = 'MARKER-ZXCV9876';
-    const MARKER_LINES = [500, 2500, 4500];
-    const TOTAL_LINES = 5000;
-    const body = Array.from({length: TOTAL_LINES}, (_, i) => {
-      const n = i + 1;
-      return MARKER_LINES.includes(n) ? `line ${String(n)}: ${MARKER}` : `line ${String(n)}: filler`;
-    }).join('\n');
-    writeFileSync(bigFilePath, body);
-
-    try {
-      const res = await fetch(`http://localhost:${AGENT_PORT}/config/chat`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          message:
-            `Read knowledge/scatter.md and quote the exact content of line 500, line 2500, and line 4500 verbatim. Report each line's full text.`,
-        }),
-        signal: AbortSignal.timeout(TIMEOUT * 2),
-      });
-
-      const text = await res.text();
-      const events = parseSSE(text);
-      const toolStarts = findEvents(events, 'tool_call_start');
-      const toolNames = toolStarts.map((e) => String(e['tool_name']));
-
-      // Agent must have touched the file.
-      const touchedFile = toolNames.some(
-        (n) => n === 'read_repo_file' || n === 'grep_repo_files',
-      );
-      expect(touchedFile).toBe(true);
-
-      // If the agent committed to read-only discovery (no grep), verify at
-      // least one read_repo_file call reached past the default 2000-line
-      // cap — otherwise it couldn't have seen markers at lines 2500 or
-      // 4500. When grep is used first, pagination isn't required because
-      // the agent may have used read_repo_file only to confirm a line it
-      // already found via grep.
-      const usedGrep = toolNames.includes('grep_repo_files');
-      const readCalls = toolStarts.filter((e) => e['tool_name'] === 'read_repo_file');
-      if (readCalls.length > 0 && !usedGrep) {
-        const reachedPastCap = readCalls.some((e) => {
-          const params = e['parameters'] as Record<string, unknown> | undefined;
-          if (!params) return false;
-          const offset = typeof params['offset'] === 'number' ? params['offset'] : 1;
-          const limit = typeof params['limit'] === 'number' ? params['limit'] : 2000;
-          // A single read covers up to line_end = offset + limit - 1.
-          return offset + limit - 1 > 2000;
-        });
-        expect(reachedPastCap).toBe(true);
-      }
-
-      // Hard assertion: final response identifies all three marker line
-      // numbers. LLMs paraphrase, so search the response for each number.
-      const responseText = allText(events);
-      for (const n of MARKER_LINES) {
-        expect(responseText).toContain(String(n));
-      }
-    } finally {
-      rmSync(bigFilePath, {force: true});
-    }
-  }, TIMEOUT * 2);
-
-  // -------------------------------------------------------------------------
-  // 10. Write intent enforcement (G8)
+  // 8. Write intent enforcement (G8)
   // -------------------------------------------------------------------------
 
   it('rejects POST with intent "read"', async () => {
@@ -861,20 +660,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   }, TIMEOUT);
 
   // -------------------------------------------------------------------------
-  // 15. Evals list endpoint
-  // -------------------------------------------------------------------------
-
-  it('lists eval suites from repo', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/api/evals/suites`, {signal: AbortSignal.timeout(5000)});
-    const body = await res.json() as {suites: Array<Record<string, unknown>>};
-
-    expect(res.status).toBe(200);
-    expect(body.suites.length).toBeGreaterThan(0);
-    expect(body.suites[0]?.['name']).toBe('basic-eval');
-  });
-
-  // -------------------------------------------------------------------------
-  // 16. Inspect endpoint — connection health
+  // 15. Inspect endpoint — connection health
   // -------------------------------------------------------------------------
 
   it('inspect shows connection status', async () => {
@@ -1081,7 +867,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const found = listBody.sessions.find((s) => s['id'] === sessionId);
     expect(found).toBeDefined();
     if (!found) throw new Error('unreachable');
-    expect(found['appId']).toBe('local');
+    expect(found['appId']).toBe('smoke-test-agent');
     expect(typeof found['summary']).toBe('string');
     expect(String(found['summary']).length).toBeGreaterThan(0);
     expect(typeof found['createdAt']).toBe('number');
@@ -1454,46 +1240,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     }
   }, TIMEOUT);
 
-  it('emits automation_started and automation_stopped', async () => {
-    // The smoke agent's test-auto has no cron schedule, so start will fail.
-    // That's fine — we want to verify the happy path when a schedulable
-    // automation exists. Skip if none are available.
-    const listRes = await fetch(`http://localhost:${AGENT_PORT}/automations`);
-    const listBody = await listRes.json() as {automations: Array<{name: string; schedule?: string}>};
-    const schedulable = listBody.automations.find((a) => a.schedule);
-    if (!schedulable) {
-      return; // smoke agent has no scheduled automation — skip
-    }
-
-    const stream = await openEventStream();
-    try {
-      const startRes = await fetch(
-        `http://localhost:${AGENT_PORT}/automations/${schedulable.name}/start`,
-        {method: 'POST', signal: AbortSignal.timeout(5000)},
-      );
-      if (startRes.status !== 200) return; // not a schedulable automation
-
-      const started = await stream.waitFor(
-        (e) => e['type'] === 'automation_started' && e['name'] === schedulable.name,
-        5000,
-      );
-      expect(typeof started['intervalMs']).toBe('number');
-
-      await fetch(
-        `http://localhost:${AGENT_PORT}/automations/${schedulable.name}/stop`,
-        {method: 'POST', signal: AbortSignal.timeout(5000)},
-      );
-
-      const stopped = await stream.waitFor(
-        (e) => e['type'] === 'automation_stopped' && e['name'] === schedulable.name,
-        5000,
-      );
-      expect(stopped['name']).toBe(schedulable.name);
-    } finally {
-      stream.close();
-    }
-  }, TIMEOUT);
-
   it('fans out the same event to all concurrent clients (two-tab case)', async () => {
     // Two independent SSE connections — the "two browser tabs" scenario.
     // Every event emitted by the server should reach BOTH clients with
@@ -1654,19 +1400,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     expect(res.status).toBe(400);
   });
 });
-
-// ---------------------------------------------------------------------------
-// SSE parser helper
-// ---------------------------------------------------------------------------
-
-function parseSSE(text: string): Array<Record<string, unknown>> {
-  const events: Array<Record<string, unknown>> = [];
-  for (const line of text.split('\n')) {
-    if (!line.startsWith('data: ')) continue;
-    try { events.push(JSON.parse(line.slice(6)) as Record<string, unknown>); } catch { /* skip */ }
-  }
-  return events;
-}
 
 // ---------------------------------------------------------------------------
 // Runtime event bus helper — opens a streaming fetch to /api/events and

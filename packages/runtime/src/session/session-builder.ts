@@ -51,6 +51,7 @@ import {StoreError} from '../errors.js';
 import {createDispatchTool, DISPATCH_TOOL_NAME} from '../tools/dispatch-tool.js';
 import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-tool.js';
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
+import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import type {Logger} from '../logger.js';
 
 // ---------------------------------------------------------------------------
@@ -93,6 +94,18 @@ export interface BuildSessionComponentsOptions {
   sessionId?: string;
   /** Optional field scrubber for response sanitization on ctx.request() */
   fieldScrubber?: FieldScrubber;
+  /**
+   * Pre-loaded memory content. When memory is enabled in the bundle config,
+   * the caller loads the blob from the database and passes it here. The
+   * builder injects it into the compiler input and registers the
+   * update_memory tool.
+   */
+  memoryContent?: string;
+  /**
+   * Database handle for the memory tool (required when memory is enabled
+   * and editableBy is not 'none'). The tool upserts directly via Drizzle.
+   */
+  memoryDb?: import('drizzle-orm/node-postgres').NodePgDatabase<Record<string, unknown>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +283,8 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     adminContent,
     sessionId = 'pending',
     fieldScrubber,
+    memoryContent,
+    memoryDb,
   } = opts;
 
   // -------------------------------------------------------------------------
@@ -380,6 +395,33 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   }
 
   // -------------------------------------------------------------------------
+  // 10b. Register memory tool (if memory is enabled and editable)
+  // -------------------------------------------------------------------------
+
+  const memoryConfig = bundle.config.memory;
+  const memoryEnabled = memoryConfig?.enabled === true;
+  const memoryEditable = memoryEnabled
+    && memoryConfig.editableBy !== 'none'
+    && (memoryConfig.editableBy !== 'admin' || sessionType === 'admin');
+
+  if (memoryEditable && memoryDb) {
+    registry.register(MEMORY_TOOL_NAME, createMemoryTool({
+      db: memoryDb,
+      logger,
+      appId,
+      maxEntries: memoryConfig.maxEntries,
+      maxTotalChars: memoryConfig.maxTotalChars,
+    }));
+    logger.info('memory_tool_registered', {editableBy: memoryConfig.editableBy ?? 'any'});
+  } else if (memoryEnabled) {
+    logger.info('memory_tool_not_registered', {
+      reason: !memoryDb ? 'no_db' : 'not_editable',
+      editableBy: memoryConfig.editableBy ?? 'any',
+      sessionType,
+    });
+  }
+
+  // -------------------------------------------------------------------------
   // 11. Build permission checker (session-level)
   // -------------------------------------------------------------------------
 
@@ -428,9 +470,20 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
         schema: s.entity.schema,
       },
     })),
+    ...(memoryEnabled && memoryContent ? {memory: memoryContent} : {}),
   };
 
   const compiled = compileContext(compilerInput);
+
+  // Inject memory management instructions when memory is enabled
+  if (memoryEnabled && memoryEditable) {
+    compiled.systemPrompt += '\n\n## Memory Instructions\n\n' +
+      'You have persistent memory. Entries appear in your context under "Memory."\n\n' +
+      '**When to save:** User states a preference, corrects you, shares a fact about themselves or their project.\n' +
+      '**How to save:** Write declarative facts ("User is a dentist") not imperatives ("Always ask about dental practice"). One fact per entry, 1-2 sentences max.\n' +
+      '**When to remove:** User asks to forget something, or a new fact contradicts an existing entry.\n' +
+      '**Tools:** Use memory tool with action "add" to save, "remove" to delete by ID, "list" to show all, "search" to find by keyword.';
+  }
 
   if (compiled.warnings.length > 0) {
     for (const warning of compiled.warnings) {
@@ -513,4 +566,4 @@ function resolveApiKey(
 }
 
 // Re-export constants for use in tests and state handlers
-export {PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME, DISPATCH_TOOL_NAME};
+export {PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME, DISPATCH_TOOL_NAME, MEMORY_TOOL_NAME};

@@ -289,6 +289,16 @@ export function compileContext(input: CompilerInput): CompilerOutput {
   }
 
   // -------------------------------------------------------------------------
+  // Memory (between knowledge and stores — per design doc priority)
+  // -------------------------------------------------------------------------
+  if (input.memory) {
+    const memorySection = `## Memory\n\n${input.memory}`;
+    parts.push(memorySection);
+    parts.push('');
+    contributions.push({name: 'Memory', category: 'memory', tokens: estimateTokens(memorySection)});
+  }
+
+  // -------------------------------------------------------------------------
   // Connections (after skills/knowledge — connection guidance is security-
   // relevant and should be preserved when budget trimming is added)
   // -------------------------------------------------------------------------

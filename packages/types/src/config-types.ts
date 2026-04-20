@@ -35,6 +35,33 @@ export interface WebToolsConfig {
 }
 
 /**
+ * Configuration for agent memory — per-instance persistent context.
+ *
+ * When enabled, the agent stores memory entries (one fact per row) that
+ * persist across sessions. The agent can read them in its system prompt
+ * and manage them via the built-in memory tool (add/remove/list/search).
+ */
+export interface MemoryConfig {
+  /** Whether memory is enabled for this agent. */
+  readonly enabled: boolean;
+  /**
+   * Who can call the memory tool:
+   * - 'any'  — any user (default)
+   * - 'admin' — only admin sessions
+   * - 'none' — memory is read-only (set via admin agent or API)
+   */
+  readonly editableBy?: 'any' | 'admin' | 'none';
+  /** Maximum number of memory entries (default: 50). */
+  readonly maxEntries?: number;
+  /** Maximum total characters across all entries (default: 8000). */
+  readonly maxTotalChars?: number;
+  /** Nudge interval — prompt agent to save every N turns (default: 10, 0 to disable). */
+  readonly nudgeInterval?: number;
+  /** Enable session search tool (default: true when memory is enabled). */
+  readonly sessionSearch?: boolean;
+}
+
+/**
  * The parsed amodal.json configuration.
  */
 export interface AmodalConfig {
@@ -79,4 +106,6 @@ export interface AmodalConfig {
       trust?: boolean;
     }>;
   };
+  /** Agent memory configuration. */
+  memory?: MemoryConfig;
 }
