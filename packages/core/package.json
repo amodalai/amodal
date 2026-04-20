@@ -1,6 +1,6 @@
 {
   "name": "@amodalai/core",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "description": "Amodal agent runtime core",
   "license": "MIT",
   "repository": {
