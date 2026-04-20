@@ -740,7 +740,7 @@ function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll, runtim
   const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
 
   useEffect(() => {
-    fetch(`${runtimeUrl}/api/evals/arena/models`, { signal: AbortSignal.timeout(5_000) })
+    fetch(`/api/evals/arena/models`, { signal: AbortSignal.timeout(5_000) })
       .then((res) => {
         if (!res.ok) return;
         return res.json();
@@ -759,7 +759,7 @@ function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll, runtim
   // Fetch per-eval history
   useEffect(() => {
     for (const suite of suites) {
-      fetch(`${runtimeUrl}/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`, { signal: AbortSignal.timeout(5_000) })
+      fetch(`/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`, { signal: AbortSignal.timeout(5_000) })
         .then((res) => {
           if (!res.ok) return;
           return res.json();
@@ -816,7 +816,7 @@ export function ArenaPage() {
   const [expandAll, setExpandAll] = useState<boolean | null>(null);
 
   const loadSuites = useCallback(() => {
-    fetch(`/api/studio/evals?agentId=${encodeURIComponent(agentId)}`, { signal: AbortSignal.timeout(5_000) })
+    fetch(`/api/evals?agentId=${encodeURIComponent(agentId)}`, { signal: AbortSignal.timeout(5_000) })
       .then((res) => {
         if (!res.ok) return;
         return res.json();

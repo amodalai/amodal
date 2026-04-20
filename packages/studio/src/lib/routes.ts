@@ -27,7 +27,7 @@ export function documentPath(storeName: string, key: string): string {
 // API routes
 // ---------------------------------------------------------------------------
 
-export const API_STORES_BASE = '/api/studio/stores';
+export const API_STORES_BASE = '/api/stores';
 
 export function apiStoreDocumentsPath(storeName: string): string {
   return `${API_STORES_BASE}/${encodeURIComponent(storeName)}/documents`;

@@ -39,7 +39,7 @@ interface Props {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MARK_REVIEWED_ENDPOINT = '/api/studio/feedback/mark-reviewed';
+const MARK_REVIEWED_ENDPOINT = '/api/feedback/mark-reviewed';
 const QUERY_PREVIEW_LENGTH = 120;
 const RESPONSE_PREVIEW_LENGTH = 200;
 

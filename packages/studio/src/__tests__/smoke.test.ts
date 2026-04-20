@@ -108,8 +108,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Config
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/config returns agent config', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/config`);
+  test('GET /api/config returns agent config', async () => {
+    const res = await fetch(`${baseUrl}/api/config`);
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as Record<string, unknown>;
@@ -142,8 +142,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Store list
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/stores returns store list', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/stores`);
+  test('GET /api/stores returns store list', async () => {
+    const res = await fetch(`${baseUrl}/api/stores`);
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as Record<string, unknown>;
@@ -155,9 +155,9 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // SSE events
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/events streams SSE', async () => {
+  test('GET /api/events streams SSE', async () => {
     const controller = new AbortController();
-    const res = await fetch(`${baseUrl}/api/studio/events`, {
+    const res = await fetch(`${baseUrl}/api/events`, {
       signal: controller.signal,
     });
 
@@ -172,8 +172,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Drafts
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/drafts returns draft list', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/drafts`);
+  test('GET /api/drafts returns draft list', async () => {
+    const res = await fetch(`${baseUrl}/api/drafts`);
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as Record<string, unknown>;
@@ -185,8 +185,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Preview (unavailable in local dev)
   // -------------------------------------------------------------------------
 
-  test('POST /api/studio/preview returns 501', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/preview`, {
+  test('POST /api/preview returns 501', async () => {
+    const res = await fetch(`${baseUrl}/api/preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -204,7 +204,7 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // -------------------------------------------------------------------------
 
   test('CORS preflight returns 204 for allowed origin', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/config`, {
+    const res = await fetch(`${baseUrl}/api/config`, {
       method: 'OPTIONS',
       headers: {
         Origin: CORS_ORIGIN,
@@ -218,7 +218,7 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   });
 
   test('CORS rejects disallowed origin', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/config`, {
+    const res = await fetch(`${baseUrl}/api/config`, {
       method: 'OPTIONS',
       headers: {
         Origin: 'http://evil.example.com',
@@ -232,8 +232,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Config response shape
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/config returns agentId from env', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/config`);
+  test('GET /api/config returns agentId from env', async () => {
+    const res = await fetch(`${baseUrl}/api/config`);
     const body = (await res.json()) as Record<string, unknown>;
     // AGENT_ID is set in the test server env
     expect(typeof body['agentId']).toBe('string');
@@ -245,8 +245,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Automations
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/automations returns wrapped object', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/automations`);
+  test('GET /api/automations returns wrapped object', async () => {
+    const res = await fetch(`${baseUrl}/api/automations`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toHaveProperty('automations');
@@ -257,8 +257,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Evals
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/evals returns wrapped suites', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/evals?agentId=test`);
+  test('GET /api/evals returns wrapped suites', async () => {
+    const res = await fetch(`${baseUrl}/api/evals?agentId=test`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toHaveProperty('suites');
@@ -269,16 +269,16 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Feedback
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/feedback returns wrapped entries', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/feedback?agentId=test`);
+  test('GET /api/feedback returns wrapped entries', async () => {
+    const res = await fetch(`${baseUrl}/api/feedback?agentId=test`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toHaveProperty('entries');
     expect(Array.isArray(body['entries'])).toBe(true);
   });
 
-  test('GET /api/studio/feedback/summary returns wrapped summary', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/feedback/summary?agentId=test`);
+  test('GET /api/feedback/summary returns wrapped summary', async () => {
+    const res = await fetch(`${baseUrl}/api/feedback/summary?agentId=test`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toHaveProperty('summary');
@@ -288,8 +288,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Workspace
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/workspace returns workspace bundle', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/workspace`);
+  test('GET /api/workspace returns workspace bundle', async () => {
+    const res = await fetch(`${baseUrl}/api/workspace`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toHaveProperty('agentId');
@@ -300,8 +300,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Discard
   // -------------------------------------------------------------------------
 
-  test('POST /api/studio/discard returns discarded count', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/discard`, {
+  test('POST /api/discard returns discarded count', async () => {
+    const res = await fetch(`${baseUrl}/api/discard`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -314,8 +314,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // 404 for unknown API routes
   // -------------------------------------------------------------------------
 
-  test('GET /api/studio/nonexistent returns 404', async () => {
-    const res = await fetch(`${baseUrl}/api/studio/nonexistent`);
+  test('GET /api/nonexistent returns 404', async () => {
+    const res = await fetch(`${baseUrl}/api/nonexistent`);
     expect(res.status).toBe(404);
   });
 });

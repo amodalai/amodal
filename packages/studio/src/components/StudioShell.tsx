@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, useParams, Link } from 'react-router-dom';
 import { useTheme } from './ThemeProvider';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { AdminChat } from './views/AdminChat';
@@ -59,11 +59,11 @@ const SECONDARY_NAV: readonly NavItem[] = [
   { href: '/system', label: 'System', icon: Settings },
 ];
 
-function SidebarNavLink({ item, active }: { item: NavItem; active: boolean }) {
+function SidebarNavLink({ item, active, to }: { item: NavItem; active: boolean; to: string }) {
   const Icon = item.icon;
   return (
     <Link
-      to={item.href}
+      to={to}
       className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
         active
           ? 'bg-primary/10 text-primary font-medium'
@@ -95,13 +95,22 @@ const INVENTORY_SECTIONS: readonly InventorySectionDef[] = [
 
 export function StudioShell({ children }: Props) {
   const { pathname } = useLocation();
+  const { agentId } = useParams();
   const { agentName, runtimeUrl } = useStudioConfig();
   const { dark, toggle } = useTheme();
   const inventory = useAgentInventory();
   const [chatOpen, setChatOpen] = useState(false);
 
-  const isActive = (href: string) =>
-    pathname === href || (href !== '/' && pathname.startsWith(href));
+  const basePath = `/agents/${agentId ?? 'local'}`;
+
+  /** Resolve a nav href to an agent-scoped absolute path */
+  const agentPath = (href: string) =>
+    href === '/' ? basePath : `${basePath}${href}`;
+
+  const isActive = (href: string) => {
+    const full = agentPath(href);
+    return pathname === full || (href !== '/' && pathname.startsWith(full));
+  };
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -124,7 +133,7 @@ export function StudioShell({ children }: Props) {
         <nav className="flex-1 py-2 overflow-y-auto">
           <div className="px-2 space-y-0.5">
             {NAV_ITEMS.map((item) => (
-              <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} />
+              <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} to={agentPath(item.href)} />
             ))}
           </div>
 
@@ -147,9 +156,9 @@ export function StudioShell({ children }: Props) {
                       {items.map((name) => (
                         <Link
                           key={name}
-                          to={`${section.pathPrefix}/${name}`}
+                          to={agentPath(`${section.pathPrefix}/${name}`)}
                           className={`flex items-center gap-2 px-3 py-1 rounded text-xs transition-colors ${
-                            pathname === `${section.pathPrefix}/${name}`
+                            pathname === agentPath(`${section.pathPrefix}/${name}`)
                               ? 'bg-primary/10 text-primary font-medium'
                               : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                           }`}
@@ -169,7 +178,7 @@ export function StudioShell({ children }: Props) {
 
           <div className="px-2 space-y-0.5">
             {SECONDARY_NAV.map((item) => (
-              <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} />
+              <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} to={agentPath(item.href)} />
             ))}
           </div>
 

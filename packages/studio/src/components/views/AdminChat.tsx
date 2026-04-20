@@ -40,7 +40,7 @@ function loadPersistedChat(): PersistedChat {
     const data = parsed as { sessionId?: unknown; messages?: unknown };
     return {
       sessionId: typeof data.sessionId === 'string' ? data.sessionId : null,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- persisted shape validated at read
+       
       messages: Array.isArray(data.messages) ? (data.messages as ChatMessage[]) : [],
     };
   } catch {
@@ -74,7 +74,7 @@ function AssistantBlocks({ blocks, compact }: { blocks: ContentBlock[]; compact:
   return (
     <>
       {blocks.map((block, i) => {
-        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- admin chat only renders text + tool_calls
+         
         switch (block.type) {
           case 'text':
             return (
@@ -119,7 +119,7 @@ export function AdminChat({ compact = true }: { compact?: boolean }) {
       const body: Record<string, unknown> = { message: text, app_id: 'admin' };
       if (sessionIdRef.current) body['session_id'] = sessionIdRef.current;
       // POST to Studio's admin-chat proxy which forwards to the admin agent
-      return streamSSE('/api/studio/admin-chat/stream', body, { signal });
+      return streamSSE('/api/admin-chat/stream', body, { signal });
     },
     [],
   );

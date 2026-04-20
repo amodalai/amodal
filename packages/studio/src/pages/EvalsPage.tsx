@@ -29,7 +29,7 @@ export function EvalsPage() {
   const [loaded, setLoaded] = useState(false);
 
   const fetchSuites = useCallback(() => {
-    fetch(`/api/studio/evals?agentId=${encodeURIComponent(agentId)}`, {
+    fetch(`/api/evals?agentId=${encodeURIComponent(agentId)}`, {
       signal: AbortSignal.timeout(5_000),
     })
       .then((r) => {

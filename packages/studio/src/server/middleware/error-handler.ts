@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type { Request, Response, NextFunction } from 'express';
+import type { Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { StudioError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 
-export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
+export function handleError(err: Error, c: Context): Response {
   if (err instanceof StudioError) {
     logger.error('route_error', {
       code: err.code,
@@ -16,15 +17,17 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
       statusCode: err.statusCode,
       ...err.context,
     });
-    res.status(err.statusCode).json({
-      error: { code: err.code, message: err.message, ...err.context },
-    });
-    return;
+    return c.json(
+      { error: { code: err.code, message: err.message, ...err.context } },
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- StudioError.statusCode is always a valid HTTP status
+      err.statusCode as ContentfulStatusCode,
+    );
   }
 
   const message = err instanceof Error ? err.message : String(err);
   logger.error('route_unexpected_error', { message });
-  res.status(500).json({
-    error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
-  });
+  return c.json(
+    { error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' } },
+    500,
+  );
 }
