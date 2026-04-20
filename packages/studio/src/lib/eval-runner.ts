@@ -9,7 +9,6 @@
  * executes each test case via POST /chat, and saves results to Postgres.
  */
 
-import { getRuntimeUrl } from './runtime-client';
 import { saveEvalRun } from './eval-queries';
 import { parseEvalMarkdown } from './eval-parser';
 import { logger } from './logger';
@@ -66,11 +65,11 @@ const FETCH_TIMEOUT_MS = 5_000;
  * record pass/fail, and persist the run to Postgres.
  *
  * @param evalName — the eval file name (without .md extension)
- * @param agentId — the agent to scope the run to
+ * @param runtimeUrl — the runtime URL to fetch the eval from and run against
+ * @param agentId — the agent ID to scope the run to
  * @returns the new run ID
  */
-export async function runEvalSuite(evalName: string, agentId: string): Promise<string> {
-  const runtimeUrl = getRuntimeUrl();
+export async function runEvalSuite(evalName: string, runtimeUrl: string, agentId: string): Promise<string> {
 
   // Fetch the eval file from the runtime
   const filePath = `evals/${evalName}.md`;

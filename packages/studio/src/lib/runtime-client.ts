@@ -12,6 +12,7 @@
 import { logger } from './logger';
 
 const RUNTIME_URL_ENV = 'RUNTIME_URL';
+const AGENT_ID_ENV = 'AGENT_ID';
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 /**
@@ -30,13 +31,56 @@ export class RuntimeFetchError extends Error {
 }
 
 /**
- * Get the configured runtime base URL, or throw if not set.
+ * Get the configured runtime base URL from env, or throw if not set.
  */
 export function getRuntimeUrl(): string {
   const url = process.env[RUNTIME_URL_ENV];
   if (!url) throw new Error(`${RUNTIME_URL_ENV} is not configured`);
   return url;
 }
+
+// ---------------------------------------------------------------------------
+// Runtime resolver — injectable hook for cloud deployments
+// ---------------------------------------------------------------------------
+
+export interface ResolvedRuntime {
+  runtimeUrl: string;
+  agentId: string;
+}
+
+/**
+ * A function that resolves the runtime URL and agent ID from a request.
+ * Cloud deployments inject their own implementation (e.g. JWT → platform API).
+ */
+export type RuntimeResolver = (req: Request) => Promise<ResolvedRuntime>;
+
+/** Default resolver: reads from env vars. */
+const defaultResolver: RuntimeResolver = async () => ({
+  runtimeUrl: getRuntimeUrl(),
+  agentId: process.env[AGENT_ID_ENV] ?? 'default',
+});
+
+let _resolver: RuntimeResolver = defaultResolver;
+
+/**
+ * Inject a custom runtime resolver. Called by cloud-studio at startup
+ * to resolve runtime URL from the JWT via the platform API.
+ */
+export function setRuntimeResolver(resolver: RuntimeResolver): void {
+  _resolver = resolver;
+}
+
+/**
+ * Resolve the runtime URL and agent ID for a request.
+ * Delegates to the registered resolver (default: env vars).
+ */
+export async function resolveRuntimeContext(req: Request): Promise<ResolvedRuntime> {
+  return _resolver(req);
+}
+
+// ---------------------------------------------------------------------------
+// Fetch helper
+// ---------------------------------------------------------------------------
 
 /**
  * Fetch JSON data from the runtime API.
