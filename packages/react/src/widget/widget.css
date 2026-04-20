@@ -17,6 +17,35 @@
   --pcw-text-muted: #6b7280;
   --pcw-border: #e5e7eb;
   --pcw-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Dark mode — responds to .dark ancestor (Tailwind convention), prefers-color-scheme, or data-theme="dark" */
+.dark .pcw-widget,
+[data-theme="dark"] .pcw-widget,
+.pcw-widget[data-theme="dark"] {
+  --pcw-primary: #60a5fa;
+  --pcw-bg: #0a0a0f;
+  --pcw-user-bubble: #1e40af;
+  --pcw-agent-bubble: #1e293b;
+  --pcw-tool-call-bg: #1e293b;
+  --pcw-text: #e2e8f0;
+  --pcw-text-muted: #94a3b8;
+  --pcw-border: #334155;
+  --pcw-shadow: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pcw-widget:not([data-theme="light"]) {
+    --pcw-primary: #60a5fa;
+    --pcw-bg: #0a0a0f;
+    --pcw-user-bubble: #1e40af;
+    --pcw-agent-bubble: #1e293b;
+    --pcw-tool-call-bg: #1e293b;
+    --pcw-text: #e2e8f0;
+    --pcw-text-muted: #94a3b8;
+    --pcw-border: #334155;
+    --pcw-shadow: none;
+  }
 
   font-family: var(--pcw-font);
   font-size: var(--pcw-font-size);

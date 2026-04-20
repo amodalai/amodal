@@ -170,11 +170,13 @@ export function ChatWidget({
   }, [theme]);
 
   const positionClass = `pcw-widget pcw-widget--${position}`;
+  const themeMode = theme?.mode;
+  const dataTheme = themeMode && themeMode !== 'auto' ? themeMode : undefined;
 
   // Inline mode is always visible
   if (position === 'inline') {
     return (
-      <div ref={containerRef} className={positionClass} data-testid="chat-widget">
+      <div ref={containerRef} className={positionClass} data-testid="chat-widget" data-theme={dataTheme}>
         <ChatHeader
           title={mergedTheme.headerText}
           onReset={reset}
@@ -226,7 +228,7 @@ export function ChatWidget({
   }
 
   return (
-    <div ref={containerRef} className={positionClass} data-testid="chat-widget">
+    <div ref={containerRef} className={positionClass} data-testid="chat-widget" data-theme={dataTheme}>
       <ChatHeader
         title={mergedTheme.headerText}
         onClose={() => setIsOpen(false)}

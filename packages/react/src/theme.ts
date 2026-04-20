@@ -20,7 +20,7 @@ export const defaultTheme: ChatTheme = {
   emptyStateText: 'Send a message to start a conversation.',
 };
 
-const themeToCSS: Record<keyof ChatTheme, string> = {
+const themeToCSS: Partial<Record<keyof ChatTheme, string>> = {
   primaryColor: '--pcw-primary',
   backgroundColor: '--pcw-bg',
   fontFamily: '--pcw-font',
