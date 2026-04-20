@@ -102,6 +102,13 @@ export function useAmodalChat(options?: UseAmodalChatOptions): UseAmodalChatRetu
   // Pull the live session id forward so the next send() reuses it.
   sessionIdRef.current = stream.sessionId ?? sessionIdRef.current;
 
+  // Wrap reset to also clear the session ref — otherwise the next send()
+  // would re-use the old session ID via the ?? fallback above.
+  const resetWithSession = useCallback(() => {
+    sessionIdRef.current = null;
+    stream.reset();
+  }, [stream]);
+
   return {
     messages: stream.messages,
     send: stream.send,
@@ -111,7 +118,7 @@ export function useAmodalChat(options?: UseAmodalChatOptions): UseAmodalChatRetu
     sessionId: stream.sessionId,
     error: stream.error,
     usage: stream.usage,
-    reset: stream.reset,
+    reset: resetWithSession,
     respondToConfirmation: stream.respondToConfirmation,
   };
 }
