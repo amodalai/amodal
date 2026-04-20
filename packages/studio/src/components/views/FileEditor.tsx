@@ -8,7 +8,7 @@
  * FileEditor — interactive file tree + code editor for agent configuration files.
  *
  * Ported from runtime-app ConfigFilesPage with Studio-specific adaptations:
- * - File content fetched via /api/runtime/files proxy (not same-origin to runtime)
+ * - File content fetched directly from runtime via runtimeUrl prop
  * - Drafts saved via useDraftWorkspace (same-origin to Studio API)
  * - Tree refetch via polling on store_updated events (Studio SSE)
  */
@@ -23,12 +23,6 @@ import { createBrowserLogger } from '@/lib/browser-logger';
 import { cn } from '@/lib/utils';
 
 const log = createBrowserLogger('FileEditor');
-
-// ---------------------------------------------------------------------------
-// Route constants
-// ---------------------------------------------------------------------------
-
-const FILES_PROXY_ROUTE = '/api/runtime/files';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -154,7 +148,7 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
 // FileEditor
 // ---------------------------------------------------------------------------
 
-export function FileEditor({ initialTree }: { initialTree: FileTreeEntry[] }) {
+export function FileEditor({ initialTree, runtimeUrl }: { initialTree: FileTreeEntry[]; runtimeUrl: string }) {
   const [tree, setTree] = useState<FileTreeEntry[]>(initialTree);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [fileData, setFileData] = useState<FileData | null>(null);
@@ -170,7 +164,7 @@ export function FileEditor({ initialTree }: { initialTree: FileTreeEntry[] }) {
   // -----------------------------------------------------------------------
 
   const fetchTree = useCallback(() => {
-    fetch(FILES_PROXY_ROUTE, { signal: AbortSignal.timeout(5_000) })
+    fetch(`${runtimeUrl}/api/files`, { signal: AbortSignal.timeout(5_000) })
       .then((res) => {
         if (!res.ok) throw new Error(`Tree fetch returned ${String(res.status)}`);
         return res.json();
@@ -205,7 +199,7 @@ export function FileEditor({ initialTree }: { initialTree: FileTreeEntry[] }) {
     setSaveStatus('idle');
     setLoading(true);
 
-    fetch(`${FILES_PROXY_ROUTE}/${encodeURIComponent(filePath)}`, {
+    fetch(`${runtimeUrl}/api/files/${encodeURIComponent(filePath)}`, {
       signal: AbortSignal.timeout(5_000),
     })
       .then((res) => {
@@ -231,7 +225,7 @@ export function FileEditor({ initialTree }: { initialTree: FileTreeEntry[] }) {
 
   const reloadFile = useCallback(() => {
     if (!selectedPath) return;
-    fetch(`${FILES_PROXY_ROUTE}/${encodeURIComponent(selectedPath)}`, {
+    fetch(`${runtimeUrl}/api/files/${encodeURIComponent(selectedPath)}`, {
       signal: AbortSignal.timeout(5_000),
     })
       .then((res) => {
