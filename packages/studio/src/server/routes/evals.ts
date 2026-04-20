@@ -53,3 +53,23 @@ evalsRoutes.get('/api/evals/:id/results', async (c) => {
   const runs = await listEvalRuns(id);
   return c.json({ runs });
 });
+
+// List eval runs by eval suite name (used by arena)
+evalsRoutes.get('/api/evals/runs/by-eval/:name', async (c) => {
+  const name = c.req.param('name');
+  const agentId = c.req.query('agentId') ?? '';
+  // Find the suite by name, then list its runs
+  const suites = await listEvalSuites(agentId);
+  const suite = suites.find((s) => s.name === name);
+  if (!suite) {
+    return c.json({ runs: [] });
+  }
+  const runs = await listEvalRuns(suite.id);
+  return c.json({ runs });
+});
+
+// Arena models — returns available models for arena comparison
+evalsRoutes.get('/api/evals/arena/models', async (c) => 
+  // TODO: return configured models from agent config
+   c.json({ models: [] })
+);
