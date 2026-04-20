@@ -20,8 +20,7 @@ import type {ServerInstance} from '../server.js';
 import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
 import {loadTestEnv, defaultTargetName} from './test-env.js';
 import {VISION_PROVIDERS} from '../providers/types.js';
-import {getDb, agentMemory} from '@amodalai/db';
-import {sql} from 'drizzle-orm';
+import {getDb, agentMemoryEntries, eq} from '@amodalai/db';
 import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 
 // Pull API keys out of <repo-root>/.env.test (gitignored). Missing keys
@@ -319,30 +318,25 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   // -------------------------------------------------------------------------
 
   it('agent responds with facts only present in memory', async () => {
-    // Seed the memory table directly — avoids depending on the LLM to call
-    // update_memory (non-deterministic). The server already migrated the
-    // schema, so the table exists. getDb() returns the same singleton the
-    // server is using.
+    // Seed the memory entries table directly — avoids depending on the LLM
+    // to call memory.add (non-deterministic). The server already migrated
+    // the schema, so the table exists. getDb() returns the same singleton.
      
     const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
     const MEMORY_SENTINEL = 'MEMORY_SMOKE_SENTINEL_XK92';
     await db
-      .insert(agentMemory)
-      .values({id: 1, content: `The user's favorite color is ${MEMORY_SENTINEL}.`, updatedAt: sql`NOW()`})
-      .onConflictDoUpdate({
-        target: agentMemory.id,
-        set: {content: `The user's favorite color is ${MEMORY_SENTINEL}.`, updatedAt: sql`NOW()`},
-      });
+      .insert(agentMemoryEntries)
+      .values({appId: 'local', content: `The user's favorite color is ${MEMORY_SENTINEL}.`});
 
-    // New session — memory is loaded fresh from the DB during session creation.
+    // New session — memory entries are loaded fresh from the DB during session creation.
     const {events} = await chat(
       'What is my favorite color? Reply with just the color value, nothing else.',
     );
     const responseText = allText(events);
     expect(responseText).toContain(MEMORY_SENTINEL);
 
-    // Clean up — remove memory so other tests start clean
-    await db.delete(agentMemory);
+    // Clean up — remove memory entries so other tests start clean
+    await db.delete(agentMemoryEntries).where(eq(agentMemoryEntries.appId, 'local'));
   }, TIMEOUT);
 
   // -------------------------------------------------------------------------
