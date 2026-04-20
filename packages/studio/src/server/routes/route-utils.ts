@@ -15,5 +15,10 @@
  *   extractWildcard('/api/drafts/', '/api/drafts/')                // => ''
  */
 export function extractWildcard(path: string, prefix: string): string {
-  return path.startsWith(prefix) ? path.slice(prefix.length) : '';
+  const raw = path.startsWith(prefix) ? path.slice(prefix.length) : '';
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }

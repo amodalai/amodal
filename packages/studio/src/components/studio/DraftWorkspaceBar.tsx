@@ -74,6 +74,7 @@ export function DraftWorkspaceBar({ workspace: injected }: DraftWorkspaceBarProp
     setPreviewBusy(true);
     setStatus(null);
     try {
+      showStatus('Creating preview branch...');
       const result: PreviewResult | null = await workspace.buildPreview();
       if (!result) {
         const storedErr = workspace.getLatestError();
@@ -82,11 +83,22 @@ export function DraftWorkspaceBar({ workspace: injected }: DraftWorkspaceBarProp
           await workspace.listDrafts();
           return;
         }
+        showStatus('Preview failed');
         return;
       }
-      const url = `/?preview=${encodeURIComponent(result.token)}`;
-      window.open(url, '_blank', 'noopener,noreferrer');
-      showStatus('Preview opened in new tab');
+
+      // Token-based preview (legacy)
+      if (result.token) {
+        const url = `/?preview=${encodeURIComponent(result.token)}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+        showStatus('Preview opened in new tab');
+        return;
+      }
+
+      // Branch-based preview
+      if (result.branch) {
+        showStatus(`Preview branch created: ${result.branch}`);
+      }
     } catch (err) {
       log.warn('preview_unexpected_error', { err: err instanceof Error ? err.message : String(err) });
       showStatus('Preview failed');
