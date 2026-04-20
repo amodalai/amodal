@@ -141,6 +141,7 @@ async function buildComponents(
     pinnedModel: opts.pinnedModel,
     memoryContent: memoryContent || undefined,
     memoryDb,
+    appId: shared.appId,
   });
 }
 
