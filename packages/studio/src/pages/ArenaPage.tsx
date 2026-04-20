@@ -8,6 +8,7 @@ import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
 import { CheckCircle2, XCircle, FlaskConical, Loader2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { useEvalSuites } from '@/hooks/useEvalSuites';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -811,39 +812,22 @@ function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll, runtim
 /* ------------------------------------------------------------------ */
 
 export function ArenaPage() {
-  const { runtimeUrl, agentId } = useStudioConfig();
+  const { runtimeUrl } = useStudioConfig();
   const [suites, setSuites] = useState<EvalSuite[]>([]);
   const [expandAll, setExpandAll] = useState<boolean | null>(null);
 
-  const loadSuites = useCallback(() => {
-    fetch(`/api/evals?agentId=${encodeURIComponent(agentId)}`, { signal: AbortSignal.timeout(5_000) })
-      .then((res) => {
-        if (!res.ok) return;
-        return res.json();
-      })
-      .then((data: unknown) => {
-        if (!data) return;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
-        const d = data as { suites: Array<{ name: string; config: Record<string, unknown> }> };
-        setSuites(d.suites.map((s) => ({
-          name: s.name,
-          title: String(s.config['title'] ?? s.name),
-          description: String(s.config['description'] ?? ''),
-          query: String(s.config['query'] ?? ''),
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsed eval suite config
-          assertions: Array.isArray(s.config['assertions']) ? s.config['assertions'] as Array<{ text: string; negated: boolean }> : [],
-           
-          assertionCount: Array.isArray(s.config['assertions']) ? (s.config['assertions'] as unknown[]).length : 0,
-        })));
-      })
-      .catch(() => {
-        // Evals endpoint may not exist
-      });
-  }, [agentId]);
+  const evalSuitesHook = useEvalSuites();
 
   useEffect(() => {
-    loadSuites();
-  }, [loadSuites]);
+    setSuites(evalSuitesHook.suites.map((s) => ({
+      name: s.name,
+      title: s.title,
+      description: s.description,
+      query: s.query,
+      assertions: s.assertions,
+      assertionCount: s.assertions.length,
+    })));
+  }, [evalSuitesHook.suites]);
 
   return (
     <div className="h-full flex flex-col bg-background">
