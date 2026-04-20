@@ -1,5 +1,15 @@
 # @amodalai/studio
 
+## 0.3.15
+
+### Patch Changes
+
+- [#232](https://github.com/amodalai/amodal/pull/232) [`aa1c86f`](https://github.com/amodalai/amodal/commit/aa1c86ff8f372b40b4de41ffdfa10bf7c9cfbe88) Thanks [@whodatdev](https://github.com/whodatdev)! - Fix file editor to call runtime directly instead of using the `/api/runtime/files` proxy route. The proxy only works in local dev — in cloud deployments, the SPA's fetch patch rewrites it to the wrong host. Now uses `runtimeUrl` from config, matching how the agent inventory hook already works.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.15
+  - @amodalai/db@0.3.15
+
 ## 0.3.14
 
 ### Patch Changes
