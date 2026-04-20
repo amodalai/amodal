@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { AgentOffline } from '@/components/AgentOffline';
 import { FileEditor } from '@/components/views/FileEditor';
+import { useStudioConfig } from '@/contexts/StudioConfigContext';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,21 +23,16 @@ interface FileTreeEntry {
 }
 
 // ---------------------------------------------------------------------------
-// Route constants
-// ---------------------------------------------------------------------------
-
-const FILES_PROXY_ROUTE = '/api/runtime/files';
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export function FilesPage() {
+  const { runtimeUrl } = useStudioConfig();
   const [tree, setTree] = useState<FileTreeEntry[] | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetch(FILES_PROXY_ROUTE, { signal: AbortSignal.timeout(5_000) })
+    fetch(`${runtimeUrl}/api/files`, { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
@@ -44,10 +40,10 @@ export function FilesPage() {
       })
       .then((data) => setTree(data.tree ?? []))
       .catch(() => setError(true));
-  }, []);
+  }, [runtimeUrl]);
 
   if (error) return <AgentOffline page="files" />;
   if (!tree) return null;
 
-  return <FileEditor initialTree={tree} />;
+  return <FileEditor initialTree={tree} runtimeUrl={runtimeUrl} />;
 }
