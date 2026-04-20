@@ -37,7 +37,7 @@ runtimeProxyRoutes.get('/api/runtime/files', async (c) => {
 
 // Proxy file tree with path
 runtimeProxyRoutes.get('/api/runtime/files/*', async (c) => {
-  const filePath = c.req.param('*') ?? '';
+  const filePath = c.req.path.replace(/^\/api\/runtime\/files\//, '');
   const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) {
     return c.json({ error: { code: 'RUNTIME_URL_NOT_CONFIGURED', message: 'RUNTIME_URL not configured' } }, 503);

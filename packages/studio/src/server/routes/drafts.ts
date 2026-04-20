@@ -60,7 +60,7 @@ draftsRoutes.post('/api/drafts/batch', async (c) => {
 
 // Read a single draft (wildcard)
 draftsRoutes.get('/api/drafts/*', async (c) => {
-  const filePath = c.req.param('*') ?? '';
+  const filePath = c.req.path.replace(/^\/api\/drafts\//, '');
   const validatedPath = validateDraftPath(filePath);
   const user = await getUser(c.req.raw);
   const backend = await getBackend();
@@ -75,7 +75,7 @@ draftsRoutes.get('/api/drafts/*', async (c) => {
 
 // Save (upsert) a draft (wildcard)
 draftsRoutes.put('/api/drafts/*', async (c) => {
-  const filePath = c.req.param('*') ?? '';
+  const filePath = c.req.path.replace(/^\/api\/drafts\//, '');
   const validatedPath = validateDraftPath(filePath);
   const user = await getUser(c.req.raw);
   const backend = await getBackend();
@@ -101,7 +101,7 @@ draftsRoutes.put('/api/drafts/*', async (c) => {
 
 // Delete a draft (wildcard)
 draftsRoutes.delete('/api/drafts/*', async (c) => {
-  const filePath = c.req.param('*') ?? '';
+  const filePath = c.req.path.replace(/^\/api\/drafts\//, '');
   const validatedPath = validateDraftPath(filePath);
   const user = await getUser(c.req.raw);
   const backend = await getBackend();
