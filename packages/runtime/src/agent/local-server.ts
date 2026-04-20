@@ -72,7 +72,7 @@ import {getDb, ensureSchema, closeDb} from '@amodalai/db';
 import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
-import {LOCAL_APP_ID} from '../constants.js';
+import {LOCAL_APP_ID as DEFAULT_APP_ID} from '../constants.js';
 import {log, createLogger} from '../logger.js';
 import {defaultRoleProvider} from '../role-provider.js';
 import {bootstrapChannels} from '../channels/bootstrap.js';
@@ -171,6 +171,10 @@ function installUnhandledRejectionLogger(): void {
 export async function createLocalServer(config: LocalServerConfig): Promise<ServerInstance> {
   installUnhandledRejectionLogger();
   let bundle = await loadRepo({localPath: config.repoPath});
+
+  // Derive appId from the agent name (matches AGENT_ID env var set by CLI,
+  // which Studio uses for its queries). Falls back to 'local' for unnamed agents.
+  const appId = bundle.config.name || process.env['AGENT_ID'] || DEFAULT_APP_ID;
 
   // Check provider API keys in the background at startup
   let providerStatuses: ProviderStatus[] = PROVIDER_CHECKS.map((c) => ({
@@ -292,7 +296,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     mcpManager,
     logger: log,
     toolExecutor,
-    appId: LOCAL_APP_ID,
+    appId,
     // Provide the DB handle for the memory tool when memory is enabled.
     // The db singleton is already initialized above (getDb + ensureSchema).
     ...(bundle.config.memory?.enabled ? {memoryDb: db} : {}),
@@ -317,7 +321,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       permissionChecker: components.permissionChecker,
       systemPrompt: components.systemPrompt,
       toolContextFactory: components.toolContextFactory,
-      appId: LOCAL_APP_ID,
+      appId,
     });
     return {session, toolContextFactory: components.toolContextFactory};
   };
@@ -357,7 +361,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           toolExecutor,
           sessionType: 'chat',
         }),
-        appId: LOCAL_APP_ID,
+        appId,
         eventBus,
         logger: log,
       });
@@ -461,7 +465,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     }
 
     res.json({
-      appId: LOCAL_APP_ID,
+      appId,
       appName: cfg?.name ?? '',
       name: cfg?.name ?? '',
       version: cfg?.version ?? '',
@@ -482,7 +486,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   if (resumeSessionId === 'latest') {
     const {sessions: recent} = await sessionStore.list({
       limit: 1,
-      filter: {appId: LOCAL_APP_ID},
+      filter: {appId},
     });
     resumeSessionId = recent[0]?.id;
   }
@@ -509,15 +513,15 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     // to chat sessions by metadata.appId (excludes eval-runner / admin).
     const filter = automationFilter
       ? {automationName: automationFilter}
-      : {appId: LOCAL_APP_ID};
+      : {appId};
     const {sessions: rows} = await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
     const sessions = rows.map((s) => {
       const title = typeof s.metadata['title'] === 'string' ? s.metadata['title'] : undefined;
-      const appId = typeof s.metadata['appId'] === 'string' ? s.metadata['appId'] : LOCAL_APP_ID;
+      const sessionAppId = typeof s.metadata['appId'] === 'string' ? s.metadata['appId'] : appId;
       const automationName = typeof s.metadata['automationName'] === 'string' ? s.metadata['automationName'] : undefined;
       return {
         id: s.id,
-        appId,
+        appId: sessionAppId,
         title,
         summary: title ?? extractFirstUserText(s.messages) ?? 'Untitled',
         createdAt: s.createdAt.getTime(),
@@ -572,7 +576,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     }
 
     // Emit session_updated so the sidebar picks up the new title live.
-    eventBus.emit({type: 'session_updated', sessionId, appId: LOCAL_APP_ID, title});
+    eventBus.emit({type: 'session_updated', sessionId, appId, title});
     res.json({ok: true});
   }));
 
@@ -599,7 +603,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.use(createEventsRouter({bus: eventBus, logger: log}));
 
   // Feedback
-  const feedbackStore = new FeedbackStore({agentId: LOCAL_APP_ID});
+  const feedbackStore = new FeedbackStore({agentId: appId});
   app.use(createFeedbackRouter({feedbackStore}));
 
   // Chat routes (new stack) — persistence is handled inside runMessage /
@@ -631,7 +635,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Store REST API (if stores are defined)
   if (storeBackend) {
-    app.use(createStoresRouter({repo: bundle, storeBackend, appId: LOCAL_APP_ID}));
+    app.use(createStoresRouter({repo: bundle, storeBackend, appId}));
   }
 
   // Build user pages (if pages/ directory exists)
