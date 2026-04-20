@@ -75,7 +75,7 @@ export async function runEvalSuite(evalName: string, runtimeUrl: string, agentId
   const filePath = `evals/${evalName}.md`;
   let fileContent: string;
   try {
-    const res = await fetch(`${runtimeUrl}/api/files/${encodeURIComponent(filePath)}`, {
+    const res = await fetch(`${runtimeUrl}/api/files/${filePath}`, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) {
