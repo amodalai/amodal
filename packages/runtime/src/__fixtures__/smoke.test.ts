@@ -341,6 +341,41 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     await db.delete(agentMemoryEntries).where(eq(agentMemoryEntries.appId, AGENT_NAME));
   }, TIMEOUT);
 
+  it('memory round-trip: agent writes entry, next session reads it', async () => {
+    // Ask the agent to remember a unique fact. The agent should call memory.add.
+    const ROUND_TRIP_SENTINEL = 'ROUNDTRIP_CODE_7749';
+    const first = await chat(
+      `Please remember this exact code for me: ${ROUND_TRIP_SENTINEL}. Save it to memory using the memory tool with action "add".`,
+    );
+
+    // Verify the agent called the memory tool
+    const toolCalls = findEvents(first.events, 'tool_call_start');
+    const memoryCall = toolCalls.find((e) => e['tool_name'] === 'memory');
+    expect(memoryCall).toBeDefined();
+
+    // Verify the entry was written with the correct appId
+     
+    const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
+    const AGENT_NAME = 'smoke-test-agent';
+    const rows = await db
+      .select({appId: agentMemoryEntries.appId, content: agentMemoryEntries.content})
+      .from(agentMemoryEntries)
+      .where(eq(agentMemoryEntries.appId, AGENT_NAME));
+    const match = rows.find((r) => r.content.includes(ROUND_TRIP_SENTINEL));
+    expect(match).toBeDefined();
+    expect(match?.appId).toBe(AGENT_NAME);
+
+    // New session — the agent should know the code from memory without being told
+    const second = await chat(
+      'What code did I ask you to remember? Reply with just the code, nothing else.',
+    );
+    const responseText = allText(second.events);
+    expect(responseText).toContain(ROUND_TRIP_SENTINEL);
+
+    // Clean up
+    await db.delete(agentMemoryEntries).where(eq(agentMemoryEntries.appId, AGENT_NAME));
+  }, TIMEOUT * 3);
+
   // -------------------------------------------------------------------------
   // 5. Tool call — store
   // -------------------------------------------------------------------------
