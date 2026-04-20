@@ -50,6 +50,8 @@ export type { StudioUser, DraftFile, PublishResult, WorkspaceBundle } from '../l
 export { logger } from '../lib/logger.js';
 export { setRuntimeResolver } from '../lib/runtime-client.js';
 export type { RuntimeResolver, ResolvedRuntime } from '../lib/runtime-client.js';
+export { setPreviewHandler } from './routes/preview.js';
+export type { PreviewHandler } from './routes/preview.js';
 
 // ---------------------------------------------------------------------------
 // App factory

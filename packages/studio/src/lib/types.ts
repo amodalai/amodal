@@ -39,10 +39,14 @@ export interface PublishResult {
 
 /** Result of building a preview snapshot. */
 export interface PreviewResult {
-  /** Unique ID for this preview snapshot. */
-  snapshotId: string;
-  /** Signed token granting access to the preview. */
-  token: string;
+  /** Unique ID for this preview snapshot (token-based preview). */
+  snapshotId?: string;
+  /** Signed token granting access to the preview (token-based preview). */
+  token?: string;
+  /** Git commit SHA (branch-based preview). */
+  commitSha?: string;
+  /** Preview branch name (branch-based preview). */
+  branch?: string;
 }
 
 // ---------------------------------------------------------------------------
