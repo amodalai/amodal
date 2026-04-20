@@ -71,6 +71,8 @@ export function ChatPage() {
     }
   }, [initialPrompt, searchParams, setSearchParams]);
 
+  const { name: agentName } = useRuntimeManifest();
+
   return (
     <ChatWidget
       key={widgetKey}
@@ -82,6 +84,9 @@ export function ChatPage() {
       showFeedback={true}
       resumeSessionId={activeResumeId ?? undefined}
       initialMessage={initialPrompt ?? undefined}
+      theme={{
+        headerText: agentName || undefined,
+      }}
     />
   );
 }

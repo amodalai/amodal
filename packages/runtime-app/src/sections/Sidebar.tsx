@@ -26,6 +26,16 @@ interface SessionSummary {
   lastAccessedAt: number;
 }
 
+function toSessionSummary(item: Record<string, unknown>): SessionSummary {
+  return {
+    id: String(item['id'] ?? ''),
+    appId: String(item['app_id'] ?? item['appId'] ?? ''),
+    title: typeof item['title'] === 'string' ? item['title'] : undefined,
+    summary: String(item['title'] ?? 'Untitled'),
+    lastAccessedAt: item['updated_at'] ? new Date(String(item['updated_at'])).getTime() : (typeof item['lastAccessedAt'] === 'number' ? item['lastAccessedAt'] : 0),
+  };
+}
+
 function DeleteConfirmModal({ sessionName, onConfirm, onCancel }: { sessionName: string; onConfirm: () => void; onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
@@ -64,7 +74,7 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
     const trimmed = editValue.trim();
     setEditing(false);
     if (!trimmed || trimmed === session.summary) return;
-    fetch(`/session/${encodeURIComponent(session.id)}`, {
+    fetch(`/sessions/history/${encodeURIComponent(session.id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: trimmed }),
@@ -212,14 +222,14 @@ export function Sidebar() {
 
   // Fetch session list (initial + refresh on bus events)
   const fetchSessions = useCallback(() => {
-    fetch('/sessions')
-      .then((res) => (res.ok ? res.json() : { sessions: [] }))
+    fetch('/sessions/history')
+      .then((res) => (res.ok ? res.json() : []))
       .then((data: unknown) => {
-        if (data && typeof data === 'object' && 'sessions' in data && Array.isArray((data as Record<string, unknown>)['sessions'])) {
+        if (Array.isArray(data)) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const all = (data as Record<string, unknown>)['sessions'] as Array<SessionSummary & {automationName?: string}>;
+          const items = (data as Array<Record<string, unknown>>).map(toSessionSummary);
           const EVAL_APP_IDS = new Set(['eval-runner', 'eval-judge', 'admin']);
-          setSessions(all.filter((s) => !s.automationName && !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
+          setSessions(items.filter((s) => !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
         }
       })
       .catch(() => {});
@@ -260,7 +270,7 @@ export function Sidebar() {
                   isActive={location.search.includes(s.id)}
                   onNavigate={(id) => { void navigate(`/?resume=${id}`); }}
                   onDelete={(id) => {
-                    fetch(`/session/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+                    fetch(`/sessions/history/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
                     setSessions((prev) => prev.filter((sess) => sess.id !== id));
                     // If we just deleted the active session, go to new chat
                     if (location.search.includes(id)) { void navigate('/'); }

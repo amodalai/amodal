@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ChatWidget } from '@amodalai/react/widget';
 import { streamSSE } from '@amodalai/react';
 import type { SSEEvent, ChatMessage } from '@amodalai/react';
+import { useTheme } from '../ThemeProvider';
 
 // ---------------------------------------------------------------------------
 // Persistence
@@ -52,6 +53,7 @@ function persistChat(chat: PersistedChat): void {
 // ---------------------------------------------------------------------------
 
 export function AdminChat({ compact = true }: { compact?: boolean }) {
+  const { dark } = useTheme();
   const sessionIdRef = useRef<string | null>(loadPersistedChat().sessionId);
 
   const streamFn = useCallback(
@@ -109,6 +111,7 @@ export function AdminChat({ compact = true }: { compact?: boolean }) {
         streamFn={streamFn}
         onStateChange={handleStateChange}
         theme={{
+          mode: dark ? 'dark' : 'light',
           headerText: 'Admin Agent',
           emptyStateText: 'Ask me to add connections, write skills, create automations, or validate your setup.',
           placeholder: compact ? 'Message admin agent...' : 'Ask me to add a connection, write a skill, or validate your config...',

@@ -23,7 +23,7 @@ export function SessionDetailPage() {
 
   useEffect(() => {
     if (!sessionId) return;
-    fetch(`/session/${encodeURIComponent(sessionId)}`)
+    fetch(`/sessions/history/${encodeURIComponent(sessionId)}`)
       .then((res) => {
         if (!res.ok) throw new Error('Session not found');
         return res.json();

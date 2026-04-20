@@ -40,12 +40,18 @@ export function SessionsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/sessions')
-      .then((res) => (res.ok ? res.json() : { sessions: [] }))
+    fetch('/sessions/history')
+      .then((res) => (res.ok ? res.json() : []))
       .then((data: unknown) => {
-        if (data && typeof data === 'object' && 'sessions' in data && Array.isArray((data as Record<string, unknown>)['sessions'])) {
+        if (Array.isArray(data)) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          setSessions((data as Record<string, unknown>)['sessions'] as SessionSummary[]);
+          const items = data as Array<Record<string, unknown>>;
+          setSessions(items.map((item) => ({
+            id: String(item['id'] ?? ''),
+            appId: String(item['app_id'] ?? ''),
+            createdAt: item['created_at'] ? new Date(String(item['created_at'])).getTime() : 0,
+            lastAccessedAt: item['updated_at'] ? new Date(String(item['updated_at'])).getTime() : 0,
+          })));
         }
       })
       .catch(() => {})
