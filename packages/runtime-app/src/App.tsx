@@ -7,6 +7,7 @@
 import { RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AmodalProvider } from '@amodalai/react';
+import '@amodalai/react/widget/style.css';
 import { RuntimeProvider } from '@/contexts/RuntimeContext';
 import { RuntimeEventsProvider } from '@/contexts/RuntimeEventsContext';
 import { router } from '@/router';
