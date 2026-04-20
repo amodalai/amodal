@@ -1,5 +1,15 @@
 # @amodalai/studio
 
+## 0.3.16
+
+### Patch Changes
+
+- [#234](https://github.com/amodalai/amodal/pull/234) [`6a5a0a4`](https://github.com/amodalai/amodal/commit/6a5a0a43db3fab70ec622086a1ebe97073a87931) Thanks [@whodatdev](https://github.com/whodatdev)! - Read eval suite definitions from the runtime's file tree instead of loading them into Postgres at startup. Eval runs still persist to Postgres.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.16
+  - @amodalai/db@0.3.16
+
 ## 0.3.15
 
 ### Patch Changes
