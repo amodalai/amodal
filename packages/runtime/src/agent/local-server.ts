@@ -68,7 +68,7 @@ import type {LocalServerConfig} from './agent-types.js';
 import type {ServerInstance} from '../server.js';
 import {createPostgresStoreBackend} from '../stores/postgres-store-backend.js';
 import type {StoreBackend} from '@amodalai/types';
-import {getDb, ensureSchema, closeDb} from '@amodalai/db';
+import {getDb, ensureSchema, closeDb, eq, sql, storeDocuments, storeDocumentVersions, agentMemoryEntries} from '@amodalai/db';
 import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
@@ -205,6 +205,21 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
   await ensureSchema(db);
   log.info('database_schema_ready', {});
+
+  // Migrate legacy 'local' appId to the agent name. Prior versions used a
+  // hardcoded 'local' value; now we use the agent name for alignment with
+  // Studio and cloud. This is safe in local dev (all 'local' data belongs
+  // to this instance) and a no-op in cloud (no 'local' rows exist).
+  if (appId !== DEFAULT_APP_ID) {
+    await db.update(storeDocuments).set({appId}).where(eq(storeDocuments.appId, 'local'));
+    await db.update(storeDocumentVersions).set({appId}).where(eq(storeDocumentVersions.appId, 'local'));
+    await db.update(agentMemoryEntries).set({appId}).where(eq(agentMemoryEntries.appId, 'local'));
+    // Sessions store appId in metadata JSONB — use raw sql for the jsonb_set
+    await db.execute(
+      sql`UPDATE agent_sessions SET metadata = jsonb_set(metadata, '{appId}', to_jsonb(${appId}::text)) WHERE metadata->>'appId' = 'local'`,
+    );
+    log.info('legacy_appid_migrated', {from: 'local', to: appId});
+  }
 
   // -------------------------------------------------------------------------
   // Store backend

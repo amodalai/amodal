@@ -23,14 +23,21 @@ const {mockLoadRepo, mockSetupSession, mockPrepareExploreConfig, mockPlanModeMan
 }));
 
 // Mock @amodalai/db so tests don't need a real Postgres connection
+const noopChain = () => ({set: noopChain, where: noopChain, execute: vi.fn(async () => ({}))});
 vi.mock('@amodalai/db', () => ({
-  getDb: vi.fn(() => ({})),
+  getDb: vi.fn(() => ({
+    update: noopChain,
+    execute: vi.fn(async () => ({})),
+  })),
   ensureSchema: vi.fn(async () => {}),
   closeDb: vi.fn(async () => {}),
+  eq: vi.fn(),
+  sql: Object.assign(vi.fn(), {raw: vi.fn()}),
   agentSessions: {},
   channelSessions: {},
-  storeDocuments: {},
-  storeDocumentVersions: {},
+  storeDocuments: {appId: 'app_id'},
+  storeDocumentVersions: {appId: 'app_id'},
+  agentMemoryEntries: {appId: 'app_id'},
   feedback: {},
   evalRuns: {},
   studioDrafts: {},
