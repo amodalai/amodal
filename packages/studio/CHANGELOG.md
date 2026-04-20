@@ -1,5 +1,15 @@
 # @amodalai/studio
 
+## 0.3.19
+
+### Patch Changes
+
+- [#240](https://github.com/amodalai/amodal/pull/240) [`5084027`](https://github.com/amodalai/amodal/commit/508402711590335360b71b49b391a5448427248c) Thanks [@whodatdev](https://github.com/whodatdev)! - Cloud compatibility fixes: decode URI-encoded paths in extractWildcard, make preview injectable via setPreviewHandler(), support branch-based preview in DraftWorkspaceBar.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.19
+  - @amodalai/db@0.3.19
+
 ## 0.3.18
 
 ### Patch Changes
