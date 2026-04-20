@@ -816,7 +816,7 @@ export function ArenaPage() {
   const [expandAll, setExpandAll] = useState<boolean | null>(null);
 
   const loadSuites = useCallback(() => {
-    fetch(`/api/studio/evals?agentId=${encodeURIComponent(agentId)}`, { signal: AbortSignal.timeout(5_000) })
+    fetch(`/api/evals?agentId=${encodeURIComponent(agentId)}`, { signal: AbortSignal.timeout(5_000) })
       .then((res) => {
         if (!res.ok) return;
         return res.json();

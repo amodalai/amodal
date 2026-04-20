@@ -29,7 +29,7 @@ export function StoresPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/studio/stores', { signal: AbortSignal.timeout(5_000) })
+    fetch('/api/stores', { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response

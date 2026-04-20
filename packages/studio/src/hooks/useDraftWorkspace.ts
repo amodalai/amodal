@@ -25,10 +25,10 @@ const log = createBrowserLogger('useDraftWorkspace');
 // API route constants
 // ---------------------------------------------------------------------------
 
-const DRAFTS_API = '/api/studio/drafts';
-const DISCARD_API = '/api/studio/discard';
-const PUBLISH_API = '/api/studio/publish';
-const PREVIEW_API = '/api/studio/preview';
+const DRAFTS_API = '/api/drafts';
+const DISCARD_API = '/api/discard';
+const PUBLISH_API = '/api/publish';
+const PREVIEW_API = '/api/preview';
 
 // ---------------------------------------------------------------------------
 // Error class for fetch failures

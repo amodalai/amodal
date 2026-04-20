@@ -28,7 +28,7 @@ interface Props {
 // Constants
 // ---------------------------------------------------------------------------
 
-const RUN_ENDPOINT = '/api/studio/evals';
+const RUN_ENDPOINT = '/api/evals';
 
 // ---------------------------------------------------------------------------
 // Component

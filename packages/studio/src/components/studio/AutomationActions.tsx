@@ -11,7 +11,7 @@ import { Play, Square, RotateCw } from 'lucide-react';
 // Route constants
 // ---------------------------------------------------------------------------
 
-const AUTOMATIONS_API_BASE = '/api/studio/automations';
+const AUTOMATIONS_API_BASE = '/api/automations';
 
 function automationRunUrl(name: string): string {
   return `${AUTOMATIONS_API_BASE}/${encodeURIComponent(name)}/run`;

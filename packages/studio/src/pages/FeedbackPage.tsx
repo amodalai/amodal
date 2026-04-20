@@ -41,14 +41,14 @@ export function FeedbackPage() {
   const fetchData = useCallback(() => {
     const encodedId = encodeURIComponent(agentId);
     Promise.all([
-      fetch(`/api/studio/feedback?agentId=${encodedId}`, {
+      fetch(`/api/feedback?agentId=${encodedId}`, {
         signal: AbortSignal.timeout(5_000),
       }).then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
         return r.json() as Promise<{ entries: FeedbackEntry[] }>;
       }),
-      fetch(`/api/studio/feedback/summary?agentId=${encodedId}`, {
+      fetch(`/api/feedback/summary?agentId=${encodedId}`, {
         signal: AbortSignal.timeout(5_000),
       }).then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);

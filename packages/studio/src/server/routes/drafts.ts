@@ -13,7 +13,7 @@ import type { BatchRequest } from '../../lib/types.js';
 export const draftsRoutes = new Hono();
 
 // List all drafts
-draftsRoutes.get('/api/studio/drafts', async (c) => {
+draftsRoutes.get('/api/drafts', async (c) => {
   const user = await getUser(c.req.raw);
   const backend = await getBackend();
   const drafts = await backend.listDrafts(user.userId);
@@ -21,7 +21,7 @@ draftsRoutes.get('/api/studio/drafts', async (c) => {
 });
 
 // Batch operations — must be before the wildcard routes
-draftsRoutes.post('/api/studio/drafts/batch', async (c) => {
+draftsRoutes.post('/api/drafts/batch', async (c) => {
   const user = await getUser(c.req.raw);
   const backend = await getBackend();
   const body = await c.req.json() as unknown;
@@ -59,7 +59,7 @@ draftsRoutes.post('/api/studio/drafts/batch', async (c) => {
 });
 
 // Read a single draft (wildcard)
-draftsRoutes.get('/api/studio/drafts/*', async (c) => {
+draftsRoutes.get('/api/drafts/*', async (c) => {
   const filePath = c.req.param('*') ?? '';
   const validatedPath = validateDraftPath(filePath);
   const user = await getUser(c.req.raw);
@@ -74,7 +74,7 @@ draftsRoutes.get('/api/studio/drafts/*', async (c) => {
 });
 
 // Save (upsert) a draft (wildcard)
-draftsRoutes.put('/api/studio/drafts/*', async (c) => {
+draftsRoutes.put('/api/drafts/*', async (c) => {
   const filePath = c.req.param('*') ?? '';
   const validatedPath = validateDraftPath(filePath);
   const user = await getUser(c.req.raw);
@@ -100,7 +100,7 @@ draftsRoutes.put('/api/studio/drafts/*', async (c) => {
 });
 
 // Delete a draft (wildcard)
-draftsRoutes.delete('/api/studio/drafts/*', async (c) => {
+draftsRoutes.delete('/api/drafts/*', async (c) => {
   const filePath = c.req.param('*') ?? '';
   const validatedPath = validateDraftPath(filePath);
   const user = await getUser(c.req.raw);

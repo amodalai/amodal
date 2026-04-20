@@ -11,14 +11,14 @@ import { listStores, listDocuments, getDocument, getDocumentHistory } from '../.
 export const storesRoutes = new Hono();
 
 // List all stores
-storesRoutes.get('/api/studio/stores', async (c) => {
+storesRoutes.get('/api/stores', async (c) => {
   const agentId = getAgentId();
   const stores = await listStores(agentId);
   return c.json({ stores });
 });
 
 // List documents in a store
-storesRoutes.get('/api/studio/stores/:name/documents', async (c) => {
+storesRoutes.get('/api/stores/:name/documents', async (c) => {
   const agentId = getAgentId();
   const name = c.req.param('name');
   const documents = await listDocuments(agentId, name);
@@ -26,7 +26,7 @@ storesRoutes.get('/api/studio/stores/:name/documents', async (c) => {
 });
 
 // Get a single document with history
-storesRoutes.get('/api/studio/stores/:name/documents/:key', async (c) => {
+storesRoutes.get('/api/stores/:name/documents/:key', async (c) => {
   const agentId = getAgentId();
   const name = c.req.param('name');
   const key = c.req.param('key');

@@ -9,7 +9,7 @@ import { getBackend } from '../../lib/startup.js';
 
 export const workspaceRoutes = new Hono();
 
-workspaceRoutes.get('/api/studio/workspace', async (c) => {
+workspaceRoutes.get('/api/workspace', async (c) => {
   const backend = await getBackend();
   const workspace = await backend.getWorkspace();
   return c.json(workspace);

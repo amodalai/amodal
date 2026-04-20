@@ -13,7 +13,7 @@ const ADMIN_CHAT_TIMEOUT_MS = 300_000;
 
 export const adminChatRoutes = new Hono();
 
-adminChatRoutes.post('/api/studio/admin-chat/stream', async (c) => {
+adminChatRoutes.post('/api/admin-chat/stream', async (c) => {
   const adminUrl = getAdminAgentUrl();
   if (!adminUrl) {
     return c.json(

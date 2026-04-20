@@ -10,7 +10,7 @@ import { listFeedback, getFeedbackSummary, markFeedbackReviewed } from '../../li
 export const feedbackRoutes = new Hono();
 
 // List feedback for an agent
-feedbackRoutes.get('/api/studio/feedback', async (c) => {
+feedbackRoutes.get('/api/feedback', async (c) => {
   const agentId = c.req.query('agentId') ?? '';
   if (!agentId) {
     return c.json({ error: { code: 'BAD_REQUEST', message: 'agentId query parameter is required' } }, 400);
@@ -21,7 +21,7 @@ feedbackRoutes.get('/api/studio/feedback', async (c) => {
 });
 
 // Get feedback summary for an agent
-feedbackRoutes.get('/api/studio/feedback/summary', async (c) => {
+feedbackRoutes.get('/api/feedback/summary', async (c) => {
   const agentId = c.req.query('agentId') ?? '';
   if (!agentId) {
     return c.json({ error: { code: 'BAD_REQUEST', message: 'agentId query parameter is required' } }, 400);
@@ -32,7 +32,7 @@ feedbackRoutes.get('/api/studio/feedback/summary', async (c) => {
 });
 
 // Mark feedback entries as reviewed
-feedbackRoutes.post('/api/studio/feedback/mark-reviewed', async (c) => {
+feedbackRoutes.post('/api/feedback/mark-reviewed', async (c) => {
   const body = await c.req.json() as unknown;
 
   if (typeof body !== 'object' || body === null || !('ids' in body)) {

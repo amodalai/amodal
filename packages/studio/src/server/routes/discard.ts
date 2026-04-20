@@ -10,7 +10,7 @@ import { getBackend } from '../../lib/startup.js';
 
 export const discardRoutes = new Hono();
 
-discardRoutes.post('/api/studio/discard', async (c) => {
+discardRoutes.post('/api/discard', async (c) => {
   const user = await getUser(c.req.raw);
   const backend = await getBackend();
   const discarded = await backend.discardAllDrafts(user.userId);

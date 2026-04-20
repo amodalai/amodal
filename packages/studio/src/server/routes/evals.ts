@@ -11,7 +11,7 @@ import { runEvalSuite } from '../../lib/eval-runner.js';
 export const evalsRoutes = new Hono();
 
 // List all eval suites for an agent
-evalsRoutes.get('/api/studio/evals', async (c) => {
+evalsRoutes.get('/api/evals', async (c) => {
   const agentId = c.req.query('agentId') ?? '';
   if (!agentId) {
     return c.json({ error: { code: 'BAD_REQUEST', message: 'agentId query parameter is required' } }, 400);
@@ -22,7 +22,7 @@ evalsRoutes.get('/api/studio/evals', async (c) => {
 });
 
 // Get a single eval suite
-evalsRoutes.get('/api/studio/evals/:id', async (c) => {
+evalsRoutes.get('/api/evals/:id', async (c) => {
   const id = c.req.param('id');
   const suite = await getEvalSuite(id);
 
@@ -34,7 +34,7 @@ evalsRoutes.get('/api/studio/evals/:id', async (c) => {
 });
 
 // Run an eval suite
-evalsRoutes.post('/api/studio/evals/:id/run', async (c) => {
+evalsRoutes.post('/api/evals/:id/run', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json() as unknown;
 
@@ -48,7 +48,7 @@ evalsRoutes.post('/api/studio/evals/:id/run', async (c) => {
 });
 
 // List eval runs for a suite
-evalsRoutes.get('/api/studio/evals/:id/results', async (c) => {
+evalsRoutes.get('/api/evals/:id/results', async (c) => {
   const id = c.req.param('id');
   const runs = await listEvalRuns(id);
   return c.json({ runs });

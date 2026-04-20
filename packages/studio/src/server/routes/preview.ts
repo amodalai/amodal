@@ -9,7 +9,7 @@ import { StudioFeatureUnavailableError } from '../../lib/errors.js';
 
 export const previewRoutes = new Hono();
 
-previewRoutes.post('/api/studio/preview', async () => {
+previewRoutes.post('/api/preview', async () => {
   throw new StudioFeatureUnavailableError(
     'preview',
     'Preview is not available in local development mode. Publish directly instead.',

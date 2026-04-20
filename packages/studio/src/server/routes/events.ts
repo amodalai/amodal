@@ -13,7 +13,7 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 
 export const eventsRoutes = new Hono();
 
-eventsRoutes.get('/api/studio/events', async (c) => {
+eventsRoutes.get('/api/events', async (c) => {
   await initEventBridge();
   const bus = getEventBus();
 

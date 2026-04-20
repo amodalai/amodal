@@ -20,13 +20,13 @@ interface AppProps {
    * that implements the same StudioEventsContext contract.
    */
   eventsProvider?: ComponentType<{ children: ReactNode }>;
-  /** Override the config endpoint URL. Defaults to '/api/studio/config'. */
+  /** Override the config endpoint URL. Defaults to '/api/config'. */
   configUrl?: string;
 }
 
 export function App({
   eventsProvider: EventsProvider = StudioEventsProvider,
-  configUrl = '/api/studio/config',
+  configUrl = '/api/config',
 }: AppProps = {}) {
   const [config, setConfig] = useState<StudioConfig | null>(null);
 

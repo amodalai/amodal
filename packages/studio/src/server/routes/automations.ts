@@ -18,14 +18,14 @@ import { getScheduler } from '../../lib/automation-scheduler.js';
 export const automationsRoutes = new Hono();
 
 // List all automations
-automationsRoutes.get('/api/studio/automations', async (c) => {
+automationsRoutes.get('/api/automations', async (c) => {
   const agentId = getAgentId();
   const automations = await listAutomations(agentId);
   return c.json({ automations });
 });
 
 // Create or update an automation
-automationsRoutes.post('/api/studio/automations', async (c) => {
+automationsRoutes.post('/api/automations', async (c) => {
   const agentId = getAgentId();
   const body = await c.req.json() as unknown;
 
@@ -52,7 +52,7 @@ automationsRoutes.post('/api/studio/automations', async (c) => {
 });
 
 // Get a single automation with recent runs
-automationsRoutes.get('/api/studio/automations/:name', async (c) => {
+automationsRoutes.get('/api/automations/:name', async (c) => {
   const agentId = getAgentId();
   const name = c.req.param('name');
 
@@ -69,7 +69,7 @@ automationsRoutes.get('/api/studio/automations/:name', async (c) => {
 });
 
 // Trigger an automation run immediately
-automationsRoutes.post('/api/studio/automations/:name/run', async (c) => {
+automationsRoutes.post('/api/automations/:name/run', async (c) => {
   const agentId = getAgentId();
   const name = c.req.param('name');
   const body = await c.req.json() as unknown;
@@ -84,7 +84,7 @@ automationsRoutes.post('/api/studio/automations/:name/run', async (c) => {
 });
 
 // Start (enable) an automation
-automationsRoutes.post('/api/studio/automations/:name/start', async (c) => {
+automationsRoutes.post('/api/automations/:name/start', async (c) => {
   const agentId = getAgentId();
   const name = c.req.param('name');
 
@@ -100,7 +100,7 @@ automationsRoutes.post('/api/studio/automations/:name/start', async (c) => {
 });
 
 // Stop (disable) an automation
-automationsRoutes.post('/api/studio/automations/:name/stop', async (c) => {
+automationsRoutes.post('/api/automations/:name/stop', async (c) => {
   const agentId = getAgentId();
   const name = c.req.param('name');
 
