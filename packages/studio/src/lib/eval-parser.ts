@@ -5,29 +5,25 @@
  */
 
 /**
- * Scans an agent repo's `evals/` directory for `.md` eval definitions
- * and upserts them into the eval_suites Postgres table.
- *
- * Called once at Studio server startup so that eval suites authored
- * on disk appear on the Evals page without manual import.
+ * Pure eval markdown parser — no Node dependencies.
+ * Used by both browser (EvalsPage, ArenaPage) and server (eval-runner).
  */
 
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import { upsertEvalSuite } from './eval-queries';
-import { logger } from './logger';
-
 // ---------------------------------------------------------------------------
-// Eval markdown parser (self-contained — studio does not depend on @amodalai/core)
+// Types
 // ---------------------------------------------------------------------------
 
-interface ParsedEval {
+export interface ParsedEval {
   name: string;
   title: string;
   description: string;
   query: string;
   assertions: Array<{ text: string; negated: boolean }>;
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Extract named `## Section` blocks from markdown content.
@@ -73,10 +69,14 @@ function parseAssertions(text: string): Array<{ text: string; negated: boolean }
   return assertions;
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /**
  * Parse an eval `.md` file into a structured definition.
  */
-function parseEvalFile(content: string, fileName: string): ParsedEval {
+export function parseEvalMarkdown(content: string, fileName: string): ParsedEval {
   const name = fileName.replace(/\.md$/, '');
   const titleMatch = /^#\s+(?:Eval:\s+)?(.+)$/m.exec(content);
   const title = titleMatch ? titleMatch[1].trim() : name;
@@ -103,70 +103,4 @@ function parseEvalFile(content: string, fileName: string): ParsedEval {
   const assertions = parseAssertions(sections['Assertions'] ?? '');
 
   return { name, title, description, query, assertions };
-}
-
-// ---------------------------------------------------------------------------
-// Loader
-// ---------------------------------------------------------------------------
-
-/**
- * Scan the `evals/` directory inside `repoPath`, parse each `.md` file,
- * and upsert the resulting eval suite into Postgres.
- *
- * Skips gracefully if the directory does not exist.
- */
-export async function loadEvalsFromDisk(
-  repoPath: string,
-  agentId: string,
-): Promise<number> {
-  const evalsDir = path.join(repoPath, 'evals');
-
-  let entries: string[];
-  try {
-    const dirEntries = await fs.readdir(evalsDir, { withFileTypes: true });
-    entries = dirEntries
-      .filter((e) => e.isFile() && e.name.endsWith('.md'))
-      .map((e) => e.name);
-  } catch (err: unknown) {
-    // Directory doesn't exist — no evals to load
-    if (err != null && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
-      logger.debug('eval_loader_no_dir', { evalsDir });
-      return 0;
-    }
-    throw err;
-  }
-
-  if (entries.length === 0) {
-    logger.debug('eval_loader_empty', { evalsDir });
-    return 0;
-  }
-
-  let loaded = 0;
-  for (const fileName of entries) {
-    const filePath = path.join(evalsDir, fileName);
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const parsed = parseEvalFile(content, fileName);
-
-      await upsertEvalSuite(agentId, parsed.name, {
-        title: parsed.title,
-        description: parsed.description,
-        query: parsed.query,
-        assertions: parsed.assertions,
-        cases: parsed.query
-          ? [{ input: parsed.query, expected: undefined }]
-          : [],
-      });
-
-      loaded++;
-    } catch (err: unknown) {
-      logger.warn('eval_loader_file_error', {
-        filePath,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  logger.info('eval_loader_complete', { evalsDir, loaded, total: entries.length });
-  return loaded;
 }

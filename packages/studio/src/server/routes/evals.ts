@@ -5,71 +5,46 @@
  */
 
 import { Hono } from 'hono';
-import { listEvalSuites, getEvalSuite, listEvalRuns } from '../../lib/eval-queries.js';
+import { listEvalRuns } from '../../lib/eval-queries.js';
 import { runEvalSuite } from '../../lib/eval-runner.js';
 
 export const evalsRoutes = new Hono();
 
-// List all eval suites for an agent
-evalsRoutes.get('/api/evals', async (c) => {
-  const agentId = c.req.query('agentId') ?? '';
-  if (!agentId) {
-    return c.json({ error: { code: 'BAD_REQUEST', message: 'agentId query parameter is required' } }, 400);
+// Run an eval by name — fetches the eval definition from the runtime on demand
+evalsRoutes.post('/api/evals/run', async (c) => {
+  const body = await c.req.json() as unknown;
+
+  if (typeof body !== 'object' || body === null || !('agentId' in body) || !('evalName' in body)) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: 'Request body must include "agentId" and "evalName"' } }, 400);
   }
 
-  const suites = await listEvalSuites(agentId);
-  return c.json({ suites });
+  const agentId = String((body as Record<string, unknown>)['agentId']);
+  const evalName = String((body as Record<string, unknown>)['evalName']);
+  const runId = await runEvalSuite(evalName, agentId);
+  return c.json({ runId });
 });
 
-// List eval runs by eval suite name (used by arena) — before :id to avoid shadowing
-evalsRoutes.get('/api/evals/runs/by-eval/:name', async (c) => {
-  const name = c.req.param('name');
-  const agentId = c.req.query('agentId') ?? '';
-  // Find the suite by name, then list its runs
-  const suites = await listEvalSuites(agentId);
-  const suite = suites.find((s) => s.name === name);
-  if (!suite) {
-    return c.json({ runs: [] });
-  }
-  const runs = await listEvalRuns(suite.id);
+// List eval runs for a suite (by suiteId = "agentId:evalName")
+evalsRoutes.get('/api/evals/runs/by-suite/:suiteId', async (c) => {
+  const suiteId = c.req.param('suiteId');
+  const runs = await listEvalRuns(suiteId);
   return c.json({ runs });
 });
 
-// Arena models — returns available models for arena comparison — before :id to avoid shadowing
+// List eval runs by eval name + agentId
+evalsRoutes.get('/api/evals/runs/by-eval/:name', async (c) => {
+  const name = c.req.param('name');
+  const agentId = c.req.query('agentId') ?? '';
+  if (!agentId) {
+    return c.json({ runs: [] });
+  }
+  const suiteId = `${agentId}:${name}`;
+  const runs = await listEvalRuns(suiteId);
+  return c.json({ runs });
+});
+
+// Arena models — returns available models for arena comparison
 evalsRoutes.get('/api/evals/arena/models', async (c) =>
   // TODO: return configured models from agent config
    c.json({ models: [] })
 );
-
-// Get a single eval suite
-evalsRoutes.get('/api/evals/:id', async (c) => {
-  const id = c.req.param('id');
-  const suite = await getEvalSuite(id);
-
-  if (!suite) {
-    return c.json({ error: { code: 'NOT_FOUND', message: `Eval suite not found: ${id}` } }, 404);
-  }
-
-  return c.json({ suite });
-});
-
-// Run an eval suite
-evalsRoutes.post('/api/evals/:id/run', async (c) => {
-  const id = c.req.param('id');
-  const body = await c.req.json() as unknown;
-
-  if (typeof body !== 'object' || body === null || !('agentId' in body)) {
-    return c.json({ error: { code: 'BAD_REQUEST', message: 'Request body must include "agentId"' } }, 400);
-  }
-
-  const agentId = String((body as Record<string, unknown>)['agentId']);
-  const runId = await runEvalSuite(id, agentId);
-  return c.json({ runId });
-});
-
-// List eval runs for a suite
-evalsRoutes.get('/api/evals/:id/results', async (c) => {
-  const id = c.req.param('id');
-  const runs = await listEvalRuns(id);
-  return c.json({ runs });
-});

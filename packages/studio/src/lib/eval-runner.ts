@@ -5,12 +5,13 @@
  */
 
 /**
- * Eval runner — executes an eval suite by calling the runtime's
- * POST /chat for each test case and saves the results.
+ * Eval runner — fetches an eval definition from the runtime's file tree,
+ * executes each test case via POST /chat, and saves results to Postgres.
  */
 
 import { getRuntimeUrl } from './runtime-client';
-import { saveEvalRun, getEvalSuite } from './eval-queries';
+import { saveEvalRun } from './eval-queries';
+import { parseEvalMarkdown } from './eval-parser';
 import { logger } from './logger';
 import { StudioError } from './errors';
 
@@ -35,15 +36,6 @@ export class EvalRunnerError extends StudioError {
 // Types
 // ---------------------------------------------------------------------------
 
-interface EvalCase {
-  input: string;
-  expected?: string;
-}
-
-interface EvalSuiteConfig {
-  cases: EvalCase[];
-}
-
 interface EvalCaseResult {
   input: string;
   output: string;
@@ -51,39 +43,67 @@ interface EvalCaseResult {
   durationMs: number;
 }
 
+interface FileContentResponse {
+  path: string;
+  content: string;
+  language: string;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const CASE_TIMEOUT_MS = 60_000;
+const FETCH_TIMEOUT_MS = 5_000;
 
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 
 /**
- * Run an eval suite: send each test case to the runtime's /chat endpoint,
- * record pass/fail based on expected substring match, and persist the run.
+ * Run an eval suite: fetch the eval definition from the runtime,
+ * send each test case to the runtime's /chat endpoint,
+ * record pass/fail, and persist the run to Postgres.
  *
- * Returns the new run ID.
+ * @param evalName — the eval file name (without .md extension)
+ * @param agentId — the agent to scope the run to
+ * @returns the new run ID
  */
-export async function runEvalSuite(suiteId: string, agentId: string): Promise<string> {
-  const suite = await getEvalSuite(suiteId);
-  if (!suite) {
-    throw new EvalRunnerError(`Eval suite ${suiteId} not found`, { suiteId });
+export async function runEvalSuite(evalName: string, agentId: string): Promise<string> {
+  const runtimeUrl = getRuntimeUrl();
+
+  // Fetch the eval file from the runtime
+  const filePath = `evals/${evalName}.md`;
+  let fileContent: string;
+  try {
+    const res = await fetch(`${runtimeUrl}/api/files/${encodeURIComponent(filePath)}`, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      throw new EvalRunnerError(`Eval file not found: ${filePath}`, { suiteId: evalName });
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
+    const data = (await res.json()) as FileContentResponse;
+    fileContent = data.content;
+  } catch (err: unknown) {
+    if (err instanceof EvalRunnerError) throw err;
+    throw new EvalRunnerError(`Failed to fetch eval file: ${filePath}`, { suiteId: evalName, cause: err });
   }
 
-  const runtimeUrl = getRuntimeUrl();
-  // System boundary cast — suite.config is stored as jsonb
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-  const config = suite.config as unknown as EvalSuiteConfig;
-  const results: EvalCaseResult[] = [];
+  const parsed = parseEvalMarkdown(fileContent, `${evalName}.md`);
 
+  if (!parsed.query) {
+    throw new EvalRunnerError(`Eval ${evalName} has no query defined`, { suiteId: evalName });
+  }
+
+  const suiteId = `${agentId}:${evalName}`;
+  const cases = [{ input: parsed.query, expected: undefined as string | undefined }];
+  const results: EvalCaseResult[] = [];
   const startTime = Date.now();
 
-  logger.info('eval_run_started', { suiteId, agentId, caseCount: config.cases.length });
+  logger.info('eval_run_started', { suiteId, agentId, caseCount: cases.length });
 
-  for (const testCase of config.cases) {
+  for (const testCase of cases) {
     const caseStart = Date.now();
     try {
       const res = await fetch(`${runtimeUrl}/chat`, {
@@ -93,8 +113,7 @@ export async function runEvalSuite(suiteId: string, agentId: string): Promise<st
         signal: AbortSignal.timeout(CASE_TIMEOUT_MS),
       });
 
-      // System boundary cast — response shape from runtime API
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
       const data = (await res.json()) as { response?: string };
       const output = data.response ?? '';
       const passed = testCase.expected ? output.includes(testCase.expected) : true;
