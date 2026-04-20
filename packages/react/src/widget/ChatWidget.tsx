@@ -37,6 +37,8 @@ export type ChatWidgetProps = WidgetConfig & {
   widgets?: WidgetRegistry;
   /** Enable session history drawer. */
   historyEnabled?: boolean;
+  /** Show thumbs up/down feedback buttons on assistant messages. Defaults to false. */
+  showFeedback?: boolean;
 };
 
 export function ChatWidget({
@@ -52,6 +54,7 @@ export function ChatWidget({
   entityExtractors,
   widgets: customWidgets,
   historyEnabled = false,
+  showFeedback = false,
   showInput = true,
   sessionType,
   deployId,
@@ -65,7 +68,7 @@ export function ChatWidget({
   const containerRef = useRef<HTMLDivElement>(null);
   const mergedTheme = mergeTheme(theme);
 
-  const { messages, send, stop, isStreaming, error, reset, eventBus, submitAskUserResponse, loadSession, isHistorical } = useChat({
+  const { messages, send, stop, isStreaming, error, reset, eventBus, submitAskUserResponse, respondToConfirmation, loadSession, isHistorical, session } = useChat({
     serverUrl,
     user,
     getToken,
@@ -80,6 +83,18 @@ export function ChatWidget({
     onStreamEnd,
     onSessionCreated,
   });
+
+  // Track elapsed time during streaming
+  const [streamStartTime, setStreamStartTime] = useState(0);
+  const prevStreamingRef = useRef(false);
+  useEffect(() => {
+    if (isStreaming && !prevStreamingRef.current) {
+      setStreamStartTime(Date.now());
+    } else if (!isStreaming && prevStreamingRef.current) {
+      setStreamStartTime(0);
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming]);
 
   const history = useSessionHistory({
     serverUrl,
@@ -139,7 +154,7 @@ export function ChatWidget({
             onUpdateTags={history.updateTags}
           />
         )}
-        <MessageList messages={messages} isStreaming={isStreaming} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} emptyStateText={mergedTheme.emptyStateText} />
+        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
         {error && <div className="pcw-error">{error}</div>}
         {showInput && (
           <InputBar
@@ -193,7 +208,7 @@ export function ChatWidget({
           onUpdateTags={history.updateTags}
         />
       )}
-      <MessageList messages={messages} isStreaming={isStreaming} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} emptyStateText={mergedTheme.emptyStateText} />
+      <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
       {error && <div className="pcw-error">{error}</div>}
       {showInput && (
         <InputBar

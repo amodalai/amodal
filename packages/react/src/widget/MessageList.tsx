@@ -5,16 +5,18 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { ChatMessage, AssistantTextMessage } from '../types';
+import Markdown from 'react-markdown';
+import type { ChatMessage, AssistantTextMessage, ConfirmationInfo } from '../types';
 import type { InteractionEvent } from '../events/types';
 import { ToolCallCard } from './ToolCallCard';
 import { KBProposalCard } from './KBProposalCard';
 import { SkillPill } from './SkillPill';
-import { FormattedText } from './FormattedText';
 import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
+import { ConfirmCard } from '../components/ConfirmCard';
+import { ReviewCard } from '../components/ReviewCard';
 
 function FeedbackButtons({ messageId, sessionId, query, response }: {
   messageId: string;
@@ -48,7 +50,7 @@ function FeedbackButtons({ messageId, sessionId, query, response }: {
         className={`pcw-feedback__btn ${rating === 'up' ? 'pcw-feedback__btn--active' : ''}`}
         onClick={() => rating === 'up' ? clear() : submit('up')}
         title={rating === 'up' ? 'Undo' : 'Good response'}
-      >👍</button>
+      >&#x1F44D;</button>
       <button
         className={`pcw-feedback__btn ${rating === 'down' ? 'pcw-feedback__btn--active' : ''}`}
         onClick={() => {
@@ -57,7 +59,7 @@ function FeedbackButtons({ messageId, sessionId, query, response }: {
           else setShowComment(true);
         }}
         title={rating === 'down' ? 'Undo' : 'Bad response'}
-      >👎</button>
+      >&#x1F44E;</button>
       {showComment && (
         <div className="pcw-feedback__comment">
           <input
@@ -79,12 +81,26 @@ function FeedbackButtons({ messageId, sessionId, query, response }: {
 interface MessageListProps {
   messages: ChatMessage[];
   isStreaming: boolean;
+  streamStartTime?: number;
   sendMessage?: (text: string) => void;
   customWidgets?: WidgetRegistry;
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
+  onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
   emptyStateText?: string;
   sessionId?: string;
+  showFeedback?: boolean;
+}
+
+function ConfirmationCard({ confirmation, onApprove, onDeny }: {
+  confirmation: ConfirmationInfo;
+  onApprove: () => void;
+  onDeny: () => void;
+}) {
+  if (confirmation.escalated || (confirmation.params && Object.keys(confirmation.params).length > 0)) {
+    return <ReviewCard confirmation={confirmation} onApprove={onApprove} onDeny={onDeny} />;
+  }
+  return <ConfirmCard confirmation={confirmation} onApprove={onApprove} onDeny={onDeny} />;
 }
 
 function AssistantBubble({
@@ -93,12 +109,14 @@ function AssistantBubble({
   customWidgets,
   onInteraction,
   onAskUserSubmit,
+  onConfirmationRespond,
 }: {
   message: AssistantTextMessage;
   sendMessage?: (text: string) => void;
   customWidgets?: WidgetRegistry;
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
+  onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
 }) {
   const hasContentBlocks = message.contentBlocks && message.contentBlocks.length > 0;
   const hasExtras =
@@ -116,11 +134,12 @@ function AssistantBubble({
           <SkillPill key={skill} skill={skill} />
         ))}
         {message.contentBlocks.map((block, i) => {
-          // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- TODO: handle all cases
           switch (block.type) {
             case 'text':
               return block.text.length > 0 ? (
-                <FormattedText key={`text-${String(i)}`} text={block.text} className="pcw-bubble__text" />
+                <div key={`text-${String(i)}`} className="pcw-bubble__text pcw-markdown">
+                  <Markdown>{block.text}</Markdown>
+                </div>
               ) : null;
             case 'widget':
               return (
@@ -149,6 +168,17 @@ function AssistantBubble({
                   onSubmit={onAskUserSubmit ?? (() => {})}
                 />
               );
+            case 'confirmation': {
+              const conf = block.confirmation;
+              return (
+                <ConfirmationCard
+                  key={`conf-${String(i)}`}
+                  confirmation={conf}
+                  onApprove={() => { if (conf.correlationId && onConfirmationRespond) onConfirmationRespond(conf.correlationId, true); }}
+                  onDeny={() => { if (conf.correlationId && onConfirmationRespond) onConfirmationRespond(conf.correlationId, false); }}
+                />
+              );
+            }
             default:
               return null;
           }
@@ -170,7 +200,11 @@ function AssistantBubble({
       {message.skillActivations.map((skill) => (
         <SkillPill key={skill} skill={skill} />
       ))}
-      {message.text.length > 0 && <FormattedText className="pcw-bubble__text" text={message.text} />}
+      {message.text.length > 0 && (
+        <div className="pcw-bubble__text pcw-markdown">
+          <Markdown>{message.text}</Markdown>
+        </div>
+      )}
       {hasExtras && (
         <div className="pcw-bubble__extras">
           {message.toolCalls.map((tc) => (
@@ -185,7 +219,7 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, sendMessage, customWidgets, onInteraction, onAskUserSubmit, emptyStateText, sessionId }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -250,8 +284,9 @@ export function MessageList({ messages, isStreaming, sendMessage, customWidgets,
                   customWidgets={customWidgets}
                   onInteraction={onInteraction}
                   onAskUserSubmit={onAskUserSubmit}
+                  onConfirmationRespond={onConfirmationRespond}
                 />
-                {!isStreaming && (
+                {showFeedback && !isStreaming && (
                   <FeedbackButtons messageId={msg.id} sessionId={sessionId} query={qText} response={rText} />
                 )}
               </div>
@@ -267,7 +302,7 @@ export function MessageList({ messages, isStreaming, sendMessage, customWidgets,
             return null;
         }
       })}
-      {isStreaming && <StreamingIndicator />}
+      {isStreaming && <StreamingIndicator startTime={streamStartTime} />}
     </div>
   );
 }

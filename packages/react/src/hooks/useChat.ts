@@ -79,6 +79,8 @@ export interface UseChatReturn {
   eventBus: WidgetEventBus;
   /** Submit answers to a pending ask_user prompt. */
   submitAskUserResponse: (askId: string, answers: Record<string, string>) => void;
+  /** Respond to a confirmation request (approve or deny). */
+  respondToConfirmation: (correlationId: string, approved: boolean) => void;
   /** Load a historical session for read-only viewing. */
   loadSession: (sessionId: string) => void;
   /** True when viewing a loaded historical session. */
@@ -270,6 +272,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     reset: stream.reset,
     eventBus: stream.eventBus,
     submitAskUserResponse,
+    respondToConfirmation: stream.respondToConfirmation,
     loadSession,
     isHistorical: stream.isHistorical,
   };
