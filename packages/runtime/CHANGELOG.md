@@ -1,5 +1,24 @@
 # @amodalai/runtime
 
+## 0.3.18
+
+### Patch Changes
+
+- [#229](https://github.com/amodalai/amodal/pull/229) [`b8a6c07`](https://github.com/amodalai/amodal/commit/b8a6c07554c31fe2be96e50b5d34409d9877caf6) Thanks [@gte620v](https://github.com/gte620v)! - Add agent memory: per-instance persistent memory with update_memory tool
+
+  Adds the Phase 1 memory feature: a single-row text blob per database that the agent
+  reads from its system prompt and updates via the built-in `update_memory` tool.
+  - New `agent_memory` table in `@amodalai/db` schema and migration
+  - `memory` config block (`enabled`, `editableBy`) in amodal.json
+  - Memory section in the context compiler (between knowledge and stores)
+  - `update_memory` tool registered when memory is enabled and editable
+  - Memory management instructions injected into the system prompt
+
+- Updated dependencies [[`b8a6c07`](https://github.com/amodalai/amodal/commit/b8a6c07554c31fe2be96e50b5d34409d9877caf6)]:
+  - @amodalai/db@0.3.18
+  - @amodalai/types@0.3.18
+  - @amodalai/core@0.3.18
+
 ## 0.3.17
 
 ### Patch Changes
