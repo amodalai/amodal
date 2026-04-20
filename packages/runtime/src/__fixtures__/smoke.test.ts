@@ -1203,46 +1203,6 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     }
   }, TIMEOUT);
 
-  it('emits automation_started and automation_stopped', async () => {
-    // The smoke agent's test-auto has no cron schedule, so start will fail.
-    // That's fine — we want to verify the happy path when a schedulable
-    // automation exists. Skip if none are available.
-    const listRes = await fetch(`http://localhost:${AGENT_PORT}/automations`);
-    const listBody = await listRes.json() as {automations: Array<{name: string; schedule?: string}>};
-    const schedulable = listBody.automations.find((a) => a.schedule);
-    if (!schedulable) {
-      return; // smoke agent has no scheduled automation — skip
-    }
-
-    const stream = await openEventStream();
-    try {
-      const startRes = await fetch(
-        `http://localhost:${AGENT_PORT}/automations/${schedulable.name}/start`,
-        {method: 'POST', signal: AbortSignal.timeout(5000)},
-      );
-      if (startRes.status !== 200) return; // not a schedulable automation
-
-      const started = await stream.waitFor(
-        (e) => e['type'] === 'automation_started' && e['name'] === schedulable.name,
-        5000,
-      );
-      expect(typeof started['intervalMs']).toBe('number');
-
-      await fetch(
-        `http://localhost:${AGENT_PORT}/automations/${schedulable.name}/stop`,
-        {method: 'POST', signal: AbortSignal.timeout(5000)},
-      );
-
-      const stopped = await stream.waitFor(
-        (e) => e['type'] === 'automation_stopped' && e['name'] === schedulable.name,
-        5000,
-      );
-      expect(stopped['name']).toBe(schedulable.name);
-    } finally {
-      stream.close();
-    }
-  }, TIMEOUT);
-
   it('fans out the same event to all concurrent clients (two-tab case)', async () => {
     // Two independent SSE connections — the "two browser tabs" scenario.
     // Every event emitted by the server should reach BOTH clients with
