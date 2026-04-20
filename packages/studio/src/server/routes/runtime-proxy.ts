@@ -7,6 +7,7 @@
 import { Hono } from 'hono';
 import { logger } from '../../lib/logger.js';
 import { getRuntimeUrl } from '../../lib/config.js';
+import { extractWildcard } from './route-utils.js';
 
 const RUNTIME_PROXY_TIMEOUT_MS = 5_000;
 
@@ -37,7 +38,7 @@ runtimeProxyRoutes.get('/api/runtime/files', async (c) => {
 
 // Proxy file tree with path
 runtimeProxyRoutes.get('/api/runtime/files/*', async (c) => {
-  const filePath = c.req.path.replace(/^\/api\/runtime\/files\//, '');
+  const filePath = extractWildcard(c.req.path, '/api/runtime/files/');
   const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) {
     return c.json({ error: { code: 'RUNTIME_URL_NOT_CONFIGURED', message: 'RUNTIME_URL not configured' } }, 503);
