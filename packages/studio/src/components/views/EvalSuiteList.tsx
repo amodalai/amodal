@@ -28,7 +28,7 @@ interface Props {
 // Component
 // ---------------------------------------------------------------------------
 
-export function EvalSuiteList({ suites, agentId, onRefresh }: Props) {
+export function EvalSuiteList({ suites, onRefresh }: Props) {
   const [runningName, setRunningName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +41,7 @@ export function EvalSuiteList({ suites, agentId, onRefresh }: Props) {
         const res = await fetch('/api/evals/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agentId, evalName }),
+          body: JSON.stringify({ evalName }),
         });
 
         if (!res.ok) {
@@ -57,7 +57,7 @@ export function EvalSuiteList({ suites, agentId, onRefresh }: Props) {
         setRunningName(null);
       }
     },
-    [agentId, onRefresh],
+    [onRefresh],
   );
 
   const getCaseCount = (config: Record<string, unknown>): number => {

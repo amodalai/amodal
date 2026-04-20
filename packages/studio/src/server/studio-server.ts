@@ -47,6 +47,8 @@ export type { DrizzleStudioBackendOptions } from '../lib/drizzle-backend.js';
 export { StudioError, StudioPublishError, StudioStorageError, StudioPathError, StudioFeatureUnavailableError } from '../lib/errors.js';
 export type { StudioUser, DraftFile, PublishResult, WorkspaceBundle } from '../lib/types.js';
 export { logger } from '../lib/logger.js';
+export { setRuntimeResolver } from '../lib/runtime-client.js';
+export type { RuntimeResolver, ResolvedRuntime } from '../lib/runtime-client.js';
 
 // ---------------------------------------------------------------------------
 // App factory
