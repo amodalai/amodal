@@ -22,6 +22,7 @@ import { AutomationDetailPage } from './pages/AutomationDetailPage';
 import { EvalsPage } from './pages/EvalsPage';
 import { FeedbackPage } from './pages/FeedbackPage';
 import { ArenaPage } from './pages/ArenaPage';
+import { MemoryPage } from './pages/MemoryPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 function Layout() {
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
       { path: '/automations/:name', element: <AutomationDetailPage /> },
       { path: '/evals', element: <EvalsPage /> },
       { path: '/feedback', element: <FeedbackPage /> },
+      { path: '/memory', element: <MemoryPage /> },
       { path: '/arena', element: <ArenaPage /> },
       { path: '/prompt', element: <PromptPage /> },
       { path: '/secrets', element: <SecretsPage /> },

@@ -26,6 +26,7 @@ import { storesRouter } from './routes/stores.js';
 import { automationsRouter } from './routes/automations.js';
 import { evalsRouter } from './routes/evals.js';
 import { feedbackRouter } from './routes/feedback.js';
+import { memoryRouter } from './routes/memory.js';
 import { eventsRouter } from './routes/events.js';
 import { adminChatRouter } from './routes/admin-chat.js';
 import { runtimeProxyRouter } from './routes/runtime-proxy.js';
@@ -91,6 +92,7 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): express.E
   app.use(automationsRouter);
   app.use(evalsRouter);
   app.use(feedbackRouter);
+  app.use(memoryRouter);
   app.use(eventsRouter);
   app.use(adminChatRouter);
   app.use(runtimeProxyRouter);
