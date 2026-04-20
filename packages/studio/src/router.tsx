@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { createBrowserRouter, Outlet } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { StudioShell } from './components/StudioShell';
 import { OverviewPage } from './pages/OverviewPage';
 import { AgentPage } from './pages/AgentPage';
@@ -33,27 +33,36 @@ function Layout() {
   );
 }
 
+/** Agent-scoped routes — all Studio pages live under /agents/:agentId/ */
+const agentRoutes = [
+  { index: true, element: <OverviewPage /> },
+  { path: 'agent', element: <AgentPage /> },
+  { path: 'files', element: <FilesPage /> },
+  { path: 'stores', element: <StoresPage /> },
+  { path: 'stores/:name', element: <StoreDocumentsPage /> },
+  { path: 'stores/:name/:key', element: <DocumentViewPage /> },
+  { path: 'automations', element: <AutomationsPage /> },
+  { path: 'automations/:name', element: <AutomationDetailPage /> },
+  { path: 'evals', element: <EvalsPage /> },
+  { path: 'feedback', element: <FeedbackPage /> },
+  { path: 'memory', element: <MemoryPage /> },
+  { path: 'arena', element: <ArenaPage /> },
+  { path: 'prompt', element: <PromptPage /> },
+  { path: 'secrets', element: <SecretsPage /> },
+  { path: 'models', element: <ModelsPage /> },
+  { path: 'system', element: <SystemPage /> },
+  { path: 'inspect/:kind/:name', element: <InspectPage /> },
+  { path: '*', element: <NotFoundPage /> },
+];
+
 export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: '/', element: <OverviewPage /> },
-      { path: '/agent', element: <AgentPage /> },
-      { path: '/files', element: <FilesPage /> },
-      { path: '/stores', element: <StoresPage /> },
-      { path: '/stores/:name', element: <StoreDocumentsPage /> },
-      { path: '/stores/:name/:key', element: <DocumentViewPage /> },
-      { path: '/automations', element: <AutomationsPage /> },
-      { path: '/automations/:name', element: <AutomationDetailPage /> },
-      { path: '/evals', element: <EvalsPage /> },
-      { path: '/feedback', element: <FeedbackPage /> },
-      { path: '/memory', element: <MemoryPage /> },
-      { path: '/arena', element: <ArenaPage /> },
-      { path: '/prompt', element: <PromptPage /> },
-      { path: '/secrets', element: <SecretsPage /> },
-      { path: '/models', element: <ModelsPage /> },
-      { path: '/system', element: <SystemPage /> },
-      { path: '/inspect/:kind/:name', element: <InspectPage /> },
+      // Root redirects to the default local agent
+      { path: '/', element: <Navigate to="/agents/local" replace /> },
+      // Agent-scoped routes
+      { path: '/agents/:agentId/*', children: agentRoutes },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

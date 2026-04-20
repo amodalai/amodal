@@ -5,7 +5,13 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Brain, Plus, Trash2, Pencil, X, Check } from 'lucide-react';
+import { Brain, Plus, Trash2, Pencil, X, Check, AlertCircle } from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const MEMORY_API_BASE = '/api/memory';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,9 +38,10 @@ export function MemoryPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchEntries = useCallback(() => {
-    fetch('/api/studio/memory', { signal: AbortSignal.timeout(5_000) })
+    fetch(MEMORY_API_BASE, { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON response boundary
@@ -54,51 +61,55 @@ export function MemoryPage() {
   const handleAdd = async () => {
     if (!newContent.trim() || saving) return;
     setSaving(true);
+    setActionError(null);
     try {
-      const res = await fetch('/api/studio/memory', {
+      const res = await fetch(MEMORY_API_BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: newContent.trim() }),
         signal: AbortSignal.timeout(5_000),
       });
-      if (!res.ok) throw new Error(`Failed: ${String(res.status)}`);
+      if (!res.ok) throw new Error(`Failed to add entry (${String(res.status)})`);
       setNewContent('');
       fetchEntries();
-    } catch {
-      // Silently fail — entry list will show stale state
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to add entry');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
+    setActionError(null);
     try {
-      await fetch(`/api/studio/memory/${id}`, {
+      const res = await fetch(`${MEMORY_API_BASE}/${id}`, {
         method: 'DELETE',
         signal: AbortSignal.timeout(5_000),
       });
+      if (!res.ok) throw new Error(`Failed to delete entry (${String(res.status)})`);
       fetchEntries();
-    } catch {
-      // Silently fail
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete entry');
     }
   };
 
   const handleEditSave = async () => {
     if (!editingId || !editContent.trim() || saving) return;
     setSaving(true);
+    setActionError(null);
     try {
-      const res = await fetch(`/api/studio/memory/${editingId}`, {
+      const res = await fetch(`${MEMORY_API_BASE}/${editingId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: editContent.trim() }),
         signal: AbortSignal.timeout(5_000),
       });
-      if (!res.ok) throw new Error(`Failed: ${String(res.status)}`);
+      if (!res.ok) throw new Error(`Failed to save edit (${String(res.status)})`);
       setEditingId(null);
       setEditContent('');
       fetchEntries();
-    } catch {
-      // Silently fail
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to save edit');
     } finally {
       setSaving(false);
     }
@@ -131,6 +142,17 @@ export function MemoryPage() {
           Persistent facts the agent remembers across sessions. Add, edit, or remove entries.
         </p>
       </div>
+
+      {/* Action error banner */}
+      {actionError && (
+        <div className="mb-4 flex items-center gap-2 p-3 text-sm text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="ml-auto p-0.5 hover:opacity-70">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Add new entry */}
       <div className="mb-6 flex gap-2">

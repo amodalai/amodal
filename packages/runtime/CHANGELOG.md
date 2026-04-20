@@ -1,5 +1,41 @@
 # @amodalai/runtime
 
+## 0.3.17
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.17
+  - @amodalai/core@0.3.17
+  - @amodalai/db@0.3.17
+
+## 0.3.16
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.16
+  - @amodalai/core@0.3.16
+  - @amodalai/db@0.3.16
+
+## 0.3.15
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.15
+  - @amodalai/core@0.3.15
+  - @amodalai/db@0.3.15
+
+## 0.3.14
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.14
+  - @amodalai/core@0.3.14
+  - @amodalai/db@0.3.14
+
 ## 0.3.13
 
 ### Patch Changes

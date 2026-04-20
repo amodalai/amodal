@@ -1,5 +1,53 @@
 # @amodalai/amodal
 
+## 0.3.17
+
+### Patch Changes
+
+- Updated dependencies [[`25c47c8`](https://github.com/amodalai/amodal/commit/25c47c802e2345f039ff47a44545d6651f19ad0b)]:
+  - @amodalai/studio@0.3.17
+  - @amodalai/types@0.3.17
+  - @amodalai/core@0.3.17
+  - @amodalai/runtime@0.3.17
+  - @amodalai/runtime-app@0.3.17
+  - @amodalai/db@0.3.17
+
+## 0.3.16
+
+### Patch Changes
+
+- Updated dependencies [[`6a5a0a4`](https://github.com/amodalai/amodal/commit/6a5a0a43db3fab70ec622086a1ebe97073a87931)]:
+  - @amodalai/studio@0.3.16
+  - @amodalai/types@0.3.16
+  - @amodalai/core@0.3.16
+  - @amodalai/runtime@0.3.16
+  - @amodalai/runtime-app@0.3.16
+  - @amodalai/db@0.3.16
+
+## 0.3.15
+
+### Patch Changes
+
+- Updated dependencies [[`aa1c86f`](https://github.com/amodalai/amodal/commit/aa1c86ff8f372b40b4de41ffdfa10bf7c9cfbe88)]:
+  - @amodalai/studio@0.3.15
+  - @amodalai/types@0.3.15
+  - @amodalai/core@0.3.15
+  - @amodalai/runtime@0.3.15
+  - @amodalai/runtime-app@0.3.15
+  - @amodalai/db@0.3.15
+
+## 0.3.14
+
+### Patch Changes
+
+- Updated dependencies [[`7acb27e`](https://github.com/amodalai/amodal/commit/7acb27e3cc229a98aadac336236bc03d11eb48df)]:
+  - @amodalai/studio@0.3.14
+  - @amodalai/types@0.3.14
+  - @amodalai/core@0.3.14
+  - @amodalai/runtime@0.3.14
+  - @amodalai/runtime-app@0.3.14
+  - @amodalai/db@0.3.14
+
 ## 0.3.13
 
 ### Patch Changes

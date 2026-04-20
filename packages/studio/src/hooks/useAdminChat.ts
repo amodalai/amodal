@@ -38,7 +38,7 @@ export interface UseAdminChat {
 
 const STORAGE_KEY = 'studio-admin-chat';
 const SESSION_KEY = 'studio-admin-chat-session';
-const PROXY_ENDPOINT = '/api/studio/admin-chat/stream';
+const PROXY_ENDPOINT = '/api/admin-chat/stream';
 
 const log = createBrowserLogger('useAdminChat');
 

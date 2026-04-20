@@ -306,7 +306,7 @@ export function InspectPage() {
   }, [runtimeUrl, inspectKind, name]);
 
   if (!kind || !name || !config) {
-    return <Navigate to="/" replace />;
+    return <Navigate to=".." replace />;
   }
 
   if (error) return <AgentOffline page={`inspect/${kind}/${name}`} detail={error} />;

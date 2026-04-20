@@ -1,5 +1,45 @@
 # @amodalai/studio
 
+## 0.3.17
+
+### Patch Changes
+
+- [#236](https://github.com/amodalai/amodal/pull/236) [`25c47c8`](https://github.com/amodalai/amodal/commit/25c47c802e2345f039ff47a44545d6651f19ad0b) Thanks [@whodatdev](https://github.com/whodatdev)! - Read eval suite definitions from the runtime's file tree instead of loading them into Postgres at startup. Eval runs still persist to Postgres.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.17
+  - @amodalai/db@0.3.17
+
+## 0.3.16
+
+### Patch Changes
+
+- [#234](https://github.com/amodalai/amodal/pull/234) [`6a5a0a4`](https://github.com/amodalai/amodal/commit/6a5a0a43db3fab70ec622086a1ebe97073a87931) Thanks [@whodatdev](https://github.com/whodatdev)! - Read eval suite definitions from the runtime's file tree instead of loading them into Postgres at startup. Eval runs still persist to Postgres.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.16
+  - @amodalai/db@0.3.16
+
+## 0.3.15
+
+### Patch Changes
+
+- [#232](https://github.com/amodalai/amodal/pull/232) [`aa1c86f`](https://github.com/amodalai/amodal/commit/aa1c86ff8f372b40b4de41ffdfa10bf7c9cfbe88) Thanks [@whodatdev](https://github.com/whodatdev)! - Fix file editor to call runtime directly instead of using the `/api/runtime/files` proxy route. The proxy only works in local dev — in cloud deployments, the SPA's fetch patch rewrites it to the wrong host. Now uses `runtimeUrl` from config, matching how the agent inventory hook already works.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.15
+  - @amodalai/db@0.3.15
+
+## 0.3.14
+
+### Patch Changes
+
+- [#230](https://github.com/amodalai/amodal/pull/230) [`7acb27e`](https://github.com/amodalai/amodal/commit/7acb27e3cc229a98aadac336236bc03d11eb48df) Thanks [@whodatdev](https://github.com/whodatdev)! - Migrate Studio server from Express to Hono. Hono is 14KB (vs Express 200KB+), has zero dependencies, built-in TypeScript types, and native support for serverless platforms (Vercel, Cloudflare Workers). The `BackendFactory` and `StudioAuth` types now accept the web standard `Request` instead of Express `Request`, making the hooks platform-agnostic.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.14
+  - @amodalai/db@0.3.14
+
 ## 0.3.13
 
 ### Patch Changes

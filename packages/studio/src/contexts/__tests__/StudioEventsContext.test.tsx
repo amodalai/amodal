@@ -79,7 +79,7 @@ describe('StudioEventsContext', () => {
   });
 
   it('MockEventSource dispatches to listeners correctly', () => {
-    const es = new MockEventSource('/api/studio/events');
+    const es = new MockEventSource('/api/events');
     const received: string[] = [];
 
     es.addEventListener('store_updated', (e) => {
@@ -92,7 +92,7 @@ describe('StudioEventsContext', () => {
   });
 
   it('MockEventSource close clears listeners', () => {
-    const es = new MockEventSource('/api/studio/events');
+    const es = new MockEventSource('/api/events');
     const received: string[] = [];
 
     es.addEventListener('store_updated', (e) => {

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import type { Request } from 'express';
 import type { StudioUser } from './types';
 
 // ---------------------------------------------------------------------------

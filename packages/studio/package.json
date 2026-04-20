@@ -1,6 +1,6 @@
 {
   "name": "@amodalai/studio",
-  "version": "0.3.13",
+  "version": "0.3.17",
   "description": "Agent editor — draft workspace, file browser, and publish flow for amodal agents",
   "license": "MIT",
   "repository": {
@@ -55,7 +55,8 @@
     "@tailwindcss/typography": "^0.5.19",
     "autoprefixer": "^10.4.20",
     "clsx": "^2.1.1",
-    "express": "^5.1.0",
+    "@hono/node-server": "^1.13.0",
+    "hono": "^4.7.0",
     "lucide-react": "^0.469.0",
     "pg": "^8.13.1",
     "postcss": "^8.4.47",
@@ -67,7 +68,6 @@
     "tailwindcss": "^3.4.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
     "@types/node": "^20.11.0",
     "@types/pg": "^8.11.0",
     "@types/react": "^19.0.0",

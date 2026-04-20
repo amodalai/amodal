@@ -36,7 +36,7 @@ export interface StudioEventsContextValue {
 // Constants
 // ---------------------------------------------------------------------------
 
-const SSE_ENDPOINT = '/api/studio/events';
+const SSE_ENDPOINT = '/api/events';
 
 // ---------------------------------------------------------------------------
 // Context

@@ -4,69 +4,54 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { asyncHandler } from '../route-helpers.js';
+import { Hono } from 'hono';
 import { getAgentId } from '../../lib/config.js';
 import { listMemoryEntries, deleteMemoryEntry, updateMemoryEntry, addMemoryEntry } from '../../lib/memory-queries.js';
 
-export const memoryRouter = Router();
+export const memoryRoutes = new Hono();
 
 // List all memory entries
-memoryRouter.get('/api/studio/memory', asyncHandler(async (_req, res) => {
+memoryRoutes.get('/api/memory', async (c) => {
   const agentId = getAgentId();
   const entries = await listMemoryEntries(agentId);
-  res.json({ entries });
-}));
+  return c.json({ entries });
+});
 
 // Add a new memory entry
-memoryRouter.post('/api/studio/memory', asyncHandler(async (req, res) => {
+memoryRoutes.post('/api/memory', async (c) => {
   const agentId = getAgentId();
-  const body = req.body as unknown;
-  if (typeof body !== 'object' || body === null) {
-    res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Request body must be a JSON object' } });
-    return;
-  }
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated object at system boundary
-  const { content } = body as Record<string, unknown>;
-  if (typeof content !== 'string' || content.trim().length === 0) {
-    res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Content is required' } });
-    return;
+  const body = await c.req.json<{ content?: string }>();
+  const content = typeof body.content === 'string' ? body.content : undefined;
+  if (!content || content.trim().length === 0) {
+    return c.json({ error: { code: 'INVALID_INPUT', message: 'Content is required' } }, 400);
   }
   const entry = await addMemoryEntry(agentId, content.trim());
-  res.status(201).json({ entry });
-}));
+  return c.json({ entry }, 201);
+});
 
 // Update a memory entry
-memoryRouter.patch('/api/studio/memory/:id', asyncHandler(async (req, res) => {
+memoryRoutes.patch('/api/memory/:id', async (c) => {
   const agentId = getAgentId();
-  const id = String(req.params['id'] ?? '');
-  const body = req.body as unknown;
-  if (typeof body !== 'object' || body === null) {
-    res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Request body must be a JSON object' } });
-    return;
-  }
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated object at system boundary
-  const { content } = body as Record<string, unknown>;
-  if (typeof content !== 'string' || content.trim().length === 0) {
-    res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Content is required' } });
-    return;
+  const id = c.req.param('id');
+  const body = await c.req.json<{ content?: string }>();
+  const content = typeof body.content === 'string' ? body.content : undefined;
+  if (!content || content.trim().length === 0) {
+    return c.json({ error: { code: 'INVALID_INPUT', message: 'Content is required' } }, 400);
   }
   const updated = await updateMemoryEntry(agentId, id, content.trim());
   if (!updated) {
-    res.status(404).json({ error: { code: 'NOT_FOUND', message: `Memory entry not found: ${id}` } });
-    return;
+    return c.json({ error: { code: 'NOT_FOUND', message: `Memory entry not found: ${id}` } }, 404);
   }
-  res.json({ entry: updated });
-}));
+  return c.json({ entry: updated });
+});
 
 // Delete a memory entry
-memoryRouter.delete('/api/studio/memory/:id', asyncHandler(async (req, res) => {
+memoryRoutes.delete('/api/memory/:id', async (c) => {
   const agentId = getAgentId();
-  const id = String(req.params['id'] ?? '');
+  const id = c.req.param('id');
   const deleted = await deleteMemoryEntry(agentId, id);
   if (!deleted) {
-    res.status(404).json({ error: { code: 'NOT_FOUND', message: `Memory entry not found: ${id}` } });
-    return;
+    return c.json({ error: { code: 'NOT_FOUND', message: `Memory entry not found: ${id}` } }, 404);
   }
-  res.json({ deleted: true });
-}));
+  return c.json({ deleted: true });
+});

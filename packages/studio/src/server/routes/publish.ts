@@ -4,16 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { asyncHandler } from '../route-helpers.js';
+import { Hono } from 'hono';
 import { getUser } from '../middleware/auth.js';
 import { getBackend } from '../../lib/startup.js';
 
-export const publishRouter = Router();
+export const publishRoutes = new Hono();
 
-publishRouter.post('/api/studio/publish', asyncHandler(async (req, res) => {
-  const user = await getUser(req);
+publishRoutes.post('/api/publish', async (c) => {
+  const user = await getUser(c.req.raw);
   const backend = await getBackend();
   const result = await backend.publishDrafts(user.userId);
-  res.json(result);
-}));
+  return c.json(result);
+});

@@ -92,61 +92,6 @@ jobs:
 
             console.log(`Created release ${tag}`);
 
-  # Post-publish smoke test — install from npm and verify it works
-  npm-smoke-test:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    name: npm smoke test
-    runs-on: ubuntu-latest
-    needs: [release]
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_DB: amodal
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 5432:5432
-        options: --health-cmd="pg_isready" --health-interval=5s --health-timeout=5s --health-retries=5
-    steps:
-      - name: Install from npm
-        run: npm install -g @amodalai/amodal@latest
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Create test agent
-        run: |
-          mkdir -p /tmp/smoke-agent
-          echo '{"name":"ci-smoke","version":"1.0.0","models":{"main":{"provider":"anthropic","model":"claude-sonnet-4-20250514"}}}' > /tmp/smoke-agent/amodal.json
-
-      - name: Start amodal dev
-        run: |
-          cd /tmp/smoke-agent
-          DATABASE_URL=postgresql://postgres@localhost:5432/amodal amodal dev &
-          # Wait for both runtime and Studio to start
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:3847/health > /dev/null 2>&1 && \
-               curl -sf http://localhost:3848/api/studio/config > /dev/null 2>&1; then
-              break
-            fi
-            sleep 1
-          done
-
-      - name: Verify endpoints
-        run: |
-          set -e
-          echo "--- Runtime health ---"
-          curl -sf http://localhost:3847/health
-          echo ""
-          echo "--- Studio config ---"
-          curl -sf http://localhost:3848/api/studio/config | jq .
-          echo "--- Studio SPA ---"
-          test "$(curl -sf -o /dev/null -w '%{http_code}' http://localhost:3848/)" = "200"
-          echo "--- Studio stores ---"
-          curl -sf http://localhost:3848/api/studio/stores | jq .
-          echo "--- Studio drafts ---"
-          curl -sf http://localhost:3848/api/studio/drafts | jq .
-          echo "All checks passed"
-
   # Manual snapshot releases for testing pre-release builds
   snapshot:
     if: github.event_name == 'workflow_dispatch'

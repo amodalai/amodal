@@ -4,16 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Router } from 'express';
-import { asyncHandler } from '../route-helpers.js';
+import { Hono } from 'hono';
 import { getAgentId, getAgentName, getRuntimeUrl } from '../../lib/config.js';
 
-export const configRouter = Router();
+export const configRoutes = new Hono();
 
-configRouter.get('/api/studio/config', asyncHandler(async (_req, res) => {
-  res.json({
+configRoutes.get('/api/config', async (c) => c.json({
     agentName: getAgentName(),
     runtimeUrl: getRuntimeUrl(),
     agentId: getAgentId(),
-  });
-}));
+  }));

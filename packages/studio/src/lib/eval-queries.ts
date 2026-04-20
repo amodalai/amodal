@@ -5,39 +5,14 @@
  */
 
 /**
- * Drizzle queries for reading eval data from Postgres.
- * Used by Studio's eval pages and eval runner.
+ * Drizzle queries for eval run data in Postgres.
+ * Suite definitions are read from the runtime's file tree — only runs are persisted.
  */
 
-import { eq, desc, evalSuites, evalRuns } from '@amodalai/db';
+import { eq, desc, evalRuns } from '@amodalai/db';
 import { getStudioDb } from './db';
 
 const DEFAULT_RUNS_LIMIT = 100;
-
-/**
- * List all eval suites for an agent, ordered newest-first.
- */
-export async function listEvalSuites(agentId: string) {
-  const db = await getStudioDb();
-  return db
-    .select()
-    .from(evalSuites)
-    .where(eq(evalSuites.agentId, agentId))
-    .orderBy(desc(evalSuites.createdAt));
-}
-
-/**
- * Get a single eval suite by ID. Returns null if not found.
- */
-export async function getEvalSuite(id: string) {
-  const db = await getStudioDb();
-  const rows = await db
-    .select()
-    .from(evalSuites)
-    .where(eq(evalSuites.id, id))
-    .limit(1);
-  return rows[0] ?? null;
-}
 
 /**
  * List eval runs for a suite, ordered newest-first.
@@ -63,34 +38,6 @@ export async function getEvalRun(id: string) {
     .where(eq(evalRuns.id, id))
     .limit(1);
   return rows[0] ?? null;
-}
-
-/**
- * Create or update an eval suite from a disk definition.
- * Uses the suite name + agentId as the natural key (id = `${agentId}:${name}`).
- */
-export async function upsertEvalSuite(
-  agentId: string,
-  name: string,
-  config: Record<string, unknown>,
-): Promise<void> {
-  const db = await getStudioDb();
-  const id = `${agentId}:${name}`;
-  const now = new Date();
-
-  await db
-    .insert(evalSuites)
-    .values({
-      id,
-      agentId,
-      name,
-      config,
-      createdAt: now,
-    })
-    .onConflictDoUpdate({
-      target: evalSuites.id,
-      set: { name, config },
-    });
 }
 
 /** Shape for inserting a new eval run. */

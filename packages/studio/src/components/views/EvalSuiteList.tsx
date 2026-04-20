@@ -25,47 +25,39 @@ interface Props {
 }
 
 // ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const RUN_ENDPOINT = '/api/studio/evals';
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function EvalSuiteList({ suites, agentId, onRefresh }: Props) {
-  const [runningId, setRunningId] = useState<string | null>(null);
+export function EvalSuiteList({ suites, onRefresh }: Props) {
+  const [runningName, setRunningName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleRun = useCallback(
-    async (suiteId: string) => {
-      setRunningId(suiteId);
+    async (evalName: string) => {
+      setRunningName(evalName);
       setError(null);
 
       try {
-        const res = await fetch(`${RUN_ENDPOINT}/${suiteId}/run`, {
+        const res = await fetch('/api/evals/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agentId }),
+          body: JSON.stringify({ evalName }),
         });
 
         if (!res.ok) {
-          // System boundary cast — parsing API error response
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
           const data = (await res.json()) as { error?: { message?: string } };
           throw new Error(data.error?.message ?? `Request failed with status ${res.status}`);
         }
 
-        // Refresh to show updated data
         onRefresh?.();
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
-        setRunningId(null);
+        setRunningName(null);
       }
     },
-    [agentId, onRefresh],
+    [onRefresh],
   );
 
   const getCaseCount = (config: Record<string, unknown>): number => {
@@ -105,11 +97,11 @@ export function EvalSuiteList({ suites, agentId, onRefresh }: Props) {
           </div>
 
           <button
-            onClick={() => void handleRun(suite.id)}
-            disabled={runningId !== null}
+            onClick={() => void handleRun(suite.name)}
+            disabled={runningName !== null}
             className="flex items-center gap-1.5 rounded-md bg-primary-solid px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {runningId === suite.id ? (
+            {runningName === suite.name ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Running

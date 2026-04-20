@@ -174,7 +174,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Derive appId from the agent name (matches AGENT_ID env var set by CLI,
   // which Studio uses for its queries). Falls back to 'local' for unnamed agents.
-  const appId = bundle.config.name || process.env['AGENT_ID'] || DEFAULT_APP_ID;
+  const appId = bundle.config.name || DEFAULT_APP_ID;
 
   // Check provider API keys in the background at startup
   let providerStatuses: ProviderStatus[] = PROVIDER_CHECKS.map((c) => ({

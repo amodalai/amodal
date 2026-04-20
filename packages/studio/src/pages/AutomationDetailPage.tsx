@@ -97,7 +97,7 @@ export function AutomationDetailPage() {
 
   const fetchData = useCallback(() => {
     if (!name) return;
-    fetch(`/api/studio/automations/${encodeURIComponent(name)}`, {
+    fetch(`/api/automations/${encodeURIComponent(name)}`, {
       signal: AbortSignal.timeout(5_000),
     })
       .then((r) => {
