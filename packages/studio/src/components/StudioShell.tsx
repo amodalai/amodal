@@ -156,9 +156,9 @@ export function StudioShell({ children }: Props) {
                       {items.map((name) => (
                         <Link
                           key={name}
-                          to={`${section.pathPrefix}/${name}`}
+                          to={agentPath(`${section.pathPrefix}/${name}`)}
                           className={`flex items-center gap-2 px-3 py-1 rounded text-xs transition-colors ${
-                            pathname === `${section.pathPrefix}/${name}`
+                            pathname === agentPath(`${section.pathPrefix}/${name}`)
                               ? 'bg-primary/10 text-primary font-medium'
                               : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                           }`}
