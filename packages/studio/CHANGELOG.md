@@ -1,5 +1,15 @@
 # @amodalai/studio
 
+## 0.3.14
+
+### Patch Changes
+
+- [#230](https://github.com/amodalai/amodal/pull/230) [`7acb27e`](https://github.com/amodalai/amodal/commit/7acb27e3cc229a98aadac336236bc03d11eb48df) Thanks [@whodatdev](https://github.com/whodatdev)! - Migrate Studio server from Express to Hono. Hono is 14KB (vs Express 200KB+), has zero dependencies, built-in TypeScript types, and native support for serverless platforms (Vercel, Cloudflare Workers). The `BackendFactory` and `StudioAuth` types now accept the web standard `Request` instead of Express `Request`, making the hooks platform-agnostic.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.14
+  - @amodalai/db@0.3.14
+
 ## 0.3.13
 
 ### Patch Changes
