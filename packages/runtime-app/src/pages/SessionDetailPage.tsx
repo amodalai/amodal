@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play } from 'lucide-react';
-import Markdown from 'react-markdown';
+import { FormattedMarkdown } from '@amodalai/react';
 
 interface HistoryMessage {
   role: string;
@@ -83,9 +83,9 @@ export function SessionDetailPage() {
                     {msg.text}
                   </div>
                 ) : (
-                  <div className="text-[14px] text-zinc-300 prose prose-invert prose-sm max-w-none prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-strong:text-zinc-200 prose-code:text-primary prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-zinc-800/80 prose-pre:border prose-pre:border-zinc-700/50 prose-a:text-primary prose-li:text-zinc-300">
-                    <Markdown>{msg.text}</Markdown>
-                  </div>
+                  <FormattedMarkdown className="text-[14px] text-zinc-300 prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-strong:text-zinc-200 prose-code:text-primary prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-zinc-800/80 prose-pre:border prose-pre:border-zinc-700/50 prose-a:text-primary prose-li:text-zinc-300">
+                    {msg.text}
+                  </FormattedMarkdown>
                 )}
               </div>
             ))}
