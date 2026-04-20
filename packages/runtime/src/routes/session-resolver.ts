@@ -51,6 +51,8 @@ export interface SharedResources {
   fieldScrubber?: FieldScrubber;
   /** Database handle for memory tool (when memory is enabled). */
   memoryDb?: NodePgDatabase<Record<string, unknown>>;
+  /** Application ID for tenant scoping (defaults to 'local' in dev). */
+  appId?: string;
 }
 
 /** Result of session resolution — includes the tool context factory for wiring into runMessage. */
@@ -123,7 +125,7 @@ async function buildComponents(
   let memoryContent: string | undefined;
   const memoryDb = shared.memoryDb;
   if (bundle.config.memory?.enabled && memoryDb) {
-    memoryContent = await loadMemoryContent(memoryDb);
+    memoryContent = await loadMemoryContent(memoryDb, shared.appId ?? 'local');
     shared.logger.info('memory_loaded', {contentLength: memoryContent.length});
   }
 

@@ -37,20 +37,28 @@ export interface WebToolsConfig {
 /**
  * Configuration for agent memory — per-instance persistent context.
  *
- * When enabled, the agent has a single text blob of memory that persists
- * across sessions. The agent can read it in its system prompt and update
- * it via the built-in update_memory tool.
+ * When enabled, the agent stores memory entries (one fact per row) that
+ * persist across sessions. The agent can read them in its system prompt
+ * and manage them via the built-in memory tool (add/remove/list/search).
  */
 export interface MemoryConfig {
   /** Whether memory is enabled for this agent. */
   readonly enabled: boolean;
   /**
-   * Who can call update_memory:
+   * Who can call the memory tool:
    * - 'any'  — any user (default)
    * - 'admin' — only admin sessions
    * - 'none' — memory is read-only (set via admin agent or API)
    */
   readonly editableBy?: 'any' | 'admin' | 'none';
+  /** Maximum number of memory entries (default: 50). */
+  readonly maxEntries?: number;
+  /** Maximum total characters across all entries (default: 8000). */
+  readonly maxTotalChars?: number;
+  /** Nudge interval — prompt agent to save every N turns (default: 10, 0 to disable). */
+  readonly nudgeInterval?: number;
+  /** Enable session search tool (default: true when memory is enabled). */
+  readonly sessionSearch?: boolean;
 }
 
 /**

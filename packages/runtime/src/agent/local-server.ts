@@ -292,6 +292,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     mcpManager,
     logger: log,
     toolExecutor,
+    appId: LOCAL_APP_ID,
     // Provide the DB handle for the memory tool when memory is enabled.
     // The db singleton is already initialized above (getDb + ensureSchema).
     ...(bundle.config.memory?.enabled ? {memoryDb: db} : {}),

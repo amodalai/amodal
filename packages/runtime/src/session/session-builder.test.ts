@@ -21,7 +21,7 @@
 import {describe, it, expect, vi} from 'vitest';
 import {buildSessionComponents, PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME} from './session-builder.js';
 import type {BuildSessionComponentsOptions} from './session-builder.js';
-import {UPDATE_MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
+import {MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import type {AgentBundle, LoadedConnection, LoadedStore, LoadedTool, LoadedSkill, LoadedKnowledge} from '@amodalai/types';
 import type {AdminAgentContent} from '@amodalai/core';
 import {createLogger} from '../logger.js';
@@ -389,28 +389,28 @@ describe('buildSessionComponents', () => {
       const bundle = makeMemoryBundle({enabled: true, editableBy: 'any'});
       const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
 
-      expect(components.toolRegistry.names()).toContain(UPDATE_MEMORY_TOOL_NAME);
+      expect(components.toolRegistry.names()).toContain(MEMORY_TOOL_NAME);
     });
 
     it('registers update_memory when memory enabled with default editableBy', () => {
       const bundle = makeMemoryBundle({enabled: true});
       const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
 
-      expect(components.toolRegistry.names()).toContain(UPDATE_MEMORY_TOOL_NAME);
+      expect(components.toolRegistry.names()).toContain(MEMORY_TOOL_NAME);
     });
 
     it('does NOT register update_memory when editableBy is none', () => {
       const bundle = makeMemoryBundle({enabled: true, editableBy: 'none'});
       const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
 
-      expect(components.toolRegistry.names()).not.toContain(UPDATE_MEMORY_TOOL_NAME);
+      expect(components.toolRegistry.names()).not.toContain(MEMORY_TOOL_NAME);
     });
 
     it('does NOT register update_memory when editableBy is admin and session is not admin', () => {
       const bundle = makeMemoryBundle({enabled: true, editableBy: 'admin'});
       const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
 
-      expect(components.toolRegistry.names()).not.toContain(UPDATE_MEMORY_TOOL_NAME);
+      expect(components.toolRegistry.names()).not.toContain(MEMORY_TOOL_NAME);
     });
 
     it('registers update_memory when editableBy is admin and session is admin', () => {
@@ -421,21 +421,21 @@ describe('buildSessionComponents', () => {
         sessionType: 'admin',
       }));
 
-      expect(components.toolRegistry.names()).toContain(UPDATE_MEMORY_TOOL_NAME);
+      expect(components.toolRegistry.names()).toContain(MEMORY_TOOL_NAME);
     });
 
     it('does NOT register update_memory when memory not enabled', () => {
       const bundle = makeMemoryBundle({enabled: false});
       const components = buildSessionComponents(makeOpts({bundle, memoryDb: mockMemoryDb}));
 
-      expect(components.toolRegistry.names()).not.toContain(UPDATE_MEMORY_TOOL_NAME);
+      expect(components.toolRegistry.names()).not.toContain(MEMORY_TOOL_NAME);
     });
 
     it('does NOT register update_memory when no memoryDb provided', () => {
       const bundle = makeMemoryBundle({enabled: true});
       const components = buildSessionComponents(makeOpts({bundle}));
 
-      expect(components.toolRegistry.names()).not.toContain(UPDATE_MEMORY_TOOL_NAME);
+      expect(components.toolRegistry.names()).not.toContain(MEMORY_TOOL_NAME);
     });
 
     it('includes memory content in system prompt when provided', () => {
@@ -457,7 +457,7 @@ describe('buildSessionComponents', () => {
       }));
 
       expect(components.systemPrompt).toContain('## Memory Instructions');
-      expect(components.systemPrompt).toContain('update_memory tool');
+      expect(components.systemPrompt).toContain('memory tool');
     });
 
     it('does NOT include memory instructions when editableBy is none', () => {

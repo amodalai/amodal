@@ -5,61 +5,28 @@
  */
 
 /**
- * Tests for the update_memory tool and loadMemoryContent helper.
+ * Tests for the memory tool with entry-level operations.
  *
  * Covers:
- * 1. loadMemoryContent — reads from db, returns empty string when no row
- * 2. createUpdateMemoryTool — upsert semantics, return shape, logging
- * 3. Error handling — wraps db errors as StoreError
+ * 1. formatMemoryForPrompt — renders entries as numbered list
+ * 2. createMemoryTool — tool metadata, validation errors for each action
+ * 3. Integration tests for add/remove/list/search run in the smoke test (requires Postgres)
  */
 
-import {describe, it, expect, vi, beforeEach} from 'vitest';
+import {describe, it, expect, vi} from 'vitest';
 import {
-  loadMemoryContent,
-  createUpdateMemoryTool,
+  formatMemoryForPrompt,
+  createMemoryTool,
+  MEMORY_TOOL_NAME,
   UPDATE_MEMORY_TOOL_NAME,
 } from './memory-tool.js';
+import type {MemoryEntry} from './memory-tool.js';
 import {StoreError} from '../errors.js';
 import type {ToolContext} from './types.js';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
-
-// Mock drizzle db with chainable query builder
-function createMockDb() {
-  const state = {
-    rows: [] as Array<{content: string}>,
-    insertedValues: null as Record<string, unknown> | null,
-    conflictSet: null as Record<string, unknown> | null,
-  };
-
-  // Chainable select builder
-  const selectBuilder = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockImplementation(() => Promise.resolve(state.rows)),
-  };
-
-  // Chainable insert builder
-  const insertBuilder = {
-    values: vi.fn().mockImplementation((vals: Record<string, unknown>) => {
-      state.insertedValues = vals;
-      return insertBuilder;
-    }),
-    onConflictDoUpdate: vi.fn().mockImplementation((opts: {set: Record<string, unknown>}) => {
-      state.conflictSet = opts.set;
-      return Promise.resolve();
-    }),
-  };
-
-  const db = {
-    select: vi.fn().mockReturnValue(selectBuilder),
-    insert: vi.fn().mockReturnValue(insertBuilder),
-  };
-
-  return {db, state, selectBuilder, insertBuilder};
-}
 
 function createMockLogger() {
   return {
@@ -68,6 +35,16 @@ function createMockLogger() {
     error: vi.fn(),
     debug: vi.fn(),
     child: vi.fn(),
+  };
+}
+
+// Minimal mock that throws on any DB operation — used to test validation-only paths
+function createThrowingDb() {
+  const thrower = () => { throw new Error('unexpected DB call'); };
+  return {
+    select: thrower,
+    insert: thrower,
+    delete: thrower,
   };
 }
 
@@ -84,130 +61,148 @@ const mockCtx: ToolContext = {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('UPDATE_MEMORY_TOOL_NAME', () => {
-  it('is update_memory', () => {
-    expect(UPDATE_MEMORY_TOOL_NAME).toBe('update_memory');
+describe('MEMORY_TOOL_NAME', () => {
+  it('is "memory"', () => {
+    expect(MEMORY_TOOL_NAME).toBe('memory');
+  });
+
+  it('UPDATE_MEMORY_TOOL_NAME is backward-compat alias', () => {
+    expect(UPDATE_MEMORY_TOOL_NAME).toBe(MEMORY_TOOL_NAME);
   });
 });
 
-describe('loadMemoryContent', () => {
-  it('returns content when row exists', async () => {
-    const {db, state} = createMockDb();
-    state.rows = [{content: 'User prefers dark mode.'}];
+describe('formatMemoryForPrompt', () => {
+  it('formats entries as numbered list with short IDs', () => {
+    const entries: MemoryEntry[] = [
+      {id: 'abcdef12-3456-7890-abcd-ef1234567890', content: 'User prefers dark mode', category: null, createdAt: new Date()},
+      {id: '12345678-abcd-ef12-3456-7890abcdef12', content: 'User is a dentist', category: null, createdAt: new Date()},
+    ];
 
-    const result = await loadMemoryContent(db as never);
+    const result = formatMemoryForPrompt(entries);
 
-    expect(result).toBe('User prefers dark mode.');
+    expect(result).toBe(
+      '1. User prefers dark mode [id: abcdef12]\n' +
+      '2. User is a dentist [id: 12345678]',
+    );
   });
 
-  it('returns empty string when no row exists', async () => {
-    const {db, state} = createMockDb();
-    state.rows = [];
+  it('returns empty string for empty entries', () => {
+    expect(formatMemoryForPrompt([])).toBe('');
+  });
 
-    const result = await loadMemoryContent(db as never);
+  it('handles single entry', () => {
+    const entries: MemoryEntry[] = [
+      {id: 'aaa11111-2222-3333-4444-555566667777', content: 'Likes TypeScript', category: null, createdAt: new Date()},
+    ];
 
-    expect(result).toBe('');
+    expect(formatMemoryForPrompt(entries)).toBe('1. Likes TypeScript [id: aaa11111]');
   });
 });
 
-describe('createUpdateMemoryTool', () => {
-  let mockDb: ReturnType<typeof createMockDb>;
-  let logger: ReturnType<typeof createMockLogger>;
-
-  beforeEach(() => {
-    mockDb = createMockDb();
-    logger = createMockLogger();
-  });
-
+describe('createMemoryTool', () => {
   it('returns a tool definition with correct metadata', () => {
-    const tool = createUpdateMemoryTool(mockDb.db as never, logger as never);
+    const tool = createMemoryTool({
+      db: createThrowingDb() as never,
+      logger: createMockLogger() as never,
+      appId: 'test',
+    });
 
     expect(tool.description).toContain('persistent memory');
-    expect(tool.description).toContain('COMPLETE updated memory');
+    expect(tool.description).toContain('add');
+    expect(tool.description).toContain('remove');
+    expect(tool.description).toContain('list');
+    expect(tool.description).toContain('search');
     expect(tool.readOnly).toBe(false);
     expect(tool.metadata).toEqual({category: 'system'});
   });
 
-  it('upserts content and returns success', async () => {
-    const tool = createUpdateMemoryTool(mockDb.db as never, logger as never);
+  describe('add action — validation', () => {
+    it('rejects empty content', async () => {
+      const tool = createMemoryTool({
+        db: createThrowingDb() as never,
+        logger: createMockLogger() as never,
+        appId: 'test',
+      });
 
-    const result = await tool.execute(
-      {content: 'User prefers dark mode.'},
-      mockCtx,
-    );
+      await expect(
+        tool.execute({action: 'add', content: ''}, mockCtx),
+      ).rejects.toThrow(StoreError);
+    });
 
-    expect(result).toEqual({updated: true, contentLength: 23});
-    expect(mockDb.db.insert).toHaveBeenCalled();
-    expect(mockDb.insertBuilder.values).toHaveBeenCalledWith(
-      expect.objectContaining({id: 1, content: 'User prefers dark mode.'}),
-    );
-    expect(mockDb.insertBuilder.onConflictDoUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        set: expect.objectContaining({content: 'User prefers dark mode.'}),
-      }),
-    );
-  });
+    it('rejects missing content', async () => {
+      const tool = createMemoryTool({
+        db: createThrowingDb() as never,
+        logger: createMockLogger() as never,
+        appId: 'test',
+      });
 
-  it('logs memory_updated on success', async () => {
-    const tool = createUpdateMemoryTool(mockDb.db as never, logger as never);
+      await expect(
+        tool.execute({action: 'add'}, mockCtx),
+      ).rejects.toThrow(StoreError);
+    });
 
-    await tool.execute({content: 'Notes here.'}, mockCtx);
+    it('rejects whitespace-only content', async () => {
+      const tool = createMemoryTool({
+        db: createThrowingDb() as never,
+        logger: createMockLogger() as never,
+        appId: 'test',
+      });
 
-    expect(logger.info).toHaveBeenCalledWith('memory_updated', {
-      contentLength: 11,
-      durationMs: expect.any(Number),
+      await expect(
+        tool.execute({action: 'add', content: '   '}, mockCtx),
+      ).rejects.toThrow(StoreError);
     });
   });
 
-  it('handles empty content', async () => {
-    const tool = createUpdateMemoryTool(mockDb.db as never, logger as never);
+  describe('remove action — validation', () => {
+    it('rejects missing entry_id', async () => {
+      const tool = createMemoryTool({
+        db: createThrowingDb() as never,
+        logger: createMockLogger() as never,
+        appId: 'test',
+      });
 
-    const result = await tool.execute({content: ''}, mockCtx);
+      await expect(
+        tool.execute({action: 'remove'}, mockCtx),
+      ).rejects.toThrow(StoreError);
+    });
 
-    expect(result).toEqual({updated: true, contentLength: 0});
-  });
+    it('rejects empty entry_id', async () => {
+      const tool = createMemoryTool({
+        db: createThrowingDb() as never,
+        logger: createMockLogger() as never,
+        appId: 'test',
+      });
 
-  it('throws StoreError on db failure', async () => {
-    mockDb.insertBuilder.onConflictDoUpdate.mockRejectedValue(
-      new Error('connection refused'),
-    );
-    const tool = createUpdateMemoryTool(mockDb.db as never, logger as never);
-
-    await expect(
-      tool.execute({content: 'test'}, mockCtx),
-    ).rejects.toThrow(StoreError);
-  });
-
-  it('logs memory_update_failed on db failure', async () => {
-    mockDb.insertBuilder.onConflictDoUpdate.mockRejectedValue(
-      new Error('connection refused'),
-    );
-    const tool = createUpdateMemoryTool(mockDb.db as never, logger as never);
-
-    await expect(
-      tool.execute({content: 'test'}, mockCtx),
-    ).rejects.toThrow();
-
-    expect(logger.error).toHaveBeenCalledWith('memory_update_failed', {
-      durationMs: expect.any(Number),
-      error: 'connection refused',
+      await expect(
+        tool.execute({action: 'remove', entry_id: ''}, mockCtx),
+      ).rejects.toThrow(StoreError);
     });
   });
 
-  it('StoreError carries context about the failed operation', async () => {
-    mockDb.insertBuilder.onConflictDoUpdate.mockRejectedValue(
-      new Error('timeout'),
-    );
-    const tool = createUpdateMemoryTool(mockDb.db as never, logger as never);
+  describe('search action — validation', () => {
+    it('rejects empty query', async () => {
+      const tool = createMemoryTool({
+        db: createThrowingDb() as never,
+        logger: createMockLogger() as never,
+        appId: 'test',
+      });
 
-    try {
-      await tool.execute({content: 'some notes'}, mockCtx);
-      expect.fail('should have thrown');
-    } catch (err) {
-      expect(err).toBeInstanceOf(StoreError);
-      const storeErr = err as StoreError;
-      expect(storeErr.store).toBe('agent_memory');
-      expect(storeErr.operation).toBe('upsert');
-    }
+      await expect(
+        tool.execute({action: 'search', query: ''}, mockCtx),
+      ).rejects.toThrow(StoreError);
+    });
+
+    it('rejects missing query', async () => {
+      const tool = createMemoryTool({
+        db: createThrowingDb() as never,
+        logger: createMockLogger() as never,
+        appId: 'test',
+      });
+
+      await expect(
+        tool.execute({action: 'search'}, mockCtx),
+      ).rejects.toThrow(StoreError);
+    });
   });
 });

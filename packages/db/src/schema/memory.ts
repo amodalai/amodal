@@ -5,19 +5,37 @@
  */
 
 /**
- * Agent memory table — a single-row blob of text per database.
+ * Agent memory entries table — one row per memory fact.
  *
- * In agent-per-tenant mode each instance has its own database,
- * so this table holds that instance's learned preferences and facts.
+ * Scoped by app_id (same isolation model as store_documents).
+ * Supports full-text search via GIN index on content.
  */
 
 import {
   pgTable,
   text,
+  uuid,
   integer,
   timestamp,
+  index,
 } from 'drizzle-orm/pg-core';
 
+export const agentMemoryEntries = pgTable(
+  'agent_memory_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    appId: text('app_id').notNull(),
+    content: text('content').notNull(),
+    category: text('category'),
+    createdAt: timestamp('created_at', {withTimezone: true}).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', {withTimezone: true}).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_memory_entries_app').on(t.appId),
+  ],
+);
+
+// Legacy single-row table — kept for Phase 1 backward compat during migration.
 export const agentMemory = pgTable(
   'agent_memory',
   {

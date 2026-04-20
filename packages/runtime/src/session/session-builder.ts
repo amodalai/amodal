@@ -51,7 +51,7 @@ import {StoreError} from '../errors.js';
 import {createDispatchTool, DISPATCH_TOOL_NAME} from '../tools/dispatch-tool.js';
 import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-tool.js';
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
-import {createUpdateMemoryTool, UPDATE_MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
+import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import type {Logger} from '../logger.js';
 
 // ---------------------------------------------------------------------------
@@ -395,7 +395,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   }
 
   // -------------------------------------------------------------------------
-  // 10b. Register update_memory tool (if memory is enabled and editable)
+  // 10b. Register memory tool (if memory is enabled and editable)
   // -------------------------------------------------------------------------
 
   const memoryConfig = bundle.config.memory;
@@ -405,7 +405,13 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     && (memoryConfig.editableBy !== 'admin' || sessionType === 'admin');
 
   if (memoryEditable && memoryDb) {
-    registry.register(UPDATE_MEMORY_TOOL_NAME, createUpdateMemoryTool(memoryDb, logger));
+    registry.register(MEMORY_TOOL_NAME, createMemoryTool({
+      db: memoryDb,
+      logger,
+      appId,
+      maxEntries: memoryConfig.maxEntries,
+      maxTotalChars: memoryConfig.maxTotalChars,
+    }));
     logger.info('memory_tool_registered', {editableBy: memoryConfig.editableBy ?? 'any'});
   } else if (memoryEnabled) {
     logger.info('memory_tool_not_registered', {
@@ -472,10 +478,11 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // Inject memory management instructions when memory is enabled
   if (memoryEnabled && memoryEditable) {
     compiled.systemPrompt += '\n\n## Memory Instructions\n\n' +
-      'You have persistent memory for this user. It appears in your context under "Memory." ' +
-      'When the user tells you a preference, correction, or important fact, update it using the update_memory tool. ' +
-      'Keep the memory concise and organized — summarize rather than append. Remove outdated entries. ' +
-      'The memory should read like notes a colleague left for you.';
+      'You have persistent memory. Entries appear in your context under "Memory."\n\n' +
+      '**When to save:** User states a preference, corrects you, shares a fact about themselves or their project.\n' +
+      '**How to save:** Write declarative facts ("User is a dentist") not imperatives ("Always ask about dental practice"). One fact per entry, 1-2 sentences max.\n' +
+      '**When to remove:** User asks to forget something, or a new fact contradicts an existing entry.\n' +
+      '**Tools:** Use memory tool with action "add" to save, "remove" to delete by ID, "list" to show all, "search" to find by keyword.';
   }
 
   if (compiled.warnings.length > 0) {
@@ -559,4 +566,4 @@ function resolveApiKey(
 }
 
 // Re-export constants for use in tests and state handlers
-export {PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME, DISPATCH_TOOL_NAME, UPDATE_MEMORY_TOOL_NAME};
+export {PRESENT_TOOL_NAME, STOP_EXECUTION_TOOL_NAME, DISPATCH_TOOL_NAME, MEMORY_TOOL_NAME};

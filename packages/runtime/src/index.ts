@@ -158,7 +158,8 @@ export { createRequestTool, REQUEST_TOOL_NAME } from './tools/request-tool.js';
 export type { ConnectionsMap, CreateRequestToolOptions } from './tools/request-tool.js';
 
 // Memory tool
-export { createUpdateMemoryTool, loadMemoryContent, UPDATE_MEMORY_TOOL_NAME } from './tools/memory-tool.js';
+export { createMemoryTool, loadMemoryContent, loadMemoryEntries, formatMemoryForPrompt, MEMORY_TOOL_NAME, UPDATE_MEMORY_TOOL_NAME } from './tools/memory-tool.js';
+export type { MemoryEntry, CreateMemoryToolOptions } from './tools/memory-tool.js';
 
 // Standalone session manager
 export { StandaloneSessionManager } from './session/manager.js';
