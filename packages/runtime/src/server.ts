@@ -184,11 +184,28 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     res.json(user);
   }));
 
-  // Auth middleware for protected routes (injected by hosting layer)
-  if (options.authMiddleware) {
-    app.use('/chat', options.authMiddleware);
-    app.use('/chat/stream', options.authMiddleware);
-    app.use('/sessions', options.authMiddleware);
+  // Auth middleware for protected routes.
+  // Priority: injected middleware (hosting layer) > AUTH_TOKEN env var > none (local dev)
+  const authToken = process.env['AUTH_TOKEN'];
+  const effectiveAuthMiddleware: express.RequestHandler | undefined =
+    options.authMiddleware ?? (authToken ? (req, res, next) => {
+      const header = req.headers['authorization'];
+      if (header === `Bearer ${authToken}`) {
+        res.locals['authContext'] = {
+          token: authToken,
+          applicationId: process.env['AGENT_ID'] ?? 'default',
+          authMethod: 'token',
+        };
+        next();
+        return;
+      }
+      res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Missing authentication' } });
+    } : undefined);
+
+  if (effectiveAuthMiddleware) {
+    app.use('/chat', effectiveAuthMiddleware);
+    app.use('/chat/stream', effectiveAuthMiddleware);
+    app.use('/sessions', effectiveAuthMiddleware);
   }
 
   app.use(createChatStreamRouter({
