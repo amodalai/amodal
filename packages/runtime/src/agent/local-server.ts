@@ -680,7 +680,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   } else if (config.staticAppDir && existsSync(config.staticAppDir)) {
     app.use(express.static(config.staticAppDir));
     app.use((_req, res, next) => {
-      if (_req.path.startsWith('/api/') || _req.path.startsWith('/inspect/') || _req.method !== 'GET') {
+      if (_req.path.startsWith('/api/') || _req.path.startsWith('/inspect/') || _req.path.startsWith('/sessions/') || _req.path === '/sessions' || _req.method !== 'GET') {
         next();
         return;
       }
