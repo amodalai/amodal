@@ -87,7 +87,8 @@ export function AdminChat({ compact = true }: { compact?: boolean }) {
     const handler = (e: Event) => {
       if (!('detail' in e)) return;
       // After the `in` guard, access the property via index to avoid type assertions
-      const obj: Record<string, unknown> = Object.assign({}, e);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- extracting detail from CustomEvent-like Event
+      const obj = e as unknown as Record<string, unknown>;
       const detail: unknown = obj['detail'];
       if (typeof detail === 'string' && widgetRef.current) {
         // Dispatch an input event to ChatWidget's InputBar
@@ -112,7 +113,7 @@ export function AdminChat({ compact = true }: { compact?: boolean }) {
     <div ref={widgetRef} className="h-full">
       <ChatWidget
         serverUrl=""
-        user={{ id: 'admin', name: 'Admin' }}
+        user={{ id: 'admin' }}
         position="inline"
         defaultOpen
         showInput
