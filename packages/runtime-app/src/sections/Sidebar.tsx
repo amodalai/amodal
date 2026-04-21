@@ -297,7 +297,7 @@ export function Sidebar() {
       </nav>
 
       {studioUrl && (
-        <div className="border-t border-border px-2 py-3">
+        <div className="px-2 py-3">
           <a
             href={studioUrl}
             target="_blank"
