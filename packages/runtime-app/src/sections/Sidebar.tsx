@@ -4,38 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { SquarePen, MessageSquare, FileText, Pencil, Trash2, ExternalLink } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
 import { cn } from '@/lib/utils';
-import { createLogger } from '@/utils/log';
-import { API_PATHS } from '@/lib/api-paths';
-import type { PageConfig } from 'virtual:amodal-manifest';
+import { useSessions, useRenameSession, useDeleteSession } from '@/hooks/useSessions';
+import { usePages, useRuntimeContext } from '@/hooks/useRuntimeData';
 
-const log = createLogger('Sidebar');
+const RUNTIME_URL = window.location.origin;
+const EVAL_APP_IDS = new Set(['eval-runner', 'eval-judge', 'admin']);
 
-/** Timeout for the /api/context fetch used to discover the Studio URL. */
-const CONTEXT_FETCH_TIMEOUT_MS = 5_000;
-const CONTEXT_ENDPOINT = '/api/context' as const;
-
-interface SessionSummary {
-  id: string;
-  appId: string;
-  title?: string;
-  summary: string;
-  lastAccessedAt: number;
-}
-
-function toSessionSummary(item: Record<string, unknown>): SessionSummary {
-  return {
-    id: String(item['id'] ?? ''),
-    appId: String(item['app_id'] ?? item['appId'] ?? ''),
-    title: typeof item['title'] === 'string' ? item['title'] : undefined,
-    summary: String(item['title'] ?? 'Untitled'),
-    lastAccessedAt: item['updated_at'] ? new Date(String(item['updated_at'])).getTime() : (typeof item['lastAccessedAt'] === 'number' ? item['lastAccessedAt'] : 0),
-  };
-}
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
 function DeleteConfirmModal({ sessionName, onConfirm, onCancel }: { sessionName: string; onConfirm: () => void; onCancel: () => void }) {
   return (
@@ -58,7 +41,13 @@ function DeleteConfirmModal({ sessionName, onConfirm, onCancel }: { sessionName:
   );
 }
 
-function SessionItem({ session, isActive, onNavigate, onDelete }: { session: SessionSummary; isActive: boolean; onNavigate: (id: string) => void; onDelete: (id: string) => void }) {
+function SessionItem({ session, isActive, onNavigate, onDelete, onRename }: {
+  session: { id: string; title?: string; summary: string };
+  isActive: boolean;
+  onNavigate: (id: string) => void;
+  onDelete: (id: string) => void;
+  onRename: (id: string, title: string) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -75,21 +64,8 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
     const trimmed = editValue.trim();
     setEditing(false);
     if (!trimmed || trimmed === session.summary) return;
-    const previousTitle = session.title;
-    const previousSummary = session.summary;
-    session.title = trimmed;
-    session.summary = trimmed;
-    fetch(`${API_PATHS.sessionHistory(session.id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: trimmed }),
-    }).catch((err: unknown) => {
-      // Revert optimistic update on failure
-      session.title = previousTitle;
-      session.summary = previousSummary;
-      log.warn('save_title_failed', { sessionId: session.id, error: err instanceof Error ? err.message : String(err) });
-    });
-  }, [editValue, session]);
+    onRename(session.id, trimmed);
+  }, [editValue, session, onRename]);
 
   if (editing) {
     return (
@@ -170,87 +146,34 @@ function SectionLabel({ children, action }: { children: React.ReactNode; action?
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
 export function Sidebar() {
-  const [devPages, setDevPages] = useState<PageConfig[]>([]);
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [studioUrl, setStudioUrl] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
-  // Fetch Studio URL from /api/context
-  useEffect(() => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), CONTEXT_FETCH_TIMEOUT_MS);
+  // Data hooks
+  const { data: allSessions } = useSessions();
+  const { data: pages } = usePages();
+  const { data: runtimeCtx } = useRuntimeContext(RUNTIME_URL);
 
-    void (async () => {
-      try {
-        const res = await fetch(CONTEXT_ENDPOINT, { signal: controller.signal });
-        if (!res.ok) return;
-        const body: unknown = await res.json();
-        if (typeof body === 'object' && body !== null && 'studioUrl' in body) {
-          const url: unknown = (body as Record<string, unknown>)['studioUrl'];
-          if (typeof url === 'string') {
-            setStudioUrl(url);
-          }
-        }
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        log.warn('context_fetch_error', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    })();
+  const renameMutation = useRenameSession();
+  const deleteMutation = useDeleteSession();
 
-    return () => {
-      clearTimeout(timeoutId);
-      controller.abort();
-    };
-  }, []);
+  // Filter sessions for sidebar display
+  const sessions = useMemo(
+    () => allSessions.filter((s) => !EVAL_APP_IDS.has(s.appId)).slice(0, 10),
+    [allSessions],
+  );
 
-  useEffect(() => {
-    // Try API first (works with pre-built pages), fall back to Vite virtual module
-    fetch(API_PATHS.PAGES)
-      .then((res) => res.ok ? res.json() : null)
-      .then((data: unknown) => {
-        if (data && typeof data === 'object' && 'pages' in data && Array.isArray((data as Record<string, unknown>)['pages'])) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const pages = (data as Record<string, unknown>)['pages'] as Array<{name: string}>;
-          setDevPages(pages.map((p) => ({name: p.name, filePath: ''} as PageConfig)));
-        }
-      })
-      .catch((err: unknown) => {
-        log.warn('pages_api_fetch_failed', { error: err instanceof Error ? err.message : String(err) });
-        // Fall back to Vite virtual module (inside monorepo)
-        import('virtual:amodal-manifest')
-          .then((m) => {
-            setDevPages(m.pages.filter((p: PageConfig) => !p.hidden));
-          })
-          .catch((importErr: unknown) => {
-            log.warn('virtual_module_import_failed', { error: importErr instanceof Error ? importErr.message : String(importErr) });
-          });
-      });
-  }, []);
+  const studioUrl = runtimeCtx?.studioUrl ?? null;
 
-  // Fetch session list (initial + refresh on bus events)
-  const fetchSessions = useCallback(() => {
-    fetch(API_PATHS.SESSIONS_HISTORY)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: unknown) => {
-        if (Array.isArray(data)) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const items = (data as Array<Record<string, unknown>>).map(toSessionSummary);
-          const EVAL_APP_IDS = new Set(['eval-runner', 'eval-judge', 'admin']);
-          setSessions(items.filter((s) => !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
-        }
-      })
-      .catch((err: unknown) => {
-        log.warn('fetch_sessions_failed', { error: err instanceof Error ? err.message : String(err) });
-      });
-  }, []);
-
-  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+  // Refetch sessions on runtime events
   useRuntimeEvents(['session_created', 'session_updated', 'session_deleted'], () => {
-    fetchSessions();
+    void queryClient.invalidateQueries({ queryKey: ['sessions'] });
   });
 
   return (
@@ -282,12 +205,9 @@ export function Sidebar() {
                   session={s}
                   isActive={location.search.includes(s.id)}
                   onNavigate={(id) => { void navigate(`/?resume=${id}`); }}
+                  onRename={(id, title) => { renameMutation.mutate({ sessionId: id, title }); }}
                   onDelete={(id) => {
-                    fetch(`${API_PATHS.sessionHistory(id)}`, { method: 'DELETE' }).catch((err: unknown) => {
-                      log.warn('delete_session_failed', { sessionId: id, error: err instanceof Error ? err.message : String(err) });
-                    });
-                    setSessions((prev) => prev.filter((sess) => sess.id !== id));
-                    // If we just deleted the active session, go to new chat
+                    deleteMutation.mutate(id);
                     if (location.search.includes(id)) { void navigate('/'); }
                   }}
                 />
@@ -296,11 +216,11 @@ export function Sidebar() {
           </>
         )}
 
-        {devPages.length > 0 && (
+        {pages.length > 0 && (
           <>
             <SectionLabel>Pages</SectionLabel>
             <div className="space-y-0.5">
-              {devPages.map((page) => (
+              {pages.map((page) => (
                 <NavItem key={page.name} to={`/pages/${page.name}`}>
                   <FileText className="h-4 w-4 shrink-0" />
                   <span className="truncate">{formatPageName(page.name)}</span>

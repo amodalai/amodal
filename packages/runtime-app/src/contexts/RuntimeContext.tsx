@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { StoreDefinitionInfo } from '@amodalai/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRuntimeEvents } from './RuntimeEventsContext';
+import { useRuntimeContext, useRuntimeConfig, useStores } from '@/hooks/useRuntimeData';
 
 export interface ConnectionStatus {
   name: string;
@@ -37,7 +39,7 @@ export interface RuntimeManifest {
   error: string | null;
 }
 
-const RuntimeContext = createContext<RuntimeManifest>({
+const RuntimeContextValue = createContext<RuntimeManifest>({
   name: '',
   model: '',
   provider: '',
@@ -58,124 +60,45 @@ export interface RuntimeProviderProps {
 }
 
 export function RuntimeProvider({ runtimeUrl, children }: RuntimeProviderProps) {
-  const [state, setState] = useState<RuntimeManifest>({
-    name: '',
-    model: '',
-    provider: '',
-    stores: [],
-    connections: [],
-    mcpServers: [],
-    skills: [],
-    automations: [],
-    knowledge: [],
-    resumeSessionId: null,
-    isLoading: true,
-    error: null,
-  });
+  const queryClient = useQueryClient();
 
-  const fetchManifestRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const { data: ctx, isLoading: ctxLoading, error: ctxError } = useRuntimeContext(runtimeUrl);
+  const { data: config } = useRuntimeConfig(runtimeUrl);
+  const { data: storesList } = useStores(runtimeUrl);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchManifest() {
-      try {
-        const inspectRes = await fetch(`${runtimeUrl}/inspect/context`);
-        let agentName = '';
-        let model = '';
-        let provider = '';
-        let connections: ConnectionStatus[] = [];
-        let mcpServers: McpServerStatus[] = [];
-        let skills: string[] = [];
-        let automations: string[] = [];
-        let knowledge: string[] = [];
-        if (inspectRes.ok) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const inspect = await inspectRes.json() as {
-            name?: string;
-            model?: string;
-            provider?: string;
-            connections?: ConnectionStatus[];
-            mcpServers?: McpServerStatus[];
-            skills?: string[];
-            automations?: string[];
-            knowledge?: string[];
-          };
-          agentName = inspect.name ?? '';
-          model = inspect.model ?? '';
-          provider = inspect.provider ?? '';
-          connections = inspect.connections ?? [];
-          mcpServers = inspect.mcpServers ?? [];
-          skills = inspect.skills ?? [];
-          automations = inspect.automations ?? [];
-          knowledge = inspect.knowledge ?? [];
-        }
-
-        let stores: StoreDefinitionInfo[] = [];
-        try {
-          const storesRes = await fetch(`${runtimeUrl}/api/stores`);
-          if (storesRes.ok) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-            const body = await storesRes.json() as { stores: StoreDefinitionInfo[] };
-            stores = body.stores;
-          }
-        } catch { /* stores endpoint may not exist */ }
-
-        // Fetch server config (resume session ID)
-        let resumeSessionId: string | null = null;
-        try {
-          const configRes = await fetch(`${runtimeUrl}/config`);
-          if (configRes.ok) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-            const configBody = await configRes.json() as { resumeSessionId?: string | null };
-            resumeSessionId = configBody.resumeSessionId ?? null;
-          }
-        } catch { /* config endpoint may not exist */ }
-
-        if (!cancelled) {
-          setState({
-            name: agentName,
-            model,
-            provider,
-            stores,
-            connections,
-            mcpServers,
-            skills,
-            automations,
-            knowledge,
-            resumeSessionId,
-            isLoading: false,
-            error: null,
-          });
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setState((prev) => ({
-            ...prev,
-            isLoading: false,
-            error: err instanceof Error ? err.message : 'Failed to load manifest',
-          }));
-        }
-      }
-    }
-
-    fetchManifestRef.current = fetchManifest;
-    void fetchManifest();
-    return () => { cancelled = true; };
-  }, [runtimeUrl]);
-
-  // Refetch the manifest when the runtime signals it changed. No more polling.
+  // Refetch when runtime signals changes
   useRuntimeEvents(['manifest_changed'], () => {
-    void fetchManifestRef.current();
+    void queryClient.invalidateQueries({ queryKey: ['runtime-context'] });
+    void queryClient.invalidateQueries({ queryKey: ['runtime-config'] });
+    void queryClient.invalidateQueries({ queryKey: ['stores'] });
   });
+
+  const resumeSessionId = config && typeof config === 'object' && 'resumeSessionId' in config
+    ? String(config['resumeSessionId'] ?? '') || null : null;
+
+  const value: RuntimeManifest = useMemo(() => ({
+    name: ctx?.name ?? '',
+    model: ctx?.model ?? '',
+    provider: ctx?.provider ?? '',
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- compatible store shape
+    stores: (storesList ?? []) as unknown as StoreDefinitionInfo[],
+    connections: ctx?.connections ?? [],
+    mcpServers: ctx?.mcpServers ?? [],
+    skills: ctx?.skills ?? [],
+    automations: ctx?.automations ?? [],
+    knowledge: ctx?.knowledge ?? [],
+    resumeSessionId,
+    isLoading: ctxLoading,
+    error: ctxError ? (ctxError instanceof Error ? ctxError.message : 'Failed to load manifest') : null,
+  }), [ctx, resumeSessionId, storesList, ctxLoading, ctxError]);
 
   return (
-    <RuntimeContext.Provider value={state}>
+    <RuntimeContextValue.Provider value={value}>
       {children}
-    </RuntimeContext.Provider>
+    </RuntimeContextValue.Provider>
   );
 }
 
 export function useRuntimeManifest(): RuntimeManifest {
-  return useContext(RuntimeContext);
+  return useContext(RuntimeContextValue);
 }

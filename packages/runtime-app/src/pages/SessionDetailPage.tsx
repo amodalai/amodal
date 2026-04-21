@@ -4,42 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play } from 'lucide-react';
 import { FormattedMarkdown } from '@amodalai/react';
-import { API_PATHS } from '@/lib/api-paths';
-
-interface HistoryMessage {
-  role: string;
-  text: string;
-}
+import { useSessionDetail } from '@/hooks/useSessions';
 
 export function SessionDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<HistoryMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!sessionId) return;
-    fetch(API_PATHS.sessionHistory(sessionId))
-      .then((res) => {
-        if (!res.ok) throw new Error('Session not found');
-        return res.json();
-      })
-      .then((data: unknown) => {
-        if (data && typeof data === 'object' && 'messages' in data && Array.isArray((data as Record<string, unknown>)['messages'])) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          setMessages((data as Record<string, unknown>)['messages'] as HistoryMessage[]);
-        }
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Failed to load session');
-      })
-      .finally(() => setLoading(false));
-  }, [sessionId]);
+  const { data: messages, isLoading, error } = useSessionDetail(sessionId);
 
   const userMessages = messages.filter((m) => m.role === 'user');
   const assistantMessages = messages.filter((m) => m.role === 'assistant');
@@ -71,10 +44,10 @@ export function SessionDetailPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Loading...</div>
         ) : error ? (
-          <div className="flex items-center justify-center h-32 text-red-400 text-sm">{error}</div>
+          <div className="flex items-center justify-center h-32 text-red-400 text-sm">{error instanceof Error ? error.message : 'Failed to load session'}</div>
         ) : (
           <div className="max-w-3xl mx-auto px-4 py-6">
             {messages.map((msg, i) => (

@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Play, Loader2, ExternalLink, AlertTriangle, LayoutDashboard } from 'lucide-react';
+import { useAutomations, useAutomationAction } from '@/hooks/useAutomations';
+import { usePages } from '@/hooks/useRuntimeData';
 
 interface PageInfo {
   name: string;
@@ -15,63 +17,36 @@ interface PageInfo {
   automations?: string[];
 }
 
-interface AutomationStatus {
-  name: string;
-  running: boolean;
-  schedule?: string;
-}
-
 function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
-  const [automations, setAutomations] = useState<AutomationStatus[]>([]);
+  const { data: allAutomations } = useAutomations();
+  const actionMutation = useAutomationAction();
   const [runningNames, setRunningNames] = useState<Set<string>>(new Set());
-  const [togglingNames, setTogglingNames] = useState<Set<string>>(new Set());
 
-  const fetchAutomations = useCallback(() => {
-    if (!pageInfo.automations?.length) return;
-    fetch('/automations')
-      .then((res) => res.json())
-      .then((data: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
-        const d = data as { automations: AutomationStatus[] };
-        const relevant = (d.automations || []).filter((a) => pageInfo.automations!.includes(a.name));
-        setAutomations(relevant);
-      })
-      .catch(() => {});
-  }, [pageInfo.automations]);
-
-  useEffect(() => {
-    fetchAutomations();
-  }, [fetchAutomations]);
+  const automations = useMemo(
+    () => allAutomations.filter((a) => pageInfo.automations?.includes(a.name)),
+    [allAutomations, pageInfo.automations],
+  );
 
   const handleToggle = useCallback((name: string, currentlyRunning: boolean) => {
-    setTogglingNames((prev) => new Set([...prev, name]));
-    const action = currentlyRunning ? 'stop' : 'start';
-    fetch(`/automations/${encodeURIComponent(name)}/${action}`, { method: 'POST' })
-      .then(() => fetchAutomations())
-      .catch(() => {})
-      .finally(() => setTogglingNames((prev) => { const next = new Set(prev); next.delete(name); return next; }));
-  }, [fetchAutomations]);
+    actionMutation.mutate({ name, action: currentlyRunning ? 'stop' : 'start' });
+  }, [actionMutation]);
 
   const handleRun = useCallback((name: string) => {
     setRunningNames((prev) => new Set([...prev, name]));
-    fetch(`/automations/${encodeURIComponent(name)}/run`, { method: 'POST' })
-      .then(() => {
+    actionMutation.mutate({ name, action: 'run' }, {
+      onSettled: () => {
         setTimeout(() => setRunningNames((prev) => { const next = new Set(prev); next.delete(name); return next; }), 5000);
-      })
-      .catch(() => setRunningNames((prev) => { const next = new Set(prev); next.delete(name); return next; }));
-  }, []);
+      },
+    });
+  }, [actionMutation]);
 
   const hasStores = pageInfo.stores && pageInfo.stores.length > 0;
   const hasAutomations = automations.length > 0;
   if (!hasStores && !hasAutomations) return null;
 
-  // Build rows: pair each automation with its store if names overlap, otherwise show separately
-  const rows: Array<{ store?: string; auto?: AutomationStatus; scheduleLabel?: string }> = [];
-
-  // Match automations to stores by position, then add any extras
+  const rows: Array<{ store?: string; auto?: typeof automations[number]; scheduleLabel?: string }> = [];
   const usedStores = new Set<string>();
   for (const auto of automations) {
-    // Try to find a matching store (by name similarity)
     const matchingStore = pageInfo.stores?.find((s) => !usedStores.has(s));
     if (matchingStore) usedStores.add(matchingStore);
 
@@ -88,7 +63,6 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
     }
     rows.push({ store: matchingStore, auto, scheduleLabel });
   }
-  // Any remaining stores without automations
   for (const store of pageInfo.stores ?? []) {
     if (!usedStores.has(store)) rows.push({ store });
   }
@@ -96,7 +70,6 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
   return (
     <div className="border-b border-border bg-muted px-4 py-2 text-xs">
       <div className="grid gap-y-1.5 gap-x-4 w-fit" style={{ gridTemplateColumns: 'auto auto auto auto auto' }}>
-        {/* Header */}
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Store</span>
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Automation</span>
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Status</span>
@@ -107,13 +80,9 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
           const isRunning = row.auto ? runningNames.has(row.auto.name) : false;
           return (
             <React.Fragment key={i}>
-              {/* Store */}
               <div>
                 {row.store ? (
-                  <Link
-                    to={`/entities/${row.store}`}
-                    className="flex items-center gap-1 text-primary hover:text-primary dark:hover:text-primary/70 transition-colors"
-                  >
+                  <Link to={`/entities/${row.store}`} className="flex items-center gap-1 text-primary hover:text-primary dark:hover:text-primary/70 transition-colors">
                     {row.store}
                     <ExternalLink className="h-2.5 w-2.5" />
                   </Link>
@@ -121,41 +90,28 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
                   <span className="text-gray-300 dark:text-zinc-700">-</span>
                 )}
               </div>
-
-              {/* Automation */}
               <div>
                 {row.auto ? (
-                  <Link
-                    to={`/automations/${row.auto.name}`}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                  >
+                  <Link to={`/automations/${row.auto.name}`} className="text-muted-foreground hover:text-foreground transition-colors">
                     {row.auto.name}
                   </Link>
                 ) : (
                   <span className="text-gray-300 dark:text-zinc-700">-</span>
                 )}
               </div>
-
-              {/* Toggle */}
               <div>
                 {row.auto ? (
                   <button
-                    onClick={() => handleToggle(row.auto!.name, row.auto!.running)}
-                    disabled={togglingNames.has(row.auto.name)}
-                    className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors ${row.auto.running ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20'}`}
-                    title={row.auto.running ? 'Click to pause' : 'Click to start'}
+                    onClick={() => handleToggle(row.auto!.name, row.auto!.active ?? false)}
+                    disabled={actionMutation.isPending}
+                    className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors ${row.auto.active ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20'}`}
+                    title={row.auto.active ? 'Click to pause' : 'Click to start'}
                   >
-                    {togglingNames.has(row.auto.name) ? '...' : row.auto.running ? 'live' : 'paused'}
+                    {row.auto.active ? 'live' : 'paused'}
                   </button>
                 ) : <span />}
               </div>
-
-              {/* Schedule */}
-              <div className="text-muted-foreground">
-                {row.scheduleLabel || '-'}
-              </div>
-
-              {/* Run */}
+              <div className="text-muted-foreground">{row.scheduleLabel || '-'}</div>
               <div>
                 {row.auto ? (
                   <button
@@ -164,7 +120,7 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
                     className="flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-40"
                   >
                     {isRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                    {isRunning ? 'Run' : 'Run'}
+                    Run
                   </button>
                 ) : <span />}
               </div>
@@ -176,39 +132,22 @@ function DataSourceBar({ pageInfo }: { pageInfo: PageInfo }) {
   );
 }
 
-/**
- * Developer page loader.
- *
- * Loads pre-built page bundles from /pages-bundle/{name}.js via a script tag.
- * The page registers itself on window.__AMODAL_PAGES__[name].
- * React is available on window.React (set by the SPA entry point).
- */
 export function DevPage() {
   const { pageName } = useParams<{ pageName: string }>();
+  const { data: allPages } = usePages();
   const [PageComponent, setPageComponent] = useState<React.ComponentType | null>(null);
-  const [pageInfo, setPageInfo] = useState<PageInfo | null>(null);
   const [error, setError] = useState(false);
 
-  // Fetch page metadata
-  useEffect(() => {
-    if (!pageName) return;
-    fetch('/api/pages')
-      .then((res) => res.json())
-      .then((data: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server response
-        const d = data as { pages: PageInfo[] };
-        const info = (d.pages || []).find((p) => p.name === pageName);
-        if (info) setPageInfo(info);
-      })
-      .catch(() => {});
-  }, [pageName]);
+  const pageInfo = useMemo(
+    () => allPages.find((p) => p.name === pageName) as PageInfo | undefined,
+    [allPages, pageName],
+  );
 
   useEffect(() => {
     if (!pageName) return;
     setPageComponent(null);
     setError(false);
 
-    // Check if already loaded
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Global page registry
     const registry = (window as unknown as Record<string, unknown>)['__AMODAL_PAGES__'] as Record<string, React.ComponentType> | undefined;
     if (registry?.[pageName]) {
@@ -216,7 +155,6 @@ export function DevPage() {
       return;
     }
 
-    // Load via script tag
     const script = document.createElement('script');
     script.src = `/pages-bundle/${pageName}.js`;
     script.onload = () => {
@@ -232,24 +170,17 @@ export function DevPage() {
     document.head.appendChild(script);
   }, [pageName]);
 
-  if (error) {
-    return <PageNotFound name={pageName ?? ''} />;
-  }
-
-  if (!PageComponent) {
-    return <div className="p-6 text-muted-foreground text-sm">Loading page...</div>;
-  }
+  if (error) return <PageNotFound name={pageName ?? ''} />;
+  if (!PageComponent) return <div className="p-6 text-muted-foreground text-sm">Loading page...</div>;
 
   return (
     <div className="flex flex-col h-full border-t-2 border-primary/40">
-      {/* Custom page header */}
       <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/[0.03] border-b border-border">
         <LayoutDashboard className="h-3 w-3 text-primary/50" />
         <span className="text-[10px] font-medium text-primary/60 uppercase tracking-widest">
           {pageInfo?.description ?? pageName}
         </span>
       </div>
-
       {pageInfo && (pageInfo.stores?.length || pageInfo.automations?.length) && (
         <DataSourceBar pageInfo={pageInfo} />
       )}
@@ -270,11 +201,9 @@ class PageErrorBoundary extends React.Component<
     super(props);
     this.state = { hasError: false, error: null };
   }
-
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
-
   render() {
     if (this.state.hasError) {
       return (
@@ -308,9 +237,7 @@ function PageNotFound({ name }: { name: string }) {
     <div className="p-6">
       <h1 className="text-xl font-bold mb-2 text-foreground">Page Not Found</h1>
       <p className="text-muted-foreground">
-        {name
-          ? `No page named "${name}" found in pages/.`
-          : 'No page specified.'}
+        {name ? `No page named "${name}" found in pages/.` : 'No page specified.'}
       </p>
     </div>
   );

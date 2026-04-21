@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { createContext, useContext } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AmodalProvider } from '@amodalai/react';
@@ -12,6 +13,8 @@ import { RuntimeProvider } from '@/contexts/RuntimeContext';
 import { RuntimeEventsProvider } from '@/contexts/RuntimeEventsContext';
 import { router } from '@/router';
 import { useAuth } from '@/hooks/useAuth';
+import type { AuthState } from '@/hooks/useAuth';
+import { LoginPage } from '@/pages/LoginPage';
 
 const RUNTIME_URL = window.location.origin;
 
@@ -24,10 +27,20 @@ const queryClient = new QueryClient({
   },
 });
 
-function AppContent() {
-  const { loading, error, getToken } = useAuth();
+// Auth context — exposes token and status to all pages/hooks
+const AuthContext = createContext<AuthState>({
+  token: null,
+  status: 'loading',
+  getToken: undefined,
+  login: async () => ({ ok: false, error: 'No auth context' }),
+  retry: () => {},
+});
+export function useAuthContext(): AuthState { return useContext(AuthContext); }
 
-  if (loading) {
+function AppContent() {
+  const auth = useAuth();
+
+  if (auth.status === 'loading') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div style={{ color: 'hsl(var(--muted-foreground))', fontSize: 14 }}>Loading...</div>
@@ -35,22 +48,20 @@ function AppContent() {
     );
   }
 
-  if (error) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div style={{ color: 'rgb(239 68 68)', fontSize: 14 }}>{error}</div>
-      </div>
-    );
+  if (auth.status === 'unauthenticated') {
+    return <LoginPage login={auth.login} />;
   }
 
   return (
-    <AmodalProvider runtimeUrl={RUNTIME_URL} getToken={getToken}>
-      <RuntimeEventsProvider runtimeUrl={RUNTIME_URL}>
-        <RuntimeProvider runtimeUrl={RUNTIME_URL}>
-          <RouterProvider router={router} />
-        </RuntimeProvider>
-      </RuntimeEventsProvider>
-    </AmodalProvider>
+    <AuthContext.Provider value={auth}>
+      <AmodalProvider runtimeUrl={RUNTIME_URL} getToken={auth.getToken}>
+        <RuntimeEventsProvider runtimeUrl={RUNTIME_URL}>
+          <RuntimeProvider runtimeUrl={RUNTIME_URL}>
+            <RouterProvider router={router} />
+          </RuntimeProvider>
+        </RuntimeEventsProvider>
+      </AmodalProvider>
+    </AuthContext.Provider>
   );
 }
 
