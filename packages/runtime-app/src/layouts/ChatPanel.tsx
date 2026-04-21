@@ -4,8 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { AmodalChat } from '@amodalai/react';
+import { useEffect, useRef, useCallback } from 'react';
+import { ChatWidget } from '@amodalai/react/widget';
+import { useAuth } from '@/hooks/useAuth';
 import { X } from 'lucide-react';
+
+const RUNTIME_URL = window.location.origin;
+
+function useSyncToken(asyncGetToken: (() => Promise<string>) | undefined): (() => string | null) | undefined {
+  const cachedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!asyncGetToken) return;
+    void asyncGetToken().then((t) => { cachedRef.current = t; });
+  }, [asyncGetToken]);
+  const syncGetter = useCallback((): string | null => cachedRef.current, []);
+  return asyncGetToken ? syncGetter : undefined;
+}
 
 export interface ChatPanelProps {
   isOpen: boolean;
@@ -16,21 +30,29 @@ export interface ChatPanelProps {
  * Slide-in chat panel for non-chat pages.
  */
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
+  const { getToken: asyncGetToken } = useAuth();
+  const getToken = useSyncToken(asyncGetToken);
+
   if (!isOpen) return null;
 
   return (
-    <div className="w-[380px] border-l border-gray-200 bg-white flex flex-col shrink-0 animate-slide-in-right">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-        <span className="text-sm font-medium text-gray-900">Chat</span>
+    <div className="w-[380px] border-l border-border bg-card flex flex-col shrink-0 animate-slide-in-right">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <span className="text-sm font-medium text-foreground">Chat</span>
         <button
           onClick={onClose}
-          className="h-6 w-6 rounded flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
       <div className="flex-1 overflow-hidden">
-        <AmodalChat />
+        <ChatWidget
+          serverUrl={RUNTIME_URL}
+          user={{ id: 'anonymous' }}
+          getToken={getToken}
+          position="inline"
+        />
       </div>
     </div>
   );

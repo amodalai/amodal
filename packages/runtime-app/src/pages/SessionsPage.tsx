@@ -7,6 +7,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MessageSquare, Clock, ChevronRight } from 'lucide-react';
+import { createLogger } from '@/utils/log';
+import { API_PATHS } from '@/lib/api-paths';
+
+const log = createLogger('SessionsPage');
 
 interface SessionSummary {
   id: string;
@@ -40,62 +44,70 @@ export function SessionsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/sessions')
-      .then((res) => (res.ok ? res.json() : { sessions: [] }))
+    fetch(API_PATHS.SESSIONS_HISTORY)
+      .then((res) => (res.ok ? res.json() : []))
       .then((data: unknown) => {
-        if (data && typeof data === 'object' && 'sessions' in data && Array.isArray((data as Record<string, unknown>)['sessions'])) {
+        if (Array.isArray(data)) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          setSessions((data as Record<string, unknown>)['sessions'] as SessionSummary[]);
+          const items = data as Array<Record<string, unknown>>;
+          setSessions(items.map((item) => ({
+            id: String(item['id'] ?? ''),
+            appId: String(item['app_id'] ?? ''),
+            createdAt: item['created_at'] ? new Date(String(item['created_at'])).getTime() : 0,
+            lastAccessedAt: item['updated_at'] ? new Date(String(item['updated_at'])).getTime() : 0,
+          })));
         }
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        log.warn('fetch_sessions_failed', { error: err instanceof Error ? err.message : String(err) });
+      })
       .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0f]">
-      <div className="border-b border-zinc-800/50 px-6 py-4">
-        <h1 className="text-lg font-semibold text-zinc-200">Sessions</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">{sessions.length} conversation{sessions.length !== 1 ? 's' : ''}</p>
+    <div className="h-full flex flex-col bg-background">
+      <div className="border-b border-border px-6 py-4">
+        <h1 className="text-lg font-semibold text-foreground">Sessions</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{sessions.length} conversation{sessions.length !== 1 ? 's' : ''}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {loading ? (
-          <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">Loading...</div>
+          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Loading...</div>
         ) : sessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-            <MessageSquare className="h-8 w-8 text-zinc-700 mb-3" />
-            <p className="text-sm text-zinc-500">No sessions yet. Start a conversation from the Chat page.</p>
+            <MessageSquare className="h-8 w-8 text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">No sessions yet. Start a conversation from the Chat page.</p>
           </div>
         ) : (
-          <div className="divide-y divide-zinc-800/50">
+          <div className="divide-y divide-border">
             {sessions.map((session) => (
               <Link
                 key={session.id}
                 to={`/sessions/${session.id}`}
-                className="flex items-center gap-4 px-6 py-4 hover:bg-white/[0.02] transition-colors group"
+                className="flex items-center gap-4 px-6 py-4 hover:bg-muted transition-colors group"
               >
                 <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                   <MessageSquare className="h-4 w-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-zinc-300 truncate font-mono">
+                    <span className="text-sm font-medium text-foreground truncate font-mono">
                       {session.id.slice(0, 8)}
                     </span>
-                    <span className="text-xs text-zinc-600">{session.appId}</span>
+                    <span className="text-xs text-muted-foreground">{session.appId}</span>
                   </div>
                   <div className="flex items-center gap-3 mt-1">
-                    <span className="flex items-center gap-1 text-xs text-zinc-500">
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Clock className="h-3 w-3" />
                       {formatTime(session.createdAt)}
                     </span>
-                    <span className="text-xs text-zinc-600">
+                    <span className="text-xs text-muted-foreground">
                       Last active {formatRelative(session.lastAccessedAt)}
                     </span>
                   </div>
                 </div>
-                <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-zinc-500 transition-colors shrink-0" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
               </Link>
             ))}
           </div>

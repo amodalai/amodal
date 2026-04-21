@@ -5,10 +5,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { WidgetConfig } from '../types';
+import type { WidgetConfig, SSEEvent } from '../types';
 import type { InteractionEvent } from '../events/types';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { useChat } from '../hooks/useChat';
+import { useChatStream } from '../hooks/useChatStream';
 import { useSessionHistory } from '../hooks/useSessionHistory';
 import { applyTheme, mergeTheme } from '../theme';
 import { MessageList } from './MessageList';
@@ -37,6 +38,18 @@ export type ChatWidgetProps = WidgetConfig & {
   widgets?: WidgetRegistry;
   /** Enable session history drawer. */
   historyEnabled?: boolean;
+  /** Show thumbs up/down feedback buttons on assistant messages. Defaults to false. */
+  showFeedback?: boolean;
+  /** Show the header bar with title and controls. Defaults to true. */
+  showHeader?: boolean;
+  /**
+   * Custom transport function. When provided, bypasses the standard useChat
+   * hook (which calls /chat/stream) and uses useChatStream directly. Use
+   * this for non-standard endpoints (e.g. admin agent, config chat).
+   */
+  streamFn?: (text: string, signal: AbortSignal, images?: Array<{mimeType: string; data: string}>) => AsyncIterable<SSEEvent>;
+  /** Called when session state changes (for external persistence). */
+  onStateChange?: (state: { sessionId: string | null; messages: Array<import('../types').ChatMessage> }) => void;
 };
 
 export function ChatWidget({
@@ -52,6 +65,8 @@ export function ChatWidget({
   entityExtractors,
   widgets: customWidgets,
   historyEnabled = false,
+  showFeedback = false,
+  showHeader = true,
   showInput = true,
   sessionType,
   deployId,
@@ -59,13 +74,17 @@ export function ChatWidget({
   resumeSessionId,
   onStreamEnd,
   onSessionCreated,
+  streamFn: customStreamFn,
+  onStateChange,
 }: ChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [showHistory, setShowHistory] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const mergedTheme = mergeTheme(theme);
 
-  const { messages, send, stop, isStreaming, error, reset, eventBus, submitAskUserResponse, loadSession, isHistorical } = useChat({
+  // When streamFn is provided, use useChatStream directly (custom transport).
+  // Otherwise use the standard useChat which calls /chat/stream.
+  const chatHook = useChat({
     serverUrl,
     user,
     getToken,
@@ -80,6 +99,44 @@ export function ChatWidget({
     onStreamEnd,
     onSessionCreated,
   });
+
+  const directStream = useChatStream({
+    streamFn: customStreamFn ?? (() => (async function* () { /* noop */ })()),
+    onToolCall,
+    onKBProposal,
+    onEvent,
+    onStreamEnd,
+    onSessionCreated,
+    entityExtractors,
+  });
+
+  // Pick the appropriate hook output based on whether a custom streamFn was provided.
+  const active = customStreamFn ? directStream : chatHook;
+  const { messages, send, stop, isStreaming, error, reset, eventBus, respondToConfirmation, isHistorical } = active;
+  const noopAskUser = useCallback((_askId: string, _answers: Record<string, string>) => { /* noop */ }, []);
+  const noopLoadSession = useCallback((_sessionId: string) => { /* noop */ }, []);
+  const submitAskUserResponse = customStreamFn ? noopAskUser : chatHook.submitAskUserResponse;
+  const loadSession = customStreamFn ? noopLoadSession : chatHook.loadSession;
+  const session = customStreamFn ? { id: directStream.sessionId } : chatHook.session;
+
+  // Track elapsed time during streaming
+  const [streamStartTime, setStreamStartTime] = useState(0);
+  const prevStreamingRef = useRef(false);
+  useEffect(() => {
+    if (isStreaming && !prevStreamingRef.current) {
+      setStreamStartTime(Date.now());
+    } else if (!isStreaming && prevStreamingRef.current) {
+      setStreamStartTime(0);
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  // Notify parent of state changes (for external persistence like localStorage).
+  const onStateChangeRef = useRef(onStateChange);
+  onStateChangeRef.current = onStateChange;
+  useEffect(() => {
+    onStateChangeRef.current?.({ sessionId: session.id ?? null, messages });
+  }, [session.id, messages]);
 
   const history = useSessionHistory({
     serverUrl,
@@ -116,18 +173,22 @@ export function ChatWidget({
   }, [theme]);
 
   const positionClass = `pcw-widget pcw-widget--${position}`;
+  const themeMode = theme?.mode;
+  const dataTheme = themeMode && themeMode !== 'auto' ? themeMode : undefined;
 
   // Inline mode is always visible
   if (position === 'inline') {
     return (
-      <div ref={containerRef} className={positionClass} data-testid="chat-widget">
-        <ChatHeader
-          title={mergedTheme.headerText}
-          onReset={reset}
-          historyEnabled={historyEnabled}
-          onToggleHistory={() => setShowHistory((v) => !v)}
-          isHistorical={isHistorical}
-        />
+      <div ref={containerRef} className={positionClass} data-testid="chat-widget" data-theme={dataTheme}>
+        {showHeader && (
+          <ChatHeader
+            title={mergedTheme.headerText}
+            onReset={reset}
+            historyEnabled={historyEnabled}
+            onToggleHistory={() => setShowHistory((v) => !v)}
+            isHistorical={isHistorical}
+          />
+        )}
         {showHistory && (
           <SessionHistory
             sessions={history.sessions}
@@ -139,7 +200,7 @@ export function ChatWidget({
             onUpdateTags={history.updateTags}
           />
         )}
-        <MessageList messages={messages} isStreaming={isStreaming} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} emptyStateText={mergedTheme.emptyStateText} />
+        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
         {error && <div className="pcw-error">{error}</div>}
         {showInput && (
           <InputBar
@@ -172,16 +233,18 @@ export function ChatWidget({
   }
 
   return (
-    <div ref={containerRef} className={positionClass} data-testid="chat-widget">
-      <ChatHeader
-        title={mergedTheme.headerText}
-        onClose={() => setIsOpen(false)}
-        onReset={reset}
-        showClose
-        historyEnabled={historyEnabled}
-        onToggleHistory={() => setShowHistory((v) => !v)}
-        isHistorical={isHistorical}
-      />
+    <div ref={containerRef} className={positionClass} data-testid="chat-widget" data-theme={dataTheme}>
+      {showHeader && (
+        <ChatHeader
+          title={mergedTheme.headerText}
+          onClose={() => setIsOpen(false)}
+          onReset={reset}
+          showClose
+          historyEnabled={historyEnabled}
+          onToggleHistory={() => setShowHistory((v) => !v)}
+          isHistorical={isHistorical}
+        />
+      )}
       {showHistory && (
         <SessionHistory
           sessions={history.sessions}
@@ -193,7 +256,7 @@ export function ChatWidget({
           onUpdateTags={history.updateTags}
         />
       )}
-      <MessageList messages={messages} isStreaming={isStreaming} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} emptyStateText={mergedTheme.emptyStateText} />
+      <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
       {error && <div className="pcw-error">{error}</div>}
       {showInput && (
         <InputBar

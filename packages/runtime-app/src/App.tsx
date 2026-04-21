@@ -7,6 +7,7 @@
 import { RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AmodalProvider } from '@amodalai/react';
+import '@amodalai/react/widget/style.css';
 import { RuntimeProvider } from '@/contexts/RuntimeContext';
 import { RuntimeEventsProvider } from '@/contexts/RuntimeEventsContext';
 import { router } from '@/router';
@@ -29,7 +30,7 @@ function AppContent() {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div style={{ color: '#71717a', fontSize: 14 }}>Loading...</div>
+        <div style={{ color: 'hsl(var(--muted-foreground))', fontSize: 14 }}>Loading...</div>
       </div>
     );
   }
@@ -37,7 +38,7 @@ function AppContent() {
   if (error) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div style={{ color: '#dc2626', fontSize: 14 }}>{error}</div>
+        <div style={{ color: 'rgb(239 68 68)', fontSize: 14 }}>{error}</div>
       </div>
     );
   }

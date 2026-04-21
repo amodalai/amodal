@@ -12,6 +12,7 @@ import { StudioEventsProvider } from './contexts/StudioEventsContext';
 import { StudioConfigContext } from './contexts/StudioConfigContext';
 import type { StudioConfig } from './contexts/StudioConfigContext';
 import { router } from './router';
+import '@amodalai/react/widget/style.css';
 
 interface AppProps {
   /**

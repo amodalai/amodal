@@ -10,6 +10,7 @@ import { SquarePen, MessageSquare, FileText, Pencil, Trash2, ExternalLink } from
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/utils/log';
+import { API_PATHS } from '@/lib/api-paths';
 import type { PageConfig } from 'virtual:amodal-manifest';
 
 const log = createLogger('Sidebar');
@@ -26,16 +27,26 @@ interface SessionSummary {
   lastAccessedAt: number;
 }
 
+function toSessionSummary(item: Record<string, unknown>): SessionSummary {
+  return {
+    id: String(item['id'] ?? ''),
+    appId: String(item['app_id'] ?? item['appId'] ?? ''),
+    title: typeof item['title'] === 'string' ? item['title'] : undefined,
+    summary: String(item['title'] ?? 'Untitled'),
+    lastAccessedAt: item['updated_at'] ? new Date(String(item['updated_at'])).getTime() : (typeof item['lastAccessedAt'] === 'number' ? item['lastAccessedAt'] : 0),
+  };
+}
+
 function DeleteConfirmModal({ sessionName, onConfirm, onCancel }: { sessionName: string; onConfirm: () => void; onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-700 p-5 max-w-sm mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-card rounded-xl border border-border p-5 max-w-sm mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-sm font-semibold text-foreground mb-2">Delete session?</h3>
         <p className="text-xs text-muted-foreground mb-4">
           &ldquo;{sessionName}&rdquo; will be permanently deleted.
         </p>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-foreground hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">
+          <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium rounded-md bg-muted text-foreground hover:bg-muted transition-colors">
             Cancel
           </button>
           <button onClick={onConfirm} className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-500 transition-colors">
@@ -64,13 +75,20 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
     const trimmed = editValue.trim();
     setEditing(false);
     if (!trimmed || trimmed === session.summary) return;
-    fetch(`/session/${encodeURIComponent(session.id)}`, {
+    const previousTitle = session.title;
+    const previousSummary = session.summary;
+    session.title = trimmed;
+    session.summary = trimmed;
+    fetch(`${API_PATHS.sessionHistory(session.id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: trimmed }),
-    }).catch(() => {});
-    session.title = trimmed;
-    session.summary = trimmed;
+    }).catch((err: unknown) => {
+      // Revert optimistic update on failure
+      session.title = previousTitle;
+      session.summary = previousSummary;
+      log.warn('save_title_failed', { sessionId: session.id, error: err instanceof Error ? err.message : String(err) });
+    });
   }, [editValue, session]);
 
   if (editing) {
@@ -85,7 +103,7 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
             if (e.key === 'Enter') saveTitle();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="w-full text-[12px] px-1.5 py-0.5 rounded border border-primary/50 bg-white dark:bg-zinc-800 text-foreground outline-none"
+          className="w-full text-[12px] px-1.5 py-0.5 rounded border border-primary/50 bg-card text-foreground outline-none"
           autoFocus
         />
       </div>
@@ -99,8 +117,8 @@ function SessionItem({ session, isActive, onNavigate, onDelete }: { session: Ses
         className={cn(
           'group flex items-center gap-2 w-full px-3 py-[6px] rounded-md text-[12px] text-left transition-colors duration-150 truncate',
           isActive
-            ? 'bg-primary/10 text-primary dark:text-primary'
-            : 'text-gray-400 dark:text-white/60 hover:text-gray-700 dark:hover:text-white/90 hover:bg-muted',
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
         )}
       >
         <MessageSquare className="h-3 w-3 shrink-0 opacity-40" />
@@ -146,7 +164,7 @@ function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
 function SectionLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="px-3 pt-5 pb-1.5 flex items-center justify-between">
-      <span className="text-[10px] font-semibold text-gray-400 dark:text-white/45 uppercase tracking-widest">{children}</span>
+      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">{children}</span>
       {action}
     </div>
   );
@@ -191,7 +209,7 @@ export function Sidebar() {
 
   useEffect(() => {
     // Try API first (works with pre-built pages), fall back to Vite virtual module
-    fetch('/api/pages')
+    fetch(API_PATHS.PAGES)
       .then((res) => res.ok ? res.json() : null)
       .then((data: unknown) => {
         if (data && typeof data === 'object' && 'pages' in data && Array.isArray((data as Record<string, unknown>)['pages'])) {
@@ -200,29 +218,34 @@ export function Sidebar() {
           setDevPages(pages.map((p) => ({name: p.name, filePath: ''} as PageConfig)));
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        log.warn('pages_api_fetch_failed', { error: err instanceof Error ? err.message : String(err) });
         // Fall back to Vite virtual module (inside monorepo)
         import('virtual:amodal-manifest')
           .then((m) => {
             setDevPages(m.pages.filter((p: PageConfig) => !p.hidden));
           })
-          .catch(() => {});
+          .catch((importErr: unknown) => {
+            log.warn('virtual_module_import_failed', { error: importErr instanceof Error ? importErr.message : String(importErr) });
+          });
       });
   }, []);
 
   // Fetch session list (initial + refresh on bus events)
   const fetchSessions = useCallback(() => {
-    fetch('/sessions')
-      .then((res) => (res.ok ? res.json() : { sessions: [] }))
+    fetch(API_PATHS.SESSIONS_HISTORY)
+      .then((res) => (res.ok ? res.json() : []))
       .then((data: unknown) => {
-        if (data && typeof data === 'object' && 'sessions' in data && Array.isArray((data as Record<string, unknown>)['sessions'])) {
+        if (Array.isArray(data)) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const all = (data as Record<string, unknown>)['sessions'] as Array<SessionSummary & {automationName?: string}>;
+          const items = (data as Array<Record<string, unknown>>).map(toSessionSummary);
           const EVAL_APP_IDS = new Set(['eval-runner', 'eval-judge', 'admin']);
-          setSessions(all.filter((s) => !s.automationName && !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
+          setSessions(items.filter((s) => !EVAL_APP_IDS.has(s.appId)).slice(0, 10));
         }
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        log.warn('fetch_sessions_failed', { error: err instanceof Error ? err.message : String(err) });
+      });
   }, []);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
@@ -245,7 +268,7 @@ export function Sidebar() {
           <>
             <SectionLabel
               action={
-                <NavLink to="/sessions" className="text-[10px] text-gray-400 dark:text-white/60 hover:text-gray-600 dark:hover:text-white/80 transition-colors">
+                <NavLink to="/sessions" className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
                   View all
                 </NavLink>
               }
@@ -260,7 +283,9 @@ export function Sidebar() {
                   isActive={location.search.includes(s.id)}
                   onNavigate={(id) => { void navigate(`/?resume=${id}`); }}
                   onDelete={(id) => {
-                    fetch(`/session/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+                    fetch(`${API_PATHS.sessionHistory(id)}`, { method: 'DELETE' }).catch((err: unknown) => {
+                      log.warn('delete_session_failed', { sessionId: id, error: err instanceof Error ? err.message : String(err) });
+                    });
                     setSessions((prev) => prev.filter((sess) => sess.id !== id));
                     // If we just deleted the active session, go to new chat
                     if (location.search.includes(id)) { void navigate('/'); }
@@ -287,7 +312,7 @@ export function Sidebar() {
       </nav>
 
       {studioUrl && (
-        <div className="border-t border-border px-2 py-3">
+        <div className="px-2 py-3">
           <a
             href={studioUrl}
             target="_blank"
@@ -296,7 +321,7 @@ export function Sidebar() {
           >
             <ExternalLink className="h-4 w-4 shrink-0" />
             <span className="flex-1">Manage</span>
-            <span className="text-[10px] text-gray-400 dark:text-white/45">&rarr;</span>
+            <span className="text-[10px] text-muted-foreground">&rarr;</span>
           </a>
         </div>
       )}

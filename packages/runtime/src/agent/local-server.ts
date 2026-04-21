@@ -523,62 +523,70 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // cursor API on the client today. If dev sessions regularly exceed this,
   // the store already supports cursor pagination via SessionListOptions.
   const SESSION_LIST_LIMIT = 500;
-  app.get('/sessions', asyncHandler(async (req, res) => {
-    const automationFilter = typeof req.query?.['automation'] === 'string' ? String(req.query['automation']) : undefined;
-    // Automation filter uses metadata.automationName; otherwise restrict
-    // to chat sessions by metadata.appId (excludes eval-runner / admin).
-    const filter = automationFilter
-      ? {automationName: automationFilter}
-      : {appId};
+
+  // --- Widget-compatible session history routes ---
+  // The ChatWidget uses /sessions/history endpoints (matching the cloud sessions-router).
+  // These return the SessionHistoryItem shape expected by @amodalai/react/client/chat-api.
+  app.get('/sessions/history', asyncHandler(async (req, res) => {
+    const filter = {appId};
     const {sessions: rows} = await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
-    const sessions = rows.map((s) => {
+    const items = rows.map((s) => {
       const title = typeof s.metadata['title'] === 'string' ? s.metadata['title'] : undefined;
-      const sessionAppId = typeof s.metadata['appId'] === 'string' ? s.metadata['appId'] : appId;
-      const automationName = typeof s.metadata['automationName'] === 'string' ? s.metadata['automationName'] : undefined;
       return {
         id: s.id,
-        appId: sessionAppId,
-        title,
-        summary: title ?? extractFirstUserText(s.messages) ?? 'Untitled',
-        createdAt: s.createdAt.getTime(),
-        lastAccessedAt: s.updatedAt.getTime(),
-        automationName,
+        app_id: typeof s.metadata['appId'] === 'string' ? s.metadata['appId'] : appId,
+        title: title ?? extractFirstUserText(s.messages) ?? 'Untitled',
+        tags: extractStringArray(s.metadata['tags']),
+        status: 'active',
+        message_count: s.messages.length,
+        created_at: s.createdAt.toISOString(),
+        updated_at: s.updatedAt.toISOString(),
       };
     });
-    res.json({sessions});
+    res.json(items);
   }));
 
-  app.get('/session/:id', asyncHandler(async (req, res) => {
+  app.get('/sessions/history/:id', asyncHandler(async (req, res) => {
     const persisted = await sessionStore.load(req.params['id'] ?? '');
     if (!persisted) {
       res.status(404).json({error: 'Session not found'});
       return;
     }
-    const messages = persisted.messages.map(flattenModelMessage).filter((m) => m !== null);
-    res.json({session_id: persisted.id, messages});
+    const title = typeof persisted.metadata['title'] === 'string' ? persisted.metadata['title'] : undefined;
+    const rawMessages = persisted.messages.map(flattenModelMessage).filter((m) => m !== null);
+    const messages = rawMessages.map((m) => ({
+      type: m.role === 'user' ? 'user' : 'assistant_text',
+      id: `hist-${Math.random().toString(36).slice(2)}`,
+      text: m.text,
+      timestamp: persisted.updatedAt.toISOString(),
+      ...(m.toolCalls ? {toolCalls: m.toolCalls} : {}),
+    }));
+    res.json({
+      id: persisted.id,
+      app_id: typeof persisted.metadata['appId'] === 'string' ? persisted.metadata['appId'] : appId,
+      title: title ?? extractFirstUserText(persisted.messages) ?? 'Untitled',
+      tags: extractStringArray(persisted.metadata['tags']),
+      status: 'active',
+      message_count: persisted.messages.length,
+      created_at: persisted.createdAt.toISOString(),
+      updated_at: persisted.updatedAt.toISOString(),
+      messages,
+    });
   }));
 
-  app.patch('/session/:id', express.json(), asyncHandler(async (req, res) => {
+  app.patch('/sessions/history/:id', express.json(), asyncHandler(async (req, res) => {
     const sessionId = req.params['id'] ?? '';
     const body: unknown = req.body;
-    if (!body || typeof body !== 'object' || !('title' in body) || typeof (body as Record<string, unknown>)['title'] !== 'string') {
-      res.status(400).json({error: 'title (string) is required'});
+    if (!body || typeof body !== 'object') {
+      res.status(400).json({error: 'Request body required'});
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated above
-    const title = (body as Record<string, unknown>)['title'] as string;
-
-    // Live session: mutate metadata on the shared object and persist so
-    // the next /sessions read reflects the new title. A concurrent
-    // runMessage may be mid-turn, but JSON.stringify runs atomically in
-    // JS's single-threaded event loop — no torn writes. The next
-    // end-of-turn persist will overwrite with the completed messages
-    // array; metadata.title stays because it's on the live session.
-    //
-    // Not-live: load → mutate → save. No race possible.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated above: body is a non-null object
+    const updates: Record<string, unknown> = body as Record<string, unknown>;
     const live = sessionManager.get(sessionId);
     if (live) {
-      live.metadata.title = title;
+      if (typeof updates['title'] === 'string') live.metadata.title = updates['title'];
+      if (Array.isArray(updates['tags'])) live.metadata['tags'] = updates['tags'];
       await sessionManager.persist(live);
     } else {
       const persisted = await sessionStore.load(sessionId);
@@ -586,17 +594,16 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         res.status(404).json({error: 'Session not found'});
         return;
       }
-      persisted.metadata.title = title;
+      if (typeof updates['title'] === 'string') persisted.metadata.title = updates['title'];
+      if (Array.isArray(updates['tags'])) persisted.metadata['tags'] = updates['tags'];
       persisted.updatedAt = new Date();
       await sessionStore.save(persisted);
     }
-
-    // Emit session_updated so the sidebar picks up the new title live.
-    eventBus.emit({type: 'session_updated', sessionId, appId, title});
+    eventBus.emit({type: 'session_updated', sessionId, appId, title: typeof updates['title'] === 'string' ? updates['title'] : undefined});
     res.json({ok: true});
   }));
 
-  app.delete('/session/:id', asyncHandler(async (req, res) => {
+  app.delete('/sessions/history/:id', asyncHandler(async (req, res) => {
     const sessionId = req.params['id'] ?? '';
     await sessionManager.destroy(sessionId);
     const deleted = await sessionStore.delete(sessionId);
@@ -680,7 +687,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   } else if (config.staticAppDir && existsSync(config.staticAppDir)) {
     app.use(express.static(config.staticAppDir));
     app.use((_req, res, next) => {
-      if (_req.path.startsWith('/api/') || _req.path.startsWith('/inspect/') || _req.method !== 'GET') {
+      if (_req.path.startsWith('/api/') || _req.path.startsWith('/inspect/') || _req.path.startsWith('/sessions/') || _req.path === '/sessions' || _req.method !== 'GET') {
         next();
         return;
       }
@@ -821,6 +828,11 @@ function excerpt(s: string): string {
 }
 
 /** Extract the first user-message text from a persisted message array for list summaries. */
+function extractStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === 'string');
+}
+
 function extractFirstUserText(messages: readonly unknown[]): string | undefined {
   for (const raw of messages) {
     if (getMessageRole(raw) !== 'user') continue;

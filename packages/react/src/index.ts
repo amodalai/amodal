@@ -22,6 +22,9 @@ export type { ConfirmCardProps } from './components/ConfirmCard';
 export { ReviewCard } from './components/ReviewCard';
 export type { ReviewCardProps } from './components/ReviewCard';
 
+// Markdown renderer
+export { FormattedMarkdown } from './components/FormattedMarkdown';
+
 // Hooks — provider-based (runtime API)
 export { useAmodalChat } from './hooks/useAmodalChat';
 export type { UseAmodalChatOptions, UseAmodalChatReturn } from './hooks/useAmodalChat';

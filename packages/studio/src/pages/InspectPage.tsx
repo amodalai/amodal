@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
-import Markdown from 'react-markdown';
+import { FormattedMarkdown } from '@amodalai/react';
 import { Plug, Sparkles, BookOpen, Cable } from 'lucide-react';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { AgentOffline } from '@/components/AgentOffline';
@@ -135,8 +135,8 @@ function ConnectionView({ data }: { data: ConnectionDetail }) {
       {data.entities && (
         <section>
           <h2 className="text-sm font-semibold text-foreground mb-3">Entities</h2>
-          <div className="bg-muted border border-border rounded-lg p-4 prose prose-sm dark:prose-invert max-w-none">
-            <Markdown>{data.entities}</Markdown>
+          <div className="bg-muted border border-border rounded-lg p-4">
+            <FormattedMarkdown>{data.entities}</FormattedMarkdown>
           </div>
         </section>
       )}
@@ -145,8 +145,8 @@ function ConnectionView({ data }: { data: ConnectionDetail }) {
       {data.rules && (
         <section>
           <h2 className="text-sm font-semibold text-foreground mb-3">Rules</h2>
-          <div className="bg-muted border border-border rounded-lg p-4 prose prose-sm dark:prose-invert max-w-none">
-            <Markdown>{data.rules}</Markdown>
+          <div className="bg-muted border border-border rounded-lg p-4">
+            <FormattedMarkdown>{data.rules}</FormattedMarkdown>
           </div>
         </section>
       )}
@@ -248,8 +248,8 @@ function SkillView({ data }: { data: SkillDetail }) {
       {/* Skill body */}
       <section>
         <h2 className="text-sm font-semibold text-foreground mb-3">Skill Definition</h2>
-        <div className="bg-muted border border-border rounded-lg p-4 overflow-auto prose prose-sm dark:prose-invert max-w-none">
-          <Markdown>{data.body}</Markdown>
+        <div className="bg-muted border border-border rounded-lg p-4 overflow-auto">
+          <FormattedMarkdown>{data.body}</FormattedMarkdown>
         </div>
       </section>
     </div>
@@ -264,8 +264,8 @@ function KnowledgeView({ data }: { data: KnowledgeDetail }) {
       )}
 
       <section>
-        <div className="bg-muted border border-border rounded-lg p-4 overflow-auto prose prose-sm dark:prose-invert max-w-none">
-          <Markdown>{data.body}</Markdown>
+        <div className="bg-muted border border-border rounded-lg p-4 overflow-auto">
+          <FormattedMarkdown>{data.body}</FormattedMarkdown>
         </div>
       </section>
     </div>

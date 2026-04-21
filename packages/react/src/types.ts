@@ -356,6 +356,8 @@ export interface ChatUser {
 }
 
 export interface ChatTheme {
+  /** Color mode. 'auto' follows prefers-color-scheme and .dark ancestor. Default: 'auto'. */
+  mode?: 'light' | 'dark' | 'auto';
   primaryColor?: string;
   backgroundColor?: string;
   fontFamily?: string;

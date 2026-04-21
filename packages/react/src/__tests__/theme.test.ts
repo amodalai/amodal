@@ -53,13 +53,14 @@ describe('applyTheme', () => {
     expect(el.style.getPropertyValue('--pcw-tool-call-bg')).toBe('#555');
   });
 
-  it('fills in defaults for unspecified properties', () => {
+  it('does not set inline styles for unspecified properties', () => {
     const el = document.createElement('div');
     applyTheme(el, {});
 
-    // Should have default values
-    expect(el.style.getPropertyValue('--pcw-primary')).toBe(defaultTheme.primaryColor);
-    expect(el.style.getPropertyValue('--pcw-bg')).toBe(defaultTheme.backgroundColor);
+    // Empty theme should not set any inline styles — CSS defaults handle it.
+    // Setting defaults as inline styles would override .dark CSS rules.
+    expect(el.style.getPropertyValue('--pcw-primary')).toBe('');
+    expect(el.style.getPropertyValue('--pcw-bg')).toBe('');
   });
 });
 
