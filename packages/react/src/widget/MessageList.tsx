@@ -18,6 +18,8 @@ import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { ConfirmCard } from '../components/ConfirmCard';
 import { ReviewCard } from '../components/ReviewCard';
 
+const FEEDBACK_PATH = '/api/feedback' as const;
+
 function FeedbackButtons({ messageId, sessionId, query, response }: {
   messageId: string;
   sessionId?: string;
@@ -31,11 +33,14 @@ function FeedbackButtons({ messageId, sessionId, query, response }: {
   const submit = useCallback((r: 'up' | 'down', c?: string) => {
     setRating(r);
     setShowComment(false);
-    fetch('/api/feedback', {
+    fetch(FEEDBACK_PATH, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({sessionId: sessionId ?? '', messageId, rating: r, comment: c, query, response}),
-    }).catch(() => {});
+    }).catch((err: unknown) => {
+      // eslint-disable-next-line no-console -- browser widget, no logger available
+      console.warn('[MessageList] feedback_post_failed', { messageId, error: err instanceof Error ? err.message : String(err) });
+    });
   }, [sessionId, messageId, query, response]);
 
   const clear = useCallback(() => {

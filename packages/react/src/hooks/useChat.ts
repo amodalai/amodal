@@ -250,9 +250,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             headers,
             body: JSON.stringify({ ask_id: askId, answers }),
           });
-        } catch {
+        } catch (err: unknown) {
           // Non-critical: server will time out the ask_user on its own.
-          // Nothing actionable for the client — swallow intentionally.
+          // Surface the error in stream state so the UI can display it.
+          stream.dispatch({
+            type: 'STREAM_ERROR',
+            message: err instanceof Error ? err.message : 'Failed to submit ask-user response',
+          });
         }
       };
       void doSubmit();

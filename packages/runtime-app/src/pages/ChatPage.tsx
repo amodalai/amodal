@@ -15,6 +15,11 @@ import { useAuth } from '@/hooks/useAuth';
 
 const RUNTIME_URL = window.location.origin;
 
+/** Type guard for location state carrying a newChat key. */
+function hasNewChat(state: unknown): state is { newChat: unknown } {
+  return typeof state === 'object' && state !== null && 'newChat' in state;
+}
+
 /**
  * Bridge async token getter to a sync getter by caching the last resolved value.
  * The widget's useChat hook calls getToken synchronously; we pre-fetch and cache.
@@ -43,9 +48,7 @@ export function ChatPage() {
 
   const location = useLocation();
   const locState: unknown = location.state;
-  const newChatKey = typeof locState === 'object' && locState !== null && 'newChat' in locState
-    ? (locState as {newChat: unknown}).newChat
-    : undefined;
+  const newChatKey = hasNewChat(locState) ? locState.newChat : undefined;
 
   // Generate a key that forces ChatWidget to remount on session change or new chat.
   const [widgetKey, setWidgetKey] = useState(0);

@@ -32,10 +32,15 @@ function loadPersistedChat(): PersistedChat {
     if (!parsed || typeof parsed !== 'object') return { sessionId: null, messages: [] };
 
     const data = parsed as { sessionId?: unknown; messages?: unknown };
+    const rawMessages = Array.isArray(data.messages) ? data.messages : [];
+    // Validate each element has the minimum ChatMessage shape (type + id)
+    const validMessages = rawMessages.filter(
+      (m: unknown): m is ChatMessage =>
+        typeof m === 'object' && m !== null && 'type' in m && 'id' in m,
+    );
     return {
       sessionId: typeof data.sessionId === 'string' ? data.sessionId : null,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- persisted shape validated at read
-      messages: Array.isArray(data.messages) ? (data.messages as ChatMessage[]) : [],
+      messages: validMessages,
     };
   } catch {
     return { sessionId: null, messages: [] };
@@ -45,7 +50,10 @@ function loadPersistedChat(): PersistedChat {
 function persistChat(chat: PersistedChat): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(chat));
-  } catch { /* quota exceeded / private browsing */ }
+  } catch (err: unknown) {
+    // eslint-disable-next-line no-console -- browser SPA, no structured logger; quota exceeded or private browsing
+    console.warn('[AdminChat] persist_chat_failed', { error: err instanceof Error ? err.message : String(err) });
+  }
 }
 
 // ---------------------------------------------------------------------------

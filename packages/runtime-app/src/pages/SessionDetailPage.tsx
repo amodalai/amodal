@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play } from 'lucide-react';
 import { FormattedMarkdown } from '@amodalai/react';
+import { API_PATHS } from '@/lib/api-paths';
 
 interface HistoryMessage {
   role: string;
@@ -23,7 +24,7 @@ export function SessionDetailPage() {
 
   useEffect(() => {
     if (!sessionId) return;
-    fetch(`/sessions/history/${encodeURIComponent(sessionId)}`)
+    fetch(API_PATHS.sessionHistory(sessionId))
       .then((res) => {
         if (!res.ok) throw new Error('Session not found');
         return res.json();
@@ -44,18 +45,18 @@ export function SessionDetailPage() {
   const assistantMessages = messages.filter((m) => m.role === 'assistant');
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0f]">
+    <div className="h-full flex flex-col bg-background">
       {/* Header */}
-      <div className="border-b border-zinc-800/50 px-6 py-4 flex items-center justify-between">
+      <div className="border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to="/sessions" className="text-zinc-500 hover:text-zinc-300 transition-colors">
+          <Link to="/sessions" className="text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
-            <h1 className="text-sm font-semibold text-zinc-200 font-mono">{sessionId?.slice(0, 8)}...</h1>
+            <h1 className="text-sm font-semibold text-foreground font-mono">{sessionId?.slice(0, 8)}...</h1>
             <div className="flex items-center gap-3 mt-0.5">
-              <span className="text-xs text-zinc-500">{userMessages.length} messages</span>
-              <span className="text-xs text-zinc-500">{assistantMessages.length} responses</span>
+              <span className="text-xs text-muted-foreground">{userMessages.length} messages</span>
+              <span className="text-xs text-muted-foreground">{assistantMessages.length} responses</span>
             </div>
           </div>
         </div>
@@ -71,7 +72,7 @@ export function SessionDetailPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {loading ? (
-          <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">Loading...</div>
+          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Loading...</div>
         ) : error ? (
           <div className="flex items-center justify-center h-32 text-red-400 text-sm">{error}</div>
         ) : (
@@ -79,11 +80,11 @@ export function SessionDetailPage() {
             {messages.map((msg, i) => (
               <div key={`msg-${String(i)}`} className={msg.role === 'user' ? 'mb-6 flex justify-end' : 'mb-6'}>
                 {msg.role === 'user' ? (
-                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary/70 text-white text-[14px] leading-relaxed">
+                  <div className="max-w-[85%] px-4 py-3 rounded-2xl rounded-br-md bg-primary-solid text-white text-[14px] leading-relaxed">
                     {msg.text}
                   </div>
                 ) : (
-                  <FormattedMarkdown className="text-[14px] text-zinc-300 prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-strong:text-zinc-200 prose-code:text-primary prose-code:bg-zinc-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-zinc-800/80 prose-pre:border prose-pre:border-zinc-700/50 prose-a:text-primary prose-li:text-zinc-300">
+                  <FormattedMarkdown className="text-[14px] text-foreground prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-a:text-primary prose-li:text-foreground">
                     {msg.text}
                   </FormattedMarkdown>
                 )}
