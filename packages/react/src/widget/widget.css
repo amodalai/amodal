@@ -29,7 +29,7 @@
 .dark .pcw-widget,
 [data-theme="dark"] .pcw-widget,
 .pcw-widget[data-theme="dark"] {
-  --pcw-primary: #60a5fa;
+  --pcw-primary: #3b82f6;
   --pcw-bg: #0a0a0f;
   --pcw-user-bubble: #1e40af;
   --pcw-agent-bubble: #1e293b;
@@ -42,7 +42,7 @@
 
 @media (prefers-color-scheme: dark) {
   .pcw-widget:not([data-theme="light"]) {
-    --pcw-primary: #60a5fa;
+    --pcw-primary: #3b82f6;
     --pcw-bg: #0a0a0f;
     --pcw-user-bubble: #1e40af;
     --pcw-agent-bubble: #1e293b;
@@ -946,11 +946,11 @@
 }
 
 .pcw-input__stop {
-  background: var(--pcw-danger, #dc2626);
+  background: var(--pcw-danger, #94a3b8);
 }
 
 .pcw-input__stop:hover {
-  opacity: 0.9;
+  background: var(--pcw-danger, #64748b);
 }
 
 /* Image attachment previews in input */

@@ -553,7 +553,14 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       return;
     }
     const title = typeof persisted.metadata['title'] === 'string' ? persisted.metadata['title'] : undefined;
-    const messages = persisted.messages.map(flattenModelMessage).filter((m) => m !== null);
+    const rawMessages = persisted.messages.map(flattenModelMessage).filter((m) => m !== null);
+    const messages = rawMessages.map((m) => ({
+      type: m.role === 'user' ? 'user' : 'assistant_text',
+      id: `hist-${Math.random().toString(36).slice(2)}`,
+      text: m.text,
+      timestamp: persisted.updatedAt.toISOString(),
+      ...(m.toolCalls ? {toolCalls: m.toolCalls} : {}),
+    }));
     res.json({
       id: persisted.id,
       app_id: typeof persisted.metadata['appId'] === 'string' ? persisted.metadata['appId'] : appId,
