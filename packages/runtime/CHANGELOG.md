@@ -1,5 +1,16 @@
 # @amodalai/runtime
 
+## 0.3.21
+
+### Patch Changes
+
+- [#245](https://github.com/amodalai/amodal/pull/245) [`fd36345`](https://github.com/amodalai/amodal/commit/fd36345e06c7d7a914c205663481042d333ac6ba) Thanks [@whodatdev](https://github.com/whodatdev)! - Add AUTH_TOKEN env var for simple bearer token auth. When set, chat and session endpoints require `Authorization: Bearer {token}`. When not set, no auth (local dev). Hosting layers that inject their own auth middleware override this.
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.21
+  - @amodalai/core@0.3.21
+  - @amodalai/db@0.3.21
+
 ## 0.3.20
 
 ### Patch Changes
