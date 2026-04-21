@@ -86,6 +86,7 @@ export function ChatPage() {
       resumeSessionId={activeResumeId ?? undefined}
       initialMessage={initialPrompt ?? undefined}
       theme={{
+        mode: 'dark',
         headerText: agentName || undefined,
       }}
     />

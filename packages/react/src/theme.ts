@@ -38,11 +38,10 @@ const themeToCSS: Partial<Record<keyof ChatTheme, string>> = {
  * Apply theme values as CSS custom properties on a DOM element.
  */
 export function applyTheme(element: HTMLElement, theme: ChatTheme): void {
-  const merged = { ...defaultTheme, ...theme };
   for (const [key, cssVar] of Object.entries(themeToCSS)) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Known theme keys
-    const value = merged[key as keyof ChatTheme];
-    if (value !== undefined) {
+    const value = theme[key as keyof ChatTheme];
+    if (value !== undefined && cssVar) {
       element.style.setProperty(cssVar, value);
     }
   }
