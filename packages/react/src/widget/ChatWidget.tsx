@@ -40,6 +40,8 @@ export type ChatWidgetProps = WidgetConfig & {
   historyEnabled?: boolean;
   /** Show thumbs up/down feedback buttons on assistant messages. Defaults to false. */
   showFeedback?: boolean;
+  /** Show the header bar with title and controls. Defaults to true. */
+  showHeader?: boolean;
   /**
    * Custom transport function. When provided, bypasses the standard useChat
    * hook (which calls /chat/stream) and uses useChatStream directly. Use
@@ -64,6 +66,7 @@ export function ChatWidget({
   widgets: customWidgets,
   historyEnabled = false,
   showFeedback = false,
+  showHeader = true,
   showInput = true,
   sessionType,
   deployId,
@@ -177,13 +180,15 @@ export function ChatWidget({
   if (position === 'inline') {
     return (
       <div ref={containerRef} className={positionClass} data-testid="chat-widget" data-theme={dataTheme}>
-        <ChatHeader
-          title={mergedTheme.headerText}
-          onReset={reset}
-          historyEnabled={historyEnabled}
-          onToggleHistory={() => setShowHistory((v) => !v)}
-          isHistorical={isHistorical}
-        />
+        {showHeader && (
+          <ChatHeader
+            title={mergedTheme.headerText}
+            onReset={reset}
+            historyEnabled={historyEnabled}
+            onToggleHistory={() => setShowHistory((v) => !v)}
+            isHistorical={isHistorical}
+          />
+        )}
         {showHistory && (
           <SessionHistory
             sessions={history.sessions}
@@ -229,15 +234,17 @@ export function ChatWidget({
 
   return (
     <div ref={containerRef} className={positionClass} data-testid="chat-widget" data-theme={dataTheme}>
-      <ChatHeader
-        title={mergedTheme.headerText}
-        onClose={() => setIsOpen(false)}
-        onReset={reset}
-        showClose
-        historyEnabled={historyEnabled}
-        onToggleHistory={() => setShowHistory((v) => !v)}
-        isHistorical={isHistorical}
-      />
+      {showHeader && (
+        <ChatHeader
+          title={mergedTheme.headerText}
+          onClose={() => setIsOpen(false)}
+          onReset={reset}
+          showClose
+          historyEnabled={historyEnabled}
+          onToggleHistory={() => setShowHistory((v) => !v)}
+          isHistorical={isHistorical}
+        />
+      )}
       {showHistory && (
         <SessionHistory
           sessions={history.sessions}

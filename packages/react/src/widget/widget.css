@@ -17,6 +17,12 @@
   --pcw-text-muted: #6b7280;
   --pcw-border: #e5e7eb;
   --pcw-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+  font-family: var(--pcw-font);
+  font-size: var(--pcw-font-size);
+  color: var(--pcw-text);
+  box-sizing: border-box;
+  line-height: 1.5;
 }
 
 /* Dark mode — responds to .dark ancestor (Tailwind convention), prefers-color-scheme, or data-theme="dark" */
@@ -46,12 +52,6 @@
     --pcw-border: #334155;
     --pcw-shadow: none;
   }
-
-  font-family: var(--pcw-font);
-  font-size: var(--pcw-font-size);
-  color: var(--pcw-text);
-  box-sizing: border-box;
-  line-height: 1.5;
 }
 
 .pcw-widget *,

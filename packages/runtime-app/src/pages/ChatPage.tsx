@@ -82,6 +82,7 @@ export function ChatPage() {
       position="inline"
       historyEnabled={true}
       showFeedback={true}
+      showHeader={false}
       resumeSessionId={activeResumeId ?? undefined}
       initialMessage={initialPrompt ?? undefined}
       theme={{
