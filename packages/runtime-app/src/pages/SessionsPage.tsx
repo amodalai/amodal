@@ -4,20 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MessageSquare, Clock, ChevronRight } from 'lucide-react';
-import { createLogger } from '@/utils/log';
-import { API_PATHS } from '@/lib/api-paths';
-
-const log = createLogger('SessionsPage');
-
-interface SessionSummary {
-  id: string;
-  appId: string;
-  createdAt: number;
-  lastAccessedAt: number;
-}
+import { useSessions } from '@/hooks/useSessions';
 
 function formatRelative(ts: number): string {
   const diff = Date.now() - ts;
@@ -40,29 +29,7 @@ function formatTime(ts: number): string {
 }
 
 export function SessionsPage() {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(API_PATHS.SESSIONS_HISTORY)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: unknown) => {
-        if (Array.isArray(data)) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Server response
-          const items = data as Array<Record<string, unknown>>;
-          setSessions(items.map((item) => ({
-            id: String(item['id'] ?? ''),
-            appId: String(item['app_id'] ?? ''),
-            createdAt: item['created_at'] ? new Date(String(item['created_at'])).getTime() : 0,
-            lastAccessedAt: item['updated_at'] ? new Date(String(item['updated_at'])).getTime() : 0,
-          })));
-        }
-      })
-      .catch((err: unknown) => {
-        log.warn('fetch_sessions_failed', { error: err instanceof Error ? err.message : String(err) });
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: sessions, isLoading } = useSessions();
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -72,7 +39,7 @@ export function SessionsPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Loading...</div>
         ) : sessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center px-4">

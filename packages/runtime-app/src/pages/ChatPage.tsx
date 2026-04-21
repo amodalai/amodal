@@ -7,11 +7,23 @@
 // Chat UI lives in @amodalai/react/widget — feature changes go there, not here.
 // This file is intentionally thin. If you need a new chat feature, add it to ChatWidget.
 
-import { useMemo, useEffect, useRef, useState, useCallback } from 'react';
+import { useMemo, useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { ChatWidget } from '@amodalai/react/widget';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { useAuth } from '@/hooks/useAuth';
+
+/** Subscribe to .dark class changes on <html> so the chat widget theme stays in sync. */
+function useDarkMode(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const observer = new MutationObserver(cb);
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      return () => observer.disconnect();
+    },
+    () => document.documentElement.classList.contains('dark'),
+  );
+}
 
 const RUNTIME_URL = window.location.origin;
 
@@ -75,6 +87,7 @@ export function ChatPage() {
   }, [initialPrompt, searchParams, setSearchParams]);
 
   const { name: agentName } = useRuntimeManifest();
+  const isDark = useDarkMode();
 
   return (
     <ChatWidget
@@ -89,7 +102,7 @@ export function ChatPage() {
       resumeSessionId={activeResumeId ?? undefined}
       initialMessage={initialPrompt ?? undefined}
       theme={{
-        mode: 'dark',
+        mode: isDark ? 'dark' : 'light',
         headerText: agentName || undefined,
       }}
     />

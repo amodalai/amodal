@@ -19,6 +19,7 @@ export interface AmodalProviderProps {
 interface AmodalContextValue {
   client: RuntimeClient;
   runtimeUrl: string;
+  getToken?: () => string | Promise<string> | null | undefined;
 }
 
 const AmodalContext = createContext<AmodalContextValue | null>(null);
@@ -33,8 +34,8 @@ export function AmodalProvider({ runtimeUrl, getToken, children }: AmodalProvide
   );
 
   const value = useMemo(
-    () => ({ client, runtimeUrl }),
-    [client, runtimeUrl],
+    () => ({ client, runtimeUrl, getToken }),
+    [client, runtimeUrl, getToken],
   );
 
   return <AmodalContext.Provider value={value}>{children}</AmodalContext.Provider>;
