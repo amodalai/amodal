@@ -880,7 +880,7 @@
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-top: 1px solid var(--pcw-border);
   background: var(--pcw-bg);
   flex-shrink: 0;
@@ -903,8 +903,9 @@
 }
 
 .pcw-input__textarea:focus {
-  border-color: var(--pcw-primary);
-  box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.1);
+  border-color: var(--pcw-border);
+  box-shadow: none;
+  outline: none;
 }
 
 .pcw-input__textarea::placeholder {
