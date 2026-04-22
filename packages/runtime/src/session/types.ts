@@ -109,6 +109,8 @@ export type ImageDataMap = Record<string, {mimeType: string; data: string}>;
 export interface PersistedSession {
   version: 1;
   id: string;
+  /** Scope ID for per-user session isolation. '' means agent-level. */
+  scopeId: string;
   messages: ModelMessage[];
   tokenUsage: TokenUsage;
   metadata: SessionMetadata;
@@ -166,6 +168,9 @@ export interface Session {
   /** App ID for multi-app isolation */
   appId: string;
 
+  /** Scope ID for per-user session isolation ('' means agent-level). */
+  scopeId: string;
+
   /** Session metadata (title, automation info, etc.) */
   metadata: SessionMetadata;
 
@@ -213,6 +218,8 @@ export interface CreateSessionOptions {
   permissionChecker: PermissionChecker;
   systemPrompt: string;
   appId?: string;
+  /** Scope ID for per-user session isolation. Default: '' (agent-level). */
+  scopeId?: string;
   metadata?: SessionMetadata;
   maxTurns?: number;
   maxContextTokens?: number;

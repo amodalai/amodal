@@ -265,6 +265,7 @@ function rehydrateImages(messages: ModelMessage[], imageData: ImageDataMap): Mod
 
 export function sessionToRow(session: PersistedSession): {
   id: string;
+  scopeId: string;
   messages: unknown[];
   tokenUsage: {inputTokens: number; outputTokens: number; totalTokens: number};
   metadata: Record<string, unknown>;
@@ -280,6 +281,7 @@ export function sessionToRow(session: PersistedSession): {
 
   return {
     id: session.id,
+    scopeId: session.scopeId,
     messages: messages as unknown[],
     tokenUsage: session.tokenUsage as {
       inputTokens: number;
@@ -326,7 +328,7 @@ export function rowToPersistedSession(
     });
   }
    
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: imageData shape validated by DB schema
+   
   const imageData = (row.imageData ?? {}) as ImageDataMap;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: array-shape checked above; element shape is not validated
   const rawMessages = row.messages as ModelMessage[];
@@ -334,10 +336,11 @@ export function rowToPersistedSession(
   return {
     version: 1,
     id: row.id,
+    scopeId: row.scopeId ?? '',
     messages: rehydrateImages(rawMessages, imageData),
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: tokenUsage shape matches DB schema
+     
     tokenUsage: row.tokenUsage as TokenUsage,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: metadata shape validated by DB schema
+     
     metadata: (row.metadata ?? {}) as SessionMetadata,
     imageData,
     createdAt: row.createdAt,

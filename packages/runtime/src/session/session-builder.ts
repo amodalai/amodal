@@ -412,6 +412,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
       db: memoryDb,
       logger,
       appId,
+      scopeId,
       maxEntries: memoryConfig.maxEntries,
       maxTotalChars: memoryConfig.maxTotalChars,
     }));

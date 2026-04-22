@@ -528,8 +528,19 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // The ChatWidget uses /sessions/history endpoints (matching the cloud sessions-router).
   // These return the SessionHistoryItem shape expected by @amodalai/react/client/chat-api.
   app.get('/sessions/history', asyncHandler(async (req, res) => {
-    const filter = {appId};
-    const {sessions: rows} = await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
+    const scopeIdParam = typeof req.query['scope_id'] === 'string' ? req.query['scope_id'] : undefined;
+    const filter: Record<string, unknown> = {appId};
+    // Scope filtering uses the dedicated findByScopeId path on DrizzleSessionStore;
+    // for the list endpoint we filter via the scope_id column directly if provided.
+    const {DrizzleSessionStore} = await import('../session/drizzle-session-store.js');
+    let sessionIds: string[] | undefined;
+    if (scopeIdParam !== undefined && sessionStore instanceof DrizzleSessionStore) {
+      const found = await sessionStore.findByScopeId(scopeIdParam);
+      sessionIds = found ? [found] : [];
+    }
+    const {sessions: rows} = sessionIds !== undefined
+      ? {sessions: (await Promise.all(sessionIds.map((id) => sessionStore.load(id)))).filter((s): s is NonNullable<typeof s> => s !== null)}
+      : await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
     const items = rows.map((s) => {
       const title = typeof s.metadata['title'] === 'string' ? s.metadata['title'] : undefined;
       return {

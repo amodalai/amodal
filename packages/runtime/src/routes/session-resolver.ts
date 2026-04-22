@@ -85,6 +85,10 @@ export interface ResolveSessionOptions {
     components: SessionComponents,
     context: { auth?: AuthContext; bundle: AgentBundle },
   ) => SessionComponents | Promise<SessionComponents>;
+  /** Scope ID for per-user session isolation. Empty string means agent-level. */
+  scopeId?: string;
+  /** Additional scope context from JWT claims or request body. */
+  scopeContext?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,14 +123,15 @@ async function buildComponents(
     sessionType?: SessionType;
     sessionId?: string;
     pinnedModel?: {provider: string; model: string};
+    scopeId?: string;
   },
 ): Promise<SessionComponents> {
   // Load memory content if memory is enabled and a DB is available
   let memoryContent: string | undefined;
   const memoryDb = shared.memoryDb;
   if (bundle.config.memory?.enabled && memoryDb) {
-    memoryContent = await loadMemoryContent(memoryDb, shared.appId ?? 'local');
-    shared.logger.info('memory_loaded', {contentLength: memoryContent.length});
+    memoryContent = await loadMemoryContent(memoryDb, shared.appId ?? 'local', opts.scopeId ?? '');
+    shared.logger.info('memory_loaded', {contentLength: memoryContent.length, scopeId: opts.scopeId ?? ''});
   }
 
   return buildSessionComponents({
@@ -142,6 +147,7 @@ async function buildComponents(
     memoryContent: memoryContent || undefined,
     memoryDb,
     appId: shared.appId,
+    scopeId: opts.scopeId,
   });
 }
 
@@ -168,6 +174,7 @@ export async function resolveSession(
   opts: ResolveSessionOptions,
 ): Promise<ResolvedSession> {
   const {sessionManager, bundleResolver, shared, auth} = opts;
+  const scopeId = opts.scopeId ?? '';
 
   // 1. In-memory lookup (existing live session)
   if (sessionId) {
@@ -197,21 +204,39 @@ export async function resolveSession(
     return {...components, systemPrompt: hookResult.systemPrompt};
   }
 
+  // 1b. Scope-based session lookup: if a scopeId is provided but no session_id,
+  // look up the latest session for that scope from the store.
+  let resolvedSessionId = sessionId;
+  if (!resolvedSessionId && scopeId && bundle) {
+    const sessionStore = sessionManager.getStore();
+    if (sessionStore && 'findByScopeId' in sessionStore && typeof (sessionStore as {findByScopeId?: unknown}).findByScopeId === 'function') {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated via in-check + typeof guard above
+      const findByScopeId = (sessionStore as {findByScopeId: (id: string) => Promise<string | null>}).findByScopeId.bind(sessionStore);
+      const found = await findByScopeId(scopeId);
+      if (found) {
+        resolvedSessionId = found;
+        shared.logger.info('session_resolved_by_scope', {scopeId, sessionId: found});
+      }
+    }
+  }
+
   // 2. Resume from store (with dedup handled by StandaloneSessionManager)
-  if (sessionId && bundle) {
+  if (resolvedSessionId && bundle) {
     const rawComponents = await buildComponents(bundle, shared, {
       sessionType: opts.sessionType,
-      sessionId,
+      sessionId: resolvedSessionId,
       pinnedModel: opts.pinnedModel,
+      scopeId,
     });
     const components = await enhance(rawComponents);
 
-    const resumed = await sessionManager.resume(sessionId, {
+    const resumed = await sessionManager.resume(resolvedSessionId, {
       provider: components.provider,
       toolRegistry: components.toolRegistry,
       permissionChecker: components.permissionChecker,
       systemPrompt: components.systemPrompt,
       toolContextFactory: components.toolContextFactory,
+      scopeId,
     });
 
     if (resumed) {
@@ -222,7 +247,7 @@ export async function resolveSession(
   // 3. Create new session
   if (!bundle) {
     throw new SessionError('No bundle available — provide a deploy_id or configure a static bundle', {
-      sessionId: sessionId ?? 'new',
+      sessionId: resolvedSessionId ?? 'new',
       context: {operation: 'resolveSession', deployId: opts.deployId},
     });
   }
@@ -230,6 +255,7 @@ export async function resolveSession(
   const rawComponents = await buildComponents(bundle, shared, {
     sessionType: opts.sessionType,
     pinnedModel: opts.pinnedModel,
+    scopeId,
   });
   const components = await enhance(rawComponents);
 
@@ -241,6 +267,7 @@ export async function resolveSession(
     toolContextFactory: components.toolContextFactory,
     maxSessionTokens: opts.maxSessionTokens,
     appId: shared.appId,
+    scopeId,
   });
 
   return {session, toolContextFactory: components.toolContextFactory};

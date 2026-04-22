@@ -40,6 +40,7 @@ function makeSession(overrides: Partial<PersistedSession> = {}): PersistedSessio
   return {
     version: 1,
     id: `sess-${Math.random().toString(36).slice(2, 10)}`,
+    scopeId: '',
     messages: [{role: 'user', content: 'Hello'}],
     tokenUsage: {inputTokens: 100, outputTokens: 50, totalTokens: 150},
     metadata: {},
@@ -406,6 +407,7 @@ describe('extractImages / rehydrateImages round-trip', () => {
     const session: PersistedSession = {
       version: 1,
       id: 'sess-img-1',
+      scopeId: '',
       messages: [
         {
           role: 'user',
@@ -440,6 +442,7 @@ describe('extractImages / rehydrateImages round-trip', () => {
     const session: PersistedSession = {
       version: 1,
       id: 'sess-img-2',
+      scopeId: '',
       messages: [
         {
           role: 'user',
