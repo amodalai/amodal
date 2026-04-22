@@ -60,8 +60,29 @@ export * from './snapshot/index.js';
 // Eval infrastructure
 export * from './eval/index.js';
 
-// Runtime provider abstraction
-export * from './providers/runtime/index.js';
+// LLM types (re-exported from @amodalai/types for convenience)
+export type {
+  LLMChatRequest,
+  LLMMessage,
+  LLMUserMessage,
+  LLMUserContentPart,
+  LLMUserImagePart,
+  LLMAssistantMessage,
+  LLMToolResultMessage,
+  LLMChatResponse,
+  LLMUsage,
+  LLMResponseBlock,
+  LLMTextBlock,
+  LLMToolUseBlock,
+  LLMToolDefinition,
+  RuntimeProvider,
+  LLMStreamEvent,
+  LLMStreamTextDelta,
+  LLMStreamToolUseStart,
+  LLMStreamToolUseDelta,
+  LLMStreamToolUseEnd,
+  LLMStreamMessageEnd,
+} from '@amodalai/types';
 
 // Default system prompt
 export { buildDefaultPrompt } from './runtime/default-prompt.js';

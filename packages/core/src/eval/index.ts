@@ -21,3 +21,5 @@ export {SessionEvalQueryProvider} from './eval-session-provider.js';
 export type {SessionEvalProviderOptions} from './eval-session-provider.js';
 export {runMultiModelEval} from './multi-model-runner.js';
 export type {MultiModelProgress, MultiModelEvalOptions} from './multi-model-runner.js';
+export {EvalProviderError} from './eval-provider-error.js';
+export {OPENAI_COMPATIBLE_BASE_URLS} from './eval-provider-urls.js';
