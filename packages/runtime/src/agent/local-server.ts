@@ -62,6 +62,7 @@ import {FeedbackStore} from './feedback-store.js';
 import {createStoresRouter} from './routes/stores.js';
 import {createFilesRouter} from './routes/files.js';
 import {createContextRouter} from './routes/context.js';
+import {createSessionsHistoryRouter} from '../routes/sessions-history.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import {asyncHandler} from '../routes/route-helpers.js';
 import type {LocalServerConfig} from './agent-types.js';
@@ -515,8 +516,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     res.json({resumeSessionId: resumeSessionId ?? null});
   });
 
-  // Sessions history routes are now mounted in server.ts via createSessionsHistoryRouter
-  // when sessionStore is provided. No need to duplicate them here.
+  // Session history routes (list, get, patch, delete sessions)
+  app.use(createSessionsHistoryRouter({
+    sessionStore,
+    sessionManager,
+    eventBus,
+    appId,
+  }));
 
   // File browser/editor — role-gated. Defaults to "everyone is ops" in
   // amodal dev; hosted-runtime injects a cloud RoleProvider.

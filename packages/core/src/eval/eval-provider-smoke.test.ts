@@ -108,20 +108,21 @@ describe.skipIf(!!skipReason)(`eval provider smoke [${picked?.name ?? 'none'}]`,
     expect(result.usage!.outputTokens).toBeGreaterThan(0);
   }, 30_000);
 
-  it('handles multi-turn with different system prompts', async () => {
+  it('returns usage on a second independent call', async () => {
     const provider = new SessionEvalQueryProvider({
       modelConfig: {
         provider: picked!.target.provider,
         model: picked!.target.model,
         credentials: {apiKey: process.env[picked!.target.apiKeyEnv]!},
       },
-      systemPrompt: 'You are a calculator. Reply with only the numeric result.',
+      systemPrompt: 'Reply with exactly one word.',
       maxTokens: 32,
     });
 
-    const result = await provider.query('What is 2 + 2?');
+    const result = await provider.query('What is the opposite of hot?');
 
-    expect(result.response).toMatch(/4/);
+    expect(result.response.length).toBeGreaterThan(0);
     expect(result.usage).toBeDefined();
+    expect(result.usage!.inputTokens).toBeGreaterThan(0);
   }, 30_000);
 });

@@ -12,17 +12,10 @@ import {createGoogleGenerativeAI} from '@ai-sdk/google';
 
 import type {EvalQueryProvider} from './eval-runner.js';
 import type {ModelConfig} from '../repo/config-schema.js';
+import {OPENAI_COMPATIBLE_BASE_URLS} from './eval-provider-urls.js';
+import {EvalProviderError} from './eval-provider-error.js';
 
 const DEFAULT_LLM_TIMEOUT_MS = 120_000;
-
-const OPENAI_COMPATIBLE_BASE_URLS: Record<string, string> = {
-  deepseek: 'https://api.deepseek.com/v1',
-  groq: 'https://api.groq.com/openai/v1',
-  mistral: 'https://api.mistral.ai/v1',
-  xai: 'https://api.x.ai/v1',
-  fireworks: 'https://api.fireworks.ai/inference/v1',
-  together: 'https://api.together.xyz/v1',
-};
 
 function resolveApiKey(config: ModelConfig): string | undefined {
   if (!config.credentials) return undefined;
@@ -46,8 +39,9 @@ function createLanguageModel(config: ModelConfig): LanguageModel {
     default: {
       const compatBaseUrl = baseUrl ?? OPENAI_COMPATIBLE_BASE_URLS[provider];
       if (!compatBaseUrl) {
-        throw new Error(
+        throw new EvalProviderError(
           `Unknown provider "${provider}". Use a known provider (anthropic, openai, google) or set a baseUrl for OpenAI-compatible providers.`,
+          {provider, model},
         );
       }
       return createOpenAI({apiKey, baseURL: compatBaseUrl})(model);
@@ -63,11 +57,15 @@ export interface SessionEvalProviderOptions {
 
 export class SessionEvalQueryProvider implements EvalQueryProvider {
   private readonly languageModel: LanguageModel;
+  private readonly providerName: string;
+  private readonly modelName: string;
   private readonly systemPrompt: string;
   private readonly maxTokens: number;
 
   constructor(options: SessionEvalProviderOptions) {
     this.languageModel = createLanguageModel(options.modelConfig);
+    this.providerName = options.modelConfig.provider;
+    this.modelName = options.modelConfig.model;
     this.systemPrompt = options.systemPrompt ?? 'You are a helpful assistant.';
     this.maxTokens = options.maxTokens ?? 4096;
   }
@@ -80,13 +78,22 @@ export class SessionEvalQueryProvider implements EvalQueryProvider {
     toolCalls: Array<{name: string; parameters: Record<string, unknown>}>;
     usage?: {inputTokens: number; outputTokens: number};
   }> {
-    const result = await generateText({
-      model: this.languageModel,
-      system: this.systemPrompt,
-      messages: [{role: 'user', content: message}],
-      maxOutputTokens: this.maxTokens,
-      abortSignal: AbortSignal.timeout(DEFAULT_LLM_TIMEOUT_MS),
-    });
+    let result;
+    try {
+      result = await generateText({
+        model: this.languageModel,
+        system: this.systemPrompt,
+        messages: [{role: 'user', content: message}],
+        maxOutputTokens: this.maxTokens,
+        abortSignal: AbortSignal.timeout(DEFAULT_LLM_TIMEOUT_MS),
+      });
+    } catch (err) {
+      throw new EvalProviderError('Eval query failed', {
+        provider: this.providerName,
+        model: this.modelName,
+        cause: err,
+      });
+    }
 
     const toolCalls = result.toolCalls.map((tc) => ({
       name: tc.toolName,
