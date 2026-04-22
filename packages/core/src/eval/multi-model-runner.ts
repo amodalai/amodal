@@ -9,7 +9,6 @@ import type {ModelConfig} from '../repo/config-schema.js';
 import type {EvalRunRecord, EvalModelInfo} from './eval-types.js';
 import type {EvalRunnerOptions} from './eval-runner.js';
 import type {JudgeProvider} from './eval-judge.js';
-import type {LLMToolDefinition} from '../providers/runtime/runtime-provider-types.js';
 import {runEvalSuite} from './eval-runner.js';
 import {buildEvalRun} from './eval-run-builder.js';
 import {SessionEvalQueryProvider} from './eval-session-provider.js';
@@ -39,7 +38,6 @@ export interface MultiModelEvalOptions {
   triggeredBy?: 'manual' | 'ci' | 'automation';
   filter?: string;
   systemPrompt?: string;
-  tools?: LLMToolDefinition[];
   maxTokens?: number;
 }
 
@@ -70,7 +68,6 @@ export async function* runMultiModelEval(
     const queryProvider = new SessionEvalQueryProvider({
       modelConfig,
       systemPrompt: options.systemPrompt,
-      tools: options.tools,
       maxTokens: options.maxTokens,
     });
 

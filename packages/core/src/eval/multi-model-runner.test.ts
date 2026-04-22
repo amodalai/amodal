@@ -10,14 +10,24 @@ import type {MultiModelProgress} from './multi-model-runner.js';
 import type {AgentBundle} from '../repo/repo-types.js';
 import type {EvalRunRecord} from './eval-types.js';
 
-vi.mock('../providers/runtime/provider-factory.js', () => ({
-  createRuntimeProvider: vi.fn(() => ({
-    chat: vi.fn().mockResolvedValue({
-      content: [{type: 'text', text: 'The answer is 2'}],
-      stopReason: 'end_turn',
-      usage: {inputTokens: 100, outputTokens: 50},
-    }),
-  })),
+vi.mock('ai', () => ({
+  generateText: vi.fn().mockResolvedValue({
+    text: 'The answer is 2',
+    toolCalls: [],
+    usage: {inputTokens: 100, outputTokens: 50},
+  }),
+}));
+
+vi.mock('@ai-sdk/anthropic', () => ({
+  createAnthropic: vi.fn(() => vi.fn(() => ({modelId: 'mock'}))),
+}));
+
+vi.mock('@ai-sdk/openai', () => ({
+  createOpenAI: vi.fn(() => vi.fn(() => ({modelId: 'mock'}))),
+}));
+
+vi.mock('@ai-sdk/google', () => ({
+  createGoogleGenerativeAI: vi.fn(() => vi.fn(() => ({modelId: 'mock'}))),
 }));
 
 function makeRepo(evals: AgentBundle['evals']): AgentBundle {

@@ -7,17 +7,24 @@
 import {describe, it, expect, vi} from 'vitest';
 import {SessionEvalQueryProvider} from './eval-session-provider.js';
 
-vi.mock('../providers/runtime/provider-factory.js', () => ({
-  createRuntimeProvider: vi.fn(() => ({
-    chat: vi.fn().mockResolvedValue({
-      content: [
-        {type: 'text', text: 'The answer is 42'},
-        {type: 'tool_use', id: 'call_1', name: 'calculator', input: {expression: '6*7'}},
-      ],
-      stopReason: 'end_turn',
-      usage: {inputTokens: 100, outputTokens: 50},
-    }),
-  })),
+vi.mock('ai', () => ({
+  generateText: vi.fn().mockResolvedValue({
+    text: 'The answer is 42',
+    toolCalls: [{toolName: 'calculator', input: {expression: '6*7'}}],
+    usage: {inputTokens: 100, outputTokens: 50},
+  }),
+}));
+
+vi.mock('@ai-sdk/anthropic', () => ({
+  createAnthropic: vi.fn(() => vi.fn(() => ({modelId: 'claude-sonnet-4-20250514'}))),
+}));
+
+vi.mock('@ai-sdk/openai', () => ({
+  createOpenAI: vi.fn(() => vi.fn(() => ({modelId: 'gpt-4o'}))),
+}));
+
+vi.mock('@ai-sdk/google', () => ({
+  createGoogleGenerativeAI: vi.fn(() => vi.fn(() => ({modelId: 'gemini-2.5-flash'}))),
 }));
 
 describe('SessionEvalQueryProvider', () => {
@@ -36,13 +43,11 @@ describe('SessionEvalQueryProvider', () => {
   });
 
   it('handles text-only response', async () => {
-    const {createRuntimeProvider} = await import('../providers/runtime/provider-factory.js');
-    (createRuntimeProvider as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-      chat: vi.fn().mockResolvedValue({
-        content: [{type: 'text', text: 'Just text'}],
-        stopReason: 'end_turn',
-        usage: {inputTokens: 50, outputTokens: 20},
-      }),
+    const {generateText} = await import('ai');
+    (generateText as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      text: 'Just text',
+      toolCalls: [],
+      usage: {inputTokens: 50, outputTokens: 20},
     });
 
     const provider = new SessionEvalQueryProvider({
@@ -57,12 +62,11 @@ describe('SessionEvalQueryProvider', () => {
   });
 
   it('handles response with no usage data', async () => {
-    const {createRuntimeProvider} = await import('../providers/runtime/provider-factory.js');
-    (createRuntimeProvider as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-      chat: vi.fn().mockResolvedValue({
-        content: [{type: 'text', text: 'No usage'}],
-        stopReason: 'end_turn',
-      }),
+    const {generateText} = await import('ai');
+    (generateText as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      text: 'No usage',
+      toolCalls: [],
+      usage: undefined,
     });
 
     const provider = new SessionEvalQueryProvider({
