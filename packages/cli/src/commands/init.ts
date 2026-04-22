@@ -100,7 +100,7 @@ function generateEnvTemplate(
 
   lines.push(
     '',
-    '# Database (optional — defaults to embedded PGLite if not set)',
+    '# Database (required — Postgres connection for memory, stores, and sessions)',
     '# DATABASE_URL=postgresql://localhost:5432/my_agent',
     '',
   );

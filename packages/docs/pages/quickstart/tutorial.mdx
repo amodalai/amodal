@@ -35,10 +35,8 @@ By the end, you'll have an agent that does things no chatbot can: call real APIs
 - **PostgreSQL** running locally (for memory and stores):
 
 ```bash
-docker run -d --name amodal-pg -p 5433:5433 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=research_agent postgres:16
+docker run -d --name amodal-pg -p 5433:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=research_agent postgres:16
 ```
-
-> **No Docker?** Skip Postgres entirely. Amodal defaults to PGLite, an embedded database that stores data in `.amodal/store-data/`. Everything in this tutorial works the same — just remove the `stores` block from `amodal.json` in the next step.
 
 ## 1. Scaffold the project
 
@@ -106,7 +104,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 # OPENAI_API_KEY=
 # GOOGLE_API_KEY=
 
-# Optional — defaults to embedded PGLite if not set
+# Required — Postgres connection for memory and stores
 DATABASE_URL=postgresql://postgres:postgres@localhost:5433/research_agent
 ```
 
