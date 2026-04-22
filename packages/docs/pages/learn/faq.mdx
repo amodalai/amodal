@@ -12,7 +12,7 @@ No. Provider choice is a one-line config change. Amodal supports Anthropic, Open
 
 ## Can I self-host Amodal?
 
-Yes. The entire runtime is MIT-licensed and runs as a single Node.js process. Deploy it anywhere that runs Node (AWS, GCP, Fly, Railway, your own metal). Bring your own Postgres for production, or use the embedded PGLite for dev.
+Yes. The entire runtime is MIT-licensed and runs as a single Node.js process. Deploy it anywhere that runs Node (AWS, GCP, Fly, Railway, your own metal). You need a PostgreSQL database — set `DATABASE_URL` in your `.env` file.
 
 The hosted cloud platform (`amodalai.com`) is a separate product. The OSS runtime is fully functional without it.
 
@@ -105,11 +105,11 @@ For `amodal dev`, set the backend in `amodal.json`:
 }
 ```
 
-PGLite is the default for local dev (zero config). Postgres is the production path. Custom `StoreBackend` implementations can target any store that satisfies the interface.
+Postgres is required — set `DATABASE_URL` in your `.env` file. Custom `StoreBackend` implementations can target any store that satisfies the interface.
 
 ## Are sessions persistent across server restarts?
 
-Yes. Sessions are stored in the configured store backend (PGLite locally, Postgres in production). When you restart the runtime, sessions resume with their full conversation history.
+Yes. Sessions are stored in the Postgres database. When you restart the runtime, sessions resume with their full conversation history.
 
 ## How do I handle secrets?
 

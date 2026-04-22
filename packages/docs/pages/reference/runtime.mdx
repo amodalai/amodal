@@ -8,7 +8,7 @@ The runtime (`@amodalai/runtime`) is an HTTP server that hosts the agent engine 
 
 The underlying engine is a state machine — see [State Machine](/learn/architecture/state-machine) for the architecture.
 
-The runtime is deliberately stateless in its HTTP layer — all persistent state lives in the store backend (PGLite or Postgres). This means you can run multiple runtime instances behind a load balancer, and sessions will work correctly as long as they share the same store.
+The runtime is deliberately stateless in its HTTP layer — all persistent state lives in the Postgres store backend. This means you can run multiple runtime instances behind a load balancer, and sessions will work correctly as long as they share the same database.
 
 ## Endpoints
 
@@ -295,7 +295,7 @@ The runtime reads from `amodal.json` and environment variables:
 
 ### Store Backend
 
-The runtime uses PGLite (in-process Postgres) by default for session and store data. This requires no setup — PGLite runs embedded in the Node.js process and stores data in a local directory. For production, configure an external PostgreSQL instance:
+The runtime requires a PostgreSQL database for session and store data. Set `DATABASE_URL` in your `.env` file (or hosting environment):
 
 ```json
 {
@@ -306,7 +306,7 @@ The runtime uses PGLite (in-process Postgres) by default for session and store d
 }
 ```
 
-Using external Postgres is recommended for production because it enables multiple runtime instances to share session state (required for load balancing) and provides proper backup and recovery.
+Postgres enables multiple runtime instances to share session state (required for load balancing) and provides proper backup and recovery.
 
 ## Starting the Server
 

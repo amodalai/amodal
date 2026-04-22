@@ -99,7 +99,7 @@ If you only need streaming LLM calls with tool support, use Vercel AI SDK direct
 - Loop (explicit state machine: thinking, streaming, executing, confirming, compacting, dispatching, done)
 - **Configuration in files, not code** — skills, knowledge, connections, stores, automations are markdown and JSON in a git repo
 - A security model baked in (field scrubbing, ACL enforcement, action tiers, confirmation gates)
-- Persistence (PGLite for dev, Postgres for production)
+- Persistence (Postgres via Drizzle ORM)
 - Package registry (`amodal pkg install @amodalai/stripe`, etc.)
 - Eval framework, automation scheduling, MCP client, sub-agent dispatch — all included
 
