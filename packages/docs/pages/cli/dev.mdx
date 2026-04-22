@@ -60,11 +60,15 @@ The dev server exposes:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/chat` | Send a message, receive SSE stream |
+| `POST` | `/chat/stream` | Send a message, receive SSE stream |
+| `POST` | `/chat/sync` | Send a message, get a complete response |
 | `POST` | `/task` | Start a background task |
 | `GET` | `/task/:id` | Get task status |
 | `GET` | `/task/:id/stream` | Stream task output |
+| `GET` | `/sessions/history` | List sessions |
+| `GET` | `/sessions/history/:id` | Get session history |
 | `GET` | `/inspect/context` | View compiled context with token counts |
+| `GET` | `/api/events` | Runtime event bus (SSE) |
 | `GET` | `/health` | Health check |
 
 ## SSE Events
@@ -73,14 +77,18 @@ The chat endpoint returns a Server-Sent Events stream with these event types:
 
 | Event | Description |
 |-------|-------------|
-| `text` | Assistant text output |
-| `tool_call` | Tool invocation |
-| `ExploreStart` / `ExploreEnd` | System exploration phase |
-| `PlanMode` | Planning phase |
+| `init` | Session created or resumed |
+| `text_delta` | Incremental text output from the LLM |
+| `tool_call_start` | Tool execution beginning |
+| `tool_call_result` | Tool execution complete |
+| `subagent_event` | Task agent activity |
 | `skill_activated` | Skill activation |
-| `FieldScrub` | Sensitive field redaction |
-| `ConfirmationRequired` | Write operation needs approval |
-| `kb_proposal` | Knowledge base update proposal |
+| `widget` | Widget rendered inline |
+| `confirmation_required` | Write operation needs approval |
+| `error` | Error occurred |
+| `done` | Response complete |
+
+See [Runtime Server](/reference/runtime#sse-event-types) for the full event reference.
 
 ## Hot Reload
 

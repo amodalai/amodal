@@ -33,7 +33,7 @@ vi.mock('@amodalai/db', () => ({
 }));
 
 vi.mock('@amodalai/core', () => ({
-  resolveAdminAgent: vi.fn().mockResolvedValue(null),
+  ensureAdminAgent: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../shared/connection-preflight.js', () => ({

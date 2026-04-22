@@ -82,6 +82,10 @@ export default defineConfig({
           link: '/quickstart/create-agent',
         },
         {
+          text: 'Tutorial',
+          link: '/quickstart/tutorial',
+        },
+        {
           text: 'Project Structure',
           link: '/quickstart/project-structure',
         },

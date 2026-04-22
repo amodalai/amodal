@@ -48,13 +48,13 @@ The chat client (CLI, web app, or widget) sends a POST to `/chat/stream` with th
 
 ### 2. Session Manager
 
-The `StandaloneSessionManager` either creates a new session or loads an existing one. For a new session, it builds the session components (provider, tool registry, permission checker, logger, compiled system prompt). For an existing session, it loads the conversation history from the session store (PGLite locally, Postgres in production). It also checks that the session has not expired.
+The `StandaloneSessionManager` either creates a new session or loads an existing one. For a new session, it builds the session components (provider, tool registry, permission checker, logger, compiled system prompt). For an existing session, it loads the conversation history from the session store (Postgres via `DATABASE_URL`). It also checks that the session has not expired.
 
 ### 3. Context Compilation
 
 Before the message reaches the LLM, the context compiler assembles the system prompt. This is where the layered config becomes a single, coherent prompt:
 
-- **Agent instructions**: the agent's role definition and `userContext` from `amodal.json`
+- **Agent instructions**: the agent's role definition and `basePrompt` from `amodal.json` (when set)
 - **Skills**: full body of every skill that passes requirement checks
 - **Knowledge index**: a compact listing of available KB documents (titles, tags, categories) so the agent can load them on demand
 - **Connection surfaces**: endpoints + field guidance + scope labels for every configured connection
@@ -74,7 +74,7 @@ See [State Machine](/learn/architecture/state-machine) for the full architecture
 When the model emits tool calls, the state machine enters `executing`. Each tool call runs through the `ToolRegistry` via the Vercel AI `tool()` interface:
 
 - **request**: Calls a connection endpoint. The `PermissionChecker` resolves the connection's `access.json` — check ACL rules, strip hidden fields, apply rate limits, require confirmation for destructive writes.
-- **query_store / write_\<store\> / \<store\>_batch**: CRUD against the configured store backend (PGLite or Postgres via Drizzle).
+- **query_store / write_\<store\> / \<store\>_batch**: CRUD against the Postgres store backend (via Drizzle ORM).
 - **dispatch_task**: Spawns a sub-agent with its own isolated state machine, sharing the parent's tools and stores. Returns a compressed summary to the parent's context.
 - **present**: Emits a widget SSE event with structured data for the client to render inline.
 - **stop_execution**: Ends the current turn cleanly — useful for automations that shouldn't keep talking after completing their task.
@@ -122,9 +122,7 @@ import { createAgent } from '@amodalai/runtime'
 
 const agent = await createAgent({
   repoPath: './my-agent',
-  provider: 'anthropic',
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  storeBackend: myPostgresPool,    // bring your own
+  storeBackend: myStoreBackend,    // bring your own
 })
 ```
 

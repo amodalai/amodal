@@ -101,11 +101,13 @@ Return a standardized vendor profile with:
 
 ### Model Tiers
 
+Maps to `models.simple`, `models.main`, and `models.advanced` in `amodal.json`:
+
 | Tier | Use Case |
 |------|----------|
-| `simple` | Data gathering, API queries, structured extraction |
-| `default` | Standard reasoning |
-| `advanced` | Complex analysis, multi-step reasoning |
+| `simple` | Data gathering, API queries, structured extraction (uses `models.simple`) |
+| `default` | Standard reasoning (uses `models.main`) |
+| `advanced` | Complex analysis, multi-step reasoning (uses `models.advanced`) |
 
 ### Available Tools
 

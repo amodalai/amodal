@@ -117,23 +117,7 @@ The agent uses these tools to get, put, list, delete, and query history on store
 
 ## Storage Backend
 
-Configured in `amodal.json`:
-
-```json
-{
-  "stores": {
-    "backend": "pglite",
-    "dataDir": ".amodal/store-data"
-  }
-}
-```
-
-| Backend | Description |
-|---------|-------------|
-| `pglite` | In-process WASM build of Postgres. Runs embedded in the runtime, file-backed at `dataDir` or in-memory. Default for `amodal dev` — zero external dependencies. |
-| `postgres` | Real Postgres server via the `postgresUrl` field (supports `env:DATABASE_URL` substitution). Use for hosted runtimes and ISV production deployments. |
-
-Both backends use [Drizzle ORM](https://orm.drizzle.team) internally against the same schema, so switching between them is a pure config change — no migration scripts, no data-shape differences. Start with `pglite` locally, move to `postgres` when you need durability / shared state across processes.
+Configured in `amodal.json`. The runtime requires a PostgreSQL database — set `DATABASE_URL` in your `.env` file:
 
 ```json
 {
@@ -143,6 +127,22 @@ Both backends use [Drizzle ORM](https://orm.drizzle.team) internally against the
   }
 }
 ```
+
+The store layer uses [Drizzle ORM](https://orm.drizzle.team) internally, so the schema is managed automatically — no migration scripts needed.
+
+## Scoped vs. Shared Stores
+
+When [scope](/guide/config#scope) is configured, stores are partitioned per `scope_id` by default — each user sees only their own data. To make a store accessible across all scopes (e.g. a read-only product catalog or shared reference data), add `"shared": true` to the store JSON:
+
+```json
+{
+  "name": "product-catalog",
+  "shared": true,
+  "entity": { ... }
+}
+```
+
+Shared stores are readable by all scopes but still enforce the same access controls. Writes from one scope do not affect another scope's partition in non-shared stores.
 
 ## History & Tracing
 

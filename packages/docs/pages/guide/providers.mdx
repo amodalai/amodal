@@ -77,18 +77,24 @@ For OpenAI-compatible providers, set `provider` to the provider name and optiona
 
 ## Failover
 
-The `createFailoverProvider()` factory cascades between providers with retry logic and linear backoff:
+Every `ModelConfig` supports a `fallback` chain — another `ModelConfig` tried when the primary fails (5xx, 429, timeout, auth error):
 
 ```json
 {
-  "provider": "failover",
-  "providers": ["anthropic", "openai"],
-  "retries": 2,
-  "backoffMs": 1000
+  "models": {
+    "main": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "fallback": {
+        "provider": "openai",
+        "model": "gpt-4o"
+      }
+    }
+  }
 }
 ```
 
-If the primary provider fails, the runtime automatically tries the next one.
+Failover is per-request. If Anthropic recovers, the next request goes back to the primary. For programmatic use, the runtime also exports `createFailoverProvider()` with configurable retry count and backoff.
 
 ## Streaming
 

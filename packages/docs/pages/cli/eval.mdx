@@ -12,20 +12,24 @@ amodal eval
 
 ## Eval Files
 
-Evals live in `evals/` as YAML files:
+Evals live in `evals/` as Markdown files:
 
-```yaml
-name: triage-accuracy
-description: Test alert triage quality
-cases:
-  - input: "Review recent security alerts"
-    rubric:
-      - "Correctly identifies critical alerts"
-      - "Filters known false positives"
-      - "Provides severity ranking"
-    expected_tools:
-      - request
-      - query_store
+```markdown
+# Eval: Triage Accuracy
+
+Test alert triage quality.
+
+## Query
+
+"Review recent security alerts"
+
+## Assertions
+
+- Should correctly identify critical alerts
+- Should filter known false positives
+- Should provide severity ranking
+- Should use the request tool to query detection systems
+- Should NOT fabricate alert data
 ```
 
 ## Evaluation Methods

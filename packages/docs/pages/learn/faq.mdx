@@ -12,7 +12,7 @@ No. Provider choice is a one-line config change. Amodal supports Anthropic, Open
 
 ## Can I self-host Amodal?
 
-Yes. The entire runtime is MIT-licensed and runs as a single Node.js process. Deploy it anywhere that runs Node (AWS, GCP, Fly, Railway, your own metal). Bring your own Postgres for production, or use the embedded PGLite for dev.
+Yes. The entire runtime is MIT-licensed and runs as a single Node.js process. Deploy it anywhere that runs Node (AWS, GCP, Fly, Railway, your own metal). You need a PostgreSQL database — set `DATABASE_URL` in your `.env` file.
 
 The hosted cloud platform (`amodalai.com`) is a separate product. The OSS runtime is fully functional without it.
 
@@ -23,8 +23,13 @@ The hosted cloud platform (`amodalai.com`) is a separate product. The OSS runtim
 ```json
 {
   "name": "My Agent",
-  "provider": "anthropic",
-  "model": "claude-sonnet-4-20250514"
+  "version": "0.1.0",
+  "models": {
+    "main": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514"
+    }
+  }
 }
 ```
 
@@ -36,7 +41,7 @@ Three places, in order of weight:
 
 1. **Skills** (`skills/*.md`) — expert reasoning methodologies that activate based on the question
 2. **Knowledge** (`knowledge/*.md`) — persistent domain context the agent loads on demand
-3. **`userContext` in `amodal.json`** — standing instructions that apply to every turn
+3. **`basePrompt` in `amodal.json`** — custom base system prompt that replaces the platform default
 
 All three get compiled into the system prompt before every LLM call.
 
@@ -82,11 +87,10 @@ Yes. Inject a store backend at runtime creation time:
 
 ```typescript
 import { createAgent } from '@amodalai/runtime'
-import { Pool } from 'pg'
 
 const agent = await createAgent({
   repoPath: './my-agent',
-  storeBackend: createPostgresStoreBackend(new Pool({ connectionString: process.env.DATABASE_URL })),
+  storeBackend: myStoreBackend,  // bring your own StoreBackend implementation
 })
 ```
 
@@ -101,11 +105,11 @@ For `amodal dev`, set the backend in `amodal.json`:
 }
 ```
 
-PGLite is the default for local dev (zero config). Postgres is the production path. Custom `StoreBackend` implementations can target any store that satisfies the interface.
+Postgres is required — set `DATABASE_URL` in your `.env` file. Custom `StoreBackend` implementations can target any store that satisfies the interface.
 
 ## Are sessions persistent across server restarts?
 
-Yes. Sessions are stored in the configured store backend (PGLite locally, Postgres in production). When you restart the runtime, sessions resume with their full conversation history.
+Yes. Sessions are stored in the Postgres database. When you restart the runtime, sessions resume with their full conversation history.
 
 ## How do I handle secrets?
 
@@ -134,7 +138,7 @@ The runtime enforces these rules before tool calls execute. See [Security & Guar
 
 ## How do I test an agent?
 
-Evals. Define test cases in `evals/*.yaml` with LLM-judged assertions, run them with `amodal eval`, compare scores across models. See [Evals](/guide/evals).
+Evals. Define test cases in `evals/*.md` with LLM-judged assertions, run them with `amodal eval`, compare scores across models. See [Evals](/guide/evals).
 
 ## Can automations run without the UI open?
 

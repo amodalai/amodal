@@ -43,13 +43,11 @@ import { createAgent } from '@amodalai/runtime'
 
 const agent = await createAgent({
   repoPath: './my-agent',
-  provider: 'anthropic',
-  apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
 // In your Express route:
 app.post('/api/chat', async (req, res) => {
-  const session = await agent.createSession({ userId: req.user.id })
+  const session = agent.createSession()
   for await (const event of session.stream(req.body.message)) {
     res.write(`data: ${JSON.stringify(event)}\n\n`)
   }
@@ -57,7 +55,7 @@ app.post('/api/chat', async (req, res) => {
 })
 ```
 
-The agent you create owns its own tool registry, provider, and store backend — you bring your own database (Postgres pool or PGLite for dev), your own auth, your own framework. Amodal stays invisible to your end users.
+The agent you create owns its own tool registry, provider, and store backend — you bring your own Postgres database, your own auth, your own framework. Amodal stays invisible to your end users.
 
 ### What you get
 
@@ -66,7 +64,7 @@ The agent you create owns its own tool registry, provider, and store backend —
 - **Tool system** — store tools, connection tools with ACL enforcement, custom tools (handler.ts files), MCP tools, and admin file tools.
 - **Sub-agent dispatch** — `dispatch_task` spawns a write-enabled sub-agent with its own context.
 - **Context compaction + loop detection** — long agent runs stay coherent without blowing the budget.
-- **Store backends** — PGLite for dev, Postgres for production, both via Drizzle ORM. Bring your own via the `storeBackend` injection.
+- **Store backends** — Postgres via Drizzle ORM. Bring your own via the `storeBackend` injection.
 - **SSE streaming** — every `session.stream()` call yields typed SSE events (init, text_delta, tool_call_start, tool_call_result, done).
 - **MCP support** — discover tools from connected MCP servers.
 

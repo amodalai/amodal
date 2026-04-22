@@ -12,7 +12,7 @@ import {spawn} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createLocalServer, initLogLevel, interceptConsole, log} from '@amodalai/runtime';
-import {resolveAdminAgent} from '@amodalai/core';
+import {ensureAdminAgent} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 import {findFreePort} from '../shared/find-free-port.js';
 import {runConnectionPreflight, printPreflightTable} from '../shared/connection-preflight.js';
@@ -253,10 +253,13 @@ async function spawnAdminAgent(opts: {
   studioUrl: string | null;
   repoPath: string;
 }): Promise<AdminSpawnResult | null> {
-  const adminAgentPath = await resolveAdminAgent(opts.repoPath);
-  if (!adminAgentPath) {
-    log.info('admin_agent_not_available', {
-      hint: 'No admin agent found at ~/.amodal/admin-agent/ or in amodal.json — skipped',
+  let adminAgentPath: string | null;
+  try {
+    adminAgentPath = await ensureAdminAgent(opts.repoPath);
+  } catch (err: unknown) {
+    log.warn('admin_agent_fetch_failed', {
+      error: err instanceof Error ? err.message : String(err),
+      hint: 'Could not download @amodalai/agent-admin — admin agent skipped',
     });
     return null;
   }
