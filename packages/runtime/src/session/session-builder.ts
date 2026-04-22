@@ -54,6 +54,7 @@ import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-too
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
 import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import type {Logger} from '../logger.js';
+import type {CredentialResolver} from '../credentials.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -111,6 +112,12 @@ export interface BuildSessionComponentsOptions {
    * and editableBy is not 'none'). The tool upserts directly via Drizzle.
    */
   memoryDb?: import('drizzle-orm/node-postgres').NodePgDatabase<Record<string, unknown>>;
+  /**
+   * Credential resolver for this session. When provided, scope:KEY and env:KEY
+   * references in connection auth tokens are resolved at request time using this
+   * resolver rather than left as literal strings.
+   */
+  credentialResolver?: CredentialResolver;
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +299,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     fieldScrubber,
     memoryContent,
     memoryDb,
+    credentialResolver,
   } = opts;
 
   // -------------------------------------------------------------------------
@@ -531,6 +539,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     fieldScrubber,
     sessionId,
     ...(searchProvider ? {searchProvider} : {}),
+    ...(credentialResolver ? {credentialResolver} : {}),
   };
 
   const toolContextFactory = createToolContextFactory(factoryOpts);

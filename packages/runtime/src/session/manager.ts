@@ -144,12 +144,18 @@ export class StandaloneSessionManager {
     // (e.g. exclude eval-runner / admin sessions from the chat history UI).
     const metadata = {...(opts.metadata ?? {}), appId};
 
+    // Create a child logger with scopeId so all downstream log events for this
+    // session automatically include scope_id for correlation and filtering.
+    const sessionLogger = scopeId
+      ? this.logger.child({scopeId})
+      : this.logger;
+
     const session: Session = {
       id,
       provider: opts.provider,
       toolRegistry: opts.toolRegistry,
       permissionChecker: opts.permissionChecker,
-      logger: this.logger,
+      logger: sessionLogger,
       systemPrompt: opts.systemPrompt,
       messages: opts.messages ?? [],
       usage: opts.usage ?? {inputTokens: 0, outputTokens: 0, totalTokens: 0},
@@ -173,6 +179,7 @@ export class StandaloneSessionManager {
       model: session.model,
       provider: session.providerName,
       appId: session.appId,
+      scopeId: session.scopeId,
       toolCount: opts.toolRegistry.size,
     });
 

@@ -37,8 +37,15 @@ export class ScopeSecretsResolver implements CredentialResolver {
 }
 
 /**
- * Tries multiple resolvers in order. Returns the first non-undefined result.
- * Falls back to treating the ref as a literal string if no resolver matches.
+ * Tries multiple resolvers in order and returns the first resolved value.
+ *
+ * Resolution semantics:
+ * - A resolver returning `undefined` means its prefix did not match — the
+ *   chain continues to the next resolver.
+ * - A resolver throwing means resolution failed (e.g. key found but lookup
+ *   errored) — the error propagates immediately; no fallback is attempted.
+ * - If ALL resolvers return `undefined` (no prefix matched), the ref is
+ *   treated as a literal string and returned unchanged.
  */
 export class ChainResolver implements CredentialResolver {
   constructor(private readonly resolvers: CredentialResolver[]) {}

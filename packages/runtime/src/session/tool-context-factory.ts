@@ -22,6 +22,7 @@ import type {ConnectionsMap} from '../tools/request-tool.js';
 import type {SearchProvider} from '../providers/search-provider.js';
 import type {ToolContext} from '../tools/types.js';
 import type {Logger} from '../logger.js';
+import type {CredentialResolver} from '../credentials.js';
 import {ConnectionError, StoreError} from '../errors.js';
 import {resolveKey} from '../stores/key-resolver.js';
 
@@ -58,6 +59,12 @@ export interface ToolContextFactoryOptions {
   scopeContext?: Record<string, string>;
   /** Grounded search provider for web_search/fetch_url (optional). */
   searchProvider?: SearchProvider;
+  /**
+   * Credential resolver for this session. Used to resolve scope:KEY and env:KEY
+   * references in connection auth tokens at request time.
+   * If not provided, auth tokens are used as-is (after {{VAR}} template expansion).
+   */
+  credentialResolver?: CredentialResolver;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +72,29 @@ export interface ToolContextFactoryOptions {
 // ---------------------------------------------------------------------------
 
 const REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * Resolve scope:KEY and env:KEY tokens within a header value string.
+ *
+ * Scans for whitespace-delimited tokens that start with "scope:" or "env:"
+ * and replaces each with the value returned by the resolver. If the resolver
+ * returns undefined (key not found), the token is left unchanged so the
+ * caller can detect the unresolved ref rather than silently sending a bad header.
+ */
+async function resolveCredentialRefs(value: string, resolver: CredentialResolver): Promise<string> {
+  // Split on whitespace boundaries but preserve the original separators
+  const parts = value.split(/(\s+)/);
+  const resolved = await Promise.all(
+    parts.map(async (part) => {
+      if (part.startsWith('scope:') || part.startsWith('env:')) {
+        const result = await resolver.resolve(part);
+        return result ?? part;
+      }
+      return part;
+    }),
+  );
+  return resolved.join('');
+}
 
 /**
  * Resolve auth template variables: "Bearer {{API_KEY}}" → "Bearer token123"
@@ -165,7 +195,15 @@ async function makeRequest(
   const reqConfig = connConfig._request_config;
   if (reqConfig?.auth) {
     for (const entry of reqConfig.auth) {
-      headers[entry.header] = resolveAuthTemplate(entry.value_template, connConfig);
+      let resolved = resolveAuthTemplate(entry.value_template, connConfig);
+      // Resolve any remaining scope:KEY or env:KEY references using the
+      // credential resolver. These appear when connection-bridge.ts could not
+      // resolve the ref at bundle-load time (e.g. scope:KEY requires per-session
+      // scope secrets that are only available at request time).
+      if (opts.credentialResolver && (resolved.includes('scope:') || resolved.includes('env:'))) {
+        resolved = await resolveCredentialRefs(resolved, opts.credentialResolver);
+      }
+      headers[entry.header] = resolved;
     }
   }
   if (reqConfig?.default_headers) {
