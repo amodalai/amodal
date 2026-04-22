@@ -84,6 +84,7 @@ export function parseStoreJson(
     failure: storeJson.failure,
     history: storeJson.history,
     trace: storeJson.trace,
+    shared: storeJson.shared,
     location,
   } as LoadedStore;
 }

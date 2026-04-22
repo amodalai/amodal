@@ -16,7 +16,7 @@
  * `AgentContext.buildToolContext` signature: `(callId: string) => ToolContext`.
  */
 
-import type {LoadedStore, StoreBackend} from '@amodalai/types';
+import type {LoadedStore, StoreBackend, LoadedConnection} from '@amodalai/types';
 import type {FieldScrubber} from '@amodalai/core';
 import type {ConnectionsMap} from '../tools/request-tool.js';
 import type {SearchProvider} from '../providers/search-provider.js';
@@ -33,6 +33,11 @@ import {resolveKey} from '../stores/key-resolver.js';
 export interface ToolContextFactoryOptions {
   /** Connection configs (base_url, auth headers, etc.) */
   connectionsMap: ConnectionsMap;
+  /**
+   * Raw loaded connections — keyed by name. Used to look up contextInjection
+   * config that is not present in the rendered connectionsMap.
+   */
+  loadedConnections?: Map<string, LoadedConnection>;
   /** Shared store backend for ctx.store() */
   storeBackend: StoreBackend;
   /** Store definitions for key resolution */
@@ -49,6 +54,8 @@ export interface ToolContextFactoryOptions {
   sessionId: string;
   /** Scope ID for per-user session isolation. Empty string means agent-level (no scope). */
   scopeId: string;
+  /** Scope context key-value pairs associated with this scope (from JWT claims or request body). */
+  scopeContext?: Record<string, string>;
   /** Grounded search provider for web_search/fetch_url (optional). */
   searchProvider?: SearchProvider;
 }
@@ -95,10 +102,56 @@ async function makeRequest(
   }
   let url = `${baseUrl.replace(/\/$/, '')}/${endpoint.replace(/^\//, '')}`;
 
-  // Add query params
-  if (params?.params) {
+  // Apply context injection — resolve scopeContext values into the request
+  // based on the connection's contextInjection config.
+  const loadedConn = opts.loadedConnections?.get(connection);
+  const contextInjection = loadedConn?.spec.contextInjection;
+  const injectedQueryParams: Record<string, string> = {};
+  const injectedHeaders: Record<string, string> = {};
+  const injectedBodyFields: Record<string, string> = {};
+
+  if (contextInjection) {
+    for (const [contextKey, injection] of Object.entries(contextInjection)) {
+      const value = opts.scopeContext?.[contextKey];
+      if (value === undefined) {
+        if (injection.required) {
+          throw new ConnectionError(
+            `Required context injection key "${contextKey}" is missing from scope context for connection "${connection}"`,
+            {connection, action: `${method} ${endpoint}`},
+          );
+        }
+        // Optional — skip
+        continue;
+      }
+      switch (injection.in) {
+        case 'query':
+          injectedQueryParams[injection.field] = value;
+          break;
+        case 'header':
+          injectedHeaders[injection.field] = value;
+          break;
+        case 'path':
+          url = url.replace(`{${injection.field}}`, encodeURIComponent(value));
+          break;
+        case 'body':
+          injectedBodyFields[injection.field] = value;
+          break;
+        default: {
+          const _exhaustive: never = injection.in;
+          throw new ConnectionError(
+            `Unknown context injection location "${String(_exhaustive)}" for key "${contextKey}"`,
+            {connection, action: `${method} ${endpoint}`},
+          );
+        }
+      }
+    }
+  }
+
+  // Add query params (caller params take precedence over injected params)
+  const mergedQueryParams = {...injectedQueryParams, ...params?.params};
+  if (Object.keys(mergedQueryParams).length > 0) {
     const searchParams = new URLSearchParams();
-    for (const [k, v] of Object.entries(params.params)) {
+    for (const [k, v] of Object.entries(mergedQueryParams)) {
       searchParams.set(k, v);
     }
     const qs = searchParams.toString();
@@ -107,8 +160,8 @@ async function makeRequest(
     }
   }
 
-  // Build headers
-  const headers: Record<string, string> = {'Content-Type': 'application/json'};
+  // Build headers (injected headers go in before auth so auth always takes precedence)
+  const headers: Record<string, string> = {'Content-Type': 'application/json', ...injectedHeaders};
   const reqConfig = connConfig._request_config;
   if (reqConfig?.auth) {
     for (const entry of reqConfig.auth) {
@@ -121,11 +174,27 @@ async function makeRequest(
     }
   }
 
+  // Merge body injection fields with caller data (caller data takes precedence)
+  let requestData = params?.data;
+  if (Object.keys(injectedBodyFields).length > 0 && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+    if (requestData !== null && requestData !== undefined && typeof requestData === 'object' && !Array.isArray(requestData)) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated object at system boundary (requestData checked with typeof above)
+      const existingBody = requestData as Record<string, unknown>;
+      for (const [k, v] of Object.entries(existingBody)) {
+        injectedBodyFields[k] = String(v);
+      }
+      requestData = injectedBodyFields;
+    } else if (requestData === undefined) {
+      requestData = injectedBodyFields;
+    }
+    // If requestData is a primitive or array, body injection is not applicable — skip
+  }
+
   const requestSignal = signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 
   const fetchOpts: RequestInit = {method, headers, signal: requestSignal};
-  if (params?.data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-    fetchOpts.body = JSON.stringify(params.data);
+  if (requestData !== undefined && requestData !== null && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+    fetchOpts.body = JSON.stringify(requestData);
   }
 
   const response = await fetch(url, fetchOpts);
@@ -267,6 +336,7 @@ export function createToolContextFactory(
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       sessionId: opts.sessionId,
       scopeId: opts.scopeId,
+      ...(opts.scopeContext ? {scopeContext: opts.scopeContext} : {}),
       ...(opts.searchProvider ? {searchProvider: opts.searchProvider} : {}),
     };
     return ctx;

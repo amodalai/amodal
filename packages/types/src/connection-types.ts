@@ -8,6 +8,21 @@
 // Connection spec types (from repo/connection-schemas.ts)
 // ---------------------------------------------------------------------------
 
+/**
+ * A single context injection field declaration.
+ *
+ * Tells the runtime how to inject a value from the session's scopeContext
+ * into outgoing HTTP requests for this connection.
+ */
+export interface ContextInjectionField {
+  /** Where to inject the value in the HTTP request. */
+  in: 'query' | 'header' | 'path' | 'body';
+  /** The field name (query param name, header name, body key, or path param name). */
+  field: string;
+  /** When true, requests fail if the scope context does not contain this key. */
+  required?: boolean;
+}
+
 export interface ConnectionSpec {
   protocol: 'rest' | 'mcp';
   baseUrl?: string;
@@ -37,6 +52,13 @@ export interface ConnectionSpec {
   url?: string;
   headers?: Record<string, string>;
   trust?: boolean;
+  /**
+   * Scope context injection rules.
+   *
+   * Keys are scopeContext keys; values declare where to inject their values
+   * into outgoing HTTP requests for this connection.
+   */
+  contextInjection?: Record<string, ContextInjectionField>;
 }
 
 export interface Threshold {

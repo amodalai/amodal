@@ -80,6 +80,11 @@ export interface LoadedStore {
   history?: StoreHistoryConfig;
   trace?: boolean;
   location: string;
+  /**
+   * When true, this store is shared across all scope IDs (agent-level).
+   * Reads use scopeId = '' (no isolation); writes are rejected with StoreError.
+   */
+  shared?: boolean;
 }
 
 // ---------------------------------------------------------------------------

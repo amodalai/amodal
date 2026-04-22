@@ -24,6 +24,7 @@ import {loadMemoryContent} from '../tools/memory-tool.js';
 import type {AuthContext} from '../middleware/auth.js';
 import {SessionError} from '../errors.js';
 import type {Logger} from '../logger.js';
+import type {CredentialResolver} from '../credentials.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -53,6 +54,12 @@ export interface SharedResources {
   memoryDb?: NodePgDatabase<Record<string, unknown>>;
   /** Application ID for tenant scoping (defaults to 'local' in dev). */
   appId?: string;
+  /**
+   * Factory that builds a CredentialResolver for a given scopeId.
+   * Used by connection loading to resolve scope:KEY references at session time.
+   * If not provided, only env:KEY and literal values are resolved.
+   */
+  buildCredentialResolver?: (scopeId: string | undefined) => CredentialResolver;
 }
 
 /** Result of session resolution — includes the tool context factory for wiring into runMessage. */
@@ -124,6 +131,7 @@ async function buildComponents(
     sessionId?: string;
     pinnedModel?: {provider: string; model: string};
     scopeId?: string;
+    scopeContext?: Record<string, string>;
   },
 ): Promise<SessionComponents> {
   // Load memory content if memory is enabled and a DB is available
@@ -148,6 +156,7 @@ async function buildComponents(
     memoryDb,
     appId: shared.appId,
     scopeId: opts.scopeId,
+    scopeContext: opts.scopeContext,
   });
 }
 
@@ -227,6 +236,7 @@ export async function resolveSession(
       sessionId: resolvedSessionId,
       pinnedModel: opts.pinnedModel,
       scopeId,
+      scopeContext: opts.scopeContext,
     });
     const components = await enhance(rawComponents);
 
@@ -256,6 +266,7 @@ export async function resolveSession(
     sessionType: opts.sessionType,
     pinnedModel: opts.pinnedModel,
     scopeId,
+    scopeContext: opts.scopeContext,
   });
   const components = await enhance(rawComponents);
 

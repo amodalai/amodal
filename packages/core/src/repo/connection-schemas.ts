@@ -48,6 +48,12 @@ export const ConnectionSpecSchema = z.object({
   url: z.string().optional(),
   headers: z.record(z.string()).optional(),
   trust: z.boolean().optional(),
+  // --- Context injection ---
+  contextInjection: z.record(z.object({
+    in: z.enum(['query', 'header', 'path', 'body']),
+    field: z.string(),
+    required: z.boolean().optional(),
+  })).optional(),
 });
 
 export type ConnectionSpec = z.infer<typeof ConnectionSpecSchema>;
