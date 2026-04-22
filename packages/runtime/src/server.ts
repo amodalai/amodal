@@ -32,6 +32,7 @@ import {MessageDedupCache} from './channels/dedup-cache.js';
 import {log, createLogger} from './logger.js';
 import {defaultRoleProvider, type RoleProvider} from './role-provider.js';
 import {asyncHandler} from './routes/route-helpers.js';
+import {createSessionsHistoryRouter} from './routes/sessions-history.js';
 import type {SessionStore} from './session/store.js';
 
 export interface ServerInstance {
@@ -132,6 +133,9 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     mcpManager: null,
     logger: log,
   };
+
+  // Event bus for session lifecycle events
+  const eventBus = new RuntimeEventBus();
 
   // --- Express app ---
   const app = express();
@@ -250,6 +254,16 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     }));
 
     log.info('channels_router_mounted', {channels: [...options.channelAdapters.keys()]});
+  }
+
+  // Session history routes (when session store is available)
+  if (options.sessionStore) {
+    app.use(createSessionsHistoryRouter({
+      sessionStore: options.sessionStore,
+      sessionManager,
+      eventBus,
+      appId: config.appId ?? 'local',
+    }));
   }
 
   // Additional routers (e.g., session history proxy from hosting layer)
