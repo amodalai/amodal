@@ -17,7 +17,7 @@
 import express from 'express';
 import type {Express} from 'express';
 import type http from 'node:http';
-import type {AgentBundle, ChannelAdapter, ChannelSessionMapper} from '@amodalai/types';
+import type {AgentBundle, ChannelAdapter, ChannelSessionMapper, StoreBackend} from '@amodalai/types';
 import {errorHandler} from './middleware/error-handler.js';
 import {createChatStreamRouter} from './routes/chat-stream.js';
 import {createAIStreamRouter} from './routes/ai-stream.js';
@@ -32,6 +32,7 @@ import {MessageDedupCache} from './channels/dedup-cache.js';
 import {log, createLogger} from './logger.js';
 import {defaultRoleProvider, type RoleProvider} from './role-provider.js';
 import {asyncHandler} from './routes/route-helpers.js';
+import type {SessionStore} from './session/store.js';
 
 export interface ServerInstance {
   app: Express;
@@ -105,7 +106,9 @@ export interface CreateServerOptions {
   /** Event bus for channel lifecycle events. If omitted, a minimal one is created. */
   channelEventBus?: RuntimeEventBus;
   /** Optional session store for persisting sessions across restarts. */
-  sessionStore?: import('./session/store.js').SessionStore;
+  sessionStore?: SessionStore;
+  /** Optional store backend for document stores. Passed to agent tools. */
+  storeBackend?: StoreBackend;
 }
 
 /**
@@ -125,7 +128,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
   sessionManager.start();
 
   const shared = {
-    storeBackend: null,
+    storeBackend: options.storeBackend ?? null,
     mcpManager: null,
     logger: log,
   };
