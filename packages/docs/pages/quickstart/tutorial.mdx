@@ -77,12 +77,15 @@ Open `amodal.json` and replace its contents with:
 | `memory.enabled` | Gives the agent a persistent memory that carries across sessions. |
 | `memory.nudgeInterval` | How often (in conversation turns) the agent is prompted to save important facts. |
 
-Set your environment variables:
+Create a `.env` file in your project root (`amodal init` already gitignores it):
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...       # or OPENAI_API_KEY / GOOGLE_API_KEY
-export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/research_agent
+# .env
+ANTHROPIC_API_KEY=sk-ant-...
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/research_agent
 ```
+
+Using OpenAI or Google instead? Replace `ANTHROPIC_API_KEY` with `OPENAI_API_KEY` or `GOOGLE_API_KEY` and update the `models.main` block to match.
 
 ## 2. Add connections
 
