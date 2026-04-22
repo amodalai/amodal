@@ -17,9 +17,7 @@ import { sql } from 'drizzle-orm';
 
 const DDL_STATEMENTS = [
   // --- store_documents ---
-  // Drop and recreate to change the primary key to include scope_id.
-  sql`DROP TABLE IF EXISTS store_documents CASCADE`,
-  sql`CREATE TABLE store_documents (
+  sql`CREATE TABLE IF NOT EXISTS store_documents (
     app_id TEXT NOT NULL,
     scope_id TEXT NOT NULL DEFAULT '',
     store TEXT NOT NULL,
@@ -32,13 +30,12 @@ const DDL_STATEMENTS = [
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (app_id, scope_id, store, key)
   )`,
+  sql`ALTER TABLE store_documents ADD COLUMN IF NOT EXISTS scope_id TEXT NOT NULL DEFAULT ''`,
   sql`CREATE INDEX IF NOT EXISTS idx_store_documents_store ON store_documents (app_id, scope_id, store)`,
   sql`CREATE INDEX IF NOT EXISTS idx_store_documents_expires ON store_documents (expires_at)`,
 
   // --- store_document_versions ---
-  // Drop and recreate to add scope_id column and update lookup index.
-  sql`DROP TABLE IF EXISTS store_document_versions CASCADE`,
-  sql`CREATE TABLE store_document_versions (
+  sql`CREATE TABLE IF NOT EXISTS store_document_versions (
     id SERIAL PRIMARY KEY,
     app_id TEXT NOT NULL,
     scope_id TEXT NOT NULL DEFAULT '',
@@ -49,6 +46,7 @@ const DDL_STATEMENTS = [
     meta JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+  sql`ALTER TABLE store_document_versions ADD COLUMN IF NOT EXISTS scope_id TEXT NOT NULL DEFAULT ''`,
   sql`CREATE INDEX IF NOT EXISTS idx_store_versions_lookup ON store_document_versions (app_id, scope_id, store, key, version)`,
 
   // --- agent_sessions ---

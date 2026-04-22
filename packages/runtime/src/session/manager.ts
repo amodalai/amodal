@@ -480,12 +480,6 @@ export class StandaloneSessionManager {
       }
     }
 
-    // Also clean up old persisted sessions
-    if (this.store) {
-      const storeDeleted = await this.store.cleanup(new Date(cutoff));
-      destroyed += storeDeleted;
-    }
-
     if (destroyed > 0) {
       this.logger.info('session_cleanup', {destroyed});
     }
