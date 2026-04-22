@@ -56,7 +56,7 @@ A realistic configuration for a deployed agent. This is what a production ops-ag
         }
       }
     },
-    "explore": {
+    "simple": {
       "provider": "anthropic",
       "model": "claude-haiku-4-5-20251001",
       "fallback": {
@@ -66,11 +66,11 @@ A realistic configuration for a deployed agent. This is what a production ops-ag
     }
   },
 
-  "userContext": "You are the operations agent for Acme Corp. Our infrastructure runs on AWS (us-east-1 and eu-west-1). We use Datadog for monitoring, PagerDuty for incident management, and Slack (#ops-alerts) for communication. Always check Datadog metrics before escalating. Never restart production services without explicit confirmation."
+  "basePrompt": "You are the operations agent for Acme Corp. Our infrastructure runs on AWS (us-east-1 and eu-west-1). We use Datadog for monitoring, PagerDuty for incident management, and Slack (#ops-alerts) for communication. Always check Datadog metrics before escalating. Never restart production services without explicit confirmation."
 }
 ```
 
-The `userContext` string is injected at the top of every session prompt. Use it for standing instructions that should always apply — your company's infrastructure layout, naming conventions, escalation policies, or behavioral constraints. This is not the place for methodology (that goes in skills) or reference data (that goes in the knowledge base). Think of it as the agent's permanent memory of "who am I and what are the ground rules."
+The `basePrompt` string replaces the default system prompt entirely. Use it when you want full control over the agent's instructions — your company's infrastructure layout, naming conventions, escalation policies, or behavioral constraints. When omitted, the platform compiles a default system prompt from your skills, knowledge, and connection surfaces. This is not the place for methodology (that goes in skills) or reference data (that goes in the knowledge base). Think of it as the agent's core identity and ground rules.
 
 ## Config with MCP, Stores, and Sandbox
 
@@ -87,7 +87,7 @@ When you need external tool servers, persistent storage, and sandboxed execution
       "provider": "anthropic",
       "model": "claude-sonnet-4-20250514"
     },
-    "explore": {
+    "simple": {
       "provider": "google",
       "model": "gemini-2.0-flash"
     }
@@ -155,13 +155,16 @@ The `stores` block configures the database backend used for **both** agent docum
 | Field | Type | Description |
 |-------|------|-------------|
 | `description` | string | Agent description. Shown in CLI output. |
-| `userContext` | string | Injected at the top of every session prompt. Standing instructions, company context, behavioral constraints. |
-| `models.explore` | ModelConfig | Model for explore/gather sub-agents. Should be faster and cheaper than `main`. |
+| `basePrompt` | string | Custom base system prompt. When set, replaces the platform-compiled default. |
+| `disabledSubagents` | string[] | Subagent names to disable (e.g., `['explore', 'plan']` to turn off platform defaults). |
+| `models.simple` | ModelConfig | Model for data-gathering sub-agents. Should be faster and cheaper than `main`. |
+| `models.advanced` | ModelConfig | Model for complex analysis tasks that need stronger reasoning than `main`. |
 | `sandbox` | object | Sandbox execution config. Controls whether custom tool handlers can call `ctx.exec()` for shell commands, and how sandboxing is enforced. |
 | `stores` | object | Data store backend config. Defaults to PGLite in the local `.amodal/store-data` directory. |
 | `proactive` | object | Webhook URL for external triggers (automation webhooks, third-party integrations). |
 | `mcp` | object | MCP server connections. Each server exposes additional tools to the agent. |
 | `webTools` | object | Enables `web_search` + `fetch_url` built-in tools via Gemini grounding. See [Web Tools](/guide/tools#web-tools). |
+| `packages` | string[] | Installed npm packages to load (content type detected from package structure). |
 | `memory` | object | Persistent memory across sessions. See [Memory](#memory). |
 | `scope` | object | Per-user isolation for multi-tenant deployments. See [Scope](#scope). |
 
@@ -171,31 +174,34 @@ The `stores` block configures the database backend used for **both** agent docum
 {
   "provider": "anthropic" | "openai" | "google",
   "model": "claude-sonnet-4-20250514",
-  "baseUrl": "https://...",        // optional, custom endpoint
-  "credentials": {                 // optional, explicit keys
+  "region": "us-east-1",            // optional, provider region
+  "baseUrl": "https://...",          // optional, custom endpoint
+  "credentials": {                   // optional, explicit keys
     "api_key": "env:ANTHROPIC_API_KEY"
   },
-  "fallback": { ... }             // optional, another ModelConfig
+  "fallback": { ... }               // optional, another ModelConfig
 }
 ```
 
-### Model Tiers: Main vs. Explore
+### Model Tiers: Main vs. Simple vs. Advanced
 
 The `main` model is your reasoning engine. It handles the user conversation, decides when to dispatch sub-agents, interprets their findings, plans next steps, and composes the final response. This is where model quality matters most — you want the best model you can afford here, because this is where judgment happens.
 
-The `explore` model is the workhorse. When the primary agent dispatches a task agent to gather data — "go query Datadog for the last hour of CPU metrics" or "pull the customer's recent Stripe invoices" — that task agent uses the explore model. These sub-agents do focused, bounded work: load some knowledge, make API calls, interpret the raw response, and return a clean summary. They do not need the full reasoning capability of the main model.
+The `simple` model is the workhorse. When the primary agent dispatches a task agent to gather data — "go query Datadog for the last hour of CPU metrics" or "pull the customer's recent Stripe invoices" — that task agent uses the simple model. These sub-agents do focused, bounded work: load some knowledge, make API calls, interpret the raw response, and return a clean summary. They do not need the full reasoning capability of the main model.
+
+The `advanced` model is for complex analysis that needs stronger reasoning than the main model. Use this for tasks requiring deep multi-step reasoning, such as compliance auditing, complex financial analysis, or code review.
 
 This matters for cost and latency. A complex investigation might dispatch 5-10 task agents, each making multiple tool calls. If every one of those runs on your most expensive model, costs add up fast and the user waits longer. By routing sub-agents to a faster, cheaper model, you keep the primary agent's context clean (it only sees the summaries) and your token bill reasonable.
 
 Typical pairings:
 
-| Use Case | Main | Explore |
-|----------|------|---------|
+| Use Case | Main | Simple |
+|----------|------|--------|
 | Cost-optimized | Claude Sonnet | Claude Haiku |
 | Quality-first | Claude Opus | Claude Sonnet |
 | Multi-provider | Claude Sonnet | Gemini Flash |
 
-If you omit `models.explore`, the runtime falls back to `models.main` for everything. This works fine — it just costs more and runs slower on complex questions.
+If you omit `models.simple`, the runtime falls back to `models.main` for everything. This works fine — it just costs more and runs slower on complex questions.
 
 ### Fallback Chains
 
@@ -285,6 +291,7 @@ When enabled, the agent gets a built-in `memory` tool with `add`, `remove`, `lis
 | `maxTotalChars` | `8000` | Maximum total characters across all entries. |
 | `editableBy` | `"any"` | Who can call the memory tool: `"any"`, `"admin"`, or `"none"`. |
 | `nudgeInterval` | `10` | Prompt the agent to save every N turns. Set to `0` to disable. |
+| `sessionSearch` | `true` | Enable the session search tool for querying past sessions. |
 
 ## Scope
 

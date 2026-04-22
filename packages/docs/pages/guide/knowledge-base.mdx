@@ -257,7 +257,7 @@ This keeps the agent's reasoning simple. A user asks about elevated error rates 
 
 Eager loading works because realistic knowledge bases are small. A deployment with 20 moderate-length knowledge docs fits comfortably in a few thousand tokens. At that scale, the simplicity of "everything in context" wins over on-demand loading.
 
-If your knowledge base grows past ~50K tokens and starts crowding the context window, the right fix is usually to **split by session type** (separate agent repos or different `userContext` blocks per persona) rather than adding retrieval. Retrieval adds a lookup hop that every investigation has to pay, and that cost compounds across turns.
+If your knowledge base grows past ~50K tokens and starts crowding the context window, the right fix is usually to **split by session type** (separate agent repos or different `basePrompt` blocks per persona) rather than adding retrieval. Retrieval adds a lookup hop that every investigation has to pay, and that cost compounds across turns.
 
 ## Growing the Knowledge Base
 

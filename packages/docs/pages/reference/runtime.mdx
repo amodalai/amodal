@@ -16,19 +16,20 @@ The runtime is deliberately stateless in its HTTP layer — all persistent state
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/chat` | Send a message, get a complete response (non-streaming) |
-| `POST` | `/chat/stream` | Send a message, stream response via SSE |
-| `GET` | `/ai/stream` | Direct AI streaming endpoint |
+| `POST` | `/chat/sync` | Send a message, get a complete response (non-streaming) |
+| `POST` | `/chat` or `/chat/stream` | Send a message, stream response via SSE (both paths accepted) |
+| `POST` | `/chat/ai-stream` | Direct AI streaming endpoint (Vercel AI SDK protocol) |
 
-The `/chat/stream` endpoint is what most clients use. You POST a message and keep the connection open — the response streams back as SSE events. The non-streaming `/chat` endpoint waits for the full response before returning, which is simpler but means no real-time feedback during tool execution.
+The `/chat/stream` endpoint is what most clients use. You POST a message and keep the connection open — the response streams back as SSE events. The non-streaming `/chat/sync` endpoint waits for the full response before returning, which is simpler but means no real-time feedback during tool execution.
 
 ### Sessions
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/sessions` | List sessions (supports pagination) |
-| `GET` | `/sessions/:id` | Get session history |
-| `PUT` | `/sessions/:id` | Update session metadata |
+| `GET` | `/sessions/history` | List sessions (supports pagination) |
+| `GET` | `/sessions/history/:id` | Get session history |
+| `PATCH` | `/sessions/history/:id` | Update session metadata |
+| `DELETE` | `/sessions/history/:id` | Delete a session |
 
 ### Interactions
 
@@ -276,6 +277,7 @@ The runtime reads from `amodal.json` and environment variables:
 |----------|---------|-------------|
 | `PORT` | `3847` | Server port |
 | `AMODAL_SESSION_TTL` | `3600` | Session timeout in seconds |
+| `AUTH_TOKEN` | — | When set, the runtime requires `Authorization: Bearer <token>` on all requests. Simple bearer token auth for non-JWT deployments. |
 
 ### Store Backend
 
@@ -285,7 +287,7 @@ The runtime uses PGLite (in-process Postgres) by default for session and store d
 {
   "stores": {
     "backend": "postgres",
-    "connectionString": "env:DATABASE_URL"
+    "postgresUrl": "env:DATABASE_URL"
   }
 }
 ```

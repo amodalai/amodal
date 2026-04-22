@@ -16,8 +16,7 @@ The init command is interactive — it asks for your product name and type, then
 
 ```
 my-agent/
-├── .amodal/
-│   └── config.json            ← manifest (name, provider, model)
+├── amodal.json                ← manifest (name, version, models)
 ├── connections/               ← API definitions (empty for now)
 ├── skills/
 │   └── general.md             ← sample skill with basic reasoning
@@ -27,7 +26,7 @@ my-agent/
 └── evals/                     ← test scenarios (empty)
 ```
 
-The `.amodal/config.json` file is the project manifest. Everything else is convention-over-configuration: drop files into the right folders and the runtime picks them up automatically.
+The `amodal.json` file is the project manifest. Everything else is convention-over-configuration: drop files into the right folders and the runtime picks them up automatically.
 
 ## 2. Configure your provider
 
@@ -47,8 +46,13 @@ You can also pin a specific provider and model in `amodal.json` to override auto
 ```json
 {
   "name": "My Agent",
-  "provider": "anthropic",
-  "model": "claude-sonnet-4-20250514"
+  "version": "0.1.0",
+  "models": {
+    "main": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514"
+    }
+  }
 }
 ```
 
@@ -93,7 +97,7 @@ The dev server compiles your entire project into an optimized context and starts
 
   Runtime ready:
     Chat UI     → http://localhost:3847
-    SSE API     → http://localhost:3847/api/v1/chat
+    SSE API     → http://localhost:3847/chat/stream
     Health      → http://localhost:3847/health
 
   Watching for changes (300ms debounce)...

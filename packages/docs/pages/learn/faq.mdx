@@ -23,8 +23,13 @@ The hosted cloud platform (`amodalai.com`) is a separate product. The OSS runtim
 ```json
 {
   "name": "My Agent",
-  "provider": "anthropic",
-  "model": "claude-sonnet-4-20250514"
+  "version": "0.1.0",
+  "models": {
+    "main": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514"
+    }
+  }
 }
 ```
 
@@ -36,7 +41,7 @@ Three places, in order of weight:
 
 1. **Skills** (`skills/*.md`) — expert reasoning methodologies that activate based on the question
 2. **Knowledge** (`knowledge/*.md`) — persistent domain context the agent loads on demand
-3. **`userContext` in `amodal.json`** — standing instructions that apply to every turn
+3. **`basePrompt` in `amodal.json`** — custom base system prompt that replaces the platform default
 
 All three get compiled into the system prompt before every LLM call.
 
@@ -134,7 +139,7 @@ The runtime enforces these rules before tool calls execute. See [Security & Guar
 
 ## How do I test an agent?
 
-Evals. Define test cases in `evals/*.yaml` with LLM-judged assertions, run them with `amodal eval`, compare scores across models. See [Evals](/guide/evals).
+Evals. Define test cases in `evals/*.md` with LLM-judged assertions, run them with `amodal eval`, compare scores across models. See [Evals](/guide/evals).
 
 ## Can automations run without the UI open?
 

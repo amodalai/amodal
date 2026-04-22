@@ -54,7 +54,7 @@ The `StandaloneSessionManager` either creates a new session or loads an existing
 
 Before the message reaches the LLM, the context compiler assembles the system prompt. This is where the layered config becomes a single, coherent prompt:
 
-- **Agent instructions**: the agent's role definition and `userContext` from `amodal.json`
+- **Agent instructions**: the agent's role definition and `basePrompt` from `amodal.json` (when set)
 - **Skills**: full body of every skill that passes requirement checks
 - **Knowledge index**: a compact listing of available KB documents (titles, tags, categories) so the agent can load them on demand
 - **Connection surfaces**: endpoints + field guidance + scope labels for every configured connection
