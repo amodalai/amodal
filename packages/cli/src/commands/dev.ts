@@ -281,6 +281,8 @@ async function spawnAdminAgent(opts: {
   const adminUrl = `http://localhost:${String(opts.port)}`;
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    AMODAL_NO_ADMIN: '1',
+    AMODAL_NO_STUDIO: '1',
   };
   if (opts.studioUrl) {
     env['STUDIO_URL'] = opts.studioUrl;
@@ -609,9 +611,9 @@ export const devCommand: CommandModule = {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const quiet = argv['quiet'] as boolean;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    const noStudio = argv['no-studio'] as boolean;
+    const noStudio = (argv['no-studio'] as boolean) || process.env['AMODAL_NO_STUDIO'] === '1';
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    const noAdmin = argv['no-admin'] as boolean;
+    const noAdmin = (argv['no-admin'] as boolean) || process.env['AMODAL_NO_ADMIN'] === '1';
     await runDev({port, host, resume, verbose, quiet, noStudio, noAdmin});
   },
 };
