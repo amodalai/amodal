@@ -48,13 +48,13 @@ export function prepareExploreConfig(
   runtime: SessionRuntime,
   options?: {maxTurns?: number; maxDepth?: number},
 ): ExploreConfig {
-  const models = runtime.repo.config.models;
+  const models = runtime.repo.config.models ?? {};
   const model = models['simple'] ?? models['main'];
 
   return {
     systemPrompt: runtime.exploreContext.systemPrompt,
-    model,
-    availableModels: models,
+    model: model!,
+    availableModels: {main: model!, ...models},
     connectionsMap: runtime.connectionsMap,
     readOnly: true,
     maxTurns: options?.maxTurns ?? DEFAULT_MAX_TURNS,

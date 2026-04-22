@@ -75,6 +75,7 @@ import {buildPages} from './page-builder.js';
 import type {BuiltPage} from './page-builder.js';
 import {LOCAL_APP_ID as DEFAULT_APP_ID} from '../constants.js';
 import {log, createLogger} from '../logger.js';
+import {detectProviderFromEnv} from '../config.js';
 import {defaultRoleProvider} from '../role-provider.js';
 import {bootstrapChannels} from '../channels/bootstrap.js';
 import {DrizzleChannelSessionMapper} from '../channels/channel-session-mapper.js';
@@ -172,6 +173,21 @@ function installUnhandledRejectionLogger(): void {
 export async function createLocalServer(config: LocalServerConfig): Promise<ServerInstance> {
   installUnhandledRejectionLogger();
   let bundle = await loadRepo({localPath: config.repoPath});
+
+  // Auto-detect model from environment if not configured
+  if (!bundle.config.models?.main) {
+    const detected = detectProviderFromEnv();
+    if (detected) {
+      bundle = {
+        ...bundle,
+        config: {
+          ...bundle.config,
+          models: {...(bundle.config.models ?? {}), main: detected},
+        },
+      };
+      log.info('provider_auto_detected', {provider: detected.provider, model: detected.model});
+    }
+  }
 
   // Derive appId from the agent name (matches AGENT_ID env var set by CLI,
   // which Studio uses for its queries). Falls back to 'local' for unnamed agents.

@@ -172,8 +172,10 @@ export async function runEval(options: EvalOptions): Promise<void> {
     }
 
     // Get model info from repo config for cost tracking
-    const modelConfig = repo.config.models.main;
-    const model = {provider: modelConfig.provider, model: modelConfig.model};
+    const modelConfig = repo.config.models?.main;
+    const model = modelConfig
+      ? {provider: modelConfig.provider, model: modelConfig.model}
+      : {provider: 'unknown', model: 'unknown'};
 
     const {runEvalSuite} = await import('@amodalai/core');
     const gen = runEvalSuite(repo, {queryProvider, judgeProvider, filter: options.filter, gitSha, model});

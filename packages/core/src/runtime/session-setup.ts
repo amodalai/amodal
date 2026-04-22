@@ -88,7 +88,7 @@ export function setupSession(options: SessionSetupOptions): SessionRuntime {
   });
 
   // Context compilation
-  const modelWindow = getModelContextWindow(repo.config.models.main.model);
+  const modelWindow = getModelContextWindow(repo.config.models?.main?.model ?? 'unknown');
   const allocator = new TokenAllocator(modelWindow);
   const contextCompiler = new ContextCompiler({repo, allocator});
 

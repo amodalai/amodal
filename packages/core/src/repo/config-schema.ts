@@ -88,10 +88,10 @@ export const AmodalConfigSchema = z.object({
   /** Subagent names to disable (e.g., ['explore', 'plan'] to turn off platform defaults) */
   disabledSubagents: z.array(z.string()).optional(),
   models: z.object({
-    main: ModelConfigSchema,
+    main: ModelConfigSchema.optional(),
     simple: ModelConfigSchema.optional(),
     advanced: ModelConfigSchema.optional(),
-  }),
+  }).optional(),
   proactive: z
     .object({
       webhook: z.string().min(1),
