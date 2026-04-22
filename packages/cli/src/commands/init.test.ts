@@ -38,6 +38,13 @@ describe('runInit', () => {
     const gitignore = readFileSync(join(tempDir, '.gitignore'), 'utf-8');
     expect(gitignore).toContain('node_modules/');
     expect(gitignore).toContain('.env');
+
+    expect(existsSync(join(tempDir, '.env'))).toBe(true);
+    const env = readFileSync(join(tempDir, '.env'), 'utf-8');
+    expect(env).toContain('ANTHROPIC_API_KEY=');
+    expect(env).toContain('# OPENAI_API_KEY=');
+    expect(env).toContain('# GOOGLE_API_KEY=');
+    expect(env).toContain('# DATABASE_URL=');
   });
 
   it('should write valid config.json', async () => {
@@ -84,6 +91,10 @@ describe('runInit', () => {
     const config = JSON.parse(readFileSync(join(tempDir, 'amodal.json'), 'utf-8'));
     expect(config['models']['main']['provider']).toBe('openai');
     expect(config['models']['main']['model']).toBe('gpt-4o');
+
+    const env = readFileSync(join(tempDir, '.env'), 'utf-8');
+    expect(env).toContain('OPENAI_API_KEY=');
+    expect(env).toContain('# ANTHROPIC_API_KEY=');
   });
 
   it('should use Google provider', async () => {

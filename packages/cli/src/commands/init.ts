@@ -56,11 +56,56 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     writeFileSync(gitignorePath, '.amodal/\nnode_modules/\n.env\n.env.*\n');
   }
 
+  // Write skeleton .env if it doesn't exist
+  const envPath = join(cwd, '.env');
+  if (!existsSync(envPath)) {
+    writeFileSync(envPath, generateEnvTemplate(provider));
+  }
+
   process.stderr.write(`[init] Created project "${name}" (${provider})\n`);
   process.stderr.write('[init] Next steps:\n');
   process.stderr.write('  1. Add a connection:  amodal connect <name>\n');
   process.stderr.write('  2. Validate config:   amodal validate\n');
   process.stderr.write('  3. Start dev server:  amodal dev\n');
+}
+
+/**
+ * Generates a skeleton .env with commented provider keys and common vars.
+ * The selected provider's key is uncommented; others are commented out.
+ */
+function generateEnvTemplate(
+  provider: 'anthropic' | 'openai' | 'google',
+): string {
+  const lines = [
+    '# Amodal environment variables',
+    '# Only fill in what you need — most projects use a single provider.',
+    '# The runtime auto-detects your provider from whichever key is set.',
+    '',
+    '# LLM provider keys (uncomment the one you use)',
+  ];
+
+  const keys: Array<{key: string; provider: string}> = [
+    {key: 'ANTHROPIC_API_KEY', provider: 'anthropic'},
+    {key: 'OPENAI_API_KEY', provider: 'openai'},
+    {key: 'GOOGLE_API_KEY', provider: 'google'},
+  ];
+
+  for (const {key, provider: p} of keys) {
+    if (p === provider) {
+      lines.push(`${key}=`);
+    } else {
+      lines.push(`# ${key}=`);
+    }
+  }
+
+  lines.push(
+    '',
+    '# Database (optional — defaults to embedded PGLite if not set)',
+    '# DATABASE_URL=postgresql://localhost:5432/my_agent',
+    '',
+  );
+
+  return lines.join('\n');
 }
 
 export const initCommand: CommandModule = {
