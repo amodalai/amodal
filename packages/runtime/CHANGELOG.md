@@ -1,5 +1,16 @@
 # @amodalai/runtime
 
+## 0.3.26
+
+### Patch Changes
+
+- [#260](https://github.com/amodalai/amodal/pull/260) [`6b74006`](https://github.com/amodalai/amodal/commit/6b74006440c54cb2fea1838baa7e1d578577d875) Thanks [@gte620v](https://github.com/gte620v)! - Remove unused production dependencies (chalk, marked, marked-terminal, semver, glob, jose, zod-to-json-schema)
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.26
+  - @amodalai/core@0.3.26
+  - @amodalai/db@0.3.26
+
 ## 0.3.25
 
 ### Patch Changes
