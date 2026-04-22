@@ -1,5 +1,29 @@
 # @amodalai/runtime
 
+## 0.3.23
+
+### Patch Changes
+
+- [#251](https://github.com/amodalai/amodal/pull/251) [`39c3697`](https://github.com/amodalai/amodal/commit/39c36976ef8a6402897272128b1e9d62bbd3a470) Thanks [@gte620v](https://github.com/gte620v)! - Wire buildCredentialResolver into connection loading for scope:KEY resolution
+
+  The CredentialResolver factory on SharedResources is now called during session
+  creation and passed to the tool context factory. Connection auth tokens using
+  scope:KEY references are resolved via the pluggable resolver chain. Also adds
+  scope_id to the session logger context for observability.
+
+- [#249](https://github.com/amodalai/amodal/pull/249) [`c1e515b`](https://github.com/amodalai/amodal/commit/c1e515b81cbb286b2b6f99d39f29eeca08bc8621) Thanks [@gte620v](https://github.com/gte620v)! - Add scope_id support for per-user session isolation
+
+  Adds `scope_id` to sessions, memory, and stores for multi-tenant data isolation.
+  ISVs embed the agent in their app and pass a `scope_id` per end user — each scope
+  gets its own memory, store partition, and session history. Includes ScopedStoreBackend
+  wrapper for shared store enforcement, context injection into connections, and
+  pluggable CredentialResolver for `scope:KEY` secret resolution.
+
+- Updated dependencies [[`c1e515b`](https://github.com/amodalai/amodal/commit/c1e515b81cbb286b2b6f99d39f29eeca08bc8621)]:
+  - @amodalai/db@0.3.23
+  - @amodalai/types@0.3.23
+  - @amodalai/core@0.3.23
+
 ## 0.3.22
 
 ### Patch Changes

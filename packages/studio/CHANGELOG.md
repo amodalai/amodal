@@ -1,5 +1,13 @@
 # @amodalai/studio
 
+## 0.3.23
+
+### Patch Changes
+
+- Updated dependencies [[`c1e515b`](https://github.com/amodalai/amodal/commit/c1e515b81cbb286b2b6f99d39f29eeca08bc8621)]:
+  - @amodalai/db@0.3.23
+  - @amodalai/react@0.3.23
+
 ## 0.3.22
 
 ### Patch Changes
