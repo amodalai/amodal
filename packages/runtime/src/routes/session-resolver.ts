@@ -24,6 +24,7 @@ import {loadMemoryContent} from '../tools/memory-tool.js';
 import type {AuthContext} from '../middleware/auth.js';
 import {SessionError} from '../errors.js';
 import type {Logger} from '../logger.js';
+import type {CredentialResolver} from '../credentials.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -53,6 +54,14 @@ export interface SharedResources {
   memoryDb?: NodePgDatabase<Record<string, unknown>>;
   /** Application ID for tenant scoping (defaults to 'local' in dev). */
   appId?: string;
+  /**
+   * Factory that builds a CredentialResolver for a given scopeId.
+   * Used by connection loading to resolve scope:KEY references at session time.
+   * If not provided, only env:KEY and literal values are resolved.
+   */
+  // TODO: Wire into connection loading path in buildSessionComponents so
+  // scope:KEY references in connection auth tokens resolve at session time.
+  buildCredentialResolver?: (scopeId: string | undefined) => CredentialResolver;
 }
 
 /** Result of session resolution — includes the tool context factory for wiring into runMessage. */
@@ -85,6 +94,10 @@ export interface ResolveSessionOptions {
     components: SessionComponents,
     context: { auth?: AuthContext; bundle: AgentBundle },
   ) => SessionComponents | Promise<SessionComponents>;
+  /** Scope ID for per-user session isolation. Empty string means agent-level. */
+  scopeId?: string;
+  /** Additional scope context from JWT claims or request body. */
+  scopeContext?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,14 +132,16 @@ async function buildComponents(
     sessionType?: SessionType;
     sessionId?: string;
     pinnedModel?: {provider: string; model: string};
+    scopeId?: string;
+    scopeContext?: Record<string, string>;
   },
 ): Promise<SessionComponents> {
   // Load memory content if memory is enabled and a DB is available
   let memoryContent: string | undefined;
   const memoryDb = shared.memoryDb;
   if (bundle.config.memory?.enabled && memoryDb) {
-    memoryContent = await loadMemoryContent(memoryDb, shared.appId ?? 'local');
-    shared.logger.info('memory_loaded', {contentLength: memoryContent.length});
+    memoryContent = await loadMemoryContent(memoryDb, shared.appId ?? 'local', opts.scopeId ?? '');
+    shared.logger.info('memory_loaded', {contentLength: memoryContent.length, scopeId: opts.scopeId ?? ''});
   }
 
   return buildSessionComponents({
@@ -142,6 +157,8 @@ async function buildComponents(
     memoryContent: memoryContent || undefined,
     memoryDb,
     appId: shared.appId,
+    scopeId: opts.scopeId,
+    scopeContext: opts.scopeContext,
   });
 }
 
@@ -168,6 +185,7 @@ export async function resolveSession(
   opts: ResolveSessionOptions,
 ): Promise<ResolvedSession> {
   const {sessionManager, bundleResolver, shared, auth} = opts;
+  const scopeId = opts.scopeId ?? '';
 
   // 1. In-memory lookup (existing live session)
   if (sessionId) {
@@ -197,21 +215,38 @@ export async function resolveSession(
     return {...components, systemPrompt: hookResult.systemPrompt};
   }
 
+  // 1b. Scope-based session lookup: if a scopeId is provided but no session_id,
+  // look up the latest session for that scope from the store.
+  let resolvedSessionId = sessionId;
+  if (!resolvedSessionId && scopeId && bundle) {
+    const sessionStore = sessionManager.getStore();
+    if (sessionStore?.findByScopeId) {
+      const found = await sessionStore.findByScopeId(scopeId);
+      if (found) {
+        resolvedSessionId = found;
+        shared.logger.info('session_resolved_by_scope', {scopeId, sessionId: found});
+      }
+    }
+  }
+
   // 2. Resume from store (with dedup handled by StandaloneSessionManager)
-  if (sessionId && bundle) {
+  if (resolvedSessionId && bundle) {
     const rawComponents = await buildComponents(bundle, shared, {
       sessionType: opts.sessionType,
-      sessionId,
+      sessionId: resolvedSessionId,
       pinnedModel: opts.pinnedModel,
+      scopeId,
+      scopeContext: opts.scopeContext,
     });
     const components = await enhance(rawComponents);
 
-    const resumed = await sessionManager.resume(sessionId, {
+    const resumed = await sessionManager.resume(resolvedSessionId, {
       provider: components.provider,
       toolRegistry: components.toolRegistry,
       permissionChecker: components.permissionChecker,
       systemPrompt: components.systemPrompt,
       toolContextFactory: components.toolContextFactory,
+      scopeId,
     });
 
     if (resumed) {
@@ -222,7 +257,7 @@ export async function resolveSession(
   // 3. Create new session
   if (!bundle) {
     throw new SessionError('No bundle available — provide a deploy_id or configure a static bundle', {
-      sessionId: sessionId ?? 'new',
+      sessionId: resolvedSessionId ?? 'new',
       context: {operation: 'resolveSession', deployId: opts.deployId},
     });
   }
@@ -230,6 +265,8 @@ export async function resolveSession(
   const rawComponents = await buildComponents(bundle, shared, {
     sessionType: opts.sessionType,
     pinnedModel: opts.pinnedModel,
+    scopeId,
+    scopeContext: opts.scopeContext,
   });
   const components = await enhance(rawComponents);
 
@@ -241,6 +278,7 @@ export async function resolveSession(
     toolContextFactory: components.toolContextFactory,
     maxSessionTokens: opts.maxSessionTokens,
     appId: shared.appId,
+    scopeId,
   });
 
   return {session, toolContextFactory: components.toolContextFactory};

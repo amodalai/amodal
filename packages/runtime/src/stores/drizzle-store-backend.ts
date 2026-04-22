@@ -91,7 +91,7 @@ export class DrizzleStoreBackend implements StoreBackend {
     }
   }
 
-  async get(appId: string, store: string, key: string): Promise<StoreDocument | null> {
+  async get(appId: string, scopeId: string, store: string, key: string): Promise<StoreDocument | null> {
     this.ensureOpen(store, 'get');
     try {
       const rows = await this.db
@@ -100,6 +100,7 @@ export class DrizzleStoreBackend implements StoreBackend {
         .where(
           and(
             eq(storeDocuments.appId, appId),
+            eq(storeDocuments.scopeId, scopeId),
             eq(storeDocuments.store, store),
             eq(storeDocuments.key, key),
           ),
@@ -109,12 +110,13 @@ export class DrizzleStoreBackend implements StoreBackend {
       if (rows.length === 0) return null;
       return this.rowToDocument(rows[0]);
     } catch (err) {
-      throw new StoreError('get failed', {store, operation: 'get', context: {appId, key}, cause: err});
+      throw new StoreError('get failed', {store, operation: 'get', context: {appId, scopeId, key}, cause: err});
     }
   }
 
   async put(
     appId: string,
+    scopeId: string,
     store: string,
     key: string,
     payload: Record<string, unknown>,
@@ -146,6 +148,7 @@ export class DrizzleStoreBackend implements StoreBackend {
           .where(
             and(
               eq(storeDocuments.appId, appId),
+              eq(storeDocuments.scopeId, scopeId),
               eq(storeDocuments.store, store),
               eq(storeDocuments.key, key),
             ),
@@ -159,6 +162,7 @@ export class DrizzleStoreBackend implements StoreBackend {
           if (maxVersions && maxVersions > 0) {
             await this.db.insert(storeDocumentVersions).values({
               appId,
+              scopeId,
               store,
               key,
               version: oldVersion,
@@ -170,12 +174,14 @@ export class DrizzleStoreBackend implements StoreBackend {
             await this.db.execute(sql`
               DELETE FROM ${storeDocumentVersions}
               WHERE ${storeDocumentVersions.appId} = ${appId}
+                AND ${storeDocumentVersions.scopeId} = ${scopeId}
                 AND ${storeDocumentVersions.store} = ${store}
                 AND ${storeDocumentVersions.key} = ${key}
                 AND ${storeDocumentVersions.version} <= (
                   SELECT COALESCE(MAX(${storeDocumentVersions.version}), 0) - ${maxVersions}
                   FROM ${storeDocumentVersions}
                   WHERE ${storeDocumentVersions.appId} = ${appId}
+                    AND ${storeDocumentVersions.scopeId} = ${scopeId}
                     AND ${storeDocumentVersions.store} = ${store}
                     AND ${storeDocumentVersions.key} = ${key}
                 )
@@ -194,6 +200,7 @@ export class DrizzleStoreBackend implements StoreBackend {
             .where(
               and(
                 eq(storeDocuments.appId, appId),
+                eq(storeDocuments.scopeId, scopeId),
                 eq(storeDocuments.store, store),
                 eq(storeDocuments.key, key),
               ),
@@ -205,6 +212,7 @@ export class DrizzleStoreBackend implements StoreBackend {
 
         await this.db.insert(storeDocuments).values({
           appId,
+          scopeId,
           store,
           key,
           version: 1,
@@ -216,13 +224,14 @@ export class DrizzleStoreBackend implements StoreBackend {
         await this.notifyStore(appId, store, key);
         return {stored: true, key, version: 1};
       } catch (err) {
-        throw new StoreError('put failed', {store, operation: 'put', context: {appId, key}, cause: err});
+        throw new StoreError('put failed', {store, operation: 'put', context: {appId, scopeId, key}, cause: err});
       }
     });
   }
 
   async list(
     appId: string,
+    scopeId: string,
     store: string,
     options: StoreListOptions = {},
   ): Promise<StoreListResult> {
@@ -230,7 +239,7 @@ export class DrizzleStoreBackend implements StoreBackend {
     const {filter, sort, limit = 100, offset = 0, includeStale = false} = options;
 
     try {
-      const conds = [eq(storeDocuments.appId, appId), eq(storeDocuments.store, store)];
+      const conds = [eq(storeDocuments.appId, appId), eq(storeDocuments.scopeId, scopeId), eq(storeDocuments.store, store)];
 
       if (!includeStale) {
         const staleCond = or(isNull(storeDocuments.expiresAt), gt(storeDocuments.expiresAt, new Date()));
@@ -293,11 +302,11 @@ export class DrizzleStoreBackend implements StoreBackend {
       return {documents, total, hasMore: offset + documents.length < total};
     } catch (err) {
       if (err instanceof StoreError) throw err;
-      throw new StoreError('list failed', {store, operation: 'list', context: {appId}, cause: err});
+      throw new StoreError('list failed', {store, operation: 'list', context: {appId, scopeId}, cause: err});
     }
   }
 
-  async delete(appId: string, store: string, key: string): Promise<boolean> {
+  async delete(appId: string, scopeId: string, store: string, key: string): Promise<boolean> {
     this.ensureOpen(store, 'delete');
     return this.enqueue(async () => {
       try {
@@ -306,6 +315,7 @@ export class DrizzleStoreBackend implements StoreBackend {
           .where(
             and(
               eq(storeDocumentVersions.appId, appId),
+              eq(storeDocumentVersions.scopeId, scopeId),
               eq(storeDocumentVersions.store, store),
               eq(storeDocumentVersions.key, key),
             ),
@@ -316,6 +326,7 @@ export class DrizzleStoreBackend implements StoreBackend {
           .where(
             and(
               eq(storeDocuments.appId, appId),
+              eq(storeDocuments.scopeId, scopeId),
               eq(storeDocuments.store, store),
               eq(storeDocuments.key, key),
             ),
@@ -327,12 +338,12 @@ export class DrizzleStoreBackend implements StoreBackend {
         }
         return deleted.length > 0;
       } catch (err) {
-        throw new StoreError('delete failed', {store, operation: 'delete', context: {appId, key}, cause: err});
+        throw new StoreError('delete failed', {store, operation: 'delete', context: {appId, scopeId, key}, cause: err});
       }
     });
   }
 
-  async history(appId: string, store: string, key: string): Promise<StoreDocument[]> {
+  async history(appId: string, scopeId: string, store: string, key: string): Promise<StoreDocument[]> {
     this.ensureOpen(store, 'history');
     try {
       const rows = await this.db
@@ -341,6 +352,7 @@ export class DrizzleStoreBackend implements StoreBackend {
         .where(
           and(
             eq(storeDocumentVersions.appId, appId),
+            eq(storeDocumentVersions.scopeId, scopeId),
             eq(storeDocumentVersions.store, store),
             eq(storeDocumentVersions.key, key),
           ),
@@ -357,16 +369,17 @@ export class DrizzleStoreBackend implements StoreBackend {
         meta: r.meta as unknown as StoreDocumentMeta,
       }));
     } catch (err) {
-      throw new StoreError('history failed', {store, operation: 'history', context: {appId, key}, cause: err});
+      throw new StoreError('history failed', {store, operation: 'history', context: {appId, scopeId, key}, cause: err});
     }
   }
 
-  async purgeExpired(appId: string, store?: string): Promise<number> {
+  async purgeExpired(appId: string, scopeId: string, store?: string): Promise<number> {
     this.ensureOpen(store ?? '(all)', 'purgeExpired');
     return this.enqueue(async () => {
       try {
         const conds = [
           eq(storeDocuments.appId, appId),
+          eq(storeDocuments.scopeId, scopeId),
           sql`${storeDocuments.expiresAt} IS NOT NULL`,
           lte(storeDocuments.expiresAt, new Date()),
         ];
@@ -379,7 +392,7 @@ export class DrizzleStoreBackend implements StoreBackend {
 
         return deleted.length;
       } catch (err) {
-        throw new StoreError('purgeExpired failed', {store: store ?? '(all)', operation: 'purgeExpired', context: {appId}, cause: err});
+        throw new StoreError('purgeExpired failed', {store: store ?? '(all)', operation: 'purgeExpired', context: {appId, scopeId}, cause: err});
       }
     });
   }

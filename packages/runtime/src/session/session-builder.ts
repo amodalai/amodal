@@ -48,6 +48,7 @@ import type {ToolContextFactoryOptions} from './tool-context-factory.js';
 import {LOCAL_APP_ID} from '../constants.js';
 import {resolveProviderApiKey} from '../config.js';
 import {StoreError} from '../errors.js';
+import {ScopedStoreBackend} from '../stores/scoped-store-backend.js';
 import {createDispatchTool, DISPATCH_TOOL_NAME} from '../tools/dispatch-tool.js';
 import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-tool.js';
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
@@ -92,6 +93,10 @@ export interface BuildSessionComponentsOptions {
   adminContent?: AdminAgentContent;
   /** Session ID for correlation in tool context (default: generated). */
   sessionId?: string;
+  /** Scope ID for per-user session isolation (default: '' means agent-level). */
+  scopeId?: string;
+  /** Scope context key-value pairs from JWT claims or request body. */
+  scopeContext?: Record<string, string>;
   /** Optional field scrubber for response sanitization on ctx.request() */
   fieldScrubber?: FieldScrubber;
   /**
@@ -219,8 +224,8 @@ function buildCustomToolSessionContext(
   // Adapt StoreBackend.put (returns StorePutResult) to CustomToolSessionContext.storeBackend.put (returns void)
   const adaptedBackend = storeBackend
     ? {
-        async put(a: string, s: string, k: string, p: Record<string, unknown>, m: Record<string, unknown>) {
-          await storeBackend.put(a, s, k, p, m);
+        async put(a: string, sc: string, s: string, k: string, p: Record<string, unknown>, m: Record<string, unknown>) {
+          await storeBackend.put(a, sc, s, k, p, m);
         },
       }
     : undefined;
@@ -282,6 +287,8 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     toolExecutor,
     adminContent,
     sessionId = 'pending',
+    scopeId = '',
+    scopeContext,
     fieldScrubber,
     memoryContent,
     memoryDb,
@@ -309,11 +316,24 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   const registry = createToolRegistry();
 
   // -------------------------------------------------------------------------
+  // 2a. Wrap store backend with scope isolation
+  // -------------------------------------------------------------------------
+
+  // Collect shared store names — shared stores are readable by all scopes but
+  // write-protected. The ScopedStoreBackend enforces this contract transparently.
+  const sharedStoreNames = new Set(
+    bundle.stores.filter((s) => s.shared).map((s) => s.name),
+  );
+  const scopedBackend = storeBackend
+    ? new ScopedStoreBackend(storeBackend, scopeId, sharedStoreNames)
+    : null;
+
+  // -------------------------------------------------------------------------
   // 3. Register store tools
   // -------------------------------------------------------------------------
 
-  if (storeBackend && bundle.stores.length > 0) {
-    registerStoreTools(registry, bundle.stores, storeBackend, appId);
+  if (scopedBackend && bundle.stores.length > 0) {
+    registerStoreTools(registry, bundle.stores, scopedBackend, appId);
   }
 
   // -------------------------------------------------------------------------
@@ -341,7 +361,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // -------------------------------------------------------------------------
 
   if (toolExecutor) {
-    const customToolSessionCtx = buildCustomToolSessionContext(bundle, connectionsMap, storeBackend, appId);
+    const customToolSessionCtx = buildCustomToolSessionContext(bundle, connectionsMap, scopedBackend, appId);
     for (const tool of bundle.tools) {
       // Skip tools with confirm: 'never' — they exist but are not callable
       if (tool.confirm === 'never') continue;
@@ -409,6 +429,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
       db: memoryDb,
       logger,
       appId,
+      scopeId,
       maxEntries: memoryConfig.maxEntries,
       maxTotalChars: memoryConfig.maxTotalChars,
     }));
@@ -499,9 +520,12 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
 
   const factoryOpts: ToolContextFactoryOptions = {
     connectionsMap,
-    storeBackend: storeBackend ?? makeThrowingStoreBackend(),
+    loadedConnections: bundle.connections,
+    storeBackend: scopedBackend ?? makeThrowingStoreBackend(),
     storeDefinitions: bundle.stores,
     appId,
+    scopeId,
+    scopeContext,
     envAllowlist,
     logger,
     fieldScrubber,

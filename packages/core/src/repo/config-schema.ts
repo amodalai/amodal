@@ -166,6 +166,13 @@ export const AmodalConfigSchema = z.object({
       sessionSearch: z.boolean().optional(),
     })
     .optional(),
+  /** Scope configuration for per-user session isolation. */
+  scope: z
+    .object({
+      /** When true, requests without a scope_id are rejected. Default: false. */
+      requireScope: z.boolean().optional(),
+    })
+    .optional(),
   /**
    * Messaging channel configurations, keyed by channel type.
    * Each channel's config block is validated by the plugin's own Zod schema

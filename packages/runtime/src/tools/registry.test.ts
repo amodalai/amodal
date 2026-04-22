@@ -27,6 +27,7 @@ const mockCtx: ToolContext = {
   log: vi.fn(),
   signal: AbortSignal.timeout(5000),
   sessionId: 'test-session',
+  scopeId: '',
 };
 
 describe('createToolRegistry', () => {

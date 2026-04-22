@@ -58,6 +58,14 @@ export type { TaskRouterOptions } from './agent/routes/task.js';
 export { getAuthContext } from './middleware/auth.js';
 export type { AuthContext } from './middleware/auth.js';
 
+// Scope resolution
+export { resolveScope } from './scope.js';
+export type { ResolvedScope } from './scope.js';
+
+// Credential resolution
+export { EnvCredentialResolver, ScopeSecretsResolver, ChainResolver } from './credentials.js';
+export type { CredentialResolver } from './credentials.js';
+
 // Stream hooks
 export type { StreamHooks, TokenCounts } from './session/stream-hooks.js';
 
@@ -152,6 +160,9 @@ export {
   storeToToolName,
   QUERY_STORE_TOOL_NAME,
 } from './tools/store-tools.js';
+
+// Scoped store backend wrapper
+export {ScopedStoreBackend} from './stores/scoped-store-backend.js';
 
 // Connection request tool
 export { createRequestTool, REQUEST_TOOL_NAME } from './tools/request-tool.js';

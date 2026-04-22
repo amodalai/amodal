@@ -45,6 +45,8 @@ import type {AgentBundle} from '@amodalai/types';
 import {StandaloneSessionManager} from '../session/manager.js';
 import {selectSessionStore} from '../session/session-store-selector.js';
 import {resolveEnvRef} from '../env-ref.js';
+import {EnvCredentialResolver, ScopeSecretsResolver, ChainResolver} from '../credentials.js';
+import type {CredentialResolver} from '../credentials.js';
 import {buildSessionComponents} from '../session/session-builder.js';
 import type {SharedResources} from '../routes/session-resolver.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
@@ -175,6 +177,49 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // Derive appId from the agent name (matches AGENT_ID env var set by CLI,
   // which Studio uses for its queries). Falls back to 'local' for unnamed agents.
   const appId = bundle.config.name || DEFAULT_APP_ID;
+
+  // -------------------------------------------------------------------------
+  // Scopes credential map (from .amodal/scopes.json, if present)
+  //
+  // Format: { "scope-id": { "KEY": "value" }, ... }
+  // When a session is created with a scopeId, we look up that scope's secrets
+  // and build a per-session ScopeSecretsResolver from them.
+  // -------------------------------------------------------------------------
+
+  let scopesMap: Record<string, Record<string, string>> = {};
+  const scopesJsonPath = path.join(config.repoPath, '.amodal', 'scopes.json');
+  if (existsSync(scopesJsonPath)) {
+    try {
+       
+      const parsed = JSON.parse(readFileSync(scopesJsonPath, 'utf-8')) as unknown;
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated: non-null object
+        scopesMap = parsed as Record<string, Record<string, string>>;
+        log.info('scopes_loaded', {scopeCount: Object.keys(scopesMap).length, path: scopesJsonPath});
+      } else {
+        log.warn('scopes_json_invalid', {path: scopesJsonPath, hint: 'Expected a JSON object at the top level'});
+      }
+    } catch (err) {
+      log.error('scopes_json_load_failed', {path: scopesJsonPath, error: err instanceof Error ? err.message : String(err)});
+    }
+  }
+
+  /**
+   * Build a CredentialResolver for a given scopeId.
+   * Always includes EnvCredentialResolver for env:KEY references.
+   * If the scopeId maps to a secrets entry in scopes.json, also includes
+   * a ScopeSecretsResolver for scope:KEY references.
+   */
+  function buildCredentialResolver(scopeId: string | undefined): CredentialResolver {
+    const resolvers: CredentialResolver[] = [new EnvCredentialResolver()];
+    if (scopeId !== undefined) {
+      const secrets = scopesMap[scopeId];
+      if (secrets !== undefined) {
+        resolvers.push(new ScopeSecretsResolver(secrets));
+      }
+    }
+    return new ChainResolver(resolvers);
+  }
 
   // Check provider API keys in the background at startup
   let providerStatuses: ProviderStatus[] = PROVIDER_CHECKS.map((c) => ({
@@ -316,6 +361,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     // Provide the DB handle for the memory tool when memory is enabled.
     // The db singleton is already initialized above (getDb + ensureSchema).
     ...(bundle.config.memory?.enabled ? {memoryDb: db} : {}),
+    buildCredentialResolver,
   };
 
   // Helper: get current bundle (updated by config watcher)
@@ -528,8 +574,19 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // The ChatWidget uses /sessions/history endpoints (matching the cloud sessions-router).
   // These return the SessionHistoryItem shape expected by @amodalai/react/client/chat-api.
   app.get('/sessions/history', asyncHandler(async (req, res) => {
-    const filter = {appId};
-    const {sessions: rows} = await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
+    const scopeIdParam = typeof req.query['scope_id'] === 'string' ? req.query['scope_id'] : undefined;
+    const filter: Record<string, unknown> = {appId};
+    // Scope filtering uses the dedicated findByScopeId path on DrizzleSessionStore;
+    // for the list endpoint we filter via the scope_id column directly if provided.
+    const {DrizzleSessionStore} = await import('../session/drizzle-session-store.js');
+    let sessionIds: string[] | undefined;
+    if (scopeIdParam !== undefined && sessionStore instanceof DrizzleSessionStore) {
+      const found = await sessionStore.findByScopeId(scopeIdParam);
+      sessionIds = found ? [found] : [];
+    }
+    const {sessions: rows} = sessionIds !== undefined
+      ? {sessions: (await Promise.all(sessionIds.map((id) => sessionStore.load(id)))).filter((s): s is NonNullable<typeof s> => s !== null)}
+      : await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
     const items = rows.map((s) => {
       const title = typeof s.metadata['title'] === 'string' ? s.metadata['title'] : undefined;
       return {

@@ -20,7 +20,7 @@ import type {ServerInstance} from '../server.js';
 import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
 import {loadTestEnv, defaultTargetName} from './test-env.js';
 import {VISION_PROVIDERS} from '../providers/types.js';
-import {getDb, agentMemoryEntries, eq} from '@amodalai/db';
+import {getDb, agentMemoryEntries, storeDocuments, eq, and} from '@amodalai/db';
 import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 
 // Pull API keys out of <repo-root>/.env.test (gitignored). Missing keys
@@ -79,13 +79,15 @@ async function waitForServer(port: number, maxMs = 15_000): Promise<void> {
 async function chat(
   message: string,
   sessionId?: string,
-  opts?: {maxSessionTokens?: number; images?: Array<{mimeType: string; data: string}>; model?: {provider: string; model: string}},
+  opts?: {maxSessionTokens?: number; images?: Array<{mimeType: string; data: string}>; model?: {provider: string; model: string}; scopeId?: string; context?: Record<string, string>},
 ): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
   const body: Record<string, unknown> = {message};
   if (sessionId) body['session_id'] = sessionId;
   if (opts?.maxSessionTokens !== undefined) body['max_session_tokens'] = opts.maxSessionTokens;
   if (opts?.images?.length) body['images'] = opts.images;
   if (opts?.model) body['model'] = opts.model;
+  if (opts?.scopeId !== undefined) body['scope_id'] = opts.scopeId;
+  if (opts?.context !== undefined) body['context'] = opts.context;
 
   const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
     method: 'POST',
@@ -375,6 +377,116 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     // Clean up
     await db.delete(agentMemoryEntries).where(eq(agentMemoryEntries.appId, AGENT_NAME));
   }, TIMEOUT * 3);
+
+  // -------------------------------------------------------------------------
+  // 4c. Memory scope isolation — scope-A entries not visible to scope-B
+  // -------------------------------------------------------------------------
+
+  it('memory entries seeded for scope-A are not visible to scope-B', async () => {
+
+    const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
+    const AGENT_NAME = 'smoke-test-agent';
+    const SCOPE_A = 'scope-isolation-A';
+    const SCOPE_B = 'scope-isolation-B';
+    const SENTINEL = 'SCOPE_MEMORY_SENTINEL_ZQ47';
+
+    // Seed a memory entry scoped to SCOPE_A only.
+    await db.insert(agentMemoryEntries).values({
+      appId: AGENT_NAME,
+      scopeId: SCOPE_A,
+      content: `The secret phrase is ${SENTINEL}.`,
+    });
+
+    try {
+      // Scope-A request — agent should know the sentinel via memory injection.
+      const {events: eventsA} = await chat(
+        'What is the secret phrase? Reply with just the phrase, nothing else.',
+        undefined,
+        {scopeId: SCOPE_A},
+      );
+      expect(allText(eventsA)).toContain(SENTINEL);
+
+      // Scope-B request — agent should not know the sentinel.
+      const {events: eventsB} = await chat(
+        'What is the secret phrase? Reply with just the phrase or "unknown" if you do not know.',
+        undefined,
+        {scopeId: SCOPE_B},
+      );
+      expect(allText(eventsB)).not.toContain(SENTINEL);
+    } finally {
+      // Clean up regardless of test outcome.
+      await db
+        .delete(agentMemoryEntries)
+        .where(and(eq(agentMemoryEntries.appId, AGENT_NAME), eq(agentMemoryEntries.scopeId, SCOPE_A)));
+    }
+  }, TIMEOUT * 2);
+
+  // -------------------------------------------------------------------------
+  // 4d. Store scope isolation — scope-A documents not visible to scope-B
+  // -------------------------------------------------------------------------
+
+  it('store documents written for scope-A are not returned when querying as scope-B', async () => {
+
+    const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
+    const AGENT_NAME = 'smoke-test-agent';
+    const SCOPE_A = 'scope-store-A';
+    const SCOPE_B = 'scope-store-B';
+    const DOC_KEY = 'scope-iso-doc';
+    const SENTINEL = 'SCOPE_STORE_SENTINEL_YR83';
+
+    // Insert a store document directly into the DB for scope-A.
+    await db.insert(storeDocuments).values({
+      appId: AGENT_NAME,
+      scopeId: SCOPE_A,
+      store: 'test-items',
+      key: DOC_KEY,
+      version: 1,
+      payload: {item_id: DOC_KEY, name: SENTINEL, status: 'active'},
+      meta: {},
+    });
+
+    try {
+      // Scope-A: agent queries the store — should find the sentinel document.
+      const {events: eventsA} = await chat(
+        `Use query_store with store="test-items" and key="${DOC_KEY}". What is the name field? Reply with just the value.`,
+        undefined,
+        {scopeId: SCOPE_A},
+      );
+      const toolResultsA = findEvents(eventsA, 'tool_call_result');
+      if (toolResultsA.length === 0) {
+        // eslint-disable-next-line no-console -- intentional test diagnostic
+        console.warn('[smoke] Model did not call query_store for scope-A — LLM non-determinism, skipping assertion');
+      } else {
+        expect(allText(eventsA)).toContain(SENTINEL);
+      }
+
+      // Scope-B: agent queries the same key — should NOT find the document.
+      const {events: eventsB} = await chat(
+        `Use query_store with store="test-items" and key="${DOC_KEY}". What is the name field? Reply with "not found" if the document does not exist.`,
+        undefined,
+        {scopeId: SCOPE_B},
+      );
+      const toolResultsB = findEvents(eventsB, 'tool_call_result');
+      if (toolResultsB.length === 0) {
+        // eslint-disable-next-line no-console -- intentional test diagnostic
+        console.warn('[smoke] Model did not call query_store for scope-B — LLM non-determinism, skipping assertion');
+      } else {
+        expect(allText(eventsB)).not.toContain(SENTINEL);
+      }
+    } finally {
+      // Clean up regardless of test outcome.
+      await db
+        .delete(storeDocuments)
+        .where(
+          and(
+            eq(storeDocuments.appId, AGENT_NAME),
+            eq(storeDocuments.scopeId, SCOPE_A),
+            eq(storeDocuments.store, 'test-items'),
+            eq(storeDocuments.key, DOC_KEY),
+          ),
+        );
+    }
+  }, TIMEOUT * 2);
 
   // -------------------------------------------------------------------------
   // 5. Tool call — store
@@ -843,15 +955,15 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   // -------------------------------------------------------------------------
 
   it('sessions endpoint returns a sessions array', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
-    const body = await res.json() as {sessions: Array<Record<string, unknown>>};
+    const res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as Array<Record<string, unknown>>;
 
     expect(res.status).toBe(200);
-    expect(Array.isArray(body.sessions)).toBe(true);
+    expect(Array.isArray(body)).toBe(true);
   });
 
   it('returns 404 for unknown session', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/session/nonexistent-id`, {signal: AbortSignal.timeout(5000)});
+    const res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/nonexistent-id`, {signal: AbortSignal.timeout(5000)});
     expect(res.status).toBe(404);
   });
 
@@ -860,31 +972,30 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const {sessionId} = await chat('Say "ok" in one word.');
     expect(sessionId).toBeTruthy();
 
-    // 1. Session appears in /sessions with the UI response shape
-    const listRes = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
-    const listBody = await listRes.json() as {sessions: Array<Record<string, unknown>>};
+    // 1. Session appears in /sessions/history with the UI response shape
+    const listRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history`, {signal: AbortSignal.timeout(5000)});
+    const listBody = await listRes.json() as Array<Record<string, unknown>>;
     expect(listRes.status).toBe(200);
-    const found = listBody.sessions.find((s) => s['id'] === sessionId);
+    const found = listBody.find((s) => s['id'] === sessionId);
     expect(found).toBeDefined();
     if (!found) throw new Error('unreachable');
-    expect(found['appId']).toBe('smoke-test-agent');
-    expect(typeof found['summary']).toBe('string');
-    expect(String(found['summary']).length).toBeGreaterThan(0);
-    expect(typeof found['createdAt']).toBe('number');
-    expect(typeof found['lastAccessedAt']).toBe('number');
-    expect(found['automationName']).toBeUndefined();
+    expect(found['app_id']).toBe('smoke-test-agent');
+    expect(typeof found['title']).toBe('string');
+    expect(String(found['title']).length).toBeGreaterThan(0);
+    expect(typeof found['created_at']).toBe('string');
+    expect(typeof found['updated_at']).toBe('string');
 
     // 2. /session/:id returns the conversation history
-    const getRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {signal: AbortSignal.timeout(5000)});
-    const getBody = await getRes.json() as {session_id: string; messages: Array<{role: string; text: string}>};
+    const getRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {signal: AbortSignal.timeout(5000)});
+    const getBody = await getRes.json() as {id: string; messages: Array<{type: string; text: string}>};
     expect(getRes.status).toBe(200);
-    expect(getBody.session_id).toBe(sessionId);
+    expect(getBody.id).toBe(sessionId);
     expect(getBody.messages.length).toBeGreaterThan(0);
-    expect(getBody.messages[0].role).toBe('user');
+    expect(getBody.messages[0].type).toBe('user');
     expect(getBody.messages[0].text).toContain('Say "ok"');
 
     // 3. PATCH title updates metadata and is visible on subsequent list
-    const patchRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+    const patchRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {
       method: 'PATCH',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({title: 'smoke renamed'}),
@@ -892,20 +1003,19 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     });
     expect(patchRes.status).toBe(200);
 
-    const list2Res = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
-    const list2Body = await list2Res.json() as {sessions: Array<Record<string, unknown>>};
-    const renamed = list2Body.sessions.find((s) => s['id'] === sessionId);
+    const list2Res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history`, {signal: AbortSignal.timeout(5000)});
+    const list2Body = await list2Res.json() as Array<Record<string, unknown>>;
+    const renamed = list2Body.find((s) => s['id'] === sessionId);
     expect(renamed?.['title']).toBe('smoke renamed');
-    expect(renamed?.['summary']).toBe('smoke renamed');
 
     // 4. DELETE removes the session, subsequent GET 404s
-    const delRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+    const delRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {
       method: 'DELETE',
       signal: AbortSignal.timeout(5000),
     });
     expect(delRes.status).toBe(200);
 
-    const getAfterDelRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {signal: AbortSignal.timeout(5000)});
+    const getAfterDelRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {signal: AbortSignal.timeout(5000)});
     expect(getAfterDelRes.status).toBe(404);
   }, TIMEOUT);
 
@@ -919,7 +1029,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     );
     expect(sessionId).toBeTruthy();
 
-    const getRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {signal: AbortSignal.timeout(5000)});
+    const getRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {signal: AbortSignal.timeout(5000)});
     const getBody = await getRes.json() as {
       session_id: string;
       messages: Array<{role: string; text: string; toolCalls?: Array<{toolId: string; toolName: string; parameters: Record<string, unknown>}>}>;
@@ -1128,7 +1238,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
 
     const stream = await openEventStream();
     try {
-      const res = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {
         method: 'DELETE',
         signal: AbortSignal.timeout(5000),
       });
@@ -1175,7 +1285,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
 
     const stream = await openEventStream();
     try {
-      const res = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {
         method: 'PATCH',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({title: 'my renamed session'}),
@@ -1399,6 +1509,42 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
 
     expect(res.status).toBe(400);
   });
+
+  // -------------------------------------------------------------------------
+  // 29. Scope ID — session resume by scope
+  // -------------------------------------------------------------------------
+
+  // NOTE: requireScope enforcement (scope.requireScope: true in amodal.json)
+  // is not tested here because the smoke agent's amodal.json does not have
+  // that flag set. It needs a dedicated agent config to test properly.
+
+  it('resumes the same session when scope_id matches and no session_id is provided', async () => {
+    const SCOPE = 'resume-test-scope';
+
+    // First chat with the scope — creates a new session scoped to SCOPE.
+    const first = await chat(
+      'Remember this code: SCOPERESUME1234. Confirm you noted it.',
+      undefined,
+      {scopeId: SCOPE},
+    );
+    expect(first.sessionId).toBeTruthy();
+
+    // Second chat: same scope_id but NO explicit session_id.
+    // The runtime should automatically resume the existing session for this scope.
+    const second = await chat(
+      'What code did I ask you to remember? Reply with just the code.',
+      undefined,
+      {scopeId: SCOPE},
+    );
+
+    // The init event's session_id must match the first session.
+    const secondInit = findEvent(second.events, 'init');
+    expect(secondInit?.['session_id']).toBe(first.sessionId);
+
+    // The agent should still recall the code (proves history was resumed).
+    const responseText = allText(second.events);
+    expect(responseText).toContain('SCOPERESUME1234');
+  }, TIMEOUT * 2);
 });
 
 // ---------------------------------------------------------------------------

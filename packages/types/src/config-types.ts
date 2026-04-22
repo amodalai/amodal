@@ -108,4 +108,9 @@ export interface AmodalConfig {
   };
   /** Agent memory configuration. */
   memory?: MemoryConfig;
+  /** Scope configuration for per-user session isolation. */
+  scope?: {
+    /** When true, requests without a scope_id are rejected. Default: false. */
+    requireScope?: boolean;
+  };
 }

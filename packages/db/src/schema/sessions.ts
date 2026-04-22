@@ -22,6 +22,7 @@ export const agentSessions = pgTable(
   'agent_sessions',
   {
     id: text('id').primaryKey(),
+    scopeId: text('scope_id').notNull().default(''),
     messages: jsonb('messages').notNull().$type<unknown[]>(),
     tokenUsage: jsonb('token_usage').notNull().$type<{
       inputTokens: number;
@@ -36,6 +37,7 @@ export const agentSessions = pgTable(
   },
   (t) => [
     index('idx_agent_sessions_updated').on(t.updatedAt),
+    index('idx_sessions_scope').on(t.scopeId),
   ],
 );
 

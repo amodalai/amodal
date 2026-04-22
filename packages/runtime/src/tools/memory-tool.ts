@@ -63,12 +63,13 @@ export interface MemoryEntry {
 // ---------------------------------------------------------------------------
 
 /**
- * Load all memory entries for an appId, ordered by creation time.
+ * Load all memory entries for an appId and scopeId, ordered by creation time.
  * Returns an empty array if no entries exist.
  */
 export async function loadMemoryEntries(
   db: NodePgDatabase<Record<string, unknown>>,
   appId: string,
+  scopeId = '',
 ): Promise<MemoryEntry[]> {
   const rows = await withDbTimeout(
     db
@@ -79,7 +80,10 @@ export async function loadMemoryEntries(
         createdAt: agentMemoryEntries.createdAt,
       })
       .from(agentMemoryEntries)
-      .where(eq(agentMemoryEntries.appId, appId))
+      .where(and(
+        eq(agentMemoryEntries.appId, appId),
+        eq(agentMemoryEntries.scopeId, scopeId),
+      ))
       .orderBy(agentMemoryEntries.createdAt),
     'load_entries',
   );
@@ -102,8 +106,9 @@ export function formatMemoryForPrompt(entries: MemoryEntry[]): string {
 export async function loadMemoryContent(
   db: NodePgDatabase<Record<string, unknown>>,
   appId = 'local',
+  scopeId = '',
 ): Promise<string> {
-  const entries = await loadMemoryEntries(db, appId);
+  const entries = await loadMemoryEntries(db, appId, scopeId);
   return formatMemoryForPrompt(entries);
 }
 
@@ -115,6 +120,8 @@ export interface CreateMemoryToolOptions {
   db: NodePgDatabase<Record<string, unknown>>;
   logger: Logger;
   appId: string;
+  /** Scope ID for per-user memory isolation. Default: '' (agent-level). */
+  scopeId?: string;
   maxEntries?: number;
   maxTotalChars?: number;
 }
@@ -123,7 +130,7 @@ export interface CreateMemoryToolOptions {
  * Create the memory tool definition with add/remove/list/search actions.
  */
 export function createMemoryTool(opts: CreateMemoryToolOptions): ToolDefinition {
-  const {db, logger, appId, maxEntries = 50, maxTotalChars = 8000} = opts;
+  const {db, logger, appId, scopeId = '', maxEntries = 50, maxTotalChars = 8000} = opts;
 
   return {
     description:
@@ -155,13 +162,13 @@ export function createMemoryTool(opts: CreateMemoryToolOptions): ToolDefinition 
       try {
         switch (params.action) {
           case 'add':
-            return await handleAdd(db, logger, appId, params.content, maxEntries, maxTotalChars, startMs);
+            return await handleAdd(db, logger, appId, scopeId, params.content, maxEntries, maxTotalChars, startMs);
           case 'remove':
-            return await handleRemove(db, logger, appId, params.entry_id, startMs);
+            return await handleRemove(db, logger, appId, scopeId, params.entry_id, startMs);
           case 'list':
-            return await handleList(db, logger, appId, startMs);
+            return await handleList(db, logger, appId, scopeId, startMs);
           case 'search':
-            return await handleSearch(db, logger, appId, params.query, startMs);
+            return await handleSearch(db, logger, appId, scopeId, params.query, startMs);
           default:
             throw new StoreError(`Unknown memory action: ${params.action}`, {
               store: 'agent_memory_entries',
@@ -181,7 +188,7 @@ export function createMemoryTool(opts: CreateMemoryToolOptions): ToolDefinition 
           store: 'agent_memory_entries',
           operation: params.action,
           cause: err,
-          context: {appId},
+          context: {appId, scopeId},
         });
       }
     },
@@ -196,6 +203,7 @@ async function handleAdd(
   db: NodePgDatabase<Record<string, unknown>>,
   logger: Logger,
   appId: string,
+  scopeId: string,
   content: string | undefined,
   maxEntries: number,
   maxTotalChars: number,
@@ -205,7 +213,7 @@ async function handleAdd(
     throw new StoreError('Content is required for add action', {
       store: 'agent_memory_entries',
       operation: 'add',
-      context: {appId},
+      context: {appId, scopeId},
     });
   }
 
@@ -217,7 +225,10 @@ async function handleAdd(
         content: agentMemoryEntries.content,
       })
       .from(agentMemoryEntries)
-      .where(eq(agentMemoryEntries.appId, appId)),
+      .where(and(
+        eq(agentMemoryEntries.appId, appId),
+        eq(agentMemoryEntries.scopeId, scopeId),
+      )),
     'budget_check',
   );
 
@@ -244,7 +255,7 @@ async function handleAdd(
   const [inserted] = await withDbTimeout(
     db
       .insert(agentMemoryEntries)
-      .values({appId, content: content.trim()})
+      .values({appId, scopeId, content: content.trim()})
       .returning({
         id: agentMemoryEntries.id,
         content: agentMemoryEntries.content,
@@ -254,10 +265,10 @@ async function handleAdd(
   );
 
   const durationMs = Date.now() - startMs;
-  logger.info('memory_entry_added', {appId, entryId: inserted.id, contentLength: content.length, durationMs});
+  logger.info('memory_entry_added', {appId, scopeId, entryId: inserted.id, contentLength: content.length, durationMs});
 
   // Return the full updated list so the LLM has mid-session visibility
-  const allEntries = await loadMemoryEntries(db, appId);
+  const allEntries = await loadMemoryEntries(db, appId, scopeId);
   return {
     added: {id: inserted.id, content: inserted.content},
     entries: allEntries.map((e, i) => ({index: i + 1, id: e.id.slice(0, 8), content: e.content})),
@@ -269,6 +280,7 @@ async function handleRemove(
   db: NodePgDatabase<Record<string, unknown>>,
   logger: Logger,
   appId: string,
+  scopeId: string,
   entryId: string | undefined,
   startMs: number,
 ): Promise<unknown> {
@@ -276,7 +288,7 @@ async function handleRemove(
     throw new StoreError('entry_id is required for remove action', {
       store: 'agent_memory_entries',
       operation: 'remove',
-      context: {appId},
+      context: {appId, scopeId},
     });
   }
 
@@ -288,6 +300,7 @@ async function handleRemove(
       .where(
         and(
           eq(agentMemoryEntries.appId, appId),
+          eq(agentMemoryEntries.scopeId, scopeId),
           sql`${agentMemoryEntries.id}::text LIKE ${idPattern + '%'}`,
         ),
       )
@@ -298,13 +311,13 @@ async function handleRemove(
   const durationMs = Date.now() - startMs;
 
   if (deleted.length === 0) {
-    logger.info('memory_entry_not_found', {appId, entryId: idPattern, durationMs});
+    logger.info('memory_entry_not_found', {appId, scopeId, entryId: idPattern, durationMs});
     return {removed: false, message: `No entry found matching ID "${idPattern}".`};
   }
 
-  logger.info('memory_entry_removed', {appId, entryId: deleted[0].id, durationMs});
+  logger.info('memory_entry_removed', {appId, scopeId, entryId: deleted[0].id, durationMs});
 
-  const allEntries = await loadMemoryEntries(db, appId);
+  const allEntries = await loadMemoryEntries(db, appId, scopeId);
   return {
     removed: true,
     deletedEntry: {id: deleted[0].id, content: deleted[0].content},
@@ -317,12 +330,13 @@ async function handleList(
   db: NodePgDatabase<Record<string, unknown>>,
   logger: Logger,
   appId: string,
+  scopeId: string,
   startMs: number,
 ): Promise<unknown> {
-  const entries = await loadMemoryEntries(db, appId);
+  const entries = await loadMemoryEntries(db, appId, scopeId);
   const durationMs = Date.now() - startMs;
 
-  logger.info('memory_listed', {appId, entryCount: entries.length, durationMs});
+  logger.info('memory_listed', {appId, scopeId, entryCount: entries.length, durationMs});
 
   if (entries.length === 0) {
     return {entries: [], message: 'No memories saved yet.'};
@@ -338,6 +352,7 @@ async function handleSearch(
   db: NodePgDatabase<Record<string, unknown>>,
   logger: Logger,
   appId: string,
+  scopeId: string,
   query: string | undefined,
   startMs: number,
 ): Promise<unknown> {
@@ -345,7 +360,7 @@ async function handleSearch(
     throw new StoreError('query is required for search action', {
       store: 'agent_memory_entries',
       operation: 'search',
-      context: {appId},
+      context: {appId, scopeId},
     });
   }
 
@@ -363,6 +378,7 @@ async function handleSearch(
       .where(
         and(
           eq(agentMemoryEntries.appId, appId),
+          eq(agentMemoryEntries.scopeId, scopeId),
           sql`to_tsvector('english', ${agentMemoryEntries.content}) @@ plainto_tsquery('english', ${query.trim()})`,
         ),
       )
@@ -372,7 +388,7 @@ async function handleSearch(
   );
 
   const durationMs = Date.now() - startMs;
-  logger.info('memory_searched', {appId, query: query.trim(), resultCount: results.length, durationMs});
+  logger.info('memory_searched', {appId, scopeId, query: query.trim(), resultCount: results.length, durationMs});
 
   if (results.length === 0) {
     return {results: [], message: `No memories found matching "${query.trim()}".`};

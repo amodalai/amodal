@@ -60,23 +60,23 @@ function runSuite(makeBackend: BackendFactory): void {
 
     describe('tenant isolation', () => {
       it('same (store, key) across different appIds do not collide', async () => {
-        await backend.put('tenant-a', 'test-store', 'shared', {id: 'shared', value: 'A'}, {});
-        await backend.put('tenant-b', 'test-store', 'shared', {id: 'shared', value: 'B'}, {});
+        await backend.put('tenant-a', '', 'test-store', 'shared', {id: 'shared', value: 'A'}, {});
+        await backend.put('tenant-b', '', 'test-store', 'shared', {id: 'shared', value: 'B'}, {});
 
-        const a = await backend.get('tenant-a', 'test-store', 'shared');
-        const b = await backend.get('tenant-b', 'test-store', 'shared');
+        const a = await backend.get('tenant-a', '', 'test-store', 'shared');
+        const b = await backend.get('tenant-b', '', 'test-store', 'shared');
 
         expect(a?.payload['value']).toBe('A');
         expect(b?.payload['value']).toBe('B');
       });
 
       it('list only returns the caller\'s appId rows', async () => {
-        await backend.put('tenant-a', 'test-store', 'a1', {id: 'a1'}, {});
-        await backend.put('tenant-a', 'test-store', 'a2', {id: 'a2'}, {});
-        await backend.put('tenant-b', 'test-store', 'b1', {id: 'b1'}, {});
+        await backend.put('tenant-a', '', 'test-store', 'a1', {id: 'a1'}, {});
+        await backend.put('tenant-a', '', 'test-store', 'a2', {id: 'a2'}, {});
+        await backend.put('tenant-b', '', 'test-store', 'b1', {id: 'b1'}, {});
 
-        const resA = await backend.list('tenant-a', 'test-store');
-        const resB = await backend.list('tenant-b', 'test-store');
+        const resA = await backend.list('tenant-a', '', 'test-store');
+        const resB = await backend.list('tenant-b', '', 'test-store');
 
         expect(resA.total).toBe(2);
         expect(resB.total).toBe(1);
@@ -85,63 +85,63 @@ function runSuite(makeBackend: BackendFactory): void {
       });
 
       it('delete on one tenant does not affect the other', async () => {
-        await backend.put('tenant-a', 'test-store', 'k', {id: 'k'}, {});
-        await backend.put('tenant-b', 'test-store', 'k', {id: 'k'}, {});
+        await backend.put('tenant-a', '', 'test-store', 'k', {id: 'k'}, {});
+        await backend.put('tenant-b', '', 'test-store', 'k', {id: 'k'}, {});
 
-        await backend.delete('tenant-a', 'test-store', 'k');
+        await backend.delete('tenant-a', '', 'test-store', 'k');
 
-        expect(await backend.get('tenant-a', 'test-store', 'k')).toBeNull();
-        expect(await backend.get('tenant-b', 'test-store', 'k')).not.toBeNull();
+        expect(await backend.get('tenant-a', '', 'test-store', 'k')).toBeNull();
+        expect(await backend.get('tenant-b', '', 'test-store', 'k')).not.toBeNull();
       });
     });
 
     describe('concurrent writes', () => {
       it('serializes parallel puts to the same key via write queue', async () => {
         const writes = Array.from({length: 20}, (_, i) =>
-          backend.put('app', 'test-store', 'same-key', {id: 'same-key', n: i}, {}),
+          backend.put('app', '', 'test-store', 'same-key', {id: 'same-key', n: i}, {}),
         );
         const results = await Promise.all(writes);
         expect(results.every((r) => r.stored)).toBe(true);
 
-        const final = await backend.get('app', 'test-store', 'same-key');
+        const final = await backend.get('app', '', 'test-store', 'same-key');
         expect(final?.version).toBe(20);
       });
     });
 
     describe('purgeExpired', () => {
       it('removes only expired rows and returns the count', async () => {
-        await backend.put('app', 'ttl-store', 'e1', {id: 'e1'}, {});
-        await backend.put('app', 'ttl-store', 'e2', {id: 'e2'}, {});
-        await backend.put('app', 'test-store', 'keep', {id: 'keep'}, {});
+        await backend.put('app', '', 'ttl-store', 'e1', {id: 'e1'}, {});
+        await backend.put('app', '', 'ttl-store', 'e2', {id: 'e2'}, {});
+        await backend.put('app', '', 'test-store', 'keep', {id: 'keep'}, {});
 
         await new Promise((r) => setTimeout(r, 1100));
 
-        const purged = await backend.purgeExpired('app');
+        const purged = await backend.purgeExpired('app', '');
         expect(purged).toBe(2);
 
-        expect(await backend.get('app', 'ttl-store', 'e1')).toBeNull();
-        expect(await backend.get('app', 'ttl-store', 'e2')).toBeNull();
-        expect(await backend.get('app', 'test-store', 'keep')).not.toBeNull();
+        expect(await backend.get('app', '', 'ttl-store', 'e1')).toBeNull();
+        expect(await backend.get('app', '', 'ttl-store', 'e2')).toBeNull();
+        expect(await backend.get('app', '', 'test-store', 'keep')).not.toBeNull();
       });
 
       it('scoped purge only touches the named store', async () => {
-        await backend.put('app', 'ttl-store', 'a', {id: 'a'}, {});
-        await backend.put('app', 'test-store', 'b', {id: 'b'}, {});
+        await backend.put('app', '', 'ttl-store', 'a', {id: 'a'}, {});
+        await backend.put('app', '', 'test-store', 'b', {id: 'b'}, {});
 
         await new Promise((r) => setTimeout(r, 1100));
-        const purged = await backend.purgeExpired('app', 'ttl-store');
+        const purged = await backend.purgeExpired('app', '', 'ttl-store');
         expect(purged).toBe(1);
-        expect(await backend.get('app', 'test-store', 'b')).not.toBeNull();
+        expect(await backend.get('app', '', 'test-store', 'b')).not.toBeNull();
       });
 
       it('excludes expired rows from list() when includeStale is false', async () => {
-        await backend.put('app', 'ttl-store', 'x', {id: 'x'}, {});
+        await backend.put('app', '', 'ttl-store', 'x', {id: 'x'}, {});
         await new Promise((r) => setTimeout(r, 1100));
 
-        const defaultList = await backend.list('app', 'ttl-store');
+        const defaultList = await backend.list('app', '', 'ttl-store');
         expect(defaultList.total).toBe(0);
 
-        const withStale = await backend.list('app', 'ttl-store', {includeStale: true});
+        const withStale = await backend.list('app', '', 'ttl-store', {includeStale: true});
         expect(withStale.total).toBe(1);
         expect(withStale.documents[0].meta.stale).toBe(true);
       });
@@ -149,27 +149,27 @@ function runSuite(makeBackend: BackendFactory): void {
 
     describe('filter-field validation', () => {
       it('rejects filter field names with injection characters', async () => {
-        await backend.put('app', 'test-store', 'k', {id: 'k'}, {});
+        await backend.put('app', '', 'test-store', 'k', {id: 'k'}, {});
         await expect(
-          backend.list('app', 'test-store', {filter: {"'; DROP TABLE store_documents; --": 'x'}}),
+          backend.list('app', '', 'test-store', {filter: {"'; DROP TABLE store_documents; --": 'x'}}),
         ).rejects.toBeInstanceOf(StoreError);
       });
 
       it('rejects filter fields containing whitespace or punctuation', async () => {
         await expect(
-          backend.list('app', 'test-store', {filter: {'value OR 1=1': 'x'}}),
+          backend.list('app', '', 'test-store', {filter: {'value OR 1=1': 'x'}}),
         ).rejects.toBeInstanceOf(StoreError);
       });
 
       it('rejects sort field with injection characters', async () => {
         await expect(
-          backend.list('app', 'test-store', {sort: "value); DROP TABLE x; --"}),
+          backend.list('app', '', 'test-store', {sort: "value); DROP TABLE x; --"}),
         ).rejects.toBeInstanceOf(StoreError);
       });
 
       it('accepts valid snake_case filter field', async () => {
-        await backend.put('app', 'test-store', 'k', {id: 'k', my_field: 'yes'}, {});
-        const result = await backend.list('app', 'test-store', {filter: {my_field: 'yes'}});
+        await backend.put('app', '', 'test-store', 'k', {id: 'k', my_field: 'yes'}, {});
+        const result = await backend.list('app', '', 'test-store', {filter: {my_field: 'yes'}});
         expect(result.total).toBe(1);
       });
     });
@@ -177,9 +177,9 @@ function runSuite(makeBackend: BackendFactory): void {
     describe('versioning edge cases', () => {
       it('history respects maxVersions trim', async () => {
         for (let i = 1; i <= 6; i++) {
-          await backend.put('app', 'versioned-store', 'k', {id: 'k', n: i}, {});
+          await backend.put('app', '', 'versioned-store', 'k', {id: 'k', n: i}, {});
         }
-        const history = await backend.history('app', 'versioned-store', 'k');
+        const history = await backend.history('app', '', 'versioned-store', 'k');
         expect(history).toHaveLength(3);
         expect(history[0].version).toBe(5);
         expect(history[2].version).toBe(3);
@@ -188,11 +188,11 @@ function runSuite(makeBackend: BackendFactory): void {
 
     describe('close() idempotency', () => {
       it('double-close is safe and ops after close throw StoreError', async () => {
-        await backend.put('app', 'test-store', 'k', {id: 'k'}, {});
+        await backend.put('app', '', 'test-store', 'k', {id: 'k'}, {});
         await backend.close();
         await backend.close();
-        await expect(backend.get('app', 'test-store', 'k')).rejects.toBeInstanceOf(StoreError);
-        await expect(backend.put('app', 'test-store', 'k', {id: 'k'}, {})).rejects.toBeInstanceOf(StoreError);
+        await expect(backend.get('app', '', 'test-store', 'k')).rejects.toBeInstanceOf(StoreError);
+        await expect(backend.put('app', '', 'test-store', 'k', {id: 'k'}, {})).rejects.toBeInstanceOf(StoreError);
       });
     });
 }

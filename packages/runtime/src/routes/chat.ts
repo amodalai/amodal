@@ -22,6 +22,7 @@ import type {StreamHooks} from '../session/stream-hooks.js';
 import {resolveSession} from './session-resolver.js';
 import type {BundleResolver, SharedResources} from './session-resolver.js';
 import {adaptOnUsage, asyncHandler, fireDrainHooks, UNKNOWN_TOOL_NAME} from './route-helpers.js';
+import {resolveScope} from '../scope.js';
 
 // ---------------------------------------------------------------------------
 // Route options
@@ -54,6 +55,17 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       const body = req.body as ChatRequest;
       const auth = getAuthContext(res);
 
+      const {scopeId, scopeContext} = resolveScope(body, auth);
+
+      // Reject if the agent requires a scope but none was provided
+      const bundleConfig = options.bundleResolver.staticBundle?.config;
+      if (bundleConfig?.scope?.requireScope === true && scopeId === '') {
+        res.status(400).json({
+          error: {code: 'scope_required', message: 'This agent requires a scope_id.'},
+        });
+        return;
+      }
+
       const {session, toolContextFactory} = await resolveSession(body.session_id, {
         sessionManager: options.sessionManager,
         bundleResolver: options.bundleResolver,
@@ -63,6 +75,8 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         auth,
         maxSessionTokens: body.max_session_tokens,
         pinnedModel: body.model,
+        scopeId,
+        scopeContext,
       });
 
       const controller = new AbortController();

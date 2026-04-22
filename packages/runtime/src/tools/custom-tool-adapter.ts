@@ -35,7 +35,7 @@ export interface CustomToolSessionContext {
     getStores(): Array<{name: string; entity: {key: string; schema: Record<string, unknown>}}>;
   };
   storeBackend?: {
-    put(appId: string, store: string, key: string, payload: Record<string, unknown>, meta: Record<string, unknown>): Promise<void>;
+    put(appId: string, scopeId: string, store: string, key: string, payload: Record<string, unknown>, meta: Record<string, unknown>): Promise<void>;
   };
   appId?: string;
   shellExecutor?: {
@@ -148,7 +148,7 @@ function buildCustomToolContext(
       }
       const key = resolveKey(storeDef.entity.key, payload);
       const appId = sessionCtx.appId ?? LOCAL_APP_ID;
-      await sessionCtx.storeBackend.put(appId, storeName, key, payload, {});
+      await sessionCtx.storeBackend.put(appId, runtimeCtx.scopeId, storeName, key, payload, {});
       return {key};
     },
 

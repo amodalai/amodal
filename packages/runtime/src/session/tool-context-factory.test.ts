@@ -99,6 +99,7 @@ function makeFactoryOpts(overrides?: Partial<ToolContextFactoryOptions>): ToolCo
     storeBackend: makeMockStoreBackend(),
     storeDefinitions: [makeStoreDefinition()],
     appId: 'test-app',
+    scopeId: '',
     envAllowlist: {ALLOWED_VAR: 'allowed-value'},
     logger: makeMockLogger(),
     sessionId: 'sess-123',
@@ -187,6 +188,7 @@ describe('createToolContextFactory', () => {
     expect(result).toEqual({key: 'acme_Q1'});
     expect(backend.put).toHaveBeenCalledWith(
       'test-app',
+      '',
       'deals',
       'acme_Q1',
       {company: 'acme', quarter: 'Q1', amount: 5000},

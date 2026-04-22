@@ -79,6 +79,7 @@ function makeToolContext(overrides?: Partial<ToolContext>): ToolContext {
     log: vi.fn(),
     signal: AbortSignal.timeout(30_000),
     sessionId: 'sess-1',
+    scopeId: '',
     ...overrides,
   };
 }
@@ -247,7 +248,7 @@ describe('createCustomToolDefinition', () => {
       const result = await def.execute({}, makeToolContext());
 
       expect(sessionCtx.storeBackend?.put).toHaveBeenCalledWith(
-        'test-app', 'alerts', 'a-1', { alert_id: 'a-1', severity: 'high' }, {},
+        'test-app', '', 'alerts', 'a-1', { alert_id: 'a-1', severity: 'high' }, {},
       );
       expect(result).toEqual({ key: 'a-1' });
     });

@@ -58,6 +58,12 @@ export interface ToolContext {
    * tools return a friendly "not configured" error in that case.
    */
   searchProvider?: SearchProvider;
+
+  /** Scope ID for per-user session isolation. Empty string means agent-level (no scope). */
+  scopeId: string;
+
+  /** Scope context key-value pairs associated with this scope */
+  scopeContext?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------

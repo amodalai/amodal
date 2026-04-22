@@ -17,7 +17,7 @@
  * (session manager, routes) are responsible for handling.
  */
 
-import {eq, lt, desc} from 'drizzle-orm';
+import {eq, lt, desc, and} from 'drizzle-orm';
 import type {PgDatabase, PgQueryResultHKT} from 'drizzle-orm/pg-core';
 
 import {SessionStoreError} from '../errors.js';
@@ -104,6 +104,7 @@ export class DrizzleSessionStore implements SessionStore {
         .onConflictDoUpdate({
           target: this.table.id,
           set: {
+            scopeId: values.scopeId,
             messages: values.messages,
             tokenUsage: values.tokenUsage,
             metadata: values.metadata,
@@ -244,6 +245,41 @@ export class DrizzleSessionStore implements SessionStore {
       await this.hooks.onAfterCleanup({deleted: result.length, before});
     }
     return result.length;
+  }
+
+  /**
+   * Find the most recent session ID for a given scope_id.
+   * Returns null if no session exists for that scope.
+   *
+   * Note: this queries by scope_id only, without filtering by appId.
+   * The sessions table stores appId in metadata JSONB (not a column),
+   * so it can't be efficiently indexed or filtered here. This is safe
+   * in production (Neon per agent — only one agent's data in the DB).
+   * In shared-DB local dev, scope_ids are opaque ISV-controlled
+   * identifiers that won't collide across agents in practice.
+   */
+  async findByScopeId(scopeId: string): Promise<string | null> {
+    this.ensureOpen('findByScopeId');
+
+    try {
+      const rows = await this.db
+        .select({id: this.table.id})
+        .from(this.table)
+        .where(and(
+          eq(this.table.scopeId, scopeId),
+        ))
+        .orderBy(desc(this.table.updatedAt))
+        .limit(1);
+
+      return rows[0]?.id ?? null;
+    } catch (cause) {
+      throw new SessionStoreError('Failed to find session by scope', {
+        backend: this.backendName,
+        operation: 'findByScopeId',
+        cause,
+        context: {scopeId},
+      });
+    }
   }
 
   async close(): Promise<void> {

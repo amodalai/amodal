@@ -9,3 +9,4 @@ export {createPostgresStoreBackend} from './postgres-store-backend.js';
 export type {PostgresStoreBackendOptions} from './postgres-store-backend.js';
 export {resolveKey} from './key-resolver.js';
 export {resolveTtl, evaluateCondition} from './ttl-resolver.js';
+export {ScopedStoreBackend} from './scoped-store-backend.js';

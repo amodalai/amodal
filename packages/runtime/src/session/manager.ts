@@ -61,7 +61,7 @@ const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
 export class StandaloneSessionManager {
   private readonly sessions = new Map<string, Session>();
   private readonly pendingResumes = new Map<string, Promise<Session | null>>();
-  private readonly store: SessionStore | null;
+  readonly store: SessionStore | null;
   private readonly logger: Logger;
   private readonly ttlMs: number;
   private readonly cleanupIntervalMs: number;
@@ -139,6 +139,7 @@ export class StandaloneSessionManager {
     const now = Date.now();
 
     const appId = opts.appId ?? 'local';
+    const scopeId = opts.scopeId ?? '';
     // Persist appId into metadata so SessionStore.list() can filter by it
     // (e.g. exclude eval-runner / admin sessions from the chat history UI).
     const metadata = {...(opts.metadata ?? {}), appId};
@@ -155,6 +156,7 @@ export class StandaloneSessionManager {
       model: opts.provider.model,
       providerName: opts.provider.provider,
       appId,
+      scopeId,
       metadata,
       createdAt: now,
       lastAccessedAt: now,
@@ -305,6 +307,7 @@ export class StandaloneSessionManager {
     const persisted: PersistedSession = {
       version: 1,
       id: session.id,
+      scopeId: session.scopeId,
       messages: session.messages,
       tokenUsage: session.usage,
       metadata: session.metadata,
@@ -418,6 +421,11 @@ export class StandaloneSessionManager {
     return this.sessions.size;
   }
 
+  /** Get the backing session store (for advanced queries like findByScopeId). */
+  getStore(): SessionStore | null {
+    return this.store;
+  }
+
   // -------------------------------------------------------------------------
   // Destroy / Cleanup
   // -------------------------------------------------------------------------
@@ -506,5 +514,6 @@ function makeNoOpToolContext(session: Session): (callId: string) => ToolContext 
     log: (message: string) => { session.logger.debug('tool_log', {session: session.id, message}); },
     signal: AbortSignal.timeout(30_000),
     sessionId: session.id,
+    scopeId: '',
   });
 }

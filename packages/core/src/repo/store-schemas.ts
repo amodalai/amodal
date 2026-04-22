@@ -121,6 +121,11 @@ export const StoreJsonSchema = z.object({
   history: StoreHistoryConfigSchema.optional(),
   /** Whether to store reasoning traces */
   trace: z.boolean().optional(),
+  /**
+   * When true, this store is shared across all scope IDs (agent-level).
+   * Reads use scopeId = '' (no isolation); writes are rejected.
+   */
+  shared: z.boolean().optional(),
 });
 
 export type StoreJson = z.infer<typeof StoreJsonSchema>;

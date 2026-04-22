@@ -30,7 +30,7 @@ describe('wrapStoreBackendWithEvents', () => {
     bus.subscribe((e) => emits.push({type: e.type, storeName: (e as {storeName?: unknown}).storeName, operation: (e as {operation?: unknown}).operation}));
 
     const wrapped = wrapStoreBackendWithEvents(makeStubBackend(), bus);
-    await wrapped.put('local', 'leads', 'k1', {x: 1}, {});
+    await wrapped.put('local', '', 'leads', 'k1', {x: 1}, {});
 
     expect(emits).toHaveLength(1);
     expect(emits[0]).toEqual({type: 'store_updated', storeName: 'leads', operation: 'put'});
@@ -42,7 +42,7 @@ describe('wrapStoreBackendWithEvents', () => {
     bus.subscribe((e) => emits.push(e as unknown as Record<string, unknown>));
 
     const wrapped = wrapStoreBackendWithEvents(makeStubBackend(), bus);
-    await wrapped.delete('local', 'leads', 'k1');
+    await wrapped.delete('local', '', 'leads', 'k1');
 
     expect(emits).toHaveLength(1);
     expect(emits[0]?.['type']).toBe('store_updated');
@@ -58,7 +58,7 @@ describe('wrapStoreBackendWithEvents', () => {
       makeStubBackend({delete: vi.fn().mockResolvedValue(false)}),
       bus,
     );
-    await wrapped.delete('local', 'leads', 'missing');
+    await wrapped.delete('local', '', 'leads', 'missing');
 
     expect(emits).toHaveLength(0);
   });
@@ -72,7 +72,7 @@ describe('wrapStoreBackendWithEvents', () => {
       makeStubBackend({purgeExpired: vi.fn().mockResolvedValue(3)}),
       bus,
     );
-    await wrapped.purgeExpired('local', 'leads');
+    await wrapped.purgeExpired('local', '', 'leads');
 
     expect(emits).toHaveLength(1);
     expect(emits[0]?.['count']).toBe(3);
@@ -85,7 +85,7 @@ describe('wrapStoreBackendWithEvents', () => {
     bus.subscribe((e) => emits.push(e as unknown as Record<string, unknown>));
 
     const wrapped = wrapStoreBackendWithEvents(makeStubBackend(), bus);
-    await wrapped.purgeExpired('local');
+    await wrapped.purgeExpired('local', '');
 
     expect(emits).toHaveLength(0);
   });
@@ -98,9 +98,9 @@ describe('wrapStoreBackendWithEvents', () => {
     const inner = makeStubBackend();
     const wrapped = wrapStoreBackendWithEvents(inner, bus);
 
-    await wrapped.get('local', 'leads', 'k1');
-    await wrapped.list('local', 'leads');
-    await wrapped.history('local', 'leads', 'k1');
+    await wrapped.get('local', '', 'leads', 'k1');
+    await wrapped.list('local', '', 'leads');
+    await wrapped.history('local', '', 'leads', 'k1');
 
     expect(emits).toHaveLength(0);
     expect(inner.get).toHaveBeenCalled();
@@ -118,7 +118,7 @@ describe('wrapStoreBackendWithEvents', () => {
       bus,
     );
 
-    await expect(wrapped.put('local', 'leads', 'k1', {}, {})).rejects.toThrow('disk full');
+    await expect(wrapped.put('local', '', 'leads', 'k1', {}, {})).rejects.toThrow('disk full');
     expect(emits).toHaveLength(0);
   });
 });

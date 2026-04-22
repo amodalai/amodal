@@ -80,6 +80,11 @@ export interface LoadedStore {
   history?: StoreHistoryConfig;
   trace?: boolean;
   location: string;
+  /**
+   * When true, this store is shared across all scope IDs (agent-level).
+   * Reads use scopeId = '' (no isolation); writes are rejected with StoreError.
+   */
+  shared?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,9 +155,10 @@ export interface StoreListResult {
  */
 export interface StoreBackend {
   initialize(stores: LoadedStore[]): Promise<void>;
-  get(appId: string, store: string, key: string): Promise<StoreDocument | null>;
+  get(appId: string, scopeId: string, store: string, key: string): Promise<StoreDocument | null>;
   put(
     appId: string,
+    scopeId: string,
     store: string,
     key: string,
     payload: Record<string, unknown>,
@@ -160,11 +166,12 @@ export interface StoreBackend {
   ): Promise<StorePutResult>;
   list(
     appId: string,
+    scopeId: string,
     store: string,
     options?: StoreListOptions,
   ): Promise<StoreListResult>;
-  delete(appId: string, store: string, key: string): Promise<boolean>;
-  history(appId: string, store: string, key: string): Promise<StoreDocument[]>;
-  purgeExpired(appId: string, store?: string): Promise<number>;
+  delete(appId: string, scopeId: string, store: string, key: string): Promise<boolean>;
+  history(appId: string, scopeId: string, store: string, key: string): Promise<StoreDocument[]>;
+  purgeExpired(appId: string, scopeId: string, store?: string): Promise<number>;
   close(): Promise<void>;
 }
