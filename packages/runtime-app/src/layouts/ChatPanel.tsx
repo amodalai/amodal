@@ -4,22 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useRef, useCallback } from 'react';
 import { ChatWidget } from '@amodalai/react/widget';
 import { useAuth } from '@/hooks/useAuth';
 import { X } from 'lucide-react';
 
 const RUNTIME_URL = window.location.origin;
-
-function useSyncToken(asyncGetToken: (() => Promise<string>) | undefined): (() => string | null) | undefined {
-  const cachedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!asyncGetToken) return;
-    void asyncGetToken().then((t) => { cachedRef.current = t; });
-  }, [asyncGetToken]);
-  const syncGetter = useCallback((): string | null => cachedRef.current, []);
-  return asyncGetToken ? syncGetter : undefined;
-}
 
 export interface ChatPanelProps {
   isOpen: boolean;
@@ -30,8 +19,7 @@ export interface ChatPanelProps {
  * Slide-in chat panel for non-chat pages.
  */
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
-  const { getToken: asyncGetToken } = useAuth();
-  const getToken = useSyncToken(asyncGetToken);
+  const { getToken } = useAuth();
 
   if (!isOpen) return null;
 

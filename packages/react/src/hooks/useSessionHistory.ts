@@ -10,7 +10,7 @@ import type { SessionHistoryItem } from '../client/chat-api';
 
 export interface UseSessionHistoryOptions {
   serverUrl: string;
-  getToken?: () => string | null | undefined;
+  getToken?: () => string | null | undefined | Promise<string | null | undefined>;
   enabled: boolean;
 }
 
@@ -39,7 +39,8 @@ export function useSessionHistory(options: UseSessionHistoryOptions): UseSession
 
     const doFetch = async () => {
       try {
-        const token = getTokenRef.current?.() ?? undefined;
+        const rawToken = getTokenRef.current?.();
+        const token = (rawToken instanceof Promise ? await rawToken : rawToken) ?? undefined;
         const result = await listSessions(serverUrl, token);
         setSessions(result);
       } catch (err) {
@@ -55,7 +56,8 @@ export function useSessionHistory(options: UseSessionHistoryOptions): UseSession
     (sessionId: string, tags: string[]) => {
       const doUpdate = async () => {
         try {
-          const token = getTokenRef.current?.() ?? undefined;
+          const rawToken = getTokenRef.current?.();
+        const token = (rawToken instanceof Promise ? await rawToken : rawToken) ?? undefined;
           await updateSession(serverUrl, sessionId, { tags }, token);
           setSessions((prev) =>
             prev.map((s) => (s.id === sessionId ? { ...s, tags } : s)),
@@ -73,7 +75,8 @@ export function useSessionHistory(options: UseSessionHistoryOptions): UseSession
     (sessionId: string, title: string) => {
       const doUpdate = async () => {
         try {
-          const token = getTokenRef.current?.() ?? undefined;
+          const rawToken = getTokenRef.current?.();
+        const token = (rawToken instanceof Promise ? await rawToken : rawToken) ?? undefined;
           await updateSession(serverUrl, sessionId, { title }, token);
           setSessions((prev) =>
             prev.map((s) => (s.id === sessionId ? { ...s, title } : s)),
