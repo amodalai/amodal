@@ -1,5 +1,13 @@
 # @amodalai/studio
 
+## 0.3.24
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.24
+  - @amodalai/db@0.3.24
+
 ## 0.3.23
 
 ### Patch Changes

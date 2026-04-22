@@ -1,5 +1,16 @@
 # @amodalai/runtime
 
+## 0.3.24
+
+### Patch Changes
+
+- [#252](https://github.com/amodalai/amodal/pull/252) [`07e06d3`](https://github.com/amodalai/amodal/commit/07e06d32fa4e42bfad87e38ad3c85ea33e28607e) Thanks [@whodatdev](https://github.com/whodatdev)! - Move session history routes to shared server.ts — sessions work in both local dev and hosted runtime. Add storeBackend and appId to ServerConfig. Remove duplicate routes from local-server.
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.24
+  - @amodalai/core@0.3.24
+  - @amodalai/db@0.3.24
+
 ## 0.3.23
 
 ### Patch Changes
