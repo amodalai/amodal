@@ -955,15 +955,15 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   // -------------------------------------------------------------------------
 
   it('sessions endpoint returns a sessions array', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
-    const body = await res.json() as {sessions: Array<Record<string, unknown>>};
+    const res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history`, {signal: AbortSignal.timeout(5000)});
+    const body = await res.json() as Array<Record<string, unknown>>;
 
     expect(res.status).toBe(200);
-    expect(Array.isArray(body.sessions)).toBe(true);
+    expect(Array.isArray(body)).toBe(true);
   });
 
   it('returns 404 for unknown session', async () => {
-    const res = await fetch(`http://localhost:${AGENT_PORT}/session/nonexistent-id`, {signal: AbortSignal.timeout(5000)});
+    const res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/nonexistent-id`, {signal: AbortSignal.timeout(5000)});
     expect(res.status).toBe(404);
   });
 
@@ -972,31 +972,30 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const {sessionId} = await chat('Say "ok" in one word.');
     expect(sessionId).toBeTruthy();
 
-    // 1. Session appears in /sessions with the UI response shape
-    const listRes = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
-    const listBody = await listRes.json() as {sessions: Array<Record<string, unknown>>};
+    // 1. Session appears in /sessions/history with the UI response shape
+    const listRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history`, {signal: AbortSignal.timeout(5000)});
+    const listBody = await listRes.json() as Array<Record<string, unknown>>;
     expect(listRes.status).toBe(200);
-    const found = listBody.sessions.find((s) => s['id'] === sessionId);
+    const found = listBody.find((s) => s['id'] === sessionId);
     expect(found).toBeDefined();
     if (!found) throw new Error('unreachable');
-    expect(found['appId']).toBe('smoke-test-agent');
-    expect(typeof found['summary']).toBe('string');
-    expect(String(found['summary']).length).toBeGreaterThan(0);
-    expect(typeof found['createdAt']).toBe('number');
-    expect(typeof found['lastAccessedAt']).toBe('number');
-    expect(found['automationName']).toBeUndefined();
+    expect(found['app_id']).toBe('smoke-test-agent');
+    expect(typeof found['title']).toBe('string');
+    expect(String(found['title']).length).toBeGreaterThan(0);
+    expect(typeof found['created_at']).toBe('string');
+    expect(typeof found['updated_at']).toBe('string');
 
     // 2. /session/:id returns the conversation history
-    const getRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {signal: AbortSignal.timeout(5000)});
-    const getBody = await getRes.json() as {session_id: string; messages: Array<{role: string; text: string}>};
+    const getRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {signal: AbortSignal.timeout(5000)});
+    const getBody = await getRes.json() as {id: string; messages: Array<{type: string; text: string}>};
     expect(getRes.status).toBe(200);
-    expect(getBody.session_id).toBe(sessionId);
+    expect(getBody.id).toBe(sessionId);
     expect(getBody.messages.length).toBeGreaterThan(0);
-    expect(getBody.messages[0].role).toBe('user');
+    expect(getBody.messages[0].type).toBe('user');
     expect(getBody.messages[0].text).toContain('Say "ok"');
 
     // 3. PATCH title updates metadata and is visible on subsequent list
-    const patchRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+    const patchRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {
       method: 'PATCH',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({title: 'smoke renamed'}),
@@ -1004,20 +1003,19 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     });
     expect(patchRes.status).toBe(200);
 
-    const list2Res = await fetch(`http://localhost:${AGENT_PORT}/sessions`, {signal: AbortSignal.timeout(5000)});
-    const list2Body = await list2Res.json() as {sessions: Array<Record<string, unknown>>};
-    const renamed = list2Body.sessions.find((s) => s['id'] === sessionId);
+    const list2Res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history`, {signal: AbortSignal.timeout(5000)});
+    const list2Body = await list2Res.json() as Array<Record<string, unknown>>;
+    const renamed = list2Body.find((s) => s['id'] === sessionId);
     expect(renamed?.['title']).toBe('smoke renamed');
-    expect(renamed?.['summary']).toBe('smoke renamed');
 
     // 4. DELETE removes the session, subsequent GET 404s
-    const delRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+    const delRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {
       method: 'DELETE',
       signal: AbortSignal.timeout(5000),
     });
     expect(delRes.status).toBe(200);
 
-    const getAfterDelRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {signal: AbortSignal.timeout(5000)});
+    const getAfterDelRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {signal: AbortSignal.timeout(5000)});
     expect(getAfterDelRes.status).toBe(404);
   }, TIMEOUT);
 
@@ -1031,7 +1029,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     );
     expect(sessionId).toBeTruthy();
 
-    const getRes = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {signal: AbortSignal.timeout(5000)});
+    const getRes = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {signal: AbortSignal.timeout(5000)});
     const getBody = await getRes.json() as {
       session_id: string;
       messages: Array<{role: string; text: string; toolCalls?: Array<{toolId: string; toolName: string; parameters: Record<string, unknown>}>}>;
@@ -1240,7 +1238,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
 
     const stream = await openEventStream();
     try {
-      const res = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {
         method: 'DELETE',
         signal: AbortSignal.timeout(5000),
       });
@@ -1287,7 +1285,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
 
     const stream = await openEventStream();
     try {
-      const res = await fetch(`http://localhost:${AGENT_PORT}/session/${sessionId}`, {
+      const res = await fetch(`http://localhost:${AGENT_PORT}/sessions/history/${sessionId}`, {
         method: 'PATCH',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({title: 'my renamed session'}),
