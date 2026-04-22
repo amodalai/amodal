@@ -1,5 +1,11 @@
 # @amodalai/react
 
+## 0.3.29
+
+### Patch Changes
+
+- [#266](https://github.com/amodalai/amodal/pull/266) [`2e1974b`](https://github.com/amodalai/amodal/commit/2e1974b2f3852efab849710856420cd4198347ae) Thanks [@whodatdev](https://github.com/whodatdev)! - Support async getToken for token refresh before chat requests. Fixes intermittent 401 errors on SSE streams when cached tokens expire.
+
 ## 0.3.28
 
 ## 0.3.27
