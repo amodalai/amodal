@@ -1,5 +1,22 @@
 # @amodalai/runtime
 
+## 0.3.25
+
+### Patch Changes
+
+- [#257](https://github.com/amodalai/amodal/pull/257) [`7ec4327`](https://github.com/amodalai/amodal/commit/7ec43277c3fee78cc5172e90c711c3ac43e719b7) Thanks [@gte620v](https://github.com/gte620v)! - Remove duplicate RuntimeProvider system, migrate evals to Vercel AI SDK
+
+  The eval judge now uses `generateText()` from the Vercel AI SDK instead of the custom RuntimeProvider
+  abstraction. This removes ~1,500 lines of duplicate provider code and eliminates the `@anthropic-ai/sdk`,
+  `openai`, `@google/genai`, and `@aws-sdk/client-bedrock-runtime` optional dependencies from `@amodalai/core`.
+
+  Also removes `@anthropic-ai/sdk` from `@amodalai/runtime` (it was unused — runtime uses `@ai-sdk/anthropic`).
+
+- Updated dependencies [[`7ec4327`](https://github.com/amodalai/amodal/commit/7ec43277c3fee78cc5172e90c711c3ac43e719b7)]:
+  - @amodalai/core@0.3.25
+  - @amodalai/types@0.3.25
+  - @amodalai/db@0.3.25
+
 ## 0.3.24
 
 ### Patch Changes

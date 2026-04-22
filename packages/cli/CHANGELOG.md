@@ -1,5 +1,25 @@
 # @amodalai/amodal
 
+## 0.3.25
+
+### Patch Changes
+
+- [#255](https://github.com/amodalai/amodal/pull/255) [`83cb677`](https://github.com/amodalai/amodal/commit/83cb67718f28cb82acf972a88235c1ac4a24f020) Thanks [@gte620v](https://github.com/gte620v)! - Auto-fetch admin agent on first `amodal dev`
+
+  `amodal dev` now calls `ensureAdminAgent()` which automatically downloads `@amodalai/agent-admin` from npm on first run. Previously the admin agent was silently skipped if not manually cached at `~/.amodal/admin-agent/`.
+
+- [#255](https://github.com/amodalai/amodal/pull/255) [`83cb677`](https://github.com/amodalai/amodal/commit/83cb67718f28cb82acf972a88235c1ac4a24f020) Thanks [@gte620v](https://github.com/gte620v)! - Generate skeleton .env on init, remove apiKey from scaffolded amodal.json
+
+  `amodal init` now creates a `.env` file with commented provider keys (selected provider uncommented) and a DATABASE_URL placeholder. The scaffolded `amodal.json` no longer includes an `apiKey` field — the runtime auto-detects from env vars.
+
+- Updated dependencies [[`7ec4327`](https://github.com/amodalai/amodal/commit/7ec43277c3fee78cc5172e90c711c3ac43e719b7)]:
+  - @amodalai/core@0.3.25
+  - @amodalai/runtime@0.3.25
+  - @amodalai/types@0.3.25
+  - @amodalai/runtime-app@0.3.25
+  - @amodalai/db@0.3.25
+  - @amodalai/studio@0.3.25
+
 ## 0.3.24
 
 ### Patch Changes
