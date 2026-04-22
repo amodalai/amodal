@@ -250,6 +250,13 @@ export class DrizzleSessionStore implements SessionStore {
   /**
    * Find the most recent session ID for a given scope_id.
    * Returns null if no session exists for that scope.
+   *
+   * Note: this queries by scope_id only, without filtering by appId.
+   * The sessions table stores appId in metadata JSONB (not a column),
+   * so it can't be efficiently indexed or filtered here. This is safe
+   * in production (Neon per agent — only one agent's data in the DB).
+   * In shared-DB local dev, scope_ids are opaque ISV-controlled
+   * identifiers that won't collide across agents in practice.
    */
   async findByScopeId(scopeId: string): Promise<string | null> {
     this.ensureOpen('findByScopeId');

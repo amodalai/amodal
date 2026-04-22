@@ -174,16 +174,18 @@ async function makeRequest(
     }
   }
 
-  // Merge body injection fields with caller data (caller data takes precedence)
+  // Merge body: injected fields first, caller data overwrites (caller takes precedence)
   let requestData = params?.data;
   if (Object.keys(injectedBodyFields).length > 0 && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
     if (requestData !== null && requestData !== undefined && typeof requestData === 'object' && !Array.isArray(requestData)) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated object at system boundary (requestData checked with typeof above)
-      const existingBody = requestData as Record<string, unknown>;
-      for (const [k, v] of Object.entries(existingBody)) {
-        injectedBodyFields[k] = String(v);
+      const callerBody = requestData as Record<string, unknown>;
+      // Injected fields as base, caller fields overwrite — caller takes precedence
+      const mergedBody: Record<string, unknown> = {...injectedBodyFields};
+      for (const [k, v] of Object.entries(callerBody)) {
+        mergedBody[k] = v;
       }
-      requestData = injectedBodyFields;
+      requestData = mergedBody;
     } else if (requestData === undefined) {
       requestData = injectedBodyFields;
     }
