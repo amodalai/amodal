@@ -10,6 +10,10 @@ Ask ChatGPT "what's trending on Hacker News?" and it'll apologize — it can't b
 
 A vanilla LLM is smart but isolated. It has no live data, no memory, no way to act on a schedule, and no custom UI. That's what an agent runtime fixes.
 
+This tutorial uses a toy problem — a Hacker News research assistant — but the pattern scales to real systems. An internal support agent that queries your ticketing API, follows your escalation playbook, and logs resolutions to a store. A compliance agent that monitors Slack channels, applies your organization's policy rules, and files structured reports. The moving parts are the same: connections to live systems, skills that encode how to reason about domain problems, stores that persist structured output, and memory that carries context across sessions.
+
+The key insight is that **configuration and intelligence are orthogonal**. The LLM provides reasoning; Amodal provides the rails — which APIs it can call, what data it can access, how it should format output, what it's allowed to do. Upgrading the model makes the agent smarter. Editing the config changes what it knows and what it can reach. You tune them independently.
+
 ## What you're building
 
 A research assistant that:
