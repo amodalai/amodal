@@ -43,13 +43,11 @@ import { createAgent } from '@amodalai/runtime'
 
 const agent = await createAgent({
   repoPath: './my-agent',
-  provider: 'anthropic',
-  apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
 // In your Express route:
 app.post('/api/chat', async (req, res) => {
-  const session = await agent.createSession({ userId: req.user.id })
+  const session = agent.createSession()
   for await (const event of session.stream(req.body.message)) {
     res.write(`data: ${JSON.stringify(event)}\n\n`)
   }

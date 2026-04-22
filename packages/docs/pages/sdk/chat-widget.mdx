@@ -58,11 +58,13 @@ The widget handles these event types from the runtime:
 
 | Event | Description |
 |-------|-------------|
-| `text` | Streaming text output |
-| `tool_call` | Tool invocation |
+| `text_delta` | Streaming text output |
+| `tool_call_start` | Tool execution beginning |
+| `tool_call_result` | Tool execution complete |
 | `skill_activated` | Skill activation |
-| `kb_proposal` | Knowledge base update proposal |
-| `ConfirmationRequired` | Write operation needs approval |
+| `widget` | Widget rendered inline |
+| `confirmation_required` | Write operation needs approval |
+| `done` | Response complete |
 
 ## Theming
 

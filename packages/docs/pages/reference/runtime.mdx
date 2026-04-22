@@ -22,6 +22,20 @@ The runtime is deliberately stateless in its HTTP layer — all persistent state
 
 The `/chat/stream` endpoint is what most clients use. You POST a message and keep the connection open — the response streams back as SSE events. The non-streaming `/chat/sync` endpoint waits for the full response before returning, which is simpler but means no real-time feedback during tool execution.
 
+#### Chat Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message` | string | yes | The user message |
+| `session_id` | string | no | Session ID to continue a conversation |
+| `scope_id` | string | no | Scope ID for per-user isolation (see [Scope](/guide/config#scope)) |
+| `context` | `Record<string, string>` | no | Key-value pairs associated with the scope (forwarded via `contextInjection`) |
+| `images` | array | no | Image attachments (max 5) |
+| `session_type` | `"chat" \| "admin" \| "automation"` | no | Controls which tools/skills load |
+| `deploy_id` | string | no | Load a specific snapshot instead of the active one |
+| `max_session_tokens` | number | no | Session-wide token budget cap |
+| `model` | `{provider, model}` | no | Pin this session to a specific provider/model |
+
 ### Sessions
 
 | Method | Path | Description |
@@ -82,7 +96,7 @@ event: text_delta
 data: {"delta":" Let me look that up."}
 
 event: tool_call_start
-data: {"name":"dispatch","id":"tc_01","args":{"task":"Query Stripe for all charges in the last month, grouped by customer. Return the top 5 by total amount with customer name and total."}}
+data: {"name":"dispatch_task","id":"tc_01","args":{"task":"Query Stripe for all charges in the last month, grouped by customer. Return the top 5 by total amount with customer name and total."}}
 
 event: subagent_event
 data: {"agentId":"agent_x2k4","event":{"type":"tool_call_start","name":"request","id":"tc_sub_01"}}
@@ -117,7 +131,7 @@ async function chat(message, sessionId) {
   const response = await fetch('http://localhost:3847/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, sessionId }),
+    body: JSON.stringify({ message, session_id: sessionId }),
   });
 
   const reader = response.body.getReader();
@@ -187,7 +201,7 @@ For production use, the `@amodalai/react` package provides hooks that handle all
 
 ### Creation
 
-The first message to `/chat/stream` without a `sessionId` creates a new session. The runtime generates a unique ID (`sess_*`), initializes the message history, compiles the initial context (system prompt, knowledge index, tool definitions), and emits the `init` event with the session ID. The client stores this ID and sends it with all subsequent messages.
+The first message to `/chat/stream` without a `session_id` creates a new session. The runtime generates a unique ID (`sess_*`), initializes the message history, compiles the initial context (system prompt, knowledge index, tool definitions), and emits the `init` event with the session ID. The client stores this ID and sends it with all subsequent messages.
 
 ### Active State
 
@@ -198,7 +212,7 @@ During an active session, messages accumulate and context grows. Each exchange a
 As the conversation grows, it eventually approaches the model's context window limit. When the compiled prompt exceeds 80% of the window, the context compiler triggers **compaction**:
 
 1. **Identify compactable segments**: Older conversation turns that are not part of an active tool chain
-2. **Summarize**: The runtime sends the old turns to the explore model with a summarization prompt: "Compress this conversation history into a concise summary preserving key facts, decisions, and open threads"
+2. **Summarize**: The runtime sends the old turns to the simple model with a summarization prompt: "Compress this conversation history into a concise summary preserving key facts, decisions, and open threads"
 3. **Replace**: The old turns are replaced with the summary in the session history
 4. **Continue**: The next LLM call uses the compacted history, freeing up context for new turns
 

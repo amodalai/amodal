@@ -122,9 +122,7 @@ import { createAgent } from '@amodalai/runtime'
 
 const agent = await createAgent({
   repoPath: './my-agent',
-  provider: 'anthropic',
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  storeBackend: myPostgresPool,    // bring your own
+  storeBackend: myStoreBackend,    // bring your own
 })
 ```
 

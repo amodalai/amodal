@@ -35,12 +35,12 @@ npm install -g @amodalai/amodal
 ### Create an agent
 
 ```bash
-amodal init my-agent
-cd my-agent
+mkdir my-agent && cd my-agent
+amodal init
 amodal dev
 ```
 
-This scaffolds a new agent project and starts a local dev server with hot reload and an interactive chat UI.
+This scaffolds a new agent project in the current directory and starts a local dev server with hot reload and an interactive chat UI. Use `--provider` to pick your LLM (defaults to Anthropic).
 
 ### From source
 
@@ -84,12 +84,13 @@ When enabled, the agent gets a built-in `memory` tool with `add`, `remove`, `lis
 
 Optional config fields:
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `maxEntries` | 50 | Maximum number of memory entries |
-| `maxTotalChars` | 8000 | Maximum total characters across all entries |
-| `editableBy` | `"any"` | Who can call the memory tool: `"any"`, `"admin"`, or `"none"` |
-| `nudgeInterval` | 10 | Prompt the agent to save every N turns (0 to disable) |
+| Field           | Default | Description                                                   |
+| --------------- | ------- | ------------------------------------------------------------- |
+| `maxEntries`    | 50      | Maximum number of memory entries                              |
+| `maxTotalChars` | 8000    | Maximum total characters across all entries                   |
+| `editableBy`    | `"any"` | Who can call the memory tool: `"any"`, `"admin"`, or `"none"` |
+| `nudgeInterval` | 10      | Prompt the agent to save every N turns (0 to disable)         |
+| `sessionSearch` | `true`  | Enable session search tool for querying past sessions         |
 
 ## Scope (per-user isolation)
 

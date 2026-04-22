@@ -134,7 +134,7 @@ When you need external tool servers, persistent storage, and sandboxed execution
 }
 ```
 
-MCP (Model Context Protocol) servers extend your agent with additional tools beyond the built-in set. Each server entry declares how to connect — either `stdio` (the runtime spawns the process) or `sse` (the runtime connects to a running server over HTTP). The tools exposed by these servers appear alongside built-in tools in the agent's tool list.
+MCP (Model Context Protocol) servers extend your agent with additional tools beyond the built-in set. Each server entry declares how to connect — `stdio` (the runtime spawns the process), `sse` (Server-Sent Events over HTTP), or `http` (streamable HTTP transport). The tools exposed by these servers appear alongside built-in tools in the agent's tool list.
 
 The `sandbox` block controls shell execution. When `shellExec` is `true`, the agent can run arbitrary commands. The `template` field specifies which sandbox image to use (pre-configured with your dependencies), and `maxTimeout` caps how long any single command can run.
 

@@ -32,6 +32,7 @@ These are always available — you don't define them. They appear in the agent's
 | **stop_execution** | always | End the current turn cleanly when the agent is done (useful for automations that shouldn't keep talking). |
 | **web_search** | `webTools` block configured | Grounded web search via Gemini Flash + Google Search. Returns a synthesized answer with cited source URLs. See [Web Tools](#web-tools). |
 | **fetch_url** | `webTools` block configured | Fetch and extract the main content of a URL via Gemini urlContext, with a local fetch + Readability fallback for private networks. See [Web Tools](#web-tools). |
+| **memory** | `memory.enabled: true` in config | Persistent memory with `add`, `remove`, `list`, and `search` actions. Entries persist across sessions and are injected into the system prompt. See [Memory](/guide/config#memory). |
 | **MCP tools** | ≥1 MCP server configured | Auto-discovered from each configured MCP server. Tool names are prefixed with the server name. |
 
 **Admin-only tools** — registered only for admin sessions (`/config/chat` in `amodal dev`), never for regular user chat or automations. See [Admin Agent](/guide/admin-agent) for the full list.

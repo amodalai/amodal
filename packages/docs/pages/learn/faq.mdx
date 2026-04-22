@@ -87,11 +87,10 @@ Yes. Inject a store backend at runtime creation time:
 
 ```typescript
 import { createAgent } from '@amodalai/runtime'
-import { Pool } from 'pg'
 
 const agent = await createAgent({
   repoPath: './my-agent',
-  storeBackend: createPostgresStoreBackend(new Pool({ connectionString: process.env.DATABASE_URL })),
+  storeBackend: myStoreBackend,  // bring your own StoreBackend implementation
 })
 ```
 
