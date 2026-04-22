@@ -150,10 +150,9 @@ describe('AmodalConfigSchema', () => {
     ).toThrow();
   });
 
-  it('rejects missing models', () => {
-    expect(() =>
-      AmodalConfigSchema.parse({name: 'test', version: '1.0.0'}),
-    ).toThrow();
+  it('accepts missing models (auto-detected at runtime)', () => {
+    const config = AmodalConfigSchema.parse({name: 'test', version: '1.0.0'});
+    expect(config.models).toBeUndefined();
   });
 
   it('supports baseUrl and region on models', () => {

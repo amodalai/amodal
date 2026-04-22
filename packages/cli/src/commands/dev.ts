@@ -6,7 +6,7 @@
 
 import type {CommandModule} from 'yargs';
 import type {ChildProcess} from 'node:child_process';
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync, readFileSync, writeFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {spawn} from 'node:child_process';
 import path from 'node:path';
@@ -264,13 +264,45 @@ async function spawnAdminAgent(opts: {
     return null;
   }
 
-  // Verify it has an amodal.json (is a valid agent directory)
-  if (!existsSync(path.join(adminAgentPath, 'amodal.json'))) {
-    log.warn('admin_agent_invalid', {
-      path: adminAgentPath,
-      hint: 'Directory exists but has no amodal.json — skipped',
-    });
-    return null;
+  // Ensure the admin agent has an amodal.json. npm packages use package.json
+  // with an "amodal" field — generate amodal.json from it if missing.
+  const adminAmodalJsonPath = path.join(adminAgentPath, 'amodal.json');
+  if (!existsSync(adminAmodalJsonPath)) {
+    const pkgPath = path.join(adminAgentPath, 'package.json');
+    if (!existsSync(pkgPath)) {
+      log.warn('admin_agent_invalid', {
+        path: adminAgentPath,
+        hint: 'Directory has no amodal.json or package.json — skipped',
+      });
+      return null;
+    }
+    try {
+      const raw: unknown = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      if (!raw || typeof raw !== 'object') throw new Error('invalid package.json');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse boundary: validated with typeof guard above
+      const pkg = raw as Record<string, unknown>;
+      const amodalField = pkg['amodal'];
+      if (!amodalField || typeof amodalField !== 'object') {
+        log.warn('admin_agent_invalid', {
+          path: adminAgentPath,
+          hint: 'package.json has no amodal field — skipped',
+        });
+        return null;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by typeof check above
+      const amodal = amodalField as Record<string, unknown>;
+      const config = {
+        name: amodal['name'] ?? pkg['name'] ?? 'admin',
+        version: pkg['version'] ?? '0.0.0',
+      };
+      writeFileSync(adminAmodalJsonPath, JSON.stringify(config, null, 2) + '\n');
+    } catch {
+      log.warn('admin_agent_invalid', {
+        path: adminAgentPath,
+        hint: 'Could not read package.json — skipped',
+      });
+      return null;
+    }
   }
 
   // Resolve the CLI entrypoint. We're running inside the CLI already, so

@@ -37,7 +37,7 @@ import type { z } from 'zod';
 /** The raw amodal.json shape (Zod-inferred, NOT the AmodalConfig class wrapper) */
 type RepoConfig = z.infer<typeof AmodalConfigSchema>;
 import { ConfigError } from './errors.js';
-import { LogLevel } from './logger.js';
+import { LogLevel, log } from './logger.js';
 
 // Re-export ModelConfig for convenience
 export type { ModelConfig } from '@amodalai/core';
@@ -90,6 +90,25 @@ export function resolveProviderApiKey(provider: string): string | undefined {
   const envKey = PROVIDER_ENV_KEYS[provider] ?? `${provider.toUpperCase()}_API_KEY`;
   const altEnvKey = PROVIDER_ALT_ENV_KEYS[provider];
   return process.env[envKey] ?? (altEnvKey ? process.env[altEnvKey] : undefined);
+}
+
+const AUTO_DETECT_PROVIDERS: Array<{provider: string; model: string}> = [
+  {provider: 'google', model: 'gemini-2.5-flash'},
+  {provider: 'anthropic', model: 'claude-sonnet-4-20250514'},
+  {provider: 'openai', model: 'gpt-4o-mini'},
+  {provider: 'deepseek', model: 'deepseek-chat'},
+  {provider: 'groq', model: 'llama-3.3-70b-versatile'},
+  {provider: 'mistral', model: 'mistral-large-latest'},
+  {provider: 'xai', model: 'grok-2'},
+];
+
+export function detectProviderFromEnv(): ModelConfig | null {
+  for (const {provider, model} of AUTO_DETECT_PROVIDERS) {
+    if (resolveProviderApiKey(provider)) {
+      return {provider, model};
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -255,8 +274,24 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
     );
   }
 
-  // 3. Validate provider API key is available
-  validateProviderKey(repoConfig.models.main);
+  // 3. Resolve model — use explicit config or auto-detect from environment
+  if (!repoConfig.models?.main) {
+    const detected = detectProviderFromEnv();
+    if (!detected) {
+      throw new ConfigError('No model configured and no provider API key found in environment', {
+        key: 'models.main',
+        suggestion: 'Add a models.main entry to amodal.json, or set an API key in .env (GOOGLE_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)',
+      });
+    }
+    repoConfig = {
+      ...repoConfig,
+      models: {...(repoConfig.models ?? {}), main: detected},
+    };
+    log.info('provider_auto_detected', {provider: detected.provider, model: detected.model});
+  }
+
+  const mainModel = repoConfig.models!.main!;
+  validateProviderKey(mainModel);
 
   // 4. Build the unified config
   const storeDataDir = overrides?.storeDataDir
@@ -299,13 +334,13 @@ export function loadConfig(opts: LoadConfigOptions): AgentConfig {
     basePrompt: repoConfig.basePrompt,
     disabledSubagents: repoConfig.disabledSubagents ?? [],
 
-    primaryModel: applyModelOverrides(repoConfig.models.main, overrides?.primaryModel),
-    simpleModel: repoConfig.models.simple,
-    advancedModel: repoConfig.models.advanced,
+    primaryModel: applyModelOverrides(mainModel, overrides?.primaryModel),
+    simpleModel: repoConfig.models?.simple,
+    advancedModel: repoConfig.models?.advanced,
     models: {
-      main: applyModelOverrides(repoConfig.models.main, overrides?.primaryModel),
-      ...(repoConfig.models.simple && { simple: repoConfig.models.simple }),
-      ...(repoConfig.models.advanced && { advanced: repoConfig.models.advanced }),
+      main: applyModelOverrides(mainModel, overrides?.primaryModel),
+      ...(repoConfig.models?.simple && { simple: repoConfig.models.simple }),
+      ...(repoConfig.models?.advanced && { advanced: repoConfig.models.advanced }),
     },
 
     stores: {

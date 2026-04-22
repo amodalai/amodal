@@ -70,8 +70,8 @@ export interface AmodalConfig {
   description?: string;
   basePrompt?: string;
   disabledSubagents?: string[];
-  models: {
-    main: ModelConfig;
+  models?: {
+    main?: ModelConfig;
     simple?: ModelConfig;
     advanced?: ModelConfig;
   };

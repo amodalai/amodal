@@ -306,13 +306,17 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // 1. Create LLM provider
   // -------------------------------------------------------------------------
 
-  const bundleModel = bundle.config.models.main;
+  const bundleModel = bundle.config.models?.main;
+  const effectiveModel = pinnedModel ?? bundleModel;
+  if (!effectiveModel) {
+    throw new Error('No model configured — set models.main in amodal.json or provide a pinnedModel');
+  }
   const providerConfig: ProviderConfig = {
-    provider: pinnedModel?.provider ?? bundleModel.provider,
-    model: pinnedModel?.model ?? bundleModel.model,
-    apiKey: resolveApiKey(pinnedModel ?? bundleModel, bundle),
-    baseUrl: pinnedModel ? undefined : bundleModel.baseUrl,
-    region: pinnedModel ? undefined : bundleModel.region,
+    provider: effectiveModel.provider,
+    model: effectiveModel.model,
+    apiKey: resolveApiKey(effectiveModel, bundle),
+    baseUrl: pinnedModel ? undefined : bundleModel?.baseUrl,
+    region: pinnedModel ? undefined : bundleModel?.region,
   };
 
   const provider = createProvider(providerConfig);
