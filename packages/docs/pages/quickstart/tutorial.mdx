@@ -1,0 +1,420 @@
+---
+description: Build a research assistant agent with connections, skills, knowledge, memory, and stores — step by step.
+---
+
+# Tutorial: Research Assistant
+
+Build an agent that searches Hacker News and Wikipedia, remembers your interests, and saves research notes. You'll use connections, skills, knowledge, memory, and stores — every core Amodal feature.
+
+## Prerequisites
+
+- **Node.js 20+** and npm
+- An **LLM API key** — Anthropic, OpenAI, or Google (see [Providers](/guide/providers))
+- **PostgreSQL** running locally (required for memory and stores) — see [Stores](/guide/stores) for setup
+
+## 1. Create the project
+
+```bash
+mkdir research-agent && cd research-agent
+npx amodal init
+```
+
+This creates:
+
+```
+research-agent/
+├── amodal.json
+├── connections/
+├── skills/
+├── knowledge/
+├── automations/
+├── evals/
+├── package.json
+└── .gitignore
+```
+
+Open `amodal.json` and replace its contents with:
+
+```json
+// amodal.json
+{
+  "name": "research-agent",
+  "version": "1.0.0",
+  "models": {
+    "main": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514"
+    }
+  },
+  "stores": {
+    "backend": "postgres",
+    "postgresUrl": "env:DATABASE_URL"
+  },
+  "memory": {
+    "enabled": true,
+    "maxEntries": 50,
+    "nudgeInterval": 5
+  }
+}
+```
+
+{/* TODO: screenshot */}
+
+**What each field does:**
+
+| Field | Purpose |
+|-------|---------|
+| `models.main` | The LLM that powers the agent. Swap `provider` and `model` for OpenAI or Google. |
+| `stores` | Configures persistent data storage. We use Postgres so stores survive restarts. |
+| `memory.enabled` | Gives the agent a persistent memory that carries across sessions. |
+| `memory.nudgeInterval` | How often (in conversation turns) the agent is prompted to save important facts. |
+
+Set your environment variables:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...       # or OPENAI_API_KEY / GOOGLE_API_KEY
+export DATABASE_URL=postgresql://localhost:5432/research_agent
+```
+
+## 2. Add connections
+
+Connections teach the agent how to call external APIs. Each connection is a directory with a `spec.json` (API config), `access.json` (what the agent can do), and `surface.md` (plain-English description).
+
+### Hacker News
+
+```bash
+mkdir -p connections/hackernews
+```
+
+```json
+// connections/hackernews/spec.json
+{
+  "protocol": "rest",
+  "baseUrl": "https://hacker-news.firebaseio.com/v0"
+}
+```
+
+```json
+// connections/hackernews/access.json
+{
+  "endpoints": {
+    "GET /topstories.json": {
+      "returns": ["story_ids"]
+    },
+    "GET /newstories.json": {
+      "returns": ["story_ids"]
+    },
+    "GET /item/{id}.json": {
+      "returns": ["story", "comment", "job", "poll"]
+    },
+    "GET /user/{id}.json": {
+      "returns": ["user"]
+    }
+  }
+}
+```
+
+```markdown
+<!-- connections/hackernews/surface.md -->
+# Hacker News API
+
+Read-only access to Hacker News (news.ycombinator.com).
+
+## Endpoints
+
+- **GET /topstories.json** — Returns an array of up to 500 top story IDs, ordered by rank.
+- **GET /newstories.json** — Returns an array of up to 500 newest story IDs.
+- **GET /item/{id}.json** — Returns a single item (story, comment, job, or poll). Stories have `title`, `url`, `score`, `by` (author), `time` (unix), `descendants` (comment count), and `kids` (child comment IDs).
+- **GET /user/{id}.json** — Returns a user profile with `id`, `created`, `karma`, `about`, and `submitted` (item IDs).
+
+## Usage notes
+
+- All endpoints are public, no authentication required.
+- Item IDs are integers. Fetch individual items by ID after getting the list.
+- To get the top 10 stories: fetch `/topstories.json`, take the first 10 IDs, then fetch each with `/item/{id}.json`.
+```
+
+`spec.json` tells the runtime the protocol and base URL. `access.json` declares which endpoints exist and what entities they return. `surface.md` is injected into the agent's context so it understands *how* to use the API.
+
+### Wikipedia
+
+```bash
+mkdir -p connections/wikipedia
+```
+
+```json
+// connections/wikipedia/spec.json
+{
+  "protocol": "rest",
+  "baseUrl": "https://en.wikipedia.org/api/rest_v1"
+}
+```
+
+```json
+// connections/wikipedia/access.json
+{
+  "endpoints": {
+    "GET /page/summary/{title}": {
+      "returns": ["page_summary"]
+    },
+    "GET /page/related/{title}": {
+      "returns": ["related_pages"]
+    }
+  }
+}
+```
+
+```markdown
+<!-- connections/wikipedia/surface.md -->
+# Wikipedia REST API
+
+Read-only access to English Wikipedia article summaries and related pages.
+
+## Endpoints
+
+- **GET /page/summary/{title}** — Returns a summary of the article: `title`, `extract` (plain text summary), `description`, `thumbnail`, and `content_urls`. The `{title}` parameter is the article title with spaces replaced by underscores (e.g., `Neural_network`).
+- **GET /page/related/{title}** — Returns a list of related articles, each with the same summary fields.
+
+## Usage notes
+
+- All endpoints are public, no authentication required.
+- Article titles are case-sensitive. Use underscores for spaces.
+- If an article doesn't exist, the API returns a 404 with a `title` field suggesting alternatives.
+- The `extract` field is a concise paragraph suitable for direct use in responses.
+```
+
+> **Tip:** Instead of creating these files manually, you can open Studio at `http://localhost:3848` and tell the admin agent:
+>
+> *"Add a connection to the Hacker News API at https://hacker-news.firebaseio.com/v0 with GET endpoints for /topstories.json, /newstories.json, /item/\{id\}.json, and /user/\{id\}.json. No auth needed."*
+>
+> The admin agent creates the directory and files for you. See [Admin Agent](/guide/admin-agent) for more.
+
+## 3. Add skills
+
+Skills are markdown files that guide the agent's reasoning. They activate automatically based on the conversation.
+
+### Research skill
+
+```bash
+mkdir -p skills/research
+```
+
+```markdown
+<!-- skills/research/SKILL.md -->
+# Research
+
+Activate when the user asks to research a topic, investigate something, or wants to know what's trending.
+
+## Process
+
+1. **Check Hacker News** — Search top stories for relevant discussions. Fetch the top 10-20 stories and filter by relevance to the topic.
+2. **Check Wikipedia** — Look up background information using the page summary endpoint. Follow related pages if the first result is too narrow.
+3. **Synthesize** — Combine findings from both sources. Lead with what's current (HN), then provide background context (Wikipedia).
+
+## Output format
+
+- Start with a one-sentence summary of what you found.
+- Use a markdown table for HN stories (title, score, comment count, link).
+- Use bullet points for Wikipedia background.
+- Always cite your sources — link to the HN discussion or Wikipedia article.
+```
+
+### Summarize skill
+
+```bash
+mkdir -p skills/summarize
+```
+
+```markdown
+<!-- skills/summarize/SKILL.md -->
+# Summarize
+
+Activate when the user asks you to summarize, condense, or give a brief on something.
+
+## Process
+
+1. Identify the key claims or facts from the source material.
+2. Group related points together.
+3. Produce a summary that is no more than 1/3 the length of the original.
+
+## Output format
+
+- Lead with the single most important takeaway.
+- Use bullet points for supporting details.
+- End with a "Sources" section listing where each fact came from.
+- Never introduce information not present in the source material.
+```
+
+Skills are named after their directory. The runtime reads the `SKILL.md` file and injects it into the agent's system prompt. The agent decides when to apply each skill based on the activation guidance at the top.
+
+> **Tip:** You can also ask the admin agent: *"Create a research skill that tells the agent how to investigate topics using Hacker News and Wikipedia."*
+
+## 4. Add knowledge
+
+Knowledge files provide static context the agent can reference. Unlike skills (which guide reasoning), knowledge teaches the agent facts and rules.
+
+```markdown
+<!-- knowledge/formatting-rules.md -->
+# Formatting Rules
+
+When presenting information to the user:
+
+- Use **markdown tables** for structured data (stories, comparisons, lists with multiple fields).
+- Use **bullet points** for unstructured lists and summaries.
+- Always **cite sources** with links. For Hacker News, link to the story URL. For Wikipedia, link to the article.
+- Use **bold** for key terms on first mention.
+- Keep paragraphs short — 2-3 sentences maximum.
+- When comparing items, use a table with clear column headers.
+```
+
+Knowledge files are automatically loaded into the agent's context at startup. No special naming required — just drop `.md` files into the `knowledge/` directory.
+
+## 5. Add a store
+
+Stores let the agent persist structured data. Define a JSON schema and the runtime creates tools for reading and writing.
+
+```json
+// stores/notes.json
+{
+  "entity": {
+    "name": "ResearchNote",
+    "key": "{topic}",
+    "schema": {
+      "topic": {
+        "type": "string"
+      },
+      "summary": {
+        "type": "string"
+      },
+      "sources": {
+        "type": "array",
+        "item": {
+          "type": "string"
+        }
+      },
+      "saved_at": {
+        "type": "datetime"
+      }
+    }
+  }
+}
+```
+
+This generates three tools the agent can use automatically:
+
+- `store_notes` — Save a research note
+- `get_notes` — Retrieve a note by topic
+- `list_notes` — List all saved notes
+
+The `key` field (`{topic}`) means each note is keyed by its topic. Saving a new note with the same topic overwrites the previous one.
+
+## 6. Memory recap
+
+You already enabled memory in step 1. Here's what it does:
+
+- The agent gets an `update_memory` tool that saves facts about the user.
+- Memory entries persist across sessions in Postgres.
+- Every 5 conversation turns (the `nudgeInterval`), the agent is prompted to save anything important it's learned.
+- Memory is injected into the agent's context at the start of each session.
+
+You can view and edit memory entries in Studio (step 8).
+
+## 7. Start it and try it
+
+Your project should now look like this:
+
+```
+research-agent/
+├── amodal.json
+├── connections/
+│   ├── hackernews/
+│   │   ├── spec.json
+│   │   ├── access.json
+│   │   └── surface.md
+│   └── wikipedia/
+│       ├── spec.json
+│       ├── access.json
+│       └── surface.md
+├── skills/
+│   ├── research/
+│   │   └── SKILL.md
+│   └── summarize/
+│       └── SKILL.md
+├── knowledge/
+│   └── formatting-rules.md
+├── stores/
+│   └── notes.json
+├── automations/
+├── evals/
+├── package.json
+└── .gitignore
+```
+
+Start the dev server:
+
+```bash
+amodal dev
+```
+
+{/* TODO: screenshot */}
+
+Open `http://localhost:3847` in your browser. Try these conversations:
+
+### a. Hacker News connection
+
+**Prompt:** *"What's trending on Hacker News right now?"*
+
+The agent activates the **research** skill, calls `GET /topstories.json` to get story IDs, then fetches details for the top stories with `GET /item/{id}.json`. It presents the results in a table with titles, scores, and links.
+
+### b. Wikipedia + research skill
+
+**Prompt:** *"Tell me about the history of neural networks"*
+
+The agent uses the **research** skill to check both Wikipedia (`GET /page/summary/Neural_network`) and Hacker News for related discussions. It synthesizes background from Wikipedia with current community discussion from HN.
+
+### c. Memory
+
+**Prompt:** *"Remember that I'm particularly interested in Rust and systems programming"*
+
+The agent calls `update_memory` to save this preference. It will reference this in future sessions when deciding what content to highlight.
+
+### d. Store
+
+**Prompt:** *"Save a research note about today's top HN stories"*
+
+The agent compiles a summary of what it found and calls `store_notes` to persist it with the topic, summary, source links, and timestamp.
+
+### e. Memory persistence
+
+Start a **new session** (refresh the page or open a new tab), then ask:
+
+**Prompt:** *"What am I interested in?"*
+
+The agent loads your memory from the previous session and recalls your interest in Rust and systems programming — without you telling it again.
+
+### f. Store reads
+
+**Prompt:** *"List my saved research notes"*
+
+The agent calls `list_notes` to retrieve all saved notes from the store and displays them.
+
+## 8. Open Studio
+
+Studio is the admin UI for your agent. Open `http://localhost:3848`.
+
+{/* TODO: screenshot */}
+
+From Studio you can:
+
+- **Memory** — View all saved memory entries. Edit or delete entries that are wrong or outdated.
+- **Stores** — Browse saved research notes. See the raw data the agent persisted.
+- **Admin Agent** — Chat with a special agent that can read and write files in your project directory. Use it to add connections, skills, or knowledge without leaving the browser.
+
+## Next steps
+
+- **[Connections](/guide/connections)** — Add more APIs (weather, GitHub, any REST API)
+- **[Automations](/guide/automations)** — Schedule a daily HN digest that runs automatically
+- **[Pages](/guide/pages)** — Build custom React UI components for your agent
+- **[Tools](/guide/tools)** — Add custom tools with code (API calls, computations, file operations)
+- **[MCP Servers](/guide/mcp)** — Connect to MCP-compatible tool servers
+- **[Security](/guide/security)** — Add field restrictions and output guards
