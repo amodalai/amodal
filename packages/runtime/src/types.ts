@@ -337,6 +337,8 @@ export interface ServerConfig {
   sessionTtlMs: number;
   /** Automation definitions from the version bundle */
   automations: AutomationDefinition[];
+  /** Application ID for scoping sessions and stores (default 'local') */
+  appId?: string;
   /** Allowed CORS origin(s). Use '*' for any origin, or a specific URL. Defaults to '*'. */
   corsOrigin?: string;
 }
