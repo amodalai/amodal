@@ -1,6 +1,6 @@
 {
   "name": "@amodalai/db",
-  "version": "0.3.26",
+  "version": "0.3.27",
   "description": "Shared Drizzle schema and Postgres connection singleton for amodal runtime and Studio",
   "license": "MIT",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@amodalai/snapshot-probe",
-  "version": "0.3.26",
+  "version": "0.3.27",
   "description": "Smoke-test package for the release-snapshot workflow. No runtime code — exists purely so the snapshot and release workflows have something non-trivial to publish while verifying the pipeline end-to-end.",
   "license": "MIT",
   "repository": {
