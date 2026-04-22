@@ -43,8 +43,8 @@ export { chatReducer } from './useChatStream';
 export interface UseChatOptions {
   serverUrl: string;
   user: ChatUser;
-  /** Return a Bearer token (API key or JWT) for authenticated requests. */
-  getToken?: () => string | null | undefined;
+  /** Return a Bearer token (API key or JWT) for authenticated requests. May be async to support token refresh. */
+  getToken?: () => string | null | undefined | Promise<string | null | undefined>;
   onToolCall?: (call: ToolCallInfo) => void;
   onKBProposal?: (proposal: KBProposalInfo) => void;
   /** Callback for all widget events (agent-driven + interaction). */
@@ -117,10 +117,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const sessionIdRef = useRef<string | null>(null);
 
   // Build a transport function that calls streamChat with /chat/stream.
+  // getToken may be async (token refresh), so we await it before streaming.
   const streamFn = useCallback(
-    (text: string, signal: AbortSignal, images?: Array<{mimeType: string; data: string}>): AsyncIterable<SSEEvent> => {
-      const token = authRef.current.getToken?.() ?? undefined;
-      return streamChat(
+    async function* (text: string, signal: AbortSignal, images?: Array<{mimeType: string; data: string}>): AsyncIterable<SSEEvent> {
+      const rawToken = authRef.current.getToken?.();
+      const token = (rawToken instanceof Promise ? await rawToken : rawToken) ?? undefined;
+      yield* streamChat(
         serverUrl,
         {
           message: text,
@@ -164,7 +166,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       initialMessageDeliveredRef.current = true;
       const doLoad = async (): Promise<void> => {
         try {
-          const token = authRef.current.getToken?.() ?? undefined;
+          const rawToken = authRef.current.getToken?.();
+          const token = (rawToken instanceof Promise ? await rawToken : rawToken) ?? undefined;
           const detail = await getSessionHistory(serverUrl, sessionId, token);
           const chatMessages = rehydrateHistory(detail.messages);
           stream.dispatch({ type: 'LOAD_HISTORY', sessionId, messages: chatMessages });

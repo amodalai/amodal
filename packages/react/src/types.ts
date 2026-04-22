@@ -376,8 +376,8 @@ export type WidgetPosition = 'right' | 'bottom' | 'floating' | 'inline';
 export interface WidgetConfig {
   serverUrl: string;
   user: ChatUser;
-  /** Return a Bearer token (API key or JWT) for authenticated requests. */
-  getToken?: () => string | null | undefined;
+  /** Return a Bearer token (API key or JWT) for authenticated requests. May be async to support token refresh. */
+  getToken?: () => string | null | undefined | Promise<string | null | undefined>;
   theme?: ChatTheme;
   position?: WidgetPosition;
   defaultOpen?: boolean;
