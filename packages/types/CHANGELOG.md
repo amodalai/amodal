@@ -1,5 +1,17 @@
 # @amodalai/types
 
+## 0.3.28
+
+### Patch Changes
+
+- [#262](https://github.com/amodalai/amodal/pull/262) [`f794ad9`](https://github.com/amodalai/amodal/commit/f794ad9dfe836d47435d2224917fb9443e1d2af5) Thanks [@gte620v](https://github.com/gte620v)! - Make models config optional — auto-detect provider from environment API keys
+
+  When `models` is omitted from amodal.json, the runtime detects which provider to use based on
+  available API keys in the environment. Preference order: Google (gemini-2.5-flash) → Anthropic →
+  OpenAI → DeepSeek → Groq → Mistral → xAI.
+
+  Also fixes admin agent spawning for npm-published packages that use package.json instead of amodal.json.
+
 ## 0.3.27
 
 ## 0.3.26

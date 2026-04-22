@@ -1,5 +1,11 @@
 # @amodalai/db
 
+## 0.3.28
+
+### Patch Changes
+
+- [#265](https://github.com/amodalai/amodal/pull/265) [`2b135e6`](https://github.com/amodalai/amodal/commit/2b135e6c5ece03d722d6018ca4a6f3faebbdc17d) Thanks [@whodatdev](https://github.com/whodatdev)! - Fix session persistence: stop dropping store tables on boot, stop deleting persisted sessions from the database on cleanup timer.
+
 ## 0.3.27
 
 ## 0.3.26
