@@ -132,6 +132,7 @@ export function createServer(options: CreateServerOptions): ServerInstance {
     storeBackend: options.storeBackend ?? null,
     mcpManager: null,
     logger: log,
+    appId: config.appId,
   };
 
   // Event bus for session lifecycle events

@@ -60,9 +60,9 @@ import {createInspectRouter} from './routes/inspect.js';
 import {createFeedbackRouter} from './routes/feedback.js';
 import {FeedbackStore} from './feedback-store.js';
 import {createStoresRouter} from './routes/stores.js';
+import {createSessionsHistoryRouter} from '../routes/sessions-history.js';
 import {createFilesRouter} from './routes/files.js';
 import {createContextRouter} from './routes/context.js';
-import {createSessionsHistoryRouter} from '../routes/sessions-history.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import {asyncHandler} from '../routes/route-helpers.js';
 import type {LocalServerConfig} from './agent-types.js';
@@ -516,7 +516,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     res.json({resumeSessionId: resumeSessionId ?? null});
   });
 
-  // Session history routes (list, get, patch, delete sessions)
+  // Session history routes (shared with hosted runtime via server.ts)
   app.use(createSessionsHistoryRouter({
     sessionStore,
     sessionManager,
