@@ -1,5 +1,16 @@
 # @amodalai/runtime
 
+## 0.3.22
+
+### Patch Changes
+
+- [#247](https://github.com/amodalai/amodal/pull/247) [`420d090`](https://github.com/amodalai/amodal/commit/420d09059e747b355812763221e3c289d0ca4dbb) Thanks [@whodatdev](https://github.com/whodatdev)! - Add `storeBackend` to `CreateServerOptions` — wired into shared resources so agent store tools work in hosted deployments.
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.22
+  - @amodalai/core@0.3.22
+  - @amodalai/db@0.3.22
+
 ## 0.3.21
 
 ### Patch Changes
