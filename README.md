@@ -64,7 +64,81 @@ pnpm build
 - **Web search & fetch** — optional `web_search` and `fetch_url` built-in tools backed by Gemini grounding, work with any main model (see below)
 - **Secure by default** — audit logging, role-based access, credential scrubbing, sandbox execution
 - **Embeddable** — React components and a drop-in chat widget for any web app
+- **Memory** — agents remember facts across sessions; entries persist and are injected into the system prompt
+- **Scope (per-user isolation)** — ISVs can isolate memory, stores, and sessions per end user via `scope_id`
 - **Evals** — test agent behavior with structured evaluation cases
+
+## Memory
+
+Enable persistent memory so the agent can remember facts across sessions:
+
+```json
+{
+  "memory": {
+    "enabled": true
+  }
+}
+```
+
+When enabled, the agent gets a built-in `memory` tool with `add`, `remove`, `list`, and `search` actions. Memory entries are stored as individual rows in the database, scoped by agent (and optionally by user — see [Scope](#scope-per-user-isolation) below). On each new session, existing entries are injected into the system prompt automatically.
+
+Optional config fields:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `maxEntries` | 50 | Maximum number of memory entries |
+| `maxTotalChars` | 8000 | Maximum total characters across all entries |
+| `editableBy` | `"any"` | Who can call the memory tool: `"any"`, `"admin"`, or `"none"` |
+| `nudgeInterval` | 10 | Prompt the agent to save every N turns (0 to disable) |
+
+## Scope (per-user isolation)
+
+For ISVs embedding the agent in a multi-tenant app, `scope_id` gives each end user fully isolated memory, store partitions, and session history — without running separate agent instances.
+
+**Passing a scope:**
+
+- Local dev: include `scope_id` in the chat request body
+- Cloud / JWT auth: include `scope_id` in JWT claims
+
+**Config:**
+
+```json
+{
+  "scope": {
+    "requireScope": true
+  }
+}
+```
+
+Set `requireScope: true` to reject any request that doesn't include a `scope_id`. Useful for multi-tenant deployments where unisolated requests should never be allowed.
+
+**Shared stores:**
+
+By default, stores are partitioned per scope. To make a store shared across all scopes (e.g. a read-only product catalog), add `"shared": true` to the store JSON file:
+
+```json
+{
+  "name": "product-catalog",
+  "shared": true,
+  "entity": { ... }
+}
+```
+
+**Context injection:**
+
+Connection specs can inject scope context values (passed with the request) into API calls automatically — as query params, headers, path variables, or body fields. Configure in the connection's `contextInjection` map:
+
+```json
+{
+  "contextInjection": {
+    "tenant_id": { "in": "header", "field": "X-Tenant-ID", "required": true }
+  }
+}
+```
+
+**Per-scope credentials:**
+
+Use `scope:KEY` in connection headers/auth to read credentials from the scope's secrets map. In local dev, define these in `.amodal/scopes.json` keyed by scope ID.
 
 ## Architecture
 

@@ -162,6 +162,8 @@ The `stores` block configures the database backend used for **both** agent docum
 | `proactive` | object | Webhook URL for external triggers (automation webhooks, third-party integrations). |
 | `mcp` | object | MCP server connections. Each server exposes additional tools to the agent. |
 | `webTools` | object | Enables `web_search` + `fetch_url` built-in tools via Gemini grounding. See [Web Tools](/guide/tools#web-tools). |
+| `memory` | object | Persistent memory across sessions. See [Memory](#memory). |
+| `scope` | object | Per-user isolation for multi-tenant deployments. See [Scope](#scope). |
 
 ## ModelConfig
 
@@ -261,3 +263,50 @@ The runtime resolves these at parse time — before any connections are establis
 A good rule of thumb: if you would not want the value visible in a public GitHub repo, use `env:`. The `amodal.json` file is checked into git. Secrets should never be in it directly.
 
 For local development, put your environment variables in a `.env` file at the repo root (and add it to `.gitignore`). The runtime loads `.env` automatically in repo mode. For production deployments, set them in your hosting environment's secret management — Kubernetes secrets, AWS Parameter Store, Fly.io secrets, or whatever your infrastructure uses.
+
+## Memory
+
+Enable persistent memory so the agent can remember facts across sessions:
+
+```json
+{
+  "memory": {
+    "enabled": true
+  }
+}
+```
+
+When enabled, the agent gets a built-in `memory` tool with `add`, `remove`, `list`, and `search` actions. Memory entries are stored as individual rows in the database, scoped by agent (and optionally per user via `scope_id`). On each new session, existing entries are injected into the system prompt automatically.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | — | Required. Set to `true` to enable memory. |
+| `maxEntries` | `50` | Maximum number of memory entries. |
+| `maxTotalChars` | `8000` | Maximum total characters across all entries. |
+| `editableBy` | `"any"` | Who can call the memory tool: `"any"`, `"admin"`, or `"none"`. |
+| `nudgeInterval` | `10` | Prompt the agent to save every N turns. Set to `0` to disable. |
+
+## Scope
+
+For ISVs embedding the agent in a multi-tenant app, `scope_id` gives each end user isolated memory, store partitions, and session history.
+
+```json
+{
+  "scope": {
+    "requireScope": true
+  }
+}
+```
+
+Setting `requireScope: true` rejects any request that does not include a `scope_id`. Recommended for production multi-tenant deployments.
+
+**Passing a scope ID:**
+
+- Local dev / unauthenticated: include `scope_id` in the chat request body
+- Cloud / JWT auth: include `scope_id` in JWT claims (takes precedence over body)
+
+**Shared stores:** By default, stores are partitioned per scope. To make a store shared across all scopes, add `"shared": true` to the store JSON file.
+
+**Context injection:** Connection specs support a `contextInjection` map to automatically forward scope context values (passed with the request) into API calls — as query params, headers, path variables, or body fields.
+
+**Per-scope credentials:** Use the `scope:KEY` prefix in connection auth/header values to read credentials from the scope's secrets map. In local dev, define these in `.amodal/scopes.json` keyed by scope ID.

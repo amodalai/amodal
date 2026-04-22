@@ -144,6 +144,20 @@ Both backends use [Drizzle ORM](https://orm.drizzle.team) internally against the
 }
 ```
 
+## Scoped vs. Shared Stores
+
+When [scope](/guide/config#scope) is configured, stores are partitioned per `scope_id` by default — each user sees only their own data. To make a store accessible across all scopes (e.g. a read-only product catalog or shared reference data), add `"shared": true` to the store JSON:
+
+```json
+{
+  "name": "product-catalog",
+  "shared": true,
+  "entity": { ... }
+}
+```
+
+Shared stores are readable by all scopes but still enforce the same access controls. Writes from one scope do not affect another scope's partition in non-shared stores.
+
 ## History & Tracing
 
 - `"history": { "versions": 3 }` — retain 3 previous versions of each document
