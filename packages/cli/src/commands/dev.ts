@@ -14,7 +14,7 @@ import {fileURLToPath} from 'node:url';
 import {createLocalServer, initLogLevel, interceptConsole, log} from '@amodalai/runtime';
 import {ensureAdminAgent} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
-import {findFreePort} from '../shared/find-free-port.js';
+import {createServer} from 'node:net';
 import {runConnectionPreflight, printPreflightTable} from '../shared/connection-preflight.js';
 import {resolveEnv} from '../shared/env-resolution.js';
 import {getDb, ensureSchema, closeDb} from '@amodalai/db';
@@ -26,6 +26,24 @@ import {getDb, ensureSchema, closeDb} from '@amodalai/db';
 const DEFAULT_RUNTIME_PORT = 3847;
 const DEFAULT_STUDIO_PORT = 3848;
 const DEFAULT_ADMIN_PORT = 3849;
+
+// ---------------------------------------------------------------------------
+// Port checking
+// ---------------------------------------------------------------------------
+
+function assertPortFree(port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once('error', () => {
+      reject(new Error(
+        `Port ${String(port)} is already in use. Stop the process using it or pass --port to pick a different port.`,
+      ));
+    });
+    server.listen(port, '0.0.0.0', () => {
+      server.close(() => resolve());
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Studio resolution
@@ -410,13 +428,13 @@ Or add it to your agent's .env file:
   // Port allocation
   // -------------------------------------------------------------------------
 
-  const runtimePort = await findFreePort(options.port ?? DEFAULT_RUNTIME_PORT);
-  const studioPort = options.noStudio
-    ? DEFAULT_STUDIO_PORT
-    : await findFreePort(DEFAULT_STUDIO_PORT);
-  const adminPort = options.noAdmin
-    ? DEFAULT_ADMIN_PORT
-    : await findFreePort(DEFAULT_ADMIN_PORT);
+  const runtimePort = options.port ?? DEFAULT_RUNTIME_PORT;
+  const studioPort = DEFAULT_STUDIO_PORT;
+  const adminPort = DEFAULT_ADMIN_PORT;
+
+  await assertPortFree(runtimePort);
+  if (!options.noStudio) await assertPortFree(studioPort);
+  if (!options.noAdmin) await assertPortFree(adminPort);
 
   log.info('ports_allocated', {
     runtime: runtimePort,

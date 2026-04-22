@@ -137,13 +137,13 @@ These rules apply to ALL code in this repo. They are non-negotiable.
 - Integration tests over unit tests for tool execution — test the real path, not mocks.
 - Contract tests for SSE events — if an event shape changes, the test fails before the UI breaks.
 - Don't test implementation details — test public behavior. Private functions can be refactored freely.
+- **Every subprocess must have a smoke test.** If `amodal dev` spawns a subprocess (Studio, admin agent), there must be a smoke test that verifies the subprocess starts and responds to health checks. Silent failures that skip broken subprocesses are not acceptable.
 
 ## Key architecture notes
 
-- All LLM calls go through the upstream `@google/gemini-cli-core` GeminiClient, even for non-Google providers (Anthropic, OpenAI, etc.) — our `MultiProviderContentGenerator` adapts them
-- Tools are registered on the upstream `ToolRegistry` — amodal tools (`request`, `load_knowledge`, `present`, stores), custom tools (from `tools/`), and MCP tools are all registered there
-- Admin file tools (`read_repo_file`, `write_repo_file`, `delete_repo_file`) are in `packages/runtime/src/session/admin-file-tools.ts` with path validation
-- Admin sessions swap repo skills/knowledge with admin content while keeping user connections (`sessionManager.createAdminSession()`)
+- All LLM calls go through the Vercel AI SDK (`@ai-sdk/anthropic`, `@ai-sdk/openai`, `@ai-sdk/google`) via `packages/runtime/src/providers/create-provider.ts`
+- The eval judge uses `generateText()` from the AI SDK directly (no custom provider abstraction)
+- `amodal dev` spawns three processes: runtime (port 3847), Studio (port 3848), admin agent (port 3849). Each is a separate Express server. Studio proxies admin chat to the admin agent over HTTP.
+- The admin agent is an npm package (`@amodalai/agent-admin`) fetched and cached at `~/.amodal/admin-agent/` on first run
 - The system prompt is built by `buildDefaultPrompt()` in `packages/core/src/runtime/default-prompt.ts` — includes skills, knowledge bodies, connection API surface docs, field guidance, scope labels
 - MCP connections are shared across sessions via `sharedMcpManager` on the SessionManager — not reconnected per session
-- Eval judge uses direct LLM calls (`createRuntimeProvider`) instead of the full session/agent loop
