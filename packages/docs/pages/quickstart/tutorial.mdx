@@ -10,7 +10,13 @@ Build an agent that searches Hacker News and Wikipedia, remembers your interests
 
 - **Node.js 20+** and npm
 - An **LLM API key** — Anthropic, OpenAI, or Google (see [Providers](/guide/providers))
-- **PostgreSQL** running locally (required for memory and stores) — see [Stores](/guide/stores) for setup
+- **PostgreSQL** running locally (required for memory and stores). Quickest way:
+
+```bash
+docker run -d --name amodal-pg -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=research_agent postgres:16
+```
+
+No Docker? You can skip Postgres and use the embedded PGLite backend instead — see the note in step 1.
 
 ## 1. Create the project
 
@@ -60,6 +66,8 @@ Open `amodal.json` and replace its contents with:
 
 {/* TODO: screenshot */}
 
+> **No Postgres?** Remove the `stores` block entirely. Amodal defaults to PGLite, an embedded Postgres that stores data in `.amodal/store-data/` — no server required. Everything in this tutorial works the same way.
+
 **What each field does:**
 
 | Field | Purpose |
@@ -73,7 +81,7 @@ Set your environment variables:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...       # or OPENAI_API_KEY / GOOGLE_API_KEY
-export DATABASE_URL=postgresql://localhost:5432/research_agent
+export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/research_agent
 ```
 
 ## 2. Add connections
