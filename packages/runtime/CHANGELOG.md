@@ -1,5 +1,18 @@
 # @amodalai/runtime
 
+## 0.3.27
+
+### Patch Changes
+
+- [#254](https://github.com/amodalai/amodal/pull/254) [`2113533`](https://github.com/amodalai/amodal/commit/2113533340a379d52b1aaa23240a04f960fd9120) Thanks [@whodatdev](https://github.com/whodatdev)! - Fix session persistence in hosted mode: pass config.appId to shared resources so sessions are saved with the correct agent ID instead of "local".
+
+- [#254](https://github.com/amodalai/amodal/pull/254) [`2113533`](https://github.com/amodalai/amodal/commit/2113533340a379d52b1aaa23240a04f960fd9120) Thanks [@whodatdev](https://github.com/whodatdev)! - Move session history routes to shared server.ts — sessions work in both local dev and hosted runtime. Add storeBackend and appId to ServerConfig. Remove duplicate routes from local-server.
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.27
+  - @amodalai/core@0.3.27
+  - @amodalai/db@0.3.27
+
 ## 0.3.26
 
 ### Patch Changes
