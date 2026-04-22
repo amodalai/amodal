@@ -59,8 +59,6 @@ export interface SharedResources {
    * Used by connection loading to resolve scope:KEY references at session time.
    * If not provided, only env:KEY and literal values are resolved.
    */
-  // TODO: Wire into connection loading path in buildSessionComponents so
-  // scope:KEY references in connection auth tokens resolve at session time.
   buildCredentialResolver?: (scopeId: string | undefined) => CredentialResolver;
 }
 
@@ -144,6 +142,8 @@ async function buildComponents(
     shared.logger.info('memory_loaded', {contentLength: memoryContent.length, scopeId: opts.scopeId ?? ''});
   }
 
+  const credentialResolver = shared.buildCredentialResolver?.(opts.scopeId);
+
   return buildSessionComponents({
     bundle,
     storeBackend: shared.storeBackend,
@@ -159,6 +159,7 @@ async function buildComponents(
     appId: shared.appId,
     scopeId: opts.scopeId,
     scopeContext: opts.scopeContext,
+    ...(credentialResolver ? {credentialResolver} : {}),
   });
 }
 
