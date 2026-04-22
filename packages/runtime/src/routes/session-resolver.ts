@@ -59,6 +59,8 @@ export interface SharedResources {
    * Used by connection loading to resolve scope:KEY references at session time.
    * If not provided, only env:KEY and literal values are resolved.
    */
+  // TODO: Wire into connection loading path in buildSessionComponents so
+  // scope:KEY references in connection auth tokens resolve at session time.
   buildCredentialResolver?: (scopeId: string | undefined) => CredentialResolver;
 }
 
@@ -218,10 +220,8 @@ export async function resolveSession(
   let resolvedSessionId = sessionId;
   if (!resolvedSessionId && scopeId && bundle) {
     const sessionStore = sessionManager.getStore();
-    if (sessionStore && 'findByScopeId' in sessionStore && typeof (sessionStore as {findByScopeId?: unknown}).findByScopeId === 'function') {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated via in-check + typeof guard above
-      const findByScopeId = (sessionStore as {findByScopeId: (id: string) => Promise<string | null>}).findByScopeId.bind(sessionStore);
-      const found = await findByScopeId(scopeId);
+    if (sessionStore?.findByScopeId) {
+      const found = await sessionStore.findByScopeId(scopeId);
       if (found) {
         resolvedSessionId = found;
         shared.logger.info('session_resolved_by_scope', {scopeId, sessionId: found});

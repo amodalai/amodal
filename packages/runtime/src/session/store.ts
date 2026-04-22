@@ -131,6 +131,12 @@ export interface SessionStore {
 
   /** Close the backing store. */
   close(): Promise<void>;
+
+  /**
+   * Find the most recent session for a scope. Returns the session ID or null.
+   * Optional — only implemented by stores that support scope-based lookup.
+   */
+  findByScopeId?(scopeId: string): Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------

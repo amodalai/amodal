@@ -57,6 +57,15 @@ export function createChatRouter(options: ChatRouterOptions): Router {
 
       const {scopeId, scopeContext} = resolveScope(body, auth);
 
+      // Reject if the agent requires a scope but none was provided
+      const bundleConfig = options.bundleResolver.staticBundle?.config;
+      if (bundleConfig?.scope?.requireScope === true && scopeId === '') {
+        res.status(400).json({
+          error: {code: 'scope_required', message: 'This agent requires a scope_id.'},
+        });
+        return;
+      }
+
       const {session, toolContextFactory} = await resolveSession(body.session_id, {
         sessionManager: options.sessionManager,
         bundleResolver: options.bundleResolver,

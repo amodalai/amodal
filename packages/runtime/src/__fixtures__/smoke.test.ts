@@ -20,7 +20,7 @@ import type {ServerInstance} from '../server.js';
 import {expectDoneReason, expectTotalTokens} from './test-helpers.js';
 import {loadTestEnv, defaultTargetName} from './test-env.js';
 import {VISION_PROVIDERS} from '../providers/types.js';
-import {getDb, agentMemoryEntries, eq} from '@amodalai/db';
+import {getDb, agentMemoryEntries, storeDocuments, eq, and} from '@amodalai/db';
 import type {NodePgDatabase} from 'drizzle-orm/node-postgres';
 
 // Pull API keys out of <repo-root>/.env.test (gitignored). Missing keys
@@ -79,13 +79,15 @@ async function waitForServer(port: number, maxMs = 15_000): Promise<void> {
 async function chat(
   message: string,
   sessionId?: string,
-  opts?: {maxSessionTokens?: number; images?: Array<{mimeType: string; data: string}>; model?: {provider: string; model: string}},
+  opts?: {maxSessionTokens?: number; images?: Array<{mimeType: string; data: string}>; model?: {provider: string; model: string}; scopeId?: string; context?: Record<string, string>},
 ): Promise<{events: Array<Record<string, unknown>>; sessionId: string}> {
   const body: Record<string, unknown> = {message};
   if (sessionId) body['session_id'] = sessionId;
   if (opts?.maxSessionTokens !== undefined) body['max_session_tokens'] = opts.maxSessionTokens;
   if (opts?.images?.length) body['images'] = opts.images;
   if (opts?.model) body['model'] = opts.model;
+  if (opts?.scopeId !== undefined) body['scope_id'] = opts.scopeId;
+  if (opts?.context !== undefined) body['context'] = opts.context;
 
   const res = await fetch(`http://localhost:${AGENT_PORT}/chat`, {
     method: 'POST',
@@ -375,6 +377,116 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     // Clean up
     await db.delete(agentMemoryEntries).where(eq(agentMemoryEntries.appId, AGENT_NAME));
   }, TIMEOUT * 3);
+
+  // -------------------------------------------------------------------------
+  // 4c. Memory scope isolation — scope-A entries not visible to scope-B
+  // -------------------------------------------------------------------------
+
+  it('memory entries seeded for scope-A are not visible to scope-B', async () => {
+
+    const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
+    const AGENT_NAME = 'smoke-test-agent';
+    const SCOPE_A = 'scope-isolation-A';
+    const SCOPE_B = 'scope-isolation-B';
+    const SENTINEL = 'SCOPE_MEMORY_SENTINEL_ZQ47';
+
+    // Seed a memory entry scoped to SCOPE_A only.
+    await db.insert(agentMemoryEntries).values({
+      appId: AGENT_NAME,
+      scopeId: SCOPE_A,
+      content: `The secret phrase is ${SENTINEL}.`,
+    });
+
+    try {
+      // Scope-A request — agent should know the sentinel via memory injection.
+      const {events: eventsA} = await chat(
+        'What is the secret phrase? Reply with just the phrase, nothing else.',
+        undefined,
+        {scopeId: SCOPE_A},
+      );
+      expect(allText(eventsA)).toContain(SENTINEL);
+
+      // Scope-B request — agent should not know the sentinel.
+      const {events: eventsB} = await chat(
+        'What is the secret phrase? Reply with just the phrase or "unknown" if you do not know.',
+        undefined,
+        {scopeId: SCOPE_B},
+      );
+      expect(allText(eventsB)).not.toContain(SENTINEL);
+    } finally {
+      // Clean up regardless of test outcome.
+      await db
+        .delete(agentMemoryEntries)
+        .where(and(eq(agentMemoryEntries.appId, AGENT_NAME), eq(agentMemoryEntries.scopeId, SCOPE_A)));
+    }
+  }, TIMEOUT * 2);
+
+  // -------------------------------------------------------------------------
+  // 4d. Store scope isolation — scope-A documents not visible to scope-B
+  // -------------------------------------------------------------------------
+
+  it('store documents written for scope-A are not returned when querying as scope-B', async () => {
+
+    const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
+    const AGENT_NAME = 'smoke-test-agent';
+    const SCOPE_A = 'scope-store-A';
+    const SCOPE_B = 'scope-store-B';
+    const DOC_KEY = 'scope-iso-doc';
+    const SENTINEL = 'SCOPE_STORE_SENTINEL_YR83';
+
+    // Insert a store document directly into the DB for scope-A.
+    await db.insert(storeDocuments).values({
+      appId: AGENT_NAME,
+      scopeId: SCOPE_A,
+      store: 'test-items',
+      key: DOC_KEY,
+      version: 1,
+      payload: {item_id: DOC_KEY, name: SENTINEL, status: 'active'},
+      meta: {},
+    });
+
+    try {
+      // Scope-A: agent queries the store — should find the sentinel document.
+      const {events: eventsA} = await chat(
+        `Use query_store with store="test-items" and key="${DOC_KEY}". What is the name field? Reply with just the value.`,
+        undefined,
+        {scopeId: SCOPE_A},
+      );
+      const toolResultsA = findEvents(eventsA, 'tool_call_result');
+      if (toolResultsA.length === 0) {
+        // eslint-disable-next-line no-console -- intentional test diagnostic
+        console.warn('[smoke] Model did not call query_store for scope-A — LLM non-determinism, skipping assertion');
+      } else {
+        expect(allText(eventsA)).toContain(SENTINEL);
+      }
+
+      // Scope-B: agent queries the same key — should NOT find the document.
+      const {events: eventsB} = await chat(
+        `Use query_store with store="test-items" and key="${DOC_KEY}". What is the name field? Reply with "not found" if the document does not exist.`,
+        undefined,
+        {scopeId: SCOPE_B},
+      );
+      const toolResultsB = findEvents(eventsB, 'tool_call_result');
+      if (toolResultsB.length === 0) {
+        // eslint-disable-next-line no-console -- intentional test diagnostic
+        console.warn('[smoke] Model did not call query_store for scope-B — LLM non-determinism, skipping assertion');
+      } else {
+        expect(allText(eventsB)).not.toContain(SENTINEL);
+      }
+    } finally {
+      // Clean up regardless of test outcome.
+      await db
+        .delete(storeDocuments)
+        .where(
+          and(
+            eq(storeDocuments.appId, AGENT_NAME),
+            eq(storeDocuments.scopeId, SCOPE_A),
+            eq(storeDocuments.store, 'test-items'),
+            eq(storeDocuments.key, DOC_KEY),
+          ),
+        );
+    }
+  }, TIMEOUT * 2);
 
   // -------------------------------------------------------------------------
   // 5. Tool call — store
