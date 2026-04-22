@@ -1509,6 +1509,42 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
 
     expect(res.status).toBe(400);
   });
+
+  // -------------------------------------------------------------------------
+  // 29. Scope ID — session resume by scope
+  // -------------------------------------------------------------------------
+
+  // NOTE: requireScope enforcement (scope.requireScope: true in amodal.json)
+  // is not tested here because the smoke agent's amodal.json does not have
+  // that flag set. It needs a dedicated agent config to test properly.
+
+  it('resumes the same session when scope_id matches and no session_id is provided', async () => {
+    const SCOPE = 'resume-test-scope';
+
+    // First chat with the scope — creates a new session scoped to SCOPE.
+    const first = await chat(
+      'Remember this code: SCOPERESUME1234. Confirm you noted it.',
+      undefined,
+      {scopeId: SCOPE},
+    );
+    expect(first.sessionId).toBeTruthy();
+
+    // Second chat: same scope_id but NO explicit session_id.
+    // The runtime should automatically resume the existing session for this scope.
+    const second = await chat(
+      'What code did I ask you to remember? Reply with just the code.',
+      undefined,
+      {scopeId: SCOPE},
+    );
+
+    // The init event's session_id must match the first session.
+    const secondInit = findEvent(second.events, 'init');
+    expect(secondInit?.['session_id']).toBe(first.sessionId);
+
+    // The agent should still recall the code (proves history was resumed).
+    const responseText = allText(second.events);
+    expect(responseText).toContain('SCOPERESUME1234');
+  }, TIMEOUT * 2);
 });
 
 // ---------------------------------------------------------------------------
