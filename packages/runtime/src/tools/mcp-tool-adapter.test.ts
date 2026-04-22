@@ -45,6 +45,7 @@ function makeMockContext(overrides?: Partial<ToolContext>): ToolContext {
     log: vi.fn(),
     signal: AbortSignal.timeout(10000),
     sessionId: 'test-session',
+    scopeId: '',
     ...overrides,
   };
 }

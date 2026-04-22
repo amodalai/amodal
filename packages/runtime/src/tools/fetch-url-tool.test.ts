@@ -17,6 +17,7 @@ function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
     log: vi.fn(),
     signal: AbortSignal.timeout(5000),
     sessionId: 'test-session',
+    scopeId: '',
     ...overrides,
   };
 }

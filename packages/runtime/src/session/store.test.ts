@@ -379,6 +379,7 @@ describe.skipIf(skip)('Postgres session store', () => {
  */
 function makeRow(overrides: Partial<{
   id: string;
+  scopeId: string;
   messages: unknown[];
   tokenUsage: {inputTokens: number; outputTokens: number; totalTokens: number};
   metadata: Record<string, unknown>;
@@ -389,6 +390,7 @@ function makeRow(overrides: Partial<{
 }> = {}) {
   return {
     id: overrides.id ?? 'test-session',
+    scopeId: overrides.scopeId ?? '',
     messages: overrides.messages ?? [],
     tokenUsage: overrides.tokenUsage ?? {inputTokens: 0, outputTokens: 0, totalTokens: 0},
     metadata: overrides.metadata ?? {},

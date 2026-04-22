@@ -58,6 +58,10 @@ export type { TaskRouterOptions } from './agent/routes/task.js';
 export { getAuthContext } from './middleware/auth.js';
 export type { AuthContext } from './middleware/auth.js';
 
+// Scope resolution
+export { resolveScope } from './scope.js';
+export type { ResolvedScope } from './scope.js';
+
 // Stream hooks
 export type { StreamHooks, TokenCounts } from './session/stream-hooks.js';
 

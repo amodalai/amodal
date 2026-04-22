@@ -47,6 +47,8 @@ export interface ToolContextFactoryOptions {
   fieldScrubber?: FieldScrubber | null;
   /** Session ID for correlation */
   sessionId: string;
+  /** Scope ID for per-user session isolation. Empty string means agent-level (no scope). */
+  scopeId: string;
   /** Grounded search provider for web_search/fetch_url (optional). */
   searchProvider?: SearchProvider;
 }
@@ -226,7 +228,7 @@ export function createToolContextFactory(
 
         // Race against abort signal so a hung database doesn't block forever
         await Promise.race([
-          opts.storeBackend.put(opts.appId, storeName, key, payload, {}),
+          opts.storeBackend.put(opts.appId, opts.scopeId, storeName, key, payload, {}),
           new Promise<never>((_resolve, reject) => {
             if (ctx.signal.aborted) {
               reject(new StoreError('Store write timed out', {store: storeName, operation: 'put', context: {callId, key}}));
@@ -264,6 +266,7 @@ export function createToolContextFactory(
 
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       sessionId: opts.sessionId,
+      scopeId: opts.scopeId,
       ...(opts.searchProvider ? {searchProvider: opts.searchProvider} : {}),
     };
     return ctx;

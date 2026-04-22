@@ -25,13 +25,14 @@ export const agentMemoryEntries = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     appId: text('app_id').notNull(),
+    scopeId: text('scope_id').notNull().default(''),
     content: text('content').notNull(),
     category: text('category'),
     createdAt: timestamp('created_at', {withTimezone: true}).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', {withTimezone: true}).defaultNow().notNull(),
   },
   (t) => [
-    index('idx_memory_entries_app').on(t.appId),
+    index('idx_memory_entries_scope').on(t.appId, t.scopeId),
   ],
 );
 

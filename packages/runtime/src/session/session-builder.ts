@@ -92,6 +92,8 @@ export interface BuildSessionComponentsOptions {
   adminContent?: AdminAgentContent;
   /** Session ID for correlation in tool context (default: generated). */
   sessionId?: string;
+  /** Scope ID for per-user session isolation (default: '' means agent-level). */
+  scopeId?: string;
   /** Optional field scrubber for response sanitization on ctx.request() */
   fieldScrubber?: FieldScrubber;
   /**
@@ -219,8 +221,8 @@ function buildCustomToolSessionContext(
   // Adapt StoreBackend.put (returns StorePutResult) to CustomToolSessionContext.storeBackend.put (returns void)
   const adaptedBackend = storeBackend
     ? {
-        async put(a: string, s: string, k: string, p: Record<string, unknown>, m: Record<string, unknown>) {
-          await storeBackend.put(a, s, k, p, m);
+        async put(a: string, sc: string, s: string, k: string, p: Record<string, unknown>, m: Record<string, unknown>) {
+          await storeBackend.put(a, sc, s, k, p, m);
         },
       }
     : undefined;
@@ -282,6 +284,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     toolExecutor,
     adminContent,
     sessionId = 'pending',
+    scopeId = '',
     fieldScrubber,
     memoryContent,
     memoryDb,
@@ -502,6 +505,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     storeBackend: storeBackend ?? makeThrowingStoreBackend(),
     storeDefinitions: bundle.stores,
     appId,
+    scopeId,
     envAllowlist,
     logger,
     fieldScrubber,

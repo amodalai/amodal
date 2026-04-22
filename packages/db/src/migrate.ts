@@ -17,8 +17,11 @@ import { sql } from 'drizzle-orm';
 
 const DDL_STATEMENTS = [
   // --- store_documents ---
-  sql`CREATE TABLE IF NOT EXISTS store_documents (
+  // Drop and recreate to change the primary key to include scope_id.
+  sql`DROP TABLE IF EXISTS store_documents CASCADE`,
+  sql`CREATE TABLE store_documents (
     app_id TEXT NOT NULL,
+    scope_id TEXT NOT NULL DEFAULT '',
     store TEXT NOT NULL,
     key TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
@@ -27,15 +30,18 @@ const DDL_STATEMENTS = [
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (app_id, store, key)
+    PRIMARY KEY (app_id, scope_id, store, key)
   )`,
-  sql`CREATE INDEX IF NOT EXISTS idx_store_documents_store ON store_documents (app_id, store)`,
+  sql`CREATE INDEX IF NOT EXISTS idx_store_documents_store ON store_documents (app_id, scope_id, store)`,
   sql`CREATE INDEX IF NOT EXISTS idx_store_documents_expires ON store_documents (expires_at)`,
 
   // --- store_document_versions ---
-  sql`CREATE TABLE IF NOT EXISTS store_document_versions (
+  // Drop and recreate to add scope_id column and update lookup index.
+  sql`DROP TABLE IF EXISTS store_document_versions CASCADE`,
+  sql`CREATE TABLE store_document_versions (
     id SERIAL PRIMARY KEY,
     app_id TEXT NOT NULL,
+    scope_id TEXT NOT NULL DEFAULT '',
     store TEXT NOT NULL,
     key TEXT NOT NULL,
     version INTEGER NOT NULL,
@@ -43,7 +49,7 @@ const DDL_STATEMENTS = [
     meta JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
-  sql`CREATE INDEX IF NOT EXISTS idx_store_versions_lookup ON store_document_versions (app_id, store, key, version)`,
+  sql`CREATE INDEX IF NOT EXISTS idx_store_versions_lookup ON store_document_versions (app_id, scope_id, store, key, version)`,
 
   // --- agent_sessions ---
   sql`CREATE TABLE IF NOT EXISTS agent_sessions (
@@ -56,7 +62,9 @@ const DDL_STATEMENTS = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+  sql`ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS scope_id TEXT NOT NULL DEFAULT ''`,
   sql`CREATE INDEX IF NOT EXISTS idx_agent_sessions_updated ON agent_sessions (updated_at)`,
+  sql`CREATE INDEX IF NOT EXISTS idx_sessions_scope ON agent_sessions (scope_id)`,
 
   // --- channel_sessions ---
   sql`CREATE TABLE IF NOT EXISTS channel_sessions (
@@ -169,7 +177,8 @@ const DDL_STATEMENTS = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
-  sql`CREATE INDEX IF NOT EXISTS idx_memory_entries_app ON agent_memory_entries (app_id)`,
+  sql`ALTER TABLE agent_memory_entries ADD COLUMN IF NOT EXISTS scope_id TEXT NOT NULL DEFAULT ''`,
+  sql`CREATE INDEX IF NOT EXISTS idx_memory_entries_scope ON agent_memory_entries (app_id, scope_id)`,
   sql`CREATE INDEX IF NOT EXISTS idx_memory_entries_search ON agent_memory_entries
     USING GIN (to_tsvector('english', content))`,
 ] as const;

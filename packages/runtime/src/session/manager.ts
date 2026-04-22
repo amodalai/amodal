@@ -506,5 +506,6 @@ function makeNoOpToolContext(session: Session): (callId: string) => ToolContext 
     log: (message: string) => { session.logger.debug('tool_log', {session: session.id, message}); },
     signal: AbortSignal.timeout(30_000),
     sessionId: session.id,
+    scopeId: '',
   });
 }

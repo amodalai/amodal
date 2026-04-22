@@ -49,6 +49,10 @@ export const ChatRequestSchema = z.object({
     provider: z.string().min(1),
     model: z.string().min(1),
   }).optional(),
+  /** Optional scope ID for per-user session isolation */
+  scope_id: z.string().optional(),
+  /** Optional context key-value pairs to associate with the scope */
+  context: z.record(z.string()).optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;

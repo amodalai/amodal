@@ -139,9 +139,9 @@ export function createStoreWriteTool(
     readOnly: false,
     metadata: {category: 'store'},
 
-    async execute(params: Record<string, unknown>, _ctx: ToolContext): Promise<unknown> {
+    async execute(params: Record<string, unknown>, ctx: ToolContext): Promise<unknown> {
       const key = resolveKey(store.entity.key, params);
-      const result = await backend.put(appId, store.name, key, params, {});
+      const result = await backend.put(appId, ctx.scopeId, store.name, key, params, {});
       return {stored: true, key, version: result.version};
     },
   };
@@ -169,7 +169,7 @@ export function createStoreBatchTool(
     readOnly: false,
     metadata: {category: 'store'},
 
-    async execute(params: {items: Array<Record<string, unknown>>}, _ctx: ToolContext): Promise<unknown> {
+    async execute(params: {items: Array<Record<string, unknown>>}, ctx: ToolContext): Promise<unknown> {
       let stored = 0;
       let failed = 0;
       const errors: string[] = [];
@@ -177,7 +177,7 @@ export function createStoreBatchTool(
       for (const item of params.items) {
         try {
           const key = resolveKey(store.entity.key, item);
-          await backend.put(appId, store.name, key, item, {});
+          await backend.put(appId, ctx.scopeId, store.name, key, item, {});
           stored++;
         } catch (err) {
           failed++;
@@ -227,16 +227,16 @@ export function createStoreQueryTool(
     readOnly: true,
     metadata: {category: 'store'},
 
-    async execute(params: {store: string; key?: string; filter?: Record<string, unknown>; sort?: string; limit?: number}, _ctx: ToolContext): Promise<unknown> {
+    async execute(params: {store: string; key?: string; filter?: Record<string, unknown>; sort?: string; limit?: number}, ctx: ToolContext): Promise<unknown> {
       if (params.key) {
-        const doc = await backend.get(appId, params.store, params.key);
+        const doc = await backend.get(appId, ctx.scopeId, params.store, params.key);
         if (!doc) {
           return {found: false, key: params.key};
         }
         return {found: true, ...doc};
       }
 
-      const result = await backend.list(appId, params.store, {
+      const result = await backend.list(appId, ctx.scopeId, params.store, {
         filter: params.filter,
         sort: params.sort,
         limit: typeof params.limit === 'number' ? params.limit : 20,

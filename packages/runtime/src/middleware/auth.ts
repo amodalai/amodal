@@ -16,6 +16,10 @@ export interface AuthContext {
   token?: string;
   applicationId: string;
   authMethod: string;
+  /** Scope ID extracted from JWT claims (for per-user session isolation) */
+  scopeId?: string;
+  /** Scope context key-value pairs extracted from JWT claims */
+  scopeContext?: Record<string, string>;
 }
 
 const AUTH_CONTEXT_KEY = 'authContext';

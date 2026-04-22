@@ -139,6 +139,7 @@ describe('stores router', () => {
 
       expect(backend.list).toHaveBeenCalledWith(
         'test-tenant',
+        '',
         'alerts',
         expect.objectContaining({
           filter: {severity: 'P1'},

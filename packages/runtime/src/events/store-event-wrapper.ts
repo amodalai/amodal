@@ -37,26 +37,27 @@ export function wrapStoreBackendWithEvents(
       return inner.initialize(stores);
     },
 
-    get(appId: string, store: string, key: string): Promise<StoreDocument | null> {
-      return inner.get(appId, store, key);
+    get(appId: string, scopeId: string, store: string, key: string): Promise<StoreDocument | null> {
+      return inner.get(appId, scopeId, store, key);
     },
 
-    list(appId: string, store: string, opts?: StoreListOptions): Promise<StoreListResult> {
-      return inner.list(appId, store, opts);
+    list(appId: string, scopeId: string, store: string, opts?: StoreListOptions): Promise<StoreListResult> {
+      return inner.list(appId, scopeId, store, opts);
     },
 
-    history(appId: string, store: string, key: string): Promise<StoreDocument[]> {
-      return inner.history(appId, store, key);
+    history(appId: string, scopeId: string, store: string, key: string): Promise<StoreDocument[]> {
+      return inner.history(appId, scopeId, store, key);
     },
 
     async put(
       appId: string,
+      scopeId: string,
       store: string,
       key: string,
       payload: Record<string, unknown>,
       meta: Partial<StoreDocumentMeta>,
     ): Promise<StorePutResult> {
-      const result = await inner.put(appId, store, key, payload, meta);
+      const result = await inner.put(appId, scopeId, store, key, payload, meta);
       bus.emit({
         type: 'store_updated',
         storeName: store,
@@ -65,8 +66,8 @@ export function wrapStoreBackendWithEvents(
       return result;
     },
 
-    async delete(appId: string, store: string, key: string): Promise<boolean> {
-      const result = await inner.delete(appId, store, key);
+    async delete(appId: string, scopeId: string, store: string, key: string): Promise<boolean> {
+      const result = await inner.delete(appId, scopeId, store, key);
       if (result) {
         bus.emit({
           type: 'store_updated',
@@ -77,8 +78,8 @@ export function wrapStoreBackendWithEvents(
       return result;
     },
 
-    async purgeExpired(appId: string, store?: string): Promise<number> {
-      const count = await inner.purgeExpired(appId, store);
+    async purgeExpired(appId: string, scopeId: string, store?: string): Promise<number> {
+      const count = await inner.purgeExpired(appId, scopeId, store);
       if (count > 0) {
         bus.emit({
           type: 'store_updated',

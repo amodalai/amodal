@@ -43,6 +43,7 @@ const mockCtx: ToolContext = {
   log: vi.fn(),
   signal: AbortSignal.timeout(5000),
   sessionId: 'test-session',
+  scopeId: '',
 };
 
 function createMockBackend(): StoreBackend {
@@ -50,8 +51,8 @@ function createMockBackend(): StoreBackend {
 
   return {
     initialize: vi.fn().mockResolvedValue(undefined),
-    get: vi.fn().mockImplementation(async (_appId: string, _store: string, key: string) => docs.get(key) ?? null),
-    put: vi.fn().mockImplementation(async (_appId: string, store: string, key: string, payload: Record<string, unknown>) => {
+    get: vi.fn().mockImplementation(async (_appId: string, _scopeId: string, _store: string, key: string) => docs.get(key) ?? null),
+    put: vi.fn().mockImplementation(async (_appId: string, _scopeId: string, store: string, key: string, payload: Record<string, unknown>) => {
       const doc: StoreDocument = {
         key,
         appId: 'test',
@@ -108,7 +109,7 @@ describe('createStoreWriteTool', () => {
     );
 
     expect(backend.put).toHaveBeenCalledWith(
-      'test-app', 'alerts', 'a1',
+      'test-app', '', 'alerts', 'a1',
       {alert_id: 'a1', severity: 'P1', message: 'disk full'},
       {},
     );
@@ -194,7 +195,7 @@ describe('createStoreQueryTool', () => {
 
   it('gets a single document by key', async () => {
     // Pre-populate
-    await backend.put('test-app', 'alerts', 'a1', {alert_id: 'a1', severity: 'P1'}, {});
+    await backend.put('test-app', '', 'alerts', 'a1', {alert_id: 'a1', severity: 'P1'}, {});
 
     const tool = createStoreQueryTool([ALERTS_STORE], backend, 'test-app');
     const result = await tool.execute({store: 'alerts', key: 'a1'}, mockCtx) as Record<string, unknown>;
@@ -211,8 +212,8 @@ describe('createStoreQueryTool', () => {
   });
 
   it('lists documents with default limit', async () => {
-    await backend.put('test-app', 'alerts', 'a1', {alert_id: 'a1'}, {});
-    await backend.put('test-app', 'alerts', 'a2', {alert_id: 'a2'}, {});
+    await backend.put('test-app', '', 'alerts', 'a1', {alert_id: 'a1'}, {});
+    await backend.put('test-app', '', 'alerts', 'a2', {alert_id: 'a2'}, {});
 
     const tool = createStoreQueryTool([ALERTS_STORE], backend, 'test-app');
     const result = await tool.execute({store: 'alerts'}, mockCtx) as Record<string, unknown>;
@@ -230,7 +231,7 @@ describe('createStoreQueryTool', () => {
       limit: 5,
     }, mockCtx);
 
-    expect(backend.list).toHaveBeenCalledWith('test-app', 'alerts', {
+    expect(backend.list).toHaveBeenCalledWith('test-app', '', 'alerts', {
       filter: {severity: 'P1'},
       sort: '-severity',
       limit: 5,
