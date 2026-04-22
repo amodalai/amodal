@@ -48,3 +48,51 @@ jobs:
           DATABASE_URL: postgresql://postgres@localhost:5432/amodal_test
           SMOKE_TARGET: google
         run: pnpm --filter @amodalai/runtime run test:smoke
+
+  cli-e2e:
+    name: CLI E2E
+    if: "!contains(github.event.head_commit.message, '[skip smoke]')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: amodal_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready" --health-interval=5s --health-timeout=5s --health-retries=5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+      - run: pnpm run build
+      - name: Run CLI e2e tests
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          DATABASE_URL: postgresql://postgres@localhost:5432/amodal_test
+        run: pnpm --filter @amodalai/amodal run test
+
+  subprocess-smoke:
+    name: Subprocess
+    if: "!contains(github.event.head_commit.message, '[skip smoke]')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: amodal_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready" --health-interval=5s --health-timeout=5s --health-retries=5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+      - run: pnpm run build
+      - name: Run subprocess smoke test
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          DATABASE_URL: postgresql://postgres@localhost:5432/amodal_test
+        run: pnpm --filter @amodalai/amodal run test:subprocess

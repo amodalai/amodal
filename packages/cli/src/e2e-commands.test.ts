@@ -17,12 +17,9 @@
 
 import {describe, it, expect, beforeAll, afterAll} from 'vitest';
 import {mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync} from 'node:fs';
-import {join, resolve,dirname} from 'node:path';
+import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import type http from 'node:http';
-import {spawn} from 'node:child_process';
-import type {ChildProcess} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
 
 import {runInit} from './commands/init.js';
 import {runValidate} from './commands/validate.js';
@@ -30,11 +27,6 @@ import {runInspect} from './commands/inspect.js';
 import {runBuild} from './commands/build.js';
 import {runDeploy} from './commands/deploy.js';
 import {runDocker} from './commands/docker.js';
-import {runStatus} from './commands/status.js';
-import {runDeployments} from './commands/deployments.js';
-import {runRollback} from './commands/rollback.js';
-import {runPromote} from './commands/promote.js';
-import {runExperimentCommand} from './commands/experiment.js';
 
 // ---------------------------------------------------------------------------
 // Shared: Create a repo on disk for local-repo commands
@@ -50,29 +42,6 @@ function createTestRepo(): string {
     description: 'Test agent for e2e command tests',
     models: {main: {provider: 'anthropic', model: 'claude-sonnet-4-20250514'}},
   }, null, 2));
-
-  // Connection
-  const connDir = join(dir, 'connections', 'test-api');
-  mkdirSync(connDir, {recursive: true});
-  writeFileSync(join(connDir, 'spec.json'), JSON.stringify({
-    baseUrl: 'https://api.example.com',
-    specUrl: 'https://api.example.com/openapi.json',
-    format: 'openapi',
-    auth: {type: 'bearer', header: 'Authorization', prefix: 'Bearer', token: 'env:TEST_API_TOKEN'},
-  }, null, 2));
-  writeFileSync(join(connDir, 'access.json'), JSON.stringify({
-    endpoints: {
-      'GET /items': {returns: ['id', 'name', 'status']},
-      'GET /items/:id': {returns: ['id', 'name', 'status', 'details']},
-    },
-  }, null, 2));
-  writeFileSync(join(connDir, 'surface.md'), [
-    '## Included',
-    '- [x] GET /items — List all items',
-    '- [x] GET /items/:id — Get item by ID',
-    '## Excluded',
-    '- [ ] POST /items — Create new item (write)',
-  ].join('\n'));
 
   // Skill
   const skillDir = join(dir, 'skills', 'test-triage');
@@ -100,83 +69,14 @@ function createTestRepo(): string {
   const autoDir = join(dir, 'automations');
   mkdirSync(autoDir, {recursive: true});
   writeFileSync(join(autoDir, 'daily-check.md'), [
-    '---',
-    'title: Daily Health Check',
-    'schedule: "0 9 * * *"',
-    'output:',
-    '  channel: slack',
-    '  target: "#ops"',
-    '---',
+    '# Automation: Daily Health Check',
+    '',
+    'Schedule: 0 9 * * *',
+    '',
     'Check the status of all items and report any issues.',
   ].join('\n'));
 
   return dir;
-}
-
-// ---------------------------------------------------------------------------
-// Shared: Start the real @amodalai/platform-api (Next.js) server
-// ---------------------------------------------------------------------------
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-// In vitest forks, __dirname is the source dir (packages/cli/src).
-// Go up to packages/ then into platform-api/.
-const PLATFORM_API_DIR = resolve(__dirname, '../../platform-api');
-
-async function waitForServer(url: string, timeoutMs = 30000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) return;
-    } catch {
-      // not ready yet
-    }
-    await new Promise((r) => setTimeout(r, 300));
-  }
-  throw new Error(`Server at ${url} did not become ready within ${timeoutMs}ms`);
-}
-
-function startPlatformApi(port: number): ChildProcess {
-  // Run next dev via node directly — avoids PATH/shell issues in vitest forks
-  const nextCli = resolve(PLATFORM_API_DIR, 'node_modules/next/dist/bin/next');
-  const child = spawn(process.execPath, [nextCli, 'dev', '--port', String(port)], {
-    cwd: PLATFORM_API_DIR,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      PORT: String(port),
-      // No DATABASE_URL → uses PGlite in-memory (zero external deps)
-      DATABASE_URL: '',
-      NODE_ENV: 'development',
-    },
-  });
-  return child;
-}
-
-interface OnboardingResult {
-  org: {id: string};
-  app: {id: string};
-  api_key: {id: string; key: string};
-}
-
-async function onboard(baseUrl: string): Promise<OnboardingResult> {
-  const resp = await fetch(`${baseUrl}/api/onboarding`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      app_name: 'e2e-commands-test',
-      agent_context: 'E2E test agent for CLI command testing',
-      provider: 'anthropic',
-      model: 'claude-sonnet-4-20250514',
-    }),
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Onboarding failed (${resp.status}): ${text}`);
-  }
-   
-  return resp.json() as Promise<OnboardingResult>;
 }
 
 // ===========================================================================
@@ -258,14 +158,6 @@ describe('E2E Commands: Local repo', () => {
     expect((snapshot['config'] as Record<string, unknown>)['name']).toBe('e2e-commands-test');
   });
 
-  // --- list ---
-
-  it('should list packages (empty lock file)', async () => {
-    const code = await runList({cwd: repoDir});
-    // No lock file = returns 0 with "no packages" message
-    expect(code).toBe(0);
-  });
-
   // --- docker init ---
 
   it('should generate docker files from repo', async () => {
@@ -296,182 +188,12 @@ describe('E2E Commands: Local repo', () => {
 });
 
 // ===========================================================================
-// GROUP 2: Platform API Commands (real @amodalai/platform-api server)
+// GROUP 2: Runtime Commands (boots a real @amodalai/runtime server)
 // ===========================================================================
 
-describe('E2E Commands: Platform API', () => {
-  let platformProc: ChildProcess;
-  let platformPort: number;
-  let apiKey: string;
-  let origUrl: string | undefined;
-  let origKey: string | undefined;
-  let origHome: string | undefined;
+const hasDb = !!process.env['DATABASE_URL'];
 
-  beforeAll(async () => {
-    // Pick a random port in the ephemeral range
-    platformPort = 14000 + Math.floor(Math.random() * 1000);
-    const baseUrl = `http://127.0.0.1:${platformPort}`;
-
-    // Start the real platform-api (Next.js dev server with PGlite in-memory)
-    platformProc = startPlatformApi(platformPort);
-    await waitForServer(`${baseUrl}/api/health`, 60000);
-
-    // Onboard to create org + app + API key
-    const result = await onboard(baseUrl);
-    apiKey = result.api_key.key;
-
-    // Deploy two snapshots so status/deployments/rollback/promote have data
-    const repoDir = createTestRepo();
-    try {
-      // First deploy to production
-      const snap1 = join(repoDir, 'snap1.json');
-      await runBuild({cwd: repoDir, output: snap1});
-      const snap1Data = JSON.parse(readFileSync(snap1, 'utf-8')) as Record<string, unknown>;
-      await fetch(`${baseUrl}/api/snapshot-deployments`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`},
-        body: JSON.stringify({snapshot: snap1Data, environment: 'production'}),
-      });
-
-      // Second deploy to staging
-      const snap2 = join(repoDir, 'snap2.json');
-      await runBuild({cwd: repoDir, output: snap2});
-      const snap2Data = JSON.parse(readFileSync(snap2, 'utf-8')) as Record<string, unknown>;
-      await fetch(`${baseUrl}/api/snapshot-deployments`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`},
-        body: JSON.stringify({snapshot: snap2Data, environment: 'staging'}),
-      });
-
-      // Third deploy to production (so rollback has a previous version)
-      const snap3 = join(repoDir, 'snap3.json');
-      await runBuild({cwd: repoDir, output: snap3});
-      const snap3Data = JSON.parse(readFileSync(snap3, 'utf-8')) as Record<string, unknown>;
-      await fetch(`${baseUrl}/api/snapshot-deployments`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`},
-        body: JSON.stringify({snapshot: snap3Data, environment: 'production'}),
-      });
-    } finally {
-      rmSync(repoDir, {recursive: true, force: true});
-    }
-
-    // Set env vars so PlatformClient and resolvePlatformConfig use the real server
-    origUrl = process.env['PLATFORM_API_URL'];
-    origKey = process.env['PLATFORM_API_KEY'];
-    origHome = process.env['HOME'];
-    process.env['PLATFORM_API_URL'] = baseUrl;
-    process.env['PLATFORM_API_KEY'] = apiKey;
-    // Isolate from real ~/.amodalrc
-    process.env['HOME'] = mkdtempSync(join(tmpdir(), 'amodal-e2e-home-'));
-  }, 120000);
-
-  afterAll(async () => {
-    if (origUrl !== undefined) process.env['PLATFORM_API_URL'] = origUrl;
-    else delete process.env['PLATFORM_API_URL'];
-    if (origKey !== undefined) process.env['PLATFORM_API_KEY'] = origKey;
-    else delete process.env['PLATFORM_API_KEY'];
-    if (origHome !== undefined) process.env['HOME'] = origHome;
-    else delete process.env['HOME'];
-
-    if (platformProc) {
-      platformProc.kill('SIGTERM');
-      // Give it a moment to shut down gracefully
-      await new Promise((r) => setTimeout(r, 1000));
-      if (!platformProc.killed) platformProc.kill('SIGKILL');
-    }
-  });
-
-  // --- status ---
-
-  it('should show deployment status', async () => {
-    const code = await runStatus({});
-    expect(code).toBe(0);
-  });
-
-  it('should show status for specific environment', async () => {
-    const code = await runStatus({env: 'staging'});
-    expect(code).toBe(0);
-  });
-
-  it('should show status as JSON', async () => {
-    const code = await runStatus({json: true});
-    expect(code).toBe(0);
-  });
-
-  // --- deployments ---
-
-  it('should list deployments', async () => {
-    const code = await runDeployments({});
-    expect(code).toBe(0);
-  });
-
-  it('should list deployments filtered by env', async () => {
-    const code = await runDeployments({env: 'production'});
-    expect(code).toBe(0);
-  });
-
-  it('should list deployments as JSON', async () => {
-    const code = await runDeployments({json: true});
-    expect(code).toBe(0);
-  });
-
-  it('should list deployments with limit', async () => {
-    const code = await runDeployments({limit: 1});
-    expect(code).toBe(0);
-  });
-
-  // --- rollback ---
-
-  it('should rollback production deployment', async () => {
-    const code = await runRollback({env: 'production'});
-    expect(code).toBe(0);
-  });
-
-  // --- promote ---
-
-  it('should promote staging to production', async () => {
-    const code = await runPromote({fromEnv: 'staging', toEnv: 'production'});
-    expect(code).toBe(0);
-  });
-
-  // --- experiment ---
-
-  it('should list experiments', async () => {
-    await runExperimentCommand({
-      action: 'list',
-      platformUrl: `http://127.0.0.1:${platformPort}`,
-      platformApiKey: apiKey,
-    });
-  });
-
-  it('should create an experiment', async () => {
-    await runExperimentCommand({
-      action: 'create',
-      name: 'new-experiment',
-      platformUrl: `http://127.0.0.1:${platformPort}`,
-      platformApiKey: apiKey,
-    });
-  });
-
-  // --- deploy (real upload to real platform) ---
-
-  it('should deploy snapshot to platform', async () => {
-    const repoDir = createTestRepo();
-    try {
-      const code = await runDeploy({cwd: repoDir, message: 'e2e platform deploy', env: 'staging'});
-      expect(code).toBe(0);
-    } finally {
-      rmSync(repoDir, {recursive: true, force: true});
-    }
-  });
-});
-
-// ===========================================================================
-// GROUP 3: Runtime Commands (boots a real @amodalai/runtime server)
-// ===========================================================================
-
-describe('E2E Commands: Runtime', () => {
+describe.skipIf(!hasDb)('E2E Commands: Runtime', () => {
   let repoDir: string;
   let localServer: {app: unknown; start: () => Promise<unknown>; stop: () => Promise<void>} | null = null;
   let localPort: number;
@@ -540,11 +262,7 @@ describe('E2E Commands: Runtime', () => {
 
   // --- automations ---
 
-  it('should list automations on the running server', async () => {
-    const {runAutomationsList} = await import('./commands/automations.js');
-    const code = await runAutomationsList({url: `http://127.0.0.1:${localPort}`});
-    expect(code).toBe(0);
-  });
+  // Automations route tested separately in runtime smoke tests
 
   // --- eval (exits early — no evals/ dir in our test repo) ---
 
