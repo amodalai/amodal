@@ -153,10 +153,10 @@ Instead of creating these files by hand, tell the admin agent. In the Studio cha
 >
 > - GET /topstories.json — returns an array of up to 500 top story IDs, ordered by rank
 > - GET /newstories.json — returns an array of up to 500 newest story IDs
-> - GET /item/{id}.json — returns a single item (story, comment, job, or poll) with title, url, score, by, time, descendants, and kids fields
-> - GET /user/{id}.json — returns a user profile with id, created, karma, about, and submitted fields
+> - GET /item/{'{id}'}.json — returns a single item (story, comment, job, or poll) with title, url, score, by, time, descendants, and kids fields
+> - GET /user/{'{id}'}.json — returns a user profile with id, created, karma, about, and submitted fields
 >
-> Item IDs are integers. To get the top 10 stories, fetch /topstories.json, take the first 10 IDs, then fetch each with /item/{id}.json.
+> Item IDs are integers. To get the top 10 stories, fetch /topstories.json, take the first 10 IDs, then fetch each with /item/{'{id}'}.json.
 
 {/* TODO: screenshot of admin agent creating hackernews connection */}
 
@@ -166,8 +166,8 @@ Now add Wikipedia:
 
 > Add a connection called "wikipedia" for the Wikipedia REST API. Base URL is https://en.wikipedia.org/api/rest_v1, protocol is REST, no auth needed. Endpoints:
 >
-> - GET /page/summary/{title} — returns article summary with title, extract (plain text), description, thumbnail, and content_urls. The title parameter uses underscores for spaces (e.g., Neural_network).
-> - GET /page/related/{title} — returns related articles, each with the same summary fields.
+> - GET /page/summary/{'{title}'} — returns article summary with title, extract (plain text), description, thumbnail, and content_urls. The title parameter uses underscores for spaces (e.g., Neural_network).
+> - GET /page/related/{'{title}'} — returns related articles, each with the same summary fields.
 >
 > Article titles are case-sensitive. The extract field is a concise paragraph suitable for direct use.
 
@@ -216,7 +216,7 @@ Check the **Knowledge** section in the sidebar to see it loaded.
 
 Stores let the agent persist structured data. Tell the admin agent:
 
-> Create a store called "notes" for saving research notes. The entity name is "ResearchNote", keyed by "{topic}". Schema fields:
+> Create a store called "notes" for saving research notes. The entity name is "ResearchNote", keyed by "{'{topic}'}". Schema fields:
 >
 > - topic: string
 > - summary: string
@@ -229,7 +229,7 @@ This creates `stores/notes.json`. The runtime automatically generates three tool
 - **get_notes** — retrieve a note by topic
 - **list_notes** — list all saved notes
 
-The `key` is `{topic}`, so saving a note with the same topic overwrites the previous one.
+The `key` is `{'{topic}'}`, so saving a note with the same topic overwrites the previous one.
 
 ## 9. Check the prompt
 
@@ -247,7 +247,7 @@ Open **http://localhost:3847** (the chat UI). Try these conversations in order:
 
 > What's trending on Hacker News right now?
 
-The agent activates the **research** skill, calls `GET /topstories.json`, fetches details for the top stories with `GET /item/{id}.json`, and presents a table. Watch the tool calls in the response — you'll see each API request.
+The agent activates the **research** skill, calls `GET /topstories.json`, fetches details for the top stories with `GET /item/{'{id}'}.json`, and presents a table. Watch the tool calls in the response — you'll see each API request.
 
 {/* TODO: screenshot of HN response */}
 
