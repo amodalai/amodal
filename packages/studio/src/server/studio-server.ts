@@ -154,7 +154,8 @@ async function main(): Promise<void> {
 
   await initEventBridge();
 
-  const server = serve({ fetch: app.fetch, port, hostname: 'localhost' }, () => {
+  const hostname = process.env['HOSTNAME'] ?? 'localhost';
+  const server = serve({ fetch: app.fetch, port, hostname }, () => {
     logger.info('studio_server_started', { port });
   });
 
