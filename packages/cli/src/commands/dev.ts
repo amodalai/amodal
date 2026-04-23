@@ -193,7 +193,7 @@ function spawnStudio(opts: {
     STUDIO_CORS_ORIGINS: `http://localhost:${String(opts.runtimePort)}`,
     RUNTIME_URL: `http://localhost:${String(opts.runtimePort)}`,
     PORT: String(opts.port),
-    HOSTNAME: 'localhost',
+    HOSTNAME: '0.0.0.0',
     ...(opts.agentId ? {AGENT_ID: opts.agentId} : {}),
   };
 
