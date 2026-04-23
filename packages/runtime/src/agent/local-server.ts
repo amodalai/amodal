@@ -236,7 +236,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     await db.execute(
       sql`UPDATE agent_sessions SET metadata = jsonb_set(metadata, '{appId}', to_jsonb(${appId}::text)) WHERE metadata->>'appId' = 'local'`,
     );
-    log.info('legacy_appid_migrated', {from: 'local', to: appId});
+    log.debug('legacy_appid_migrated', {from: 'local', to: appId});
   }
 
   // -------------------------------------------------------------------------
