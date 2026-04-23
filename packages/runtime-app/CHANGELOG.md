@@ -1,5 +1,15 @@
 # @amodalai/runtime-app
 
+## 0.3.31
+
+### Patch Changes
+
+- [#275](https://github.com/amodalai/amodal/pull/275) [`6d772e6`](https://github.com/amodalai/amodal/commit/6d772e671bc19e82cdbd2a76a30d572ebab4084d) Thanks [@whodatdev](https://github.com/whodatdev)! - Gate all data hooks on token availability. Local dev returns 'local' as token. Queries use token from context, mutations use getToken() with auth check. Auto-refresh on expiry.
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.31
+  - @amodalai/react@0.3.31
+
 ## 0.3.30
 
 ### Patch Changes
