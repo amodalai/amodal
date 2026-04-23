@@ -1,5 +1,17 @@
 # @amodalai/studio
 
+## 0.3.32
+
+### Patch Changes
+
+- [#278](https://github.com/amodalai/amodal/pull/278) [`3639576`](https://github.com/amodalai/amodal/commit/3639576b10e81f11ca90f7bad6dae9ce71dd3fee) Thanks [@gte620v](https://github.com/gte620v)! - Fix Studio not reachable in Docker/container environments
+
+  Studio server was hardcoded to bind to `localhost`, making it unreachable via Docker port forwarding. Now binds to `0.0.0.0` when launched by `amodal dev`.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.32
+  - @amodalai/db@0.3.32
+
 ## 0.3.31
 
 ### Patch Changes
