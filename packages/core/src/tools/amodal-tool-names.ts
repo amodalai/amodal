@@ -5,8 +5,7 @@
  */
 
 /**
- * Tool name constants for amodal-specific tools.
- * These tools are NOT part of upstream @google/gemini-cli-core.
+ * Tool name constants for amodal built-in tools.
  */
 
 export const PROPOSE_KNOWLEDGE_TOOL_NAME = 'propose_knowledge';

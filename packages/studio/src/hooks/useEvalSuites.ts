@@ -7,7 +7,7 @@
 /**
  * Fetches eval suite definitions from the runtime's file tree.
  * Eval .md files live in the repo's evals/ directory — the runtime serves them
- * via GET /api/files. This replaces the previous Postgres-based approach.
+ * via GET /api/files.
  */
 
 import { useState, useEffect, useCallback } from 'react';

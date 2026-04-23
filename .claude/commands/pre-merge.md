@@ -18,7 +18,6 @@ Pre-merge checklist for the current branch. Run this before merging any branch t
    - Run `git diff main...HEAD -- '**/package.json'` to see dependency changes
    - Any new dependency must have a clear justification
    - No new dependencies with native bindings unless absolutely necessary
-   - Verify no `@google/gemini-cli-core` imports were reintroduced
 
 5. **Check for accidental commits:**
    - No `.env` files, credentials, or API keys in the diff

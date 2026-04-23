@@ -1634,7 +1634,7 @@ describe('runAgent', () => {
     const lastEvent = events[events.length - 1];
     expect(lastEvent.type).toBe(SSEEventType.Done);
 
-    // Done always has usage (G2)
+    // Done always has usage
     const doneEvent = lastEvent as SSEDoneEvent;
     expect(doneEvent.usage).toBeDefined();
     expect(doneEvent.usage?.input_tokens).toBeGreaterThanOrEqual(0);
@@ -1856,7 +1856,7 @@ describe('runAgent', () => {
     // (positive assertion: we reached max_turns, accumulating tokens beyond any tiny cap)
   });
 
-  it('done event always includes usage regardless of reason (G2)', async () => {
+  it('done event always includes usage regardless of reason', async () => {
     // Abort immediately
     const abortController = new AbortController();
     abortController.abort();

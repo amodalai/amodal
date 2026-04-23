@@ -7,10 +7,9 @@
 /**
  * Tool system types for the Amodal runtime.
  *
- * Replaces the upstream gemini-cli-core ToolRegistry with our own that
- * holds Vercel AI SDK-compatible tool definitions. Each tool has a Zod
- * schema for parameter validation, an execute function, and metadata
- * for permission/execution decisions.
+ * The ToolRegistry holds Vercel AI SDK-compatible tool definitions.
+ * Each tool has a Zod schema for parameter validation, an execute
+ * function, and metadata for permission/execution decisions.
  */
 
 import type {z} from 'zod';
@@ -108,7 +107,7 @@ export interface ToolDefinition<TParams = unknown> {
    *
    * Used for:
    * - Pre-execution: read-only tools can start during streaming
-   * - Parallel execution: read-only tools can run concurrently (Roadmap 2.5)
+   * - Parallel execution: read-only tools can run concurrently
    * - Confirmation flow: write tools may require user confirmation
    */
   readOnly: boolean;

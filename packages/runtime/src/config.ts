@@ -8,8 +8,7 @@
  * Unified runtime configuration.
  *
  * Consolidates amodal.json, environment variables, and runtime overrides
- * into a single typed, validated config object. Replaces the split between
- * core's AmodalConfig schema and the upstream gemini-cli-core Config wrapper.
+ * into a single typed, validated config object.
  *
  * Config precedence (highest to lowest):
  * 1. Runtime overrides (passed to createAgent() by ISVs)

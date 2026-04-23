@@ -10,9 +10,7 @@
  * Builds a ToolContext from session-level dependencies. This is the bridge
  * between the agent loop and tool implementations.
  *
- * Replaces the old `buildToolContext()` in agent/tool-context-builder.ts
- * which depended on the legacy AgentSession type. This factory takes
- * explicit dependencies and returns a factory function matching the
+ * Takes explicit dependencies and returns a factory function matching the
  * `AgentContext.buildToolContext` signature: `(callId: string) => ToolContext`.
  */
 

@@ -5,7 +5,7 @@
  */
 
 /**
- * Session tables — ported from packages/runtime/src/stores/schema.ts.
+ * Session tables.
  */
 
 import {

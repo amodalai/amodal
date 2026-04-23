@@ -7,14 +7,10 @@
 /**
  * Permission checker interface for tool execution.
  *
- * Extracted from the request tool so that the same permission pipeline
- * can be used by the agent loop (confirmation flow), egress proxy
- * (Roadmap 5.1), async approval (Roadmap 5.3), and PII detection
- * (Roadmap 5.2).
+ * A single permission pipeline used by every enforcement point:
+ * agent loop confirmation, egress proxy, async approval, PII detection.
  *
  * The default implementation reads from access.json via ActionGate.
- * Future implementations can add external policy services, audit
- * logging, or rate limiting.
  */
 
 import type {AccessConfig} from '@amodalai/types';
@@ -82,9 +78,8 @@ export interface AccessJsonPermissionCheckerConfig {
 /**
  * Permission checker that reads from access.json configuration.
  *
- * Wraps the existing ActionGate to evaluate confirmation tiers,
- * thresholds, and delegation escalation. Adds the intent/method
- * validation that was previously inline in the request tool.
+ * Wraps ActionGate to evaluate confirmation tiers, thresholds, and
+ * delegation escalation. Also enforces intent/method consistency.
  */
 export class AccessJsonPermissionChecker implements PermissionChecker {
   private readonly gate: ActionGate;
