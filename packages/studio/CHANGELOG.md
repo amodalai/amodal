@@ -1,5 +1,17 @@
 # @amodalai/studio
 
+## 0.3.33
+
+### Patch Changes
+
+- [#280](https://github.com/amodalai/amodal/pull/280) [`950632b`](https://github.com/amodalai/amodal/commit/950632bfd09da62d3eed42805c77d183a0f2dba8) Thanks [@gte620v](https://github.com/gte620v)! - Fix admin chat 404 — server route path didn't match frontend request
+
+  The frontend calls `/api/studio/admin-chat/stream` but the server route was registered at `/api/admin-chat/stream`. Updated the route to match.
+
+- Updated dependencies []:
+  - @amodalai/react@0.3.33
+  - @amodalai/db@0.3.33
+
 ## 0.3.32
 
 ### Patch Changes
