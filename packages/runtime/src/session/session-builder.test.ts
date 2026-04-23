@@ -14,8 +14,8 @@
  * 4. Build with pinned model → provider uses pinned model
  * 5. stop_execution tool is registered
  * 6. present tool is registered
- * 7. shell_exec is NOT registered (G24 — dropped by design)
- * 8. System prompt includes connection, skill, knowledge (G9)
+ * 7. shell_exec is NOT registered (dropped by design)
+ * 8. System prompt includes connection, skill, knowledge
  */
 
 import {describe, it, expect, vi} from 'vitest';
@@ -319,7 +319,7 @@ describe('buildSessionComponents', () => {
     });
   });
 
-  describe('system prompt (G9)', () => {
+  describe('system prompt', () => {
     it('includes connection endpoints', () => {
       const components = buildSessionComponents(makeOpts());
       expect(components.systemPrompt).toContain('/items');

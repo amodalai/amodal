@@ -148,9 +148,9 @@ export interface SSEToolCallResultEvent {
   type: SSEEventType.ToolCallResult;
   tool_id: string;
   status: 'success' | 'error';
-  /** Plain text result (Phase 1 — string tool results). */
+  /** Plain text result. */
   result?: string;
-  /** Structured content blocks with images (Phase 2). When present, supersedes `result`. */
+  /** Structured content blocks with images. When present, supersedes `result`. */
   content?: SSEToolResultContentBlock[];
   parameters?: Record<string, unknown>;
   duration_ms?: number;

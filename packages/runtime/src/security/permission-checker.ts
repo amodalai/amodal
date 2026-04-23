@@ -8,13 +8,10 @@
  * Permission checker interface for tool execution.
  *
  * Extracted from the request tool so that the same permission pipeline
- * can be used by the agent loop (confirmation flow), egress proxy
- * (Roadmap 5.1), async approval (Roadmap 5.3), and PII detection
- * (Roadmap 5.2).
+ * can be reused by other enforcement points (agent loop confirmation,
+ * egress proxy, async approval, PII detection).
  *
  * The default implementation reads from access.json via ActionGate.
- * Future implementations can add external policy services, audit
- * logging, or rate limiting.
  */
 
 import type {AccessConfig} from '@amodalai/types';

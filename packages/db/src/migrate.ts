@@ -159,14 +159,14 @@ const DDL_STATEMENTS = [
   sql`CREATE INDEX IF NOT EXISTS idx_eval_runs_suite ON eval_runs (suite_id)`,
   sql`CREATE INDEX IF NOT EXISTS idx_eval_runs_agent ON eval_runs (agent_id)`,
 
-  // --- agent_memory (legacy Phase 1 — will be dropped after migration) ---
+  // --- agent_memory (legacy single-row blob — will be dropped after migration) ---
   sql`CREATE TABLE IF NOT EXISTS agent_memory (
     id INTEGER PRIMARY KEY DEFAULT 1,
     content TEXT NOT NULL DEFAULT '',
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 
-  // --- agent_memory_entries (Phase 2 — entry-per-row) ---
+  // --- agent_memory_entries (entry-per-row) ---
   sql`CREATE TABLE IF NOT EXISTS agent_memory_entries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     app_id TEXT NOT NULL,

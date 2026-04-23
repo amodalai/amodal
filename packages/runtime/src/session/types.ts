@@ -63,13 +63,13 @@ export interface AutomationConfig {
   maxTurns?: number;
   /** Max tokens per run */
   budget?: number;
-  /** Delivery routing — parsed now, implemented in roadmap 3.1 */
+  /** Delivery routing — parsed but not yet wired to a delivery mechanism */
   delivery?: {
     on: 'completion' | 'new_results';
     targets: Array<{type: 'webhook' | 'callback'; url?: string}>;
     template?: string;
   };
-  /** Failure alerting — parsed now, implemented in roadmap 3.1 */
+  /** Failure alerting — parsed but not yet wired to a delivery mechanism */
   failureAlert?: {
     after: number;
     targets: Array<{type: 'webhook' | 'callback'; url?: string}>;

@@ -254,7 +254,7 @@ describe('createRequestTool', () => {
     expect(url).toContain('limit=10');
   });
 
-  it('handles non-string query param values without crashing (G7)', async () => {
+  it('handles non-string query param values without crashing', async () => {
     const tool = createRequestTool({
       connectionsMap: makeConnectionsMap(),
       permissionChecker: allowAllChecker,

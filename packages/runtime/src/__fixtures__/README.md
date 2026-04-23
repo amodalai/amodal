@@ -38,7 +38,7 @@ The `-t` flag filters which `it()` blocks execute. The server still starts once 
 | --- | ------------------ | ------------------------------------------------------ |
 | 1   | health endpoint    | Server starts and responds                             |
 | 2   | config endpoint    | Agent config loads from repo                           |
-| 3   | system prompt (G9) | Prompt includes connections, skills, knowledge, stores |
+| 3   | system prompt      | Prompt includes connections, skills, knowledge, stores |
 | 4   | chat streaming     | Init, text_delta, done events with usage               |
 | 5   | session resume     | Multi-turn context preserved across messages           |
 | 6   | store tool call    | Model calls query_store                                |
@@ -46,7 +46,7 @@ The `-t` flag filters which `it()` blocks execute. The server still starts once 
 | 8   | tool error status  | Failed tool calls report status: error                 |
 | 9   | eval run           | Eval suite executes and scores                         |
 | 10  | admin chat         | Admin agent reads repo files                           |
-| 11  | write intent (G8)  | POST with intent "read" rejected                       |
+| 11  | write intent       | POST with intent "read" rejected                       |
 | 12  | store persistence  | Write + query in separate sessions                     |
 | 13  | session isolation  | Concurrent sessions don't share context                |
 | 14  | automation API     | Automation endpoint responds                           |
@@ -56,7 +56,7 @@ The `-t` flag filters which `it()` blocks execute. The server still starts once 
 | 18  | MCP tool call      | MCP tool executes via stdio transport                  |
 | 19  | custom tool        | echo_tool with ctx.request + ctx.store                 |
 | 20  | stop_execution     | Tool is available to model                             |
-| 21  | done usage (G2)    | Done event always has token counts                     |
+| 21  | done usage         | Done event always has token counts                     |
 | 22  | dispatch_task      | Child agent runs with tool subset                      |
 | 23  | dispatch available | dispatch_task tool in model's tool list                |
 

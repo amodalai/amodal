@@ -12,9 +12,6 @@ import type { DraftFile, PublishResult, WorkspaceBundle } from './types';
 
 /**
  * The storage + operations backend for the Studio.
- *
- * Phase 1: PGLiteStudioBackend (local dev, in-process PGLite).
- * Future: PostgresStudioBackend (cloud, external Postgres).
  */
 export interface StudioBackend {
   // -------------------------------------------------------------------------

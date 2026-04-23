@@ -5,13 +5,11 @@
  */
 
 /**
- * Shared Drizzle-ORM SessionStore implementation.
- *
  * Shared Drizzle-ORM SessionStore implementation. The Postgres factory
  * constructs the underlying db client and hands the result here along
  * with a table binding and an `onClose` callback for teardown.
  *
- * Mirrors the `DrizzleStoreBackend` pattern introduced in amodal#146.
+ * Mirrors the `DrizzleStoreBackend` pattern.
  *
  * Errors bubble up as SessionStoreError — callers at module edges
  * (session manager, routes) are responsible for handling.

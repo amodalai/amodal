@@ -349,7 +349,7 @@ export interface AgentContext {
 
   /**
    * Optional callback fired after each turn with token usage.
-   * Default is no-op. Roadmap 6.3 (Stripe billing) plugs into this.
+   * Default is no-op. Billing integrations hook in here.
    */
   onUsage?: (usage: TurnUsage) => void;
 
