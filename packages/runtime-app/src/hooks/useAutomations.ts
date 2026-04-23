@@ -22,12 +22,13 @@ export interface Automation {
  * Fetch automations list.
  */
 export function useAutomations() {
-  const { token, status } = useAuthContext();
+  const { getToken, status } = useAuthContext();
   const enabled = status === 'none' || status === 'authenticated';
 
   return useQuery({
     queryKey: ['automations'],
     queryFn: async (): Promise<Automation[]> => {
+      const token = await getToken?.() ?? null;
       const res = await fetch('/automations', { headers: authHeaders(token) });
       if (!res.ok) return [];
       const data: unknown = await res.json();
@@ -44,11 +45,12 @@ export function useAutomations() {
  * Run/start/stop an automation.
  */
 export function useAutomationAction() {
-  const { token } = useAuthContext();
+  const { getToken } = useAuthContext();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ name, action }: { name: string; action: string }) => {
+      const token = await getToken?.() ?? null;
       const res = await fetch(`/automations/${encodeURIComponent(name)}/${action}`, {
         method: 'POST',
         headers: authHeaders(token),
