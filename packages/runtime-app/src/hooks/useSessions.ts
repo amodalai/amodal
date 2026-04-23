@@ -41,12 +41,13 @@ function toSessionSummary(item: Record<string, unknown>): SessionSummary {
  * Fetch all sessions. Depends on auth — won't fire until token is ready (or auth is not needed).
  */
 export function useSessions() {
-  const { token, status } = useAuthContext();
+  const { getToken, status } = useAuthContext();
   const enabled = status === 'none' || status === 'authenticated';
 
   return useQuery({
     queryKey: ['sessions'],
     queryFn: async (): Promise<SessionSummary[]> => {
+      const token = await getToken?.() ?? null;
       const res = await fetch(API_PATHS.SESSIONS_HISTORY, { headers: authHeaders(token) });
       if (!res.ok) return [];
       const data: unknown = await res.json();
@@ -63,12 +64,13 @@ export function useSessions() {
  * Fetch a single session's messages.
  */
 export function useSessionDetail(sessionId: string | undefined) {
-  const { token, status } = useAuthContext();
+  const { getToken, status } = useAuthContext();
   const enabled = (status === 'none' || status === 'authenticated') && !!sessionId;
 
   return useQuery({
     queryKey: ['session', sessionId],
     queryFn: async (): Promise<HistoryMessage[]> => {
+      const token = await getToken?.() ?? null;
       const res = await fetch(API_PATHS.sessionHistory(sessionId ?? ''), { headers: authHeaders(token) });
       if (!res.ok) throw new Error('Session not found');
       const data: unknown = await res.json();
@@ -87,11 +89,12 @@ export function useSessionDetail(sessionId: string | undefined) {
  * Rename a session.
  */
 export function useRenameSession() {
-  const { token } = useAuthContext();
+  const { getToken } = useAuthContext();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ sessionId, title }: { sessionId: string; title: string }) => {
+      const token = await getToken?.() ?? null;
       await fetch(API_PATHS.sessionHistory(sessionId), {
         method: 'PATCH',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
@@ -108,11 +111,12 @@ export function useRenameSession() {
  * Delete a session.
  */
 export function useDeleteSession() {
-  const { token } = useAuthContext();
+  const { getToken } = useAuthContext();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (sessionId: string) => {
+      const token = await getToken?.() ?? null;
       await fetch(API_PATHS.sessionHistory(sessionId), {
         method: 'DELETE',
         headers: authHeaders(token),
