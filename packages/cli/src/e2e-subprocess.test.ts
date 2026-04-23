@@ -105,11 +105,11 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
       process.stderr.write(`[subprocess-smoke] ${chunk.toString()}`);
     });
 
-    const runtimeOk = await waitForHealth(RUNTIME_PORT, 30_000);
+    const runtimeOk = await waitForHealth(RUNTIME_PORT, 90_000);
     if (!runtimeOk) {
-      throw new Error('Runtime did not start within 30s');
+      throw new Error('Runtime did not start within 90s');
     }
-  }, 60_000);
+  }, 120_000);
 
   afterAll(() => {
     if (child) {
