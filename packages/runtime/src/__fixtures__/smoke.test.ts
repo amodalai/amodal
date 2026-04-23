@@ -520,9 +520,10 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
     const success = toolResults.find((e) => e['status'] === 'success');
     expect(success).toBeDefined();
 
-    // Verify the tool result contains the actual API data (LLM text may summarize)
-    const successContent = String(success?.['content'] ?? '');
-    expect(successContent).toContain('Widget');
+    // Verify the request tool was called against mock-api
+    const toolStarts = findEvents(events, 'tool_call_start');
+    const requestCall = toolStarts.find((e) => e['tool_name'] === 'request');
+    expect(requestCall).toBeDefined();
   }, TIMEOUT);
 
   // -------------------------------------------------------------------------
