@@ -64,13 +64,13 @@ export interface PageConfig {
  * Returns agent name, model, connections, stores, etc.
  */
 export function useRuntimeContext(runtimeUrl: string) {
-  const { getToken, status } = useAuthContext();
-  const enabled = status === 'none' || status === 'authenticated';
+  const { token } = useAuthContext();
+  const enabled = !!token;
 
   return useQuery({
     queryKey: ['runtime-context', runtimeUrl],
     queryFn: async (): Promise<RuntimeContext | null> => {
-      const token = await getToken?.() ?? null;
+
       const res = await fetch(`${runtimeUrl}/inspect/context`, {
         headers: authHeaders(token),
         signal: AbortSignal.timeout(5_000),
@@ -88,13 +88,13 @@ export function useRuntimeContext(runtimeUrl: string) {
  * Fetch runtime config from /config.
  */
 export function useRuntimeConfig(runtimeUrl: string) {
-  const { getToken, status } = useAuthContext();
-  const enabled = status === 'none' || status === 'authenticated';
+  const { token } = useAuthContext();
+  const enabled = !!token;
 
   return useQuery({
     queryKey: ['runtime-config', runtimeUrl],
     queryFn: async (): Promise<Record<string, unknown> | null> => {
-      const token = await getToken?.() ?? null;
+
       const res = await fetch(`${runtimeUrl}/config`, {
         headers: authHeaders(token),
         signal: AbortSignal.timeout(5_000),
@@ -112,13 +112,13 @@ export function useRuntimeConfig(runtimeUrl: string) {
  * Fetch stores from /api/stores.
  */
 export function useStores(runtimeUrl: string) {
-  const { getToken, status } = useAuthContext();
-  const enabled = status === 'none' || status === 'authenticated';
+  const { token } = useAuthContext();
+  const enabled = !!token;
 
   return useQuery({
     queryKey: ['stores', runtimeUrl],
     queryFn: async (): Promise<StoreDefinition[]> => {
-      const token = await getToken?.() ?? null;
+
       const res = await fetch(`${runtimeUrl}/api/stores`, {
         headers: authHeaders(token),
         signal: AbortSignal.timeout(5_000),
@@ -138,13 +138,13 @@ export function useStores(runtimeUrl: string) {
  * Fetch pages from /api/pages (hosted) or fall back to Vite virtual module (local dev).
  */
 export function usePages() {
-  const { getToken, status } = useAuthContext();
-  const enabled = status === 'none' || status === 'authenticated';
+  const { token } = useAuthContext();
+  const enabled = !!token;
 
   return useQuery({
     queryKey: ['pages'],
     queryFn: async (): Promise<PageConfig[]> => {
-      const token = await getToken?.() ?? null;
+
       // Try API first (works with pre-built pages in hosted mode)
       try {
         const res = await fetch('/api/pages', { headers: authHeaders(token) });
