@@ -36,7 +36,7 @@ export const agentMemoryEntries = pgTable(
   ],
 );
 
-// Legacy single-row table — kept for Phase 1 backward compat during migration.
+// Legacy single-row table — kept for backward compat during migration.
 export const agentMemory = pgTable(
   'agent_memory',
   {

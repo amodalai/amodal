@@ -9,7 +9,7 @@
  *
  * Covers:
  * 1. Basic compilation — identity, core behavior, error handling
- * 2. Gotcha G9 — system prompt includes ALL context (skills, knowledge, connections)
+ * 2. System prompt includes ALL context (skills, knowledge, connections)
  * 3. Description handling
  * 4. Store schemas — rendered as tables in the prompt
  * 5. Field guidance — generated from connection access configs
@@ -112,10 +112,10 @@ describe('compileContext', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 2. Gotcha G9 — ALL context included
+  // 2. ALL context included
   // -------------------------------------------------------------------------
 
-  it('G9: includes connection endpoints, skill bodies, and knowledge bodies', () => {
+  it('includes connection endpoints, skill bodies, and knowledge bodies', () => {
     const input = makeFullInput();
     const result = compileContext(input);
     const prompt = result.systemPrompt;
@@ -138,16 +138,15 @@ describe('compileContext', () => {
     expect(prompt).toContain('Deal');
   });
 
-  it('G9: compiled prompt length is substantial with full config', () => {
+  it('compiled prompt length is substantial with full config', () => {
     const input = makeFullInput();
     const result = compileContext(input);
 
     // A full config should produce a prompt well over 1K chars
-    // (the bug from G9 dropped from 30K to 1.3K)
     expect(result.systemPrompt.length).toBeGreaterThan(2000);
   });
 
-  it('G9: section order matches design doc priority (skills before connections)', () => {
+  it('section order matches design doc priority (skills before connections)', () => {
     const input = makeFullInput();
     const result = compileContext(input);
     const prompt = result.systemPrompt;

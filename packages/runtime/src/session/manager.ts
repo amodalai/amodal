@@ -110,7 +110,7 @@ export class StandaloneSessionManager {
       this.cleanupTimer = null;
     }
 
-    // Copy keys to avoid modifying map during iteration (G26)
+    // Copy keys to avoid modifying map during iteration
     const ids = [...this.sessions.keys()];
     for (const id of ids) {
       await this.destroy(id);

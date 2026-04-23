@@ -240,7 +240,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   });
 
   // -------------------------------------------------------------------------
-  // 2. System prompt (G9)
+  // 2. System prompt
   // -------------------------------------------------------------------------
 
   it('system prompt includes all context sections', async () => {
@@ -548,7 +548,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   // packages/studio/src/__tests__/smoke.test.ts for Studio-side coverage.
 
   // -------------------------------------------------------------------------
-  // 8. Write intent enforcement (G8)
+  // 8. Write intent enforcement
   // -------------------------------------------------------------------------
 
   it('rejects POST with intent "read"', async () => {
@@ -852,7 +852,7 @@ describe.skipIf(!!skipReason)(`smoke tests [${smokeTargetName}]`, () => {
   }, TIMEOUT);
 
   // -------------------------------------------------------------------------
-  // 20. Done event always has usage (G2)
+  // 20. Done event always has usage
   // -------------------------------------------------------------------------
 
   it('done event always includes token usage', async () => {

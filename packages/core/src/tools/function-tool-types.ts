@@ -28,7 +28,6 @@ export type FunctionToolHandler = (
 
 /**
  * Map of handler names to handler functions.
- * Populated from version bundle in Step 8; passed in directly for now.
  */
 export type FunctionHandlerMap = Map<string, FunctionToolHandler>;
 

@@ -102,7 +102,7 @@ export function formatMemoryForPrompt(entries: MemoryEntry[]): string {
     .join('\n');
 }
 
-// Backward-compat: loadMemoryContent that returns a string (used by Phase 1 callers)
+// String form of loadMemoryEntries, for callers that want the prompt-ready text directly.
 export async function loadMemoryContent(
   db: NodePgDatabase<Record<string, unknown>>,
   appId = 'local',

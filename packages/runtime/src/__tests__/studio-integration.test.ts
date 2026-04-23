@@ -5,9 +5,9 @@
  */
 
 /**
- * Cross-service smoke tests for the studio-standalone architecture.
+ * Cross-service smoke tests verifying runtime/Studio service boundaries.
  *
- * These tests verify:
+ * These tests check:
  * 1. Runtime isolation — studio/admin routes are NOT served by the runtime
  * 2. /api/context returns service URLs based on config
  * 3. Context router works correctly in isolation

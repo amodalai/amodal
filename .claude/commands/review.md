@@ -53,6 +53,13 @@ Run `git diff main...HEAD --name-only` to get changed files, then review each on
 - Private field access via `(obj as any)` or bracket notation
 - Circular dependencies
 
+### Comments
+
+- **No ephemeral project state.** Code comments must not reference mini-project phases, workstreams, milestones, sprints, refactor names, or other PM labels — these go stale the moment the project ships or gets renamed. Red flags: "Phase 1", "Phase 2", "WS1"/"WS2", "Stage 1 of the X refactor", "for the vercel-shaped rollout", "added in Q3 push", "used by Phase 1 callers". If the comment is real (a legacy table kept for backward-compat, a plain-text vs structured-content distinction), rewrite it around the **technical** reality — not the project timeline that produced it.
+- No references to the current task, PR number, ticket, or who-asked ("added for the X flow", "fix for issue #123", "per @alice's request") — that belongs in the PR description, not the code.
+- **Stage / step** language is fine when it describes an **algorithm's own stages** (e.g. "Stage 1: field redaction" inside a pipeline, "Stage 1: Build" in a multi-stage Dockerfile). Not fine when it describes the project's rollout stages.
+- Default to no comment. Only keep comments that explain a non-obvious WHY: a hidden constraint, a subtle invariant, a workaround for a specific bug, behavior that would surprise a reader.
+
 ### Testing Gaps
 
 - New public behavior without a corresponding test

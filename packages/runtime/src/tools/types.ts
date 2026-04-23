@@ -108,7 +108,7 @@ export interface ToolDefinition<TParams = unknown> {
    *
    * Used for:
    * - Pre-execution: read-only tools can start during streaming
-   * - Parallel execution: read-only tools can run concurrently (Roadmap 2.5)
+   * - Parallel execution: read-only tools can run concurrently
    * - Confirmation flow: write tools may require user confirmation
    */
   readOnly: boolean;
