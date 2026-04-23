@@ -5,17 +5,13 @@
  */
 
 /**
- * Standalone Session Manager.
+ * Session Manager — session creation, persistence, resume, and cleanup.
  *
- * Replaces gemini-cli-core's session lifecycle with our own. Manages
- * session creation, persistence, resume, and cleanup using:
- * - Agent loop (3.1) for message execution
- * - Context compiler (3.2) for system prompt building
+ * Wires together:
+ * - Agent loop for message execution
+ * - Context compiler for system prompt building
  * - Tool registry for tool management
  * - Postgres session store for persistence
- *
- * The old `session-manager.ts` remains for the upstream code path
- * until the full migration is complete.
  */
 
 import {randomUUID} from 'node:crypto';
@@ -53,10 +49,8 @@ const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
 // ---------------------------------------------------------------------------
 
 /**
- * Standalone session manager.
- *
  * Manages the full session lifecycle: create, execute messages, persist,
- * resume, and cleanup. Does not depend on gemini-cli-core.
+ * resume, and cleanup.
  */
 export class StandaloneSessionManager {
   private readonly sessions = new Map<string, Session>();
@@ -504,7 +498,7 @@ export class StandaloneSessionManager {
 }
 
 // ---------------------------------------------------------------------------
-// No-op ToolContext builder (replaced by real wiring at call sites)
+// No-op ToolContext fallback — call sites override with real wiring
 // ---------------------------------------------------------------------------
 
 function makeNoOpToolContext(session: Session): (callId: string) => ToolContext {

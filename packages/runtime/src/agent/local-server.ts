@@ -12,9 +12,6 @@
  * Loads the `.amodal/` config from `config.repoPath`, creates a
  * StandaloneSessionManager, mounts all routes, and optionally watches
  * for config changes (hot reload).
- *
- * Replaces the old initialization sequence that depended on gemini-cli-core's
- * Config, GeminiClient, and upstream ToolRegistry.
  */
 
 import express from 'express';

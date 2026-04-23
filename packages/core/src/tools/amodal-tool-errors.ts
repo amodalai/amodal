@@ -5,8 +5,7 @@
  */
 
 /**
- * Extended tool error types for amodal custom tools.
- * These supplement the upstream ToolErrorType enum.
+ * Tool error types for amodal custom tools.
  */
 export const AmodalToolErrorType = {
   // HTTP tool errors

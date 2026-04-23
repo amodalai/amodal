@@ -9,9 +9,6 @@ import {readFileSync} from 'node:fs';
 import yargs from 'yargs';
 import {hideBin} from 'yargs/helpers';
 
-// Console interception is now handled by interceptConsole() in the logger,
-// called from dev/serve commands. The old manual hack is no longer needed.
-
 import {amodalCommands} from './commands/index.js';
 import {loadEnvFile} from './shared/load-env.js';
 

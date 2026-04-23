@@ -7,9 +7,8 @@
 /**
  * Tool registry implementation.
  *
- * Holds Vercel AI SDK-compatible tool definitions for a session. Replaces
- * the upstream gemini-cli-core ToolRegistry with a simpler, type-safe
- * implementation that supports readOnly flags and metadata.
+ * Holds Vercel AI SDK-compatible tool definitions for a session. Type-safe,
+ * supports readOnly flags and metadata.
  */
 
 import {ConfigError} from '../errors.js';

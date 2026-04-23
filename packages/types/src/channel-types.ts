@@ -20,8 +20,8 @@
 // ---------------------------------------------------------------------------
 
 /**
- * Minimal request shape passed to channel adapters. Extracted from the
- * HTTP framework (Express, Hono, etc.) so adapters have no framework dep.
+ * Minimal request shape passed to channel adapters — intentionally
+ * framework-independent so adapters don't depend on Express/Hono/etc.
  */
 export interface ChannelWebhookRequest {
   headers: Record<string, string | string[] | undefined>;

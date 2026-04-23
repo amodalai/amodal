@@ -10,8 +10,7 @@
  * Hosted server.
  *
  * Creates the Express server for hosted mode with all routes, session
- * management, and graceful shutdown. Uses StandaloneSessionManager
- * instead of the old gemini-cli-core-based SessionManager.
+ * management, and graceful shutdown.
  */
 
 import express from 'express';

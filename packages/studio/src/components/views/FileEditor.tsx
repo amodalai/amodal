@@ -7,10 +7,9 @@
 /**
  * FileEditor — interactive file tree + code editor for agent configuration files.
  *
- * Ported from runtime-app ConfigFilesPage with Studio-specific adaptations:
- * - File content fetched directly from runtime via runtimeUrl prop
- * - Drafts saved via useDraftWorkspace (same-origin to Studio API)
- * - Tree refetch via polling on store_updated events (Studio SSE)
+ * - File content fetched from the runtime via the `runtimeUrl` prop
+ * - Drafts saved via useDraftWorkspace (same-origin to the Studio API)
+ * - Tree refetch via polling on `store_updated` events (Studio SSE)
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';

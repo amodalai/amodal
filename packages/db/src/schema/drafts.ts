@@ -5,7 +5,7 @@
  */
 
 /**
- * Studio drafts table — ported from Studio's pglite-backend.
+ * Studio drafts table.
  */
 
 import {pgTable, text, timestamp, primaryKey} from 'drizzle-orm/pg-core';

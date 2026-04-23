@@ -10,9 +10,6 @@
  * Standalone module that compiles an agent's configuration into a system
  * prompt string. This is the SINGLE place where prompt compilation happens.
  *
- * Replaces the scattered logic across session-manager.ts and inspect.ts
- * that manually assembled buildDefaultPrompt() inputs from bundle data.
- *
  * The compiler takes raw bundle-level objects (connections, skills,
  * knowledge, stores) and handles all intermediate processing internally:
  * - Field guidance generation from connection access configs
@@ -177,8 +174,7 @@ function renderStoreSection(
 /**
  * Compile an agent's configuration into a system prompt.
  *
- * This is the single entry point for prompt compilation. It replaces the
- * scattered buildDefaultPrompt() callsites in session-manager and inspect.
+ * This is the single entry point for prompt compilation.
  */
 export function compileContext(input: CompilerInput): CompilerOutput {
   // Short-circuit: if basePrompt is set, use it directly

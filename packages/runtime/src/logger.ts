@@ -61,8 +61,8 @@ export function initLogLevel(opts: {verbosity?: number; quiet?: boolean}): void 
 }
 
 /**
- * Intercept console.* to route upstream library output (e.g. @google/gemini-cli-core)
- * through our log levels. Call once at startup.
+ * Intercept console.* so output from third-party libraries flows through
+ * our log levels. Call once at startup.
  */
 /* eslint-disable no-console */
 export function interceptConsole(): void {

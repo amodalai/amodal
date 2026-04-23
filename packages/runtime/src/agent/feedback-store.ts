@@ -8,8 +8,7 @@
  * Postgres-backed feedback store.
  *
  * Persists user feedback (thumbs up/down) to the shared Postgres
- * database via Drizzle ORM. Replaces the previous file-based JSON
- * implementation.
+ * database via Drizzle ORM.
  */
 
 import {eq, desc, inArray, count, sql} from 'drizzle-orm';

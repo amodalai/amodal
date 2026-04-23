@@ -6,7 +6,6 @@
 
 /**
  * Tool definition shape used by amodal tools.
- * Mirrors the upstream ToolDefinition interface.
  */
 export interface ToolDefinition {
   base: {

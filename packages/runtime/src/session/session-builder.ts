@@ -11,7 +11,6 @@
  * LLMProvider, ToolRegistry, PermissionChecker, system prompt, and
  * ToolContextFactory needed to create a session.
  *
- * Replaces the 150-line initialization sequence in the old SessionManager.create().
  * The builder is pure — no async callbacks, no platform awareness. The route
  * handler fetches the bundle and passes it here.
  */

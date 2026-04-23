@@ -5,7 +5,7 @@
  */
 
 /**
- * Store document tables — ported from packages/runtime/src/stores/schema.ts.
+ * Store document tables.
  */
 
 import {

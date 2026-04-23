@@ -7,9 +7,8 @@
 /**
  * Permission checker interface for tool execution.
  *
- * Extracted from the request tool so that the same permission pipeline
- * can be reused by other enforcement points (agent loop confirmation,
- * egress proxy, async approval, PII detection).
+ * A single permission pipeline used by every enforcement point:
+ * agent loop confirmation, egress proxy, async approval, PII detection.
  *
  * The default implementation reads from access.json via ActionGate.
  */
@@ -79,9 +78,8 @@ export interface AccessJsonPermissionCheckerConfig {
 /**
  * Permission checker that reads from access.json configuration.
  *
- * Wraps the existing ActionGate to evaluate confirmation tiers,
- * thresholds, and delegation escalation. Adds the intent/method
- * validation that was previously inline in the request tool.
+ * Wraps ActionGate to evaluate confirmation tiers, thresholds, and
+ * delegation escalation. Also enforces intent/method consistency.
  */
 export class AccessJsonPermissionChecker implements PermissionChecker {
   private readonly gate: ActionGate;

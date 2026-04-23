@@ -8,8 +8,7 @@
  * Build the default Amodal system prompt.
  *
  * Used when the user has not set a custom `basePrompt` in amodal.json
- * or on the application record. This replaces the upstream Gemini CLI
- * system prompt with one tailored for the Amodal agent runtime.
+ * or on the application record.
  */
 export function buildDefaultPrompt(opts: {
   name: string;
