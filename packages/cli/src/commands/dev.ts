@@ -106,8 +106,9 @@ interface ManagedProcess {
  * with a label. Lines are buffered per-stream to avoid interleaved output
  * from concurrent subprocesses.
  */
-function pipeWithLabel(child: ChildProcess, label: string): void {
+function pipeWithLabel(child: ChildProcess, label: string, opts?: {quiet?: boolean}): void {
   const prefix = `[${label}] `;
+  const quiet = opts?.quiet ?? false;
   for (const stream of [child.stdout, child.stderr]) {
     if (!stream) continue;
     let buffer = '';
@@ -115,15 +116,17 @@ function pipeWithLabel(child: ChildProcess, label: string): void {
     stream.on('data', (chunk: string) => {
       buffer += chunk;
       const lines = buffer.split('\n');
-      // Keep the last (potentially incomplete) line in the buffer
       buffer = lines.pop() ?? '';
       for (const line of lines) {
+        if (quiet && !line.includes('[WARN]') && !line.includes('[ERROR]') && !line.includes('Error')) continue;
         process.stderr.write(`${prefix}${line}\n`);
       }
     });
     stream.on('end', () => {
       if (buffer.length > 0) {
-        process.stderr.write(`${prefix}${buffer}\n`);
+        if (!quiet || buffer.includes('[WARN]') || buffer.includes('[ERROR]') || buffer.includes('Error')) {
+          process.stderr.write(`${prefix}${buffer}\n`);
+        }
         buffer = '';
       }
     });
@@ -202,7 +205,7 @@ function spawnStudio(opts: {
   let spawnArgs: string[];
 
   if (existsSync(prebuiltEntry)) {
-    log.info('studio_prebuilt', {path: prebuiltEntry});
+    log.debug('studio_prebuilt', {path: prebuiltEntry});
     spawnArgs = [prebuiltEntry];
   } else if (existsSync(sourceEntry)) {
     // Resolve tsx from the studio package's dependency tree
@@ -241,7 +244,7 @@ function spawnStudio(opts: {
   });
 
   const label = 'studio';
-  pipeWithLabel(child, label);
+  pipeWithLabel(child, label, {quiet: true});
 
   child.once('exit', (code, signal) => {
     if (code !== null && code !== 0) {
@@ -317,7 +320,7 @@ async function spawnAdminAgent(opts: {
   );
 
   const label = 'admin';
-  pipeWithLabel(child, label);
+  pipeWithLabel(child, label, {quiet: true});
 
   child.once('exit', (code, signal) => {
     if (code !== null && code !== 0) {
@@ -413,7 +416,7 @@ Or add it to your agent's .env file:
     const migrationDb = getDb(databaseUrl);
     await ensureSchema(migrationDb);
     await closeDb(); // Close migration connection — runtime and Studio open their own
-    log.info('schema_migration_complete', {});
+    log.debug('schema_migration_complete', {});
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error('schema_migration_failed', {error: msg});
@@ -436,7 +439,7 @@ Or add it to your agent's .env file:
   if (!options.noStudio) await assertPortFree(studioPort);
   if (!options.noAdmin) await assertPortFree(adminPort);
 
-  log.info('ports_allocated', {
+  log.debug('ports_allocated', {
     runtime: runtimePort,
     studio: options.noStudio ? null : studioPort,
     admin: options.noAdmin ? null : adminPort,
@@ -481,7 +484,7 @@ Or add it to your agent's .env file:
   // Start the runtime server
   // -------------------------------------------------------------------------
 
-  process.stderr.write(`[dev] Starting dev server for ${repoPath}\n`);
+  log.debug('starting_dev_server', {repoPath});
 
   try {
     let staticAppDir: string | undefined;
@@ -501,7 +504,7 @@ Or add it to your agent's .env file:
 
     for (const dir of candidates) {
       if (existsSync(path.join(dir, 'index.html'))) {
-        process.stderr.write('[dev] Serving pre-built runtime app\n');
+        log.debug('serving_prebuilt_app', {path: staticAppDir});
         staticAppDir = dir;
         break;
       }
@@ -521,7 +524,7 @@ Or add it to your agent's .env file:
 
     await server.start();
 
-    // Print all URLs
+    // Print clean startup summary
     process.stderr.write('\n');
     process.stderr.write(`  Runtime:     http://localhost:${String(runtimePort)}\n`);
     if (studioUrl) {
@@ -530,9 +533,6 @@ Or add it to your agent's .env file:
     if (adminAgentUrl) {
       process.stderr.write(`  Admin Agent: ${adminAgentUrl}\n`);
     }
-    // Redact credentials from the connection string before printing.
-    // Show host + db name so the operator knows which database is in use,
-    // but never print the password portion.
     const redactedUrl = databaseUrl.replace(
       /\/\/([^:]+):([^@]+)@/,
       '//$1:***@',
@@ -557,7 +557,7 @@ Or add it to your agent's .env file:
 
       // Kill subprocesses first
       if (managedProcesses.length > 0) {
-        log.info('subprocess_shutdown', {count: managedProcesses.length});
+        log.debug('subprocess_shutdown', {count: managedProcesses.length});
         await killAll(managedProcesses);
       }
 
@@ -632,6 +632,12 @@ export const devCommand: CommandModule = {
     const noStudio = (argv['no-studio'] as boolean) || process.env['AMODAL_NO_STUDIO'] === '1';
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const noAdmin = (argv['no-admin'] as boolean) || process.env['AMODAL_NO_ADMIN'] === '1';
-    await runDev({port, host, resume, verbose, quiet, noStudio, noAdmin});
+    try {
+      await runDev({port, host, resume, verbose, quiet, noStudio, noAdmin});
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`\n  Error: ${msg}\n\n`);
+      process.exit(1);
+    }
   },
 };

@@ -185,7 +185,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           models: {...(bundle.config.models ?? {}), main: detected},
         },
       };
-      log.info('provider_auto_detected', {provider: detected.provider, model: detected.model});
+      log.debug('provider_auto_detected', {provider: detected.provider, model: detected.model});
     }
   }
 
@@ -201,7 +201,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     providerStatuses = results;
     const verified = results.filter((r) => r.verified).map((r) => r.provider);
     if (verified.length > 0) {
-      log.info('provider_keys_verified', {providers: verified});
+      log.debug('provider_keys_verified', {providers: verified});
     }
     const failed = results.filter((r) => r.keySet && !r.verified);
     for (const f of failed) {
@@ -221,7 +221,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- getDb returns Db which extends NodePgDatabase
   const db = getDb() as unknown as NodePgDatabase<Record<string, unknown>>;
   await ensureSchema(db);
-  log.info('database_schema_ready', {});
+  log.debug('database_schema_ready', {});
 
   // Migrate legacy 'local' appId to the agent name. Prior versions used a
   // hardcoded 'local' value; now we use the agent name for alignment with
@@ -651,7 +651,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
       return new Promise((resolve) => {
         const httpServer = app.listen(port, host, () => {
-          log.info('server_started', {host, port, repoPath: config.repoPath, hotReload: !!config.hotReload});
+          log.debug('server_started', {host, port, repoPath: config.repoPath, hotReload: !!config.hotReload});
           resolve(httpServer);
         });
         server = httpServer;
