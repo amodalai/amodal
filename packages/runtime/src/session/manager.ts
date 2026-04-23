@@ -95,7 +95,7 @@ export class StandaloneSessionManager {
       void this.cleanup();
     }, this.cleanupIntervalMs);
 
-    this.logger.info('session_manager_started', {
+    this.logger.debug('session_manager_started', {
       ttlMs: this.ttlMs,
       cleanupIntervalMs: this.cleanupIntervalMs,
     });

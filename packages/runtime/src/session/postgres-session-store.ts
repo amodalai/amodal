@@ -45,7 +45,7 @@ export async function createPostgresSessionStore(
   const logger = opts.logger ?? defaultLogger;
   const db = getDb();
 
-  logger.info('session_store_initialized', {
+  logger.debug('session_store_initialized', {
     backend: BACKEND_NAME,
   });
 
