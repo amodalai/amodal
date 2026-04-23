@@ -34,7 +34,7 @@ function hasNewChat(state: unknown): state is { newChat: unknown } {
 
 export function ChatPage() {
   const { resumeSessionId: serverResumeId } = useRuntimeManifest();
-  const { getToken } = useAuth();
+  const { token, getToken } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlResumeId = searchParams.get('resume');
   const initialPrompt = searchParams.get('prompt');
@@ -70,6 +70,9 @@ export function ChatPage() {
 
   const { name: agentName } = useRuntimeManifest();
   const isDark = useDarkMode();
+
+  // Don't render ChatWidget until token is ready — avoids 401 on resume session load.
+  if (!token) return null;
 
   return (
     <ChatWidget

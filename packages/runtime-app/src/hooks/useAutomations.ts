@@ -22,8 +22,8 @@ export interface Automation {
  * Fetch automations list.
  */
 export function useAutomations() {
-  const { token, status } = useAuthContext();
-  const enabled = status === 'none' || status === 'authenticated';
+  const { token } = useAuthContext();
+  const enabled = !!token;
 
   return useQuery({
     queryKey: ['automations'],
@@ -44,11 +44,13 @@ export function useAutomations() {
  * Run/start/stop an automation.
  */
 export function useAutomationAction() {
-  const { token } = useAuthContext();
+  const { getToken } = useAuthContext();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ name, action }: { name: string; action: string }) => {
+      const token = await getToken?.();
+      if (!token) throw new Error('Not authenticated');
       const res = await fetch(`/automations/${encodeURIComponent(name)}/${action}`, {
         method: 'POST',
         headers: authHeaders(token),

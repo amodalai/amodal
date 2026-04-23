@@ -45,7 +45,10 @@ export function useAuth(): AuthState {
         const res = await fetch('/auth/token', { method: 'POST', credentials: 'include' });
 
         if (res.status === 404) {
-          if (!cancelled) setStatus('none');
+          if (!cancelled) {
+            setToken('local');
+            setStatus('none');
+          }
           return;
         }
 
@@ -71,6 +74,14 @@ export function useAuth(): AuthState {
           ? new Date(String(data['expires_at'])).getTime() - 60_000
           : Date.now() + 50 * 60 * 1000;
 
+        const scheduleRefresh = (ms: number) => {
+          if (ms > 0) setTimeout(() => {
+            // Token expired — clear it so queries pause, then refresh.
+            setToken(null);
+            void tokenGetterRef.current?.();
+          }, ms);
+        };
+
         tokenGetterRef.current = async () => {
           if (Date.now() < expiresAt) return currentToken;
 
@@ -88,12 +99,14 @@ export function useAuth(): AuthState {
             : Date.now() + 50 * 60 * 1000;
 
           setToken(currentToken);
+          scheduleRefresh(expiresAt - Date.now());
           return currentToken;
         };
 
         if (!cancelled) {
           setToken(currentToken);
           setStatus('authenticated');
+          scheduleRefresh(expiresAt - Date.now());
         }
       } catch {
         if (!cancelled) setStatus('none');

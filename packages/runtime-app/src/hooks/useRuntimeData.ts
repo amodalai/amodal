@@ -64,8 +64,8 @@ export interface PageConfig {
  * Returns agent name, model, connections, stores, etc.
  */
 export function useRuntimeContext(runtimeUrl: string) {
-  const { token, status } = useAuthContext();
-  const enabled = status === 'none' || status === 'authenticated';
+  const { token } = useAuthContext();
+  const enabled = !!token;
 
   return useQuery({
     queryKey: ['runtime-context', runtimeUrl],
@@ -87,8 +87,8 @@ export function useRuntimeContext(runtimeUrl: string) {
  * Fetch runtime config from /config.
  */
 export function useRuntimeConfig(runtimeUrl: string) {
-  const { token, status } = useAuthContext();
-  const enabled = status === 'none' || status === 'authenticated';
+  const { token } = useAuthContext();
+  const enabled = !!token;
 
   return useQuery({
     queryKey: ['runtime-config', runtimeUrl],
@@ -110,8 +110,8 @@ export function useRuntimeConfig(runtimeUrl: string) {
  * Fetch stores from /api/stores.
  */
 export function useStores(runtimeUrl: string) {
-  const { token, status } = useAuthContext();
-  const enabled = status === 'none' || status === 'authenticated';
+  const { token } = useAuthContext();
+  const enabled = !!token;
 
   return useQuery({
     queryKey: ['stores', runtimeUrl],
@@ -135,8 +135,8 @@ export function useStores(runtimeUrl: string) {
  * Fetch pages from /api/pages (hosted) or fall back to Vite virtual module (local dev).
  */
 export function usePages() {
-  const { token, status } = useAuthContext();
-  const enabled = status === 'none' || status === 'authenticated';
+  const { token } = useAuthContext();
+  const enabled = !!token;
 
   return useQuery({
     queryKey: ['pages'],
