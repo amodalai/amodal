@@ -1,5 +1,22 @@
 # @amodalai/studio
 
+## 0.3.30
+
+### Patch Changes
+
+- [#271](https://github.com/amodalai/amodal/pull/271) [`d820a7d`](https://github.com/amodalai/amodal/commit/d820a7dcd5512ac75e5891ba899ab895960c5aea) Thanks [@gte620v](https://github.com/gte620v)! - Fix Studio not loading after npm install
+
+  Studio's package.json exports field didn't expose `./package.json`,
+  so `require.resolve('@amodalai/studio/package.json')` failed when
+  the CLI tried to locate the Studio package. This caused Studio to
+  silently skip on every `amodal dev` run from an npm-installed CLI.
+
+- [#272](https://github.com/amodalai/amodal/pull/272) [`3ea984e`](https://github.com/amodalai/amodal/commit/3ea984e4384142e225e8176469fb9db56437fa84) Thanks [@gte620v](https://github.com/gte620v)! - Clean up code comments that referenced ephemeral project state (phase/workstream/roadmap labels, gotcha indexes, "replaces upstream X" lineage, refactor code-names, PR numbers). No functional changes — comment-only edits so future readers see what the code is and does, not the project timeline that produced it.
+
+- Updated dependencies [[`3ea984e`](https://github.com/amodalai/amodal/commit/3ea984e4384142e225e8176469fb9db56437fa84)]:
+  - @amodalai/db@0.3.30
+  - @amodalai/react@0.3.30
+
 ## 0.3.29
 
 ### Patch Changes
