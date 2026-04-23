@@ -1,5 +1,15 @@
 # @amodalai/runtime-app
 
+## 0.3.30
+
+### Patch Changes
+
+- [#274](https://github.com/amodalai/amodal/pull/274) [`abf306b`](https://github.com/amodalai/amodal/commit/abf306b92f66f0221820e463d34abec41a18f3b2) Thanks [@whodatdev](https://github.com/whodatdev)! - Use async getToken in session data hooks to prevent 401s on session history requests.
+
+- Updated dependencies [[`3ea984e`](https://github.com/amodalai/amodal/commit/3ea984e4384142e225e8176469fb9db56437fa84)]:
+  - @amodalai/types@0.3.30
+  - @amodalai/react@0.3.30
+
 ## 0.3.29
 
 ### Patch Changes

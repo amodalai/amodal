@@ -1,5 +1,19 @@
 # @amodalai/amodal
 
+## 0.3.30
+
+### Patch Changes
+
+- [#272](https://github.com/amodalai/amodal/pull/272) [`3ea984e`](https://github.com/amodalai/amodal/commit/3ea984e4384142e225e8176469fb9db56437fa84) Thanks [@gte620v](https://github.com/gte620v)! - Clean up code comments that referenced ephemeral project state (phase/workstream/roadmap labels, gotcha indexes, "replaces upstream X" lineage, refactor code-names, PR numbers). No functional changes — comment-only edits so future readers see what the code is and does, not the project timeline that produced it.
+
+- Updated dependencies [[`abf306b`](https://github.com/amodalai/amodal/commit/abf306b92f66f0221820e463d34abec41a18f3b2), [`d820a7d`](https://github.com/amodalai/amodal/commit/d820a7dcd5512ac75e5891ba899ab895960c5aea), [`3ea984e`](https://github.com/amodalai/amodal/commit/3ea984e4384142e225e8176469fb9db56437fa84)]:
+  - @amodalai/runtime-app@0.3.30
+  - @amodalai/studio@0.3.30
+  - @amodalai/runtime@0.3.30
+  - @amodalai/core@0.3.30
+  - @amodalai/types@0.3.30
+  - @amodalai/db@0.3.30
+
 ## 0.3.29
 
 ### Patch Changes
