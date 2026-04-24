@@ -62,11 +62,23 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     writeFileSync(envPath, generateEnvTemplate(provider));
   }
 
-  process.stderr.write(`[init] Created project "${name}" (${provider})\n`);
-  process.stderr.write('[init] Next steps:\n');
-  process.stderr.write('  1. Add a connection:  amodal connect <name>\n');
-  process.stderr.write('  2. Validate config:   amodal validate\n');
-  process.stderr.write('  3. Start dev server:  amodal dev\n');
+  process.stderr.write('\n');
+  process.stderr.write(`  Amodal project initialized in ${cwd}\n`);
+  process.stderr.write('\n');
+  process.stderr.write('  Created:\n');
+  process.stderr.write('    amodal.json       Agent config\n');
+  process.stderr.write('    .env              API keys and database URL\n');
+  process.stderr.write('    connections/       API connections\n');
+  process.stderr.write('    skills/           Reasoning frameworks\n');
+  process.stderr.write('    knowledge/        Domain knowledge\n');
+  process.stderr.write('    automations/      Scheduled tasks\n');
+  process.stderr.write('    evals/            Test assertions\n');
+  process.stderr.write('\n');
+  process.stderr.write('  Next steps:\n');
+  process.stderr.write('    1. Add your API key to .env\n');
+  process.stderr.write('    2. Set DATABASE_URL in .env (Postgres)\n');
+  process.stderr.write('    3. Run: amodal dev\n');
+  process.stderr.write('\n');
 }
 
 /**
