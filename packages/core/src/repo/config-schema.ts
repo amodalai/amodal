@@ -166,6 +166,14 @@ export const AmodalConfigSchema = z.object({
       sessionSearch: z.boolean().optional(),
     })
     .optional(),
+  /** File tools for reading/writing agent repo files. */
+  fileTools: z.union([
+    z.boolean(),
+    z.object({
+      allowedDirs: z.array(z.string()).optional(),
+      blockedFiles: z.array(z.string()).optional(),
+    }),
+  ]).optional(),
   /** Scope configuration for per-user session isolation. */
   scope: z
     .object({

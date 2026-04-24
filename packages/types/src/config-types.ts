@@ -108,6 +108,11 @@ export interface AmodalConfig {
   };
   /** Agent memory configuration. */
   memory?: MemoryConfig;
+  /** File tools for reading/writing agent repo files. */
+  fileTools?: boolean | {
+    allowedDirs?: string[];
+    blockedFiles?: string[];
+  };
   /** Scope configuration for per-user session isolation. */
   scope?: {
     /** When true, requests without a scope_id are rejected. Default: false. */

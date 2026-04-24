@@ -19,7 +19,7 @@
 import {describe, it, expect, beforeAll, afterAll} from 'vitest';
 import {spawn, type ChildProcess} from 'node:child_process';
 import {resolve} from 'node:path';
-import {mkdtempSync, writeFileSync, rmSync,readFileSync, existsSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 
@@ -81,6 +81,11 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
       resolve(agentDir, 'amodal.json'),
       JSON.stringify({name: 'subprocess-smoke', version: '1.0.0'}),
     );
+
+    // Create a test knowledge file for file tools tests
+    const knowledgeDir = resolve(agentDir, 'knowledge');
+    mkdirSync(knowledgeDir, {recursive: true});
+    writeFileSync(resolve(knowledgeDir, 'test-doc.md'), '# Test\n\nSENTINEL_FILE_TOOLS_9923\n');
 
     const cliEntry = resolve(__dir, '../dist/src/main.js');
     if (!existsSync(cliEntry)) {
@@ -149,5 +154,30 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
     const text = await res.text();
     expect(text.length).toBeGreaterThan(0);
     expect(text).toContain('data:');
+  }, 45_000);
+
+  it('studio proxies admin chat to admin agent', async () => {
+    const res = await fetch(`http://localhost:${STUDIO_PORT}/api/studio/admin-chat/stream`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: 'Say ok'}),
+      signal: AbortSignal.timeout(30_000),
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('data:');
+  }, 45_000);
+
+  it('admin agent reads a file from the repo using file tools', async () => {
+    const res = await fetch(`http://localhost:${ADMIN_PORT}/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: 'Read the file knowledge/test-doc.md using the read_repo_file tool and tell me its contents.'}),
+      signal: AbortSignal.timeout(30_000),
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('tool_call_start');
+    expect(text).toContain('SENTINEL_FILE_TOOLS_9923');
   }, 45_000);
 });
