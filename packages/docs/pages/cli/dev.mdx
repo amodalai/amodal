@@ -14,11 +14,15 @@ amodal dev
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port` | `3847` | Server port |
-| `--host` | `localhost` | Server host |
+| `--port` | `3847` | Runtime server port |
+| `--host` | `0.0.0.0` | Server host |
 | `--resume` | | Resume a previous session by ID or `latest` |
+| `--no-studio` | `false` | Do not spawn Studio subprocess |
+| `--no-admin` | `false` | Do not spawn admin agent subprocess |
 | `-v` | | Increase log verbosity (`-v` for debug, `-vv` for trace) |
 | `-q` / `--quiet` | | Only show errors |
+
+If the runtime port (default 3847), Studio port (3848), or admin agent port (3849) is already in use, `amodal dev` will fail with an error. Stop the existing process or use `--port` to select a different runtime port.
 
 ## Log Levels
 
