@@ -178,6 +178,7 @@ function spawnStudio(opts: {
   runtimePort: number;
   repoPath: string;
   agentId?: string;
+  adminAgentUrl?: string;
 }): StudioSpawnResult | null {
   const studioDir = resolveStudioDir();
   if (!studioDir) {
@@ -195,6 +196,7 @@ function spawnStudio(opts: {
     PORT: String(opts.port),
     HOSTNAME: '0.0.0.0',
     ...(opts.agentId ? {AGENT_ID: opts.agentId} : {}),
+    ...(opts.adminAgentUrl ? {ADMIN_AGENT_URL: opts.adminAgentUrl} : {}),
   };
 
   // Pre-built server (npm install): dist-server/studio-server.js
@@ -461,6 +463,7 @@ Or add it to your agent's .env file:
       runtimePort,
       repoPath,
       agentId,
+      adminAgentUrl: options.noAdmin ? undefined : `http://localhost:${String(adminPort)}`,
     });
     if (studioResult) {
       managedProcesses.push(studioResult.process);
