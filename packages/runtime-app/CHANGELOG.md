@@ -1,5 +1,13 @@
 # @amodalai/runtime-app
 
+## 0.3.34
+
+### Patch Changes
+
+- Updated dependencies [[`075ff2b`](https://github.com/amodalai/amodal/commit/075ff2b03c9eb20d294469cd9b0dbf86d70d3ad7)]:
+  - @amodalai/types@0.3.34
+  - @amodalai/react@0.3.34
+
 ## 0.3.33
 
 ### Patch Changes
