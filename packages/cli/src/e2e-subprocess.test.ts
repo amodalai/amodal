@@ -150,4 +150,16 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
     expect(text.length).toBeGreaterThan(0);
     expect(text).toContain('data:');
   }, 45_000);
+
+  it('studio proxies admin chat to admin agent', async () => {
+    const res = await fetch(`http://localhost:${STUDIO_PORT}/api/studio/admin-chat/stream`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: 'Say ok'}),
+      signal: AbortSignal.timeout(30_000),
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('data:');
+  }, 45_000);
 });
