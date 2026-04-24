@@ -19,9 +19,31 @@
 import {readFile, readdir, writeFile, mkdir, unlink} from 'node:fs/promises';
 import * as path from 'node:path';
 import {z} from 'zod';
-import {resolveSandboxPath} from '@amodalai/workspace-tools';
 import type {ToolRegistry, ToolContext} from './types.js';
 import type {Logger} from '../logger.js';
+
+// ---------------------------------------------------------------------------
+// Sandbox path resolution (inlined from @amodalai/workspace-tools to avoid
+// making the private workspace-tools package a published dependency)
+// ---------------------------------------------------------------------------
+
+function resolveSandboxPath(sandboxRoot: string, requestedPath: string): string {
+  if (path.isAbsolute(requestedPath)) {
+    throw new FileToolError(`Absolute paths are not allowed: ${requestedPath}`);
+  }
+  if (requestedPath.includes('\0')) {
+    throw new FileToolError('Path contains null bytes');
+  }
+  const segments = requestedPath.split(/[/\\]/);
+  if (segments.includes('..')) {
+    throw new FileToolError(`Path traversal is not allowed: ${requestedPath}`);
+  }
+  const resolved = path.resolve(sandboxRoot, requestedPath);
+  if (resolved !== sandboxRoot && !resolved.startsWith(sandboxRoot + path.sep)) {
+    throw new FileToolError(`Path escapes sandbox: ${requestedPath}`);
+  }
+  return resolved;
+}
 
 // ---------------------------------------------------------------------------
 // Constants

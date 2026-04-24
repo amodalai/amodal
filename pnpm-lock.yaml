@@ -285,9 +285,6 @@ importers:
       "@amodalai/types":
         specifier: workspace:*
         version: link:../types
-      "@amodalai/workspace-tools":
-        specifier: workspace:*
-        version: link:../workspace-tools
       "@mozilla/readability":
         specifier: ^0.6.0
         version: 0.6.0
