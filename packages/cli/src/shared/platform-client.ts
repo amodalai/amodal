@@ -296,6 +296,22 @@ export class PlatformClient {
   }
 
   /**
+   * Fetch build logs from the logging service.
+   */
+  async getBuildLogs(buildId: string): Promise<Array<{
+    _time: string;
+    phase: string;
+    message: string;
+    level: string;
+  }>> {
+    const result = await this.request<{logs: Array<{_time: string; phase: string; message: string; level: string}>}>(
+      'GET',
+      `/api/builds/${encodeURIComponent(buildId)}/logs`,
+    );
+    return result.logs;
+  }
+
+  /**
    * List deployments for the authenticated app.
    */
   async listDeployments(options: {

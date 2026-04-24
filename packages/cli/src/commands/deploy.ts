@@ -95,6 +95,19 @@ export async function runDeploy(options: DeployOptions = {}): Promise<number> {
 
       if (status.status === 'error') {
         process.stderr.write(`[deploy] Build failed: ${status.error ?? 'unknown error'}\n`);
+        try {
+          const logs = await client.getBuildLogs(buildId);
+          if (logs.length > 0) {
+            process.stderr.write('\n[deploy] Build log:\n');
+            for (const entry of logs) {
+              const prefix = entry.level === 'error' ? '  ERROR' : entry.level === 'warn' ? '  WARN ' : '      ';
+              process.stderr.write(`${prefix} ${entry.message}\n`);
+            }
+            process.stderr.write('\n');
+          }
+        } catch {
+          // Best-effort — logs may not be available yet
+        }
         return 1;
       }
 
