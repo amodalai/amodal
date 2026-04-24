@@ -133,7 +133,7 @@ function validateDirPath(
 // Draft API helpers
 // ---------------------------------------------------------------------------
 
-async function readFromDraft(studioUrl: string, filePath: string): Promise<string | null> {
+async function readFromDraft(studioUrl: string, filePath: string, logger: Logger): Promise<string | null> {
   try {
     const res = await fetch(`${studioUrl}/api/drafts/${encodeURIComponent(filePath)}`, {
       signal: AbortSignal.timeout(5000),
@@ -145,8 +145,8 @@ async function readFromDraft(studioUrl: string, filePath: string): Promise<strin
         if (typeof val === 'string') return val;
       }
     }
-  } catch {
-    /* draft not found or network error, fall back to disk */
+  } catch (err) {
+    logger.debug('draft_read_fallback', {path: filePath, error: err instanceof Error ? err.message : String(err)});
   }
   return null;
 }
@@ -181,10 +181,11 @@ async function readFileContent(
   abs: string,
   relPath: string,
   studioUrl: string | undefined,
+  logger: Logger,
 ): Promise<string> {
   // Try draft overlay first
   if (studioUrl) {
-    const draftContent = await readFromDraft(studioUrl, relPath);
+    const draftContent = await readFromDraft(studioUrl, relPath, logger);
     if (draftContent !== null) return draftContent;
   }
 
@@ -258,7 +259,7 @@ function globToRegex(pattern: string): RegExp {
 // Recursive directory listing
 // ---------------------------------------------------------------------------
 
-async function listFilesRecursive(dirPath: string, basePath: string): Promise<string[]> {
+async function listFilesRecursive(dirPath: string, basePath: string, logger: Logger): Promise<string[]> {
   const results: string[] = [];
 
   try {
@@ -268,14 +269,14 @@ async function listFilesRecursive(dirPath: string, basePath: string): Promise<st
       const relPath = path.relative(basePath, fullPath);
 
       if (entry.isDirectory()) {
-        const subFiles = await listFilesRecursive(fullPath, basePath);
+        const subFiles = await listFilesRecursive(fullPath, basePath, logger);
         results.push(...subFiles);
       } else {
         results.push(relPath);
       }
     }
-  } catch {
-    // Directory doesn't exist or isn't readable — skip
+  } catch (err) {
+    logger.debug('file_tool_readdir_skipped', {dir: dirPath, error: err instanceof Error ? err.message : String(err)});
   }
 
   return results;
@@ -310,7 +311,7 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
 
         logger.debug('file_tool_call', {tool: 'read_repo_file', path: params.path});
 
-        let content = await readFileContent(abs, relPath, studioUrl);
+        let content = await readFileContent(abs, relPath, studioUrl, logger);
 
         // Apply line-based offset/limit
         if (params.offset !== undefined || params.limit !== undefined) {
@@ -395,7 +396,7 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
 
         logger.debug('file_tool_call', {tool: 'edit_repo_file', path: params.path});
 
-        const content = await readFileContent(abs, relPath, studioUrl);
+        const content = await readFileContent(abs, relPath, studioUrl, logger);
 
         // Count occurrences
         let count = 0;
@@ -503,13 +504,13 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
           if (!absDir) {
             return {error: 'Invalid directory'};
           }
-          files = await listFilesRecursive(absDir, repoRoot);
+          files = await listFilesRecursive(absDir, repoRoot, logger);
         } else {
           // List all allowed directories
           files = [];
           for (const dir of allowedDirs) {
             const absDir = path.join(repoRoot, dir);
-            const dirFiles = await listFilesRecursive(absDir, repoRoot);
+            const dirFiles = await listFilesRecursive(absDir, repoRoot, logger);
             files.push(...dirFiles);
           }
         }
@@ -550,7 +551,7 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
 
         for (const dir of allowedDirs) {
           const absDir = path.join(repoRoot, dir);
-          const files = await listFilesRecursive(absDir, repoRoot);
+          const files = await listFilesRecursive(absDir, repoRoot, logger);
           for (const file of files) {
             if (regex.test(file)) {
               matches.push(file);
@@ -615,7 +616,7 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
           if (results.length >= GREP_MAX_RESULTS) break;
 
           const absDir = path.join(repoRoot, dir);
-          const files = await listFilesRecursive(absDir, repoRoot);
+          const files = await listFilesRecursive(absDir, repoRoot, logger);
 
           for (const file of files) {
             if (results.length >= GREP_MAX_RESULTS) break;
@@ -630,8 +631,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
                   results.push({file, line: i + 1, content: lines[i]});
                 }
               }
-            } catch {
-              // Skip files that can't be read (binary, permissions, etc.)
+            } catch (err) {
+              logger.debug('file_tool_grep_skip', {file, error: err instanceof Error ? err.message : String(err)});
             }
           }
         }
@@ -679,7 +680,7 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
           try {
             const abs = validatePath(repoRoot, filePath, allowedDirs, blockedFiles);
             const relPath = path.relative(repoRoot, abs);
-            results[filePath] = await readFileContent(abs, relPath, studioUrl);
+            results[filePath] = await readFileContent(abs, relPath, studioUrl, logger);
           } catch (err) {
             results[filePath] = {error: err instanceof Error ? err.message : String(err)};
           }
