@@ -148,7 +148,6 @@ The `stores` block configures the database backend used for **both** agent docum
 |-------|------|-------------|
 | `name` | string | Agent name (min 1 char). Used in logging and deployment IDs. |
 | `version` | string | Semantic version. Used for snapshot tagging and versioning. |
-| `models.main` | ModelConfig | Primary agent model. This is the reasoning brain — it handles the conversation, plans, and decides. |
 
 ### Optional
 
@@ -157,6 +156,7 @@ The `stores` block configures the database backend used for **both** agent docum
 | `description` | string | Agent description. Shown in CLI output. |
 | `basePrompt` | string | Custom base system prompt. When set, replaces the platform-compiled default. |
 | `disabledSubagents` | string[] | Subagent names to disable (e.g., `['explore', 'plan']` to turn off platform defaults). |
+| `models.main` | ModelConfig | Primary agent model. When omitted, auto-detects from environment API keys (prefers Google, then Anthropic, OpenAI, etc.). |
 | `models.simple` | ModelConfig | Model for data-gathering sub-agents. Should be faster and cheaper than `main`. |
 | `models.advanced` | ModelConfig | Model for complex analysis tasks that need stronger reasoning than `main`. |
 | `sandbox` | object | Sandbox execution config. Controls whether custom tool handlers can call `ctx.exec()` for shell commands, and how sandboxing is enforced. |
@@ -166,6 +166,7 @@ The `stores` block configures the database backend used for **both** agent docum
 | `webTools` | object | Enables `web_search` + `fetch_url` built-in tools via Gemini grounding. See [Web Tools](/guide/tools#web-tools). |
 | `packages` | string[] | Installed npm packages to load (content type detected from package structure). |
 | `memory` | object | Persistent memory across sessions. See [Memory](#memory). |
+| `fileTools` | boolean or object | Enable built-in file tools for reading/writing agent repo files. Set to `true` for defaults, or pass `{allowedDirs, blockedFiles}` to customize. Used by the admin agent. |
 | `scope` | object | Per-user isolation for multi-tenant deployments. See [Scope](#scope). |
 
 ## ModelConfig

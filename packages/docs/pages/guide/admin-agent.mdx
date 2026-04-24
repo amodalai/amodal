@@ -11,13 +11,12 @@ Admin sessions are **local-only**. They exist in `amodal dev`, not in hosted run
 ## What makes an admin session different
 
 - **Different system prompt.** The admin agent is an assistant for configuring amodal agents. It knows the file structure (`skills/`, `knowledge/`, `connections/`, etc.), the config schemas, and the common patterns.
-- **File tools.** Nine admin-only tools for navigating and editing the repo. Regular chat sessions never see these.
-- **Path allowlist.** All file operations are scoped to the agent's config directories (`skills/`, `knowledge/`, `connections/`, `stores/`, `pages/`, `automations/`, `evals/`, `agents/`, `tools/`, `amodal_packages/`). Sensitive files (`.env`, `amodal.json`, `package.json`, `pnpm-lock.yaml`, `tsconfig.json`) are blocked.
-- **Read-only packages.** Files under `amodal_packages/` can be read but not written — they're installed from the registry and should be edited by updating the package, not the local copy.
+- **File tools.** Eight built-in tools for navigating and editing the repo. Enabled via `fileTools: true` in `amodal.json`.
+- **Path allowlist.** All file operations are scoped to the agent's config directories (`skills/`, `knowledge/`, `connections/`, `stores/`, `pages/`, `automations/`, `evals/`, `agents/`, `tools/`). Sensitive files (`.env`, `amodal.json`, `package.json`, `pnpm-lock.yaml`, `tsconfig.json`) are blocked.
 
-## The nine file tools
+## The eight file tools
 
-The admin agent has tools grouped by purpose: **discovery** (finding what's there), **read/write** (operating on files), and **introspection** (querying the runtime itself).
+The admin agent has tools grouped by purpose: **discovery** (finding what's there) and **read/write** (operating on files).
 
 ### Discovery
 
@@ -35,17 +34,11 @@ Use these **before** reading or editing — don't guess paths.
 
 | Tool | What it does |
 |------|--------------|
-| **`read_repo_file`** | Read a single file. Default returns up to 2000 lines; for longer files set `truncated: true` and include `total_lines` — paginate with `offset` + `limit`. |
-| **`read_many_repo_files`** | Batched read of up to 20 files (50KB each). Good for "review every SKILL.md." |
+| **`read_repo_file`** | Read a single file. Supports `offset` and `limit` for line-based pagination of large files. |
+| **`read_many_repo_files`** | Batched read of up to 20 files. Good for "review every SKILL.md." |
 | **`edit_repo_file`** | In-place find-and-replace. Default requires exactly one match of `old_string`; set `allow_multiple: true` to replace every occurrence. Use for targeted changes to existing files — preserves everything you don't touch. |
-| **`write_repo_file`** | Create a new file or fully rewrite an existing one. Prefer `edit_repo_file` for targeted changes. |
+| **`write_repo_file`** | Create a new file or fully rewrite an existing one. Creates parent directories as needed. Prefer `edit_repo_file` for targeted changes. |
 | **`delete_repo_file`** | Delete a file. Always confirm with the user first. |
-
-### Introspection
-
-| Tool | What it does |
-|------|--------------|
-| **`internal_api`** | GET any endpoint on the running runtime. Useful for checking eval results (`/api/evals/runs`), connection health (`/inspect/context`), store data, etc. Read-only (GET requests only). |
 
 ## The workflow
 
