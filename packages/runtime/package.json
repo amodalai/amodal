@@ -46,6 +46,7 @@
     "@amodalai/core": "workspace:*",
     "@amodalai/db": "workspace:*",
     "@amodalai/types": "workspace:*",
+    "@amodalai/workspace-tools": "workspace:*",
     "@mozilla/readability": "^0.6.0",
     "ai": "^6.0.145",
     "drizzle-orm": "^0.45.2",

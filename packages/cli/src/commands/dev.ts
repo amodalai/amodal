@@ -304,6 +304,7 @@ async function spawnAdminAgent(opts: {
     ...process.env,
     AMODAL_NO_ADMIN: '1',
     AMODAL_NO_STUDIO: '1',
+    REPO_PATH: opts.repoPath,
   };
   if (opts.studioUrl) {
     env['STUDIO_URL'] = opts.studioUrl;

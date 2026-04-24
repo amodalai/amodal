@@ -52,6 +52,7 @@ import {createDispatchTool, DISPATCH_TOOL_NAME} from '../tools/dispatch-tool.js'
 import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-tool.js';
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
 import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
+import {registerFileTools, DEFAULT_ALLOWED_DIRS, DEFAULT_BLOCKED_FILES} from '../tools/file-tools.js';
 import type {Logger} from '../logger.js';
 import type {CredentialResolver} from '../credentials.js';
 
@@ -451,6 +452,28 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
       editableBy: memoryConfig.editableBy ?? 'any',
       sessionType,
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // 10c. Register file tools (read/write agent repo files)
+  // -------------------------------------------------------------------------
+
+  const fileToolsConfig = bundle.config.fileTools;
+  const fileToolsEnabled = fileToolsConfig === true || (typeof fileToolsConfig === 'object' && fileToolsConfig !== null);
+  const repoRoot = process.env['REPO_PATH'] ?? bundle.origin;
+
+  if (fileToolsEnabled && repoRoot) {
+    const customConfig = typeof fileToolsConfig === 'object' ? fileToolsConfig : {};
+    registerFileTools(registry, {
+      repoRoot,
+      allowedDirs: customConfig.allowedDirs ?? DEFAULT_ALLOWED_DIRS,
+      blockedFiles: customConfig.blockedFiles ?? DEFAULT_BLOCKED_FILES,
+      studioUrl: process.env['STUDIO_URL'],
+      logger,
+    });
+    logger.debug('file_tools_registered', {repoRoot});
+  } else if (fileToolsConfig) {
+    logger.debug('file_tools_not_registered', {reason: 'no_repo_root'});
   }
 
   // -------------------------------------------------------------------------
