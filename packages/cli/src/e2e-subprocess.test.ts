@@ -133,6 +133,14 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
     expect(body['status']).toBe('ok');
   });
 
+  it('auth/token returns 404 in local dev (no auth system)', async () => {
+    const res = await fetch(`http://localhost:${RUNTIME_PORT}/auth/token`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(res.status).toBe(404);
+  });
+
   it('studio responds to health check', async () => {
     const ok = await waitForHealth(STUDIO_PORT, 15_000);
     expect(ok).toBe(true);

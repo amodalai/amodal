@@ -448,9 +448,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     });
   });
 
-  // Auth token endpoint — local dev returns empty (no auth needed)
+  // Auth token endpoint — local dev has no auth system.
+  // Return 404 so the frontend falls into the "no auth" path
+  // (sets token='local', status='none', all data hooks fire).
+  // Cloud deployments override this with a real auth handler.
   app.post('/auth/token', (_req, res) => {
-    res.json({token: '', expires_at: null});
+    res.status(404).json({error: 'No auth configured'});
   });
 
   // RoleProvider — defaults to "everyone is ops" for amodal dev.
