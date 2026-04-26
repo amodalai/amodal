@@ -1,5 +1,16 @@
 # @amodalai/runtime
 
+## 0.3.35
+
+### Patch Changes
+
+- [#288](https://github.com/amodalai/amodal/pull/288) [`6c3490e`](https://github.com/amodalai/amodal/commit/6c3490e713a2bfb3cfb0fd1b15bb068d210ef981) Thanks [@gte620v](https://github.com/gte620v)! - Fix blank chat UI on amodal dev — return 404 from /auth/token in local dev
+
+- Updated dependencies []:
+  - @amodalai/types@0.3.35
+  - @amodalai/core@0.3.35
+  - @amodalai/db@0.3.35
+
 ## 0.3.34
 
 ### Patch Changes
