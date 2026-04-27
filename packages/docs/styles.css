@@ -4,14 +4,14 @@
   --vocs-color_heading: #0f172a;
   --vocs-color_codeBlockBackground: #f8fafc;
   --vocs-color_codeTitleBackground: #f1f5f9;
-  --vocs-color_noteBorder: #3B82F6;
-  --vocs-color_noteText: #1E40AF;
+  --vocs-color_noteBorder: #2db895;
+  --vocs-color_noteText: #0d9e87;
 }
 
 :root[data-theme='dark'] {
   --vocs-color_heading: #f1f5f9;
   --vocs-color_codeBlockBackground: #0c1322;
   --vocs-color_codeTitleBackground: #111827;
-  --vocs-color_noteBorder: #60A5FA;
-  --vocs-color_noteText: #93C5FD;
+  --vocs-color_noteBorder: #2db895;
+  --vocs-color_noteText: #96dfd0;
 }

@@ -4,11 +4,11 @@
 
 @layer base {
   :root {
-    /* Brand — matches docs theme (#1E40AF light / #60A5FA dark) */
-    --primary: 224 71% 40%;
+    /* Brand — teal accent matching website theme */
+    --primary: 174 72% 25%;
     --primary-foreground: 0 0% 100%;
     /* Always-dark variant for surfaces with white text (buttons, chat bubbles) */
-    --primary-solid: 224 71% 40%;
+    --primary-solid: 174 72% 25%;
 
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -24,15 +24,15 @@
     --destructive-foreground: 0 0% 98%;
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 217 91% 60%;
+    --ring: 174 72% 40%;
     --radius: 0.5rem;
   }
 
   .dark {
-    /* Brand — blue-400 in dark mode */
-    --primary: 217 91% 68%;
+    /* Brand — teal in dark mode */
+    --primary: 174 72% 85%;
     --primary-foreground: 0 0% 100%;
-    --primary-solid: 224 71% 40%;
+    --primary-solid: 174 72% 25%;
 
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
@@ -48,7 +48,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
-    --ring: 217 91% 68%;
+    --ring: 174 72% 85%;
   }
 }
 

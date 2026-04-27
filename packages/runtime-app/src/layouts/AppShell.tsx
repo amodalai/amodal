@@ -59,10 +59,10 @@ export function AppShell() {
       <header className="h-14 bg-card border-b border-border text-gray-900 dark:text-white flex items-center justify-between px-5 shrink-0 z-20">
         <div className="flex items-center gap-3">
           <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-            <defs><clipPath id="logo-sq"><rect x="2" y="10" width="17" height="17" rx="3" /></clipPath></defs>
-            <rect x="2" y="10" width="17" height="17" rx="3" fill="#1E40AF" />
-            <circle cx="22" cy="11" r="10" fill="#60A5FA" fillOpacity="0.85" />
-            <circle cx="22" cy="11" r="10" fill="#3B82F6" clipPath="url(#logo-sq)" />
+            <rect width="32" height="32" rx="6" fill="#334155" />
+            <polygon points="16,3 6,20 16,27" fill="white" />
+            <polyline points="16,3 26,20 16,27" fill="none" stroke="white" strokeWidth="1.2" strokeLinejoin="miter" />
+            <line x1="16" y1="3" x2="16" y2="27" stroke="white" strokeWidth="1.2" />
           </svg>
           <div className="flex items-center gap-2">
             <span className="font-semibold tracking-tight text-[15px] text-foreground">amodal</span>
