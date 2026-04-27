@@ -60,12 +60,13 @@ interface EvalResultEvent {
  * Used for internal fetch calls to /chat.
  */
 function selfBaseUrl(req: Request): string {
-  const addr = req.socket.localAddress;
   const port = req.socket.localPort;
-  if (!addr || !port) {
-    throw new Error('Cannot determine server address from request socket');
+  if (!port) {
+    throw new Error('Cannot determine server port from request socket');
   }
-  return `http://${addr}:${String(port)}`;
+  // Always use 127.0.0.1 for internal loopback — req.socket.localAddress
+  // may return ::1 (IPv6) which produces malformed URLs like http://::1:3847
+  return `http://127.0.0.1:${String(port)}`;
 }
 
 /**
