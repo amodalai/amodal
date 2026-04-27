@@ -23,3 +23,5 @@ export {runMultiModelEval} from './multi-model-runner.js';
 export type {MultiModelProgress, MultiModelEvalOptions} from './multi-model-runner.js';
 export {EvalProviderError} from './eval-provider-error.js';
 export {OPENAI_COMPATIBLE_BASE_URLS} from './eval-provider-urls.js';
+export {tryDeterministicAssertion, evaluateAssertions, DETERMINISTIC_KEYS} from './deterministic-assertions.js';
+export type {DeterministicContext} from './deterministic-assertions.js';

@@ -16,8 +16,8 @@
 import {Router} from 'express';
 import type {Request, Response} from 'express';
 import type {AgentBundle} from '@amodalai/types';
-import {judgeAllAssertions, computeEvalCost} from '@amodalai/core';
-import type {JudgeProvider, EvalCostInfo} from '@amodalai/core';
+import {evaluateAssertions, computeEvalCost} from '@amodalai/core';
+import type {JudgeProvider, EvalCostInfo, DeterministicContext} from '@amodalai/core';
 import {SSEEventType} from '../types.js';
 import type {StandaloneSessionManager} from '../session/manager.js';
 import {resolveSession} from './session-resolver.js';
@@ -77,6 +77,7 @@ async function queryViaSession(
   response: string;
   toolCalls: Array<{name: string; parameters: Record<string, unknown>}>;
   toolResults: string[];
+  turns: number;
   usage?: {inputTokens: number; outputTokens: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number};
 }> {
   const {session, toolContextFactory} = await resolveSession(undefined, {
@@ -94,6 +95,7 @@ async function queryViaSession(
   let fullResponse = '';
   const toolCalls: Array<{name: string; parameters: Record<string, unknown>}> = [];
   const toolResults: string[] = [];
+  let turns = 0;
   let usage: {inputTokens: number; outputTokens: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number} | undefined;
 
   // Track tool names by tool_id so we can match results
@@ -112,6 +114,7 @@ async function queryViaSession(
           parameters: event.parameters,
         });
       } else if (event.type === SSEEventType.ToolCallResult) {
+        turns++;
         const result = event.result ?? event.error ?? '';
         const preview = result.length > 300 ? result.substring(0, 300) + '...' : result;
         toolResults.push(preview);
@@ -143,7 +146,7 @@ async function queryViaSession(
     usage = {inputTokens: estimatedInput, outputTokens: estimatedOutput};
   }
 
-  return {response: fullResponse, toolCalls, toolResults, usage};
+  return {response: fullResponse, toolCalls, toolResults, turns, usage};
 }
 
 /**
@@ -285,10 +288,24 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
             enrichedResponse += `\n\n## Tool Results\n${queryResult.toolResults.map((r) => `- ${r}`).join('\n')}`;
           }
 
-          // Judge all assertions
-          const assertions = await judgeAllAssertions(enrichedResponse, ev.assertions, judgeProvider);
-          const passed = assertions.every((a) => a.passed);
+          // Split assertions into deterministic and LLM-judged
           const durationMs = Date.now() - start;
+          const deterministicCtx: DeterministicContext = {
+            response: queryResult.response,
+            toolCalls: queryResult.toolCalls,
+            durationMs,
+            turns: queryResult.turns,
+          };
+
+          // Evaluate assertions: deterministic first, then LLM judge for the rest
+          const assertions = await evaluateAssertions(
+            enrichedResponse,
+            ev.assertions,
+            deterministicCtx,
+            judgeProvider,
+          );
+
+          const passed = assertions.every((a) => a.passed);
 
           // Compute costs
           const queryCost = queryResult.usage

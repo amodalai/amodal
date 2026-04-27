@@ -8,8 +8,9 @@ import type {AgentBundle} from '../repo/repo-types.js';
 import type {LoadedEval} from '../repo/repo-types.js';
 import type {EvalResult, EvalSuiteResult, EvalProgress, EvalCostInfo, EvalModelInfo} from './eval-types.js';
 import type {JudgeProvider} from './eval-judge.js';
-import {judgeAllAssertions} from './eval-judge.js';
 import {computeEvalCost, aggregateRunCost} from './eval-cost.js';
+import {evaluateAssertions} from './deterministic-assertions.js';
+import type {DeterministicContext} from './deterministic-assertions.js';
 
 /**
  * Provider interface for running a query against the agent.
@@ -105,9 +106,19 @@ async function runSingleEval(
       enrichedResponse += `\n\n## Tool Calls Made\n${toolSummary}`;
     }
 
-    const assertions = await judgeAllAssertions(
+    const durationMs = Date.now() - start;
+    const deterministicCtx: DeterministicContext = {
+      response,
+      toolCalls,
+      durationMs,
+      turns: toolCalls.length,
+    };
+
+    // Evaluate assertions: deterministic first, then LLM judge for the rest
+    const assertions = await evaluateAssertions(
       enrichedResponse,
       ev.assertions,
+      deterministicCtx,
       options.judgeProvider,
     );
 

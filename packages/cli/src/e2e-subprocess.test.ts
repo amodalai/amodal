@@ -98,6 +98,8 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
       '',
       '## Assertions',
       '- Should contain the number 4',
+      '- contains: 4',
+      '- Should NOT contain the word elephant',
     ].join('\n'));
 
     const cliEntry = resolve(__dir, '../dist/src/main.js');
@@ -220,6 +222,13 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
     const result = event['result'] as Record<string, unknown>;
     expect(result['response']).toBeDefined();
     expect(Array.isArray(result['assertions'])).toBe(true);
+    // Verify deterministic assertions were evaluated (3 total: 1 LLM-judged + 1 deterministic + 1 negated)
+    const assertions = result['assertions'] as Array<Record<string, unknown>>;
+    expect(assertions.length).toBe(3);
+    // The deterministic "contains: 4" assertion should have a reason mentioning "contains"
+    const containsAssertion = assertions.find((a) => a['text'] === 'contains: 4');
+    expect(containsAssertion).toBeDefined();
+    expect(containsAssertion!['reason']).toBeDefined();
     expect(result['durationMs']).toBeDefined();
   }, 45_000);
 

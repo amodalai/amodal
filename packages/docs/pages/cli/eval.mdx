@@ -32,12 +32,75 @@ Test alert triage quality.
 - Should NOT fabricate alert data
 ```
 
+## Assertions
+
+Assertions come in two types: **deterministic** checks that run instantly with no LLM call, and **LLM-judged** assertions that send the response to a judge model for evaluation. Both can be mixed freely in the same eval.
+
+### Deterministic Assertions
+
+Deterministic assertions use a `key: value` format. They are instant, free (no tokens), and fully reproducible.
+
+**Response text checks:**
+
+```markdown
+- contains: "exact string"          # response includes this substring
+- regex: "\\d{3}-\\d{4}"            # response matches regex pattern
+- starts_with: "{"                  # response starts with this string
+- length_between: [100, 5000]       # character count is in range
+```
+
+**Tool usage checks:**
+
+```markdown
+- tool_called: request              # agent called this tool
+- tool_not_called: write_repo_file  # agent did NOT call this tool
+```
+
+**Performance checks:**
+
+```markdown
+- max_latency: 10000                # completed under N milliseconds
+- max_turns: 3                      # agent loop completed in N turns
+```
+
+**Negation:** Prefix any assertion with `NOT` to invert it:
+
+```markdown
+- NOT contains: "#hashtag"
+- NOT regex: "\\bTODO\\b"
+```
+
+### LLM-Judged Assertions
+
+Any assertion that does not match the `key: value` format is sent to an LLM judge. Use these for subjective quality checks that a regex cannot capture. They are slower and cost tokens, but can evaluate nuance.
+
+```markdown
+- Should explain the concept clearly
+- Response is professional in tone
+- Does not hallucinate data not present in the source
+```
+
+### Mixing Both Types
+
+Use deterministic assertions for structural requirements and LLM-judged assertions for quality:
+
+```markdown
+## Assertions
+
+- contains: "```json"
+- starts_with: "{"
+- tool_called: request
+- max_turns: 5
+- Should explain the reasoning behind the result
+- Should NOT include PII
+```
+
 ## Evaluation Methods
 
 | Method | Description |
 |--------|-------------|
-| **LLM Judge** | An LLM evaluates the agent's response against the rubric |
-| **Tool usage** | Verify expected tools were called |
+| **Deterministic** | Instant checks — string matching, regex, tool usage, latency, turn count |
+| **LLM Judge** | An LLM evaluates the agent's response against plain-English assertions |
 | **Cost tracking** | Track token usage and cost per eval |
 
 ## Experiments
