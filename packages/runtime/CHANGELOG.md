@@ -1,5 +1,17 @@
 # @amodalai/runtime
 
+## 0.3.36
+
+### Patch Changes
+
+- 701b5d0: Fix evals and wire arena backend
+  - Fix eval runner SSE parsing (was trying to JSON.parse an SSE stream)
+  - Add POST /api/evals/run endpoint to runtime for arena eval execution
+  - Fix GET /api/evals/arena/models to return configured models from agent config
+  - @amodalai/types@0.3.36
+  - @amodalai/core@0.3.36
+  - @amodalai/db@0.3.36
+
 ## 0.3.35
 
 ### Patch Changes
