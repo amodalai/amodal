@@ -112,16 +112,27 @@ export async function runEvalSuite(evalName: string, runtimeUrl: string, agentId
         signal: AbortSignal.timeout(CASE_TIMEOUT_MS),
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
-      const data = (await res.json()) as { response?: string };
-      const output = data.response ?? '';
+      const sseText = await res.text();
+      let output = '';
+      for (const line of sseText.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse boundary
+          const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
+          if (event['type'] === 'text_delta') {
+            output += String(event['content'] ?? '');
+          }
+        } catch { /* skip non-JSON lines (e.g. keep-alive comments) */ }
+      }
       const passed = testCase.expected ? output.includes(testCase.expected) : true;
       results.push({ input: testCase.input, output, passed, durationMs: Date.now() - caseStart });
     } catch (err: unknown) {
-      logger.warn('eval_case_error', {
+      logger.error('eval_case_failed', {
         suiteId,
         input: testCase.input,
+        caseIndex: cases.indexOf(testCase),
         error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
       });
       results.push({
         input: testCase.input,
