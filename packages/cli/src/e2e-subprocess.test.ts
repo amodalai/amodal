@@ -87,6 +87,19 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
     mkdirSync(knowledgeDir, {recursive: true});
     writeFileSync(resolve(knowledgeDir, 'test-doc.md'), '# Test\n\nSENTINEL_FILE_TOOLS_9923\n');
 
+    // Create a test eval for eval/arena tests
+    const evalsDir = resolve(agentDir, 'evals');
+    mkdirSync(evalsDir, {recursive: true});
+    writeFileSync(resolve(evalsDir, 'math-check.md'), [
+      '# Eval: Math Check',
+      '',
+      '## Query',
+      'What is 2 + 2? Reply with just the number.',
+      '',
+      '## Assertions',
+      '- Should contain the number 4',
+    ].join('\n'));
+
     const cliEntry = resolve(__dir, '../dist/src/main.js');
     if (!existsSync(cliEntry)) {
       throw new Error(`CLI not built — run pnpm --filter @amodalai/amodal run build first`);
@@ -187,5 +200,32 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
     const text = await res.text();
     expect(text).toContain('tool_call_start');
     expect(text).toContain('SENTINEL_FILE_TOOLS_9923');
+  }, 45_000);
+
+  it('runtime runs eval and returns SSE results', async () => {
+    const res = await fetch(`http://localhost:${RUNTIME_PORT}/api/evals/run`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({evalNames: ['math-check']}),
+      signal: AbortSignal.timeout(30_000),
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('eval_complete');
+  }, 45_000);
+
+  it('runtime runs arena eval with specified model', async () => {
+    const res = await fetch(`http://localhost:${RUNTIME_PORT}/api/evals/run`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        evalNames: ['math-check'],
+        model: {provider: 'google', model: 'gemini-2.0-flash'},
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('eval_complete');
   }, 45_000);
 });
