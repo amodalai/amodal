@@ -6,7 +6,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Sun, Moon } from 'lucide-react';
 import { Sidebar } from '@/sections/Sidebar';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { useRuntimeConnection } from '@/contexts/RuntimeEventsContext';
@@ -59,10 +58,10 @@ export function AppShell() {
       <header className="h-14 bg-card border-b border-border text-gray-900 dark:text-white flex items-center justify-between px-5 shrink-0 z-20">
         <div className="flex items-center gap-3">
           <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-            <defs><clipPath id="logo-sq"><rect x="2" y="10" width="17" height="17" rx="3" /></clipPath></defs>
-            <rect x="2" y="10" width="17" height="17" rx="3" fill="#1E40AF" />
-            <circle cx="22" cy="11" r="10" fill="#60A5FA" fillOpacity="0.85" />
-            <circle cx="22" cy="11" r="10" fill="#3B82F6" clipPath="url(#logo-sq)" />
+            <rect width="32" height="32" rx="6" fill="#334155" />
+            <polygon points="16,3 6,20 16,27" fill="white" />
+            <polyline points="16,3 26,20 16,27" fill="none" stroke="white" strokeWidth="1.2" strokeLinejoin="miter" />
+            <line x1="16" y1="3" x2="16" y2="27" stroke="white" strokeWidth="1.2" />
           </svg>
           <div className="flex items-center gap-2">
             <span className="font-semibold tracking-tight text-[15px] text-foreground">amodal</span>
@@ -75,13 +74,6 @@ export function AppShell() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={toggle}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
           {model && (
             <span className="text-[11px] text-gray-400 dark:text-white/45 font-mono">{model.replace(/-\d{8}$/, '')}</span>
           )}
@@ -101,7 +93,7 @@ export function AppShell() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        <Sidebar dark={dark} onToggleTheme={toggle} />
         <main className="flex-1 overflow-auto bg-background scrollbar-thin">
           <Outlet />
         </main>

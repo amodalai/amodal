@@ -24,8 +24,8 @@ export default defineConfig({
   },
   theme: {
     accentColor: {
-      light: '#1E40AF',
-      dark: '#60A5FA',
+      light: '#0d9e87',
+      dark: '#96dfd0',
     },
     colorScheme: 'system',
     variables: {
@@ -51,7 +51,7 @@ export default defineConfig({
   banner: {
     content:
       'Amodal is in early access — [get started](/quickstart/introduction)',
-    backgroundColor: '#1E40AF',
+    backgroundColor: '#0d9e87',
     textColor: '#ffffff',
     dismissable: true,
   },

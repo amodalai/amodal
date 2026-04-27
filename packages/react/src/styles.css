@@ -5,10 +5,10 @@
  */
 
 .amodal-chat {
-  --amodal-primary: #2563eb;
-  --amodal-primary-hover: #1d4ed8;
+  --amodal-primary: #0d9e87;
+  --amodal-primary-hover: #0a7d6b;
   --amodal-bg: #ffffff;
-  --amodal-bg-user: #eff6ff;
+  --amodal-bg-user: #f0fdfa;
   --amodal-bg-assistant: #f9fafb;
   --amodal-bg-error: #fef2f2;
   --amodal-text: #111827;
