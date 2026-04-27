@@ -6,7 +6,7 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { SquarePen, MessageSquare, FileText, Pencil, Trash2, ExternalLink } from 'lucide-react';
+import { SquarePen, MessageSquare, FileText, Pencil, Trash2, ExternalLink, Sun, Moon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRuntimeEvents } from '@/contexts/RuntimeEventsContext';
 import { cn } from '@/lib/utils';
@@ -150,7 +150,7 @@ function SectionLabel({ children, action }: { children: React.ReactNode; action?
 // Main
 // ---------------------------------------------------------------------------
 
-export function Sidebar() {
+export function Sidebar({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -231,20 +231,25 @@ export function Sidebar() {
         )}
       </nav>
 
-      {studioUrl && (
-        <div className="px-2 py-3">
+      <div className="px-4 py-3 border-t border-border flex items-center justify-between">
+        <button
+          onClick={onToggleTheme}
+          className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {dark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+          {dark ? 'Light mode' : 'Dark mode'}
+        </button>
+        {studioUrl && (
           <a
             href={studioUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            <ExternalLink className="h-4 w-4 shrink-0" />
-            <span className="flex-1">Manage</span>
-            <span className="text-[10px] text-muted-foreground">&rarr;</span>
+            Manage <ExternalLink className="h-3 w-3" />
           </a>
-        </div>
-      )}
+        )}
+      </div>
     </aside>
   );
 }

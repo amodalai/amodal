@@ -7,12 +7,12 @@
 import type { ChatTheme } from './types';
 
 export const defaultTheme: ChatTheme = {
-  primaryColor: '#1e40af',
+  primaryColor: '#0d9e87',
   backgroundColor: '#ffffff',
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   fontSize: '14px',
   borderRadius: '8px',
-  userBubbleColor: '#1e40af',
+  userBubbleColor: '#0d9e87',
   agentBubbleColor: '#f3f4f6',
   toolCallColor: '#f9fafb',
   headerText: 'AI Assistant',

@@ -6,7 +6,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Sun, Moon } from 'lucide-react';
 import { Sidebar } from '@/sections/Sidebar';
 import { useRuntimeManifest } from '@/contexts/RuntimeContext';
 import { useRuntimeConnection } from '@/contexts/RuntimeEventsContext';
@@ -75,13 +74,6 @@ export function AppShell() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={toggle}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
           {model && (
             <span className="text-[11px] text-gray-400 dark:text-white/45 font-mono">{model.replace(/-\d{8}$/, '')}</span>
           )}
@@ -101,7 +93,7 @@ export function AppShell() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        <Sidebar dark={dark} onToggleTheme={toggle} />
         <main className="flex-1 overflow-auto bg-background scrollbar-thin">
           <Outlet />
         </main>
