@@ -588,7 +588,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   }
 
   // Eval runner
-  app.use(createEvalRouter({getBundle}));
+  app.use(createEvalRouter({
+    getBundle,
+    sessionManager,
+    bundleResolver: {staticBundle: bundle},
+    shared,
+  }));
 
   // Build user pages (if pages/ directory exists)
   let builtPages: BuiltPage[] = [];

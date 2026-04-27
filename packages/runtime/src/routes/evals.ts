@@ -8,7 +8,7 @@
  * Eval execution route.
  *
  * Accepts POST to /api/evals/run, runs the specified evals from the
- * agent bundle against the runtime's own chat endpoint, judges the
+ * agent bundle against the session manager directly, judges the
  * results with an LLM, and streams SSE progress events back to the
  * caller (typically the Studio ArenaPage).
  */
@@ -18,6 +18,10 @@ import type {Request, Response} from 'express';
 import type {AgentBundle} from '@amodalai/types';
 import {judgeAllAssertions, computeEvalCost} from '@amodalai/core';
 import type {JudgeProvider, EvalCostInfo} from '@amodalai/core';
+import {SSEEventType} from '../types.js';
+import type {StandaloneSessionManager} from '../session/manager.js';
+import {resolveSession} from './session-resolver.js';
+import type {BundleResolver, SharedResources} from './session-resolver.js';
 import {asyncHandler} from './route-helpers.js';
 import {log} from '../logger.js';
 
@@ -28,6 +32,9 @@ import {log} from '../logger.js';
 export interface EvalRouterOptions {
   /** Returns the current agent bundle (may be hot-reloaded). */
   getBundle: () => AgentBundle;
+  sessionManager: StandaloneSessionManager;
+  bundleResolver: BundleResolver;
+  shared: SharedResources;
 }
 
 interface EvalRunBody {
@@ -56,25 +63,13 @@ interface EvalResultEvent {
 // ---------------------------------------------------------------------------
 
 /**
- * Derive the runtime's own base URL from the incoming request.
- * Used for internal fetch calls to /chat.
+ * Run a message through the session manager and collect the full response,
+ * tool calls, tool results, and usage from the SSE event stream.
  */
-function selfBaseUrl(req: Request): string {
-  const port = req.socket.localPort;
-  if (!port) {
-    throw new Error('Cannot determine server port from request socket');
-  }
-  // Always use 127.0.0.1 for internal loopback — req.socket.localAddress
-  // may return ::1 (IPv6) which produces malformed URLs like http://::1:3847
-  return `http://127.0.0.1:${String(port)}`;
-}
-
-/**
- * Send a message to the runtime's own /chat endpoint and collect the
- * full response, tool calls, and usage from the SSE stream.
- */
-async function queryChat(
-  baseUrl: string,
+async function queryViaSession(
+  sessionManager: StandaloneSessionManager,
+  bundleResolver: BundleResolver,
+  shared: SharedResources,
   message: string,
   model?: {provider: string; model: string},
   signal?: AbortSignal,
@@ -84,63 +79,60 @@ async function queryChat(
   toolResults: string[];
   usage?: {inputTokens: number; outputTokens: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number};
 }> {
-  const body: Record<string, unknown> = {
-    message,
-    session_id: `eval-${crypto.randomUUID()}`,
-  };
-  if (model) {
-    body['model'] = `${model.provider}/${model.model}`;
-  }
-
-  const res = await fetch(`${baseUrl}/chat`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(body),
-    signal,
+  const {session, toolContextFactory} = await resolveSession(undefined, {
+    sessionManager,
+    bundleResolver,
+    shared,
+    ...(model ? {pinnedModel: model} : {}),
   });
 
-  const sseText = await res.text();
+  const stream = sessionManager.runMessage(session.id, message, {
+    signal,
+    buildToolContext: toolContextFactory,
+  });
+
   let fullResponse = '';
   const toolCalls: Array<{name: string; parameters: Record<string, unknown>}> = [];
   const toolResults: string[] = [];
   let usage: {inputTokens: number; outputTokens: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number} | undefined;
 
-  for (const line of sseText.split('\n')) {
-    if (!line.startsWith('data: ')) continue;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse boundary
-      const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
-      if (event['type'] === 'text_delta') {
-        fullResponse += String(event['content'] ?? '');
-      } else if (event['type'] === 'tool_call_start') {
+  // Track tool names by tool_id so we can match results
+  const toolNames = new Map<string, string>();
+
+  try {
+    for await (const event of stream) {
+      if (signal?.aborted) break;
+
+      if (event.type === SSEEventType.TextDelta) {
+        fullResponse += event.content;
+      } else if (event.type === SSEEventType.ToolCallStart) {
+        toolNames.set(event.tool_id, event.tool_name);
         toolCalls.push({
-          name: String(event['tool_name'] ?? ''),
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- event field
-          parameters: (event['parameters'] ?? {}) as Record<string, unknown>,
+          name: event.tool_name,
+          parameters: event.parameters,
         });
-      } else if (event['type'] === 'tool_call_result') {
-        const result = String(event['result'] ?? event['error'] ?? '');
+      } else if (event.type === SSEEventType.ToolCallResult) {
+        const result = event.result ?? event.error ?? '';
         const preview = result.length > 300 ? result.substring(0, 300) + '...' : result;
         toolResults.push(preview);
-      } else if (event['type'] === 'done') {
-        if (event['usage']) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- event field
-          const u = event['usage'] as Record<string, unknown>;
-          const inputTokens = Number(u['input_tokens'] ?? 0);
-          const outputTokens = Number(u['output_tokens'] ?? 0);
+      } else if (event.type === SSEEventType.Done) {
+        if (event.usage) {
+          const inputTokens = event.usage.input_tokens;
+          const outputTokens = event.usage.output_tokens;
           if (inputTokens > 0 || outputTokens > 0) {
             usage = {
               inputTokens,
               outputTokens,
-              ...(u['cache_read_input_tokens'] ? {cacheReadInputTokens: Number(u['cache_read_input_tokens'])} : {}),
-              ...(u['cache_creation_input_tokens'] ? {cacheCreationInputTokens: Number(u['cache_creation_input_tokens'])} : {}),
+              ...(event.usage.cached_tokens ? {cacheReadInputTokens: event.usage.cached_tokens} : {}),
+              ...(event.usage.cache_creation_tokens ? {cacheCreationInputTokens: event.usage.cache_creation_tokens} : {}),
             };
           }
         }
       }
-    } catch (err) {
-      log.debug('eval_sse_parse_skip', {error: err instanceof Error ? err.message : String(err)});
     }
+  } finally {
+    // Destroy the eval session — eval sessions are ephemeral
+    await sessionManager.destroy(session.id);
   }
 
   // Estimate usage if runtime didn't report it
@@ -155,33 +147,35 @@ async function queryChat(
 }
 
 /**
- * Create a judge provider that uses the runtime's own /chat endpoint.
+ * Create a judge provider that runs messages through the session manager.
  */
-function createJudgeProvider(baseUrl: string): JudgeProvider {
+function createJudgeProvider(
+  sessionManager: StandaloneSessionManager,
+  bundleResolver: BundleResolver,
+  shared: SharedResources,
+): JudgeProvider {
   return {
     judge: async (prompt: string) => {
-      const res = await fetch(`${baseUrl}/chat`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          message: prompt,
-          session_id: `judge-${crypto.randomUUID()}`,
-        }),
-        signal: AbortSignal.timeout(120_000),
+      const {session, toolContextFactory} = await resolveSession(undefined, {
+        sessionManager,
+        bundleResolver,
+        shared,
       });
-      const sseText = await res.text();
+
+      const stream = sessionManager.runMessage(session.id, prompt, {
+        signal: AbortSignal.timeout(120_000),
+        buildToolContext: toolContextFactory,
+      });
+
       let result = '';
-      for (const line of sseText.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse boundary
-          const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
-          if (event['type'] === 'text_delta') {
-            result += String(event['content'] ?? '');
+      try {
+        for await (const event of stream) {
+          if (event.type === SSEEventType.TextDelta) {
+            result += event.content;
           }
-        } catch (err) {
-          log.debug('judge_sse_parse_skip', {error: err instanceof Error ? err.message : String(err)});
         }
+      } finally {
+        await sessionManager.destroy(session.id);
       }
       return result;
     },
@@ -216,7 +210,6 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated above
     const {evalNames, model} = body as unknown as EvalRunBody;
     const bundle = options.getBundle();
-    const baseUrl = selfBaseUrl(req);
 
     // Set up SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
@@ -227,7 +220,11 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
     const controller = new AbortController();
     res.on('close', () => controller.abort());
 
-    const judgeProvider = createJudgeProvider(baseUrl);
+    const judgeProvider = createJudgeProvider(
+      options.sessionManager,
+      options.bundleResolver,
+      options.shared,
+    );
     const modelName = model ? model.model : (bundle.config.models?.main?.model ?? 'unknown');
 
     log.info('eval_run_started', {evalNames, model: modelName, evalCount: evalNames.length});
@@ -258,8 +255,15 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
         const start = Date.now();
 
         try {
-          // Run the query through the runtime's chat
-          const queryResult = await queryChat(baseUrl, ev.query, model, controller.signal);
+          // Run the query through the session manager directly
+          const queryResult = await queryViaSession(
+            options.sessionManager,
+            options.bundleResolver,
+            options.shared,
+            ev.query,
+            model,
+            controller.signal,
+          );
 
           // Signal query done — ArenaPage uses this for the "judging" phase indicator
           sendSSE(res, {type: 'done', usage: queryResult.usage ? {
