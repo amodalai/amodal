@@ -16,8 +16,8 @@
 import {Router} from 'express';
 import type {Request, Response} from 'express';
 import type {AgentBundle} from '@amodalai/types';
-import {judgeAllAssertions, computeEvalCost, tryDeterministicAssertion} from '@amodalai/core';
-import type {JudgeProvider, EvalCostInfo, AssertionResult, DeterministicContext} from '@amodalai/core';
+import {evaluateAssertions, computeEvalCost} from '@amodalai/core';
+import type {JudgeProvider, EvalCostInfo, DeterministicContext} from '@amodalai/core';
 import {SSEEventType} from '../types.js';
 import type {StandaloneSessionManager} from '../session/manager.js';
 import {resolveSession} from './session-resolver.js';
@@ -297,34 +297,13 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
             turns: queryResult.turns,
           };
 
-          const assertionSlots: Array<{text: string; negated: boolean; result: AssertionResult | null}> = ev.assertions.map((a) => {
-            const det = tryDeterministicAssertion(a.text, a.negated, deterministicCtx);
-            return {
-              text: a.text,
-              negated: a.negated,
-              result: det ? {text: a.text, negated: a.negated, passed: det.passed, reason: det.reason} : null,
-            };
-          });
-
-          // Collect assertions that need LLM judging
-          const needsJudging = ev.assertions.filter((_, i) => assertionSlots[i].result === null);
-          const judgedResults = needsJudging.length > 0
-            ? await judgeAllAssertions(enrichedResponse, needsJudging, judgeProvider)
-            : [];
-
-          // Merge results back in order
-          let judgeIdx = 0;
-          const assertions: AssertionResult[] = assertionSlots.map((slot) => {
-            if (slot.result !== null) return slot.result;
-            return judgedResults[judgeIdx++];
-          });
-
-          const deterministicCount = assertionSlots.filter((s) => s.result !== null).length;
-          log.debug('eval_assertion_types', {
-            evalName,
-            deterministic: deterministicCount,
-            judged: needsJudging.length,
-          });
+          // Evaluate assertions: deterministic first, then LLM judge for the rest
+          const assertions = await evaluateAssertions(
+            enrichedResponse,
+            ev.assertions,
+            deterministicCtx,
+            judgeProvider,
+          );
 
           const passed = assertions.every((a) => a.passed);
 

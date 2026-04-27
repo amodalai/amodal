@@ -12,6 +12,25 @@
  * signaling the caller to fall through to the LLM judge.
  */
 
+import {judgeAllAssertions} from './eval-judge.js';
+import type {JudgeProvider} from './eval-judge.js';
+import type {AssertionResult} from './eval-types.js';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+export const DETERMINISTIC_KEYS = {
+  CONTAINS: 'contains',
+  REGEX: 'regex',
+  STARTS_WITH: 'starts_with',
+  LENGTH_BETWEEN: 'length_between',
+  TOOL_CALLED: 'tool_called',
+  TOOL_NOT_CALLED: 'tool_not_called',
+  MAX_LATENCY: 'max_latency',
+  MAX_TURNS: 'max_turns',
+} as const;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -44,12 +63,12 @@ export function tryDeterministicAssertion(
   const value = rawValue.trim();
 
   switch (key) {
-    case 'contains': {
+    case DETERMINISTIC_KEYS.CONTAINS: {
       const found = ctx.response.includes(value);
       const passed = negated ? !found : found;
       return {passed, reason: found ? `Response contains "${value}"` : `Response does not contain "${value}"`};
     }
-    case 'regex': {
+    case DETERMINISTIC_KEYS.REGEX: {
       try {
         const re = new RegExp(value);
         const found = re.test(ctx.response);
@@ -60,12 +79,12 @@ export function tryDeterministicAssertion(
         return null;
       }
     }
-    case 'starts_with': {
+    case DETERMINISTIC_KEYS.STARTS_WITH: {
       const found = ctx.response.startsWith(value);
       const passed = negated ? !found : found;
       return {passed, reason: found ? `Response starts with "${value}"` : `Response does not start with "${value}"`};
     }
-    case 'length_between': {
+    case DETERMINISTIC_KEYS.LENGTH_BETWEEN: {
       try {
         const parsed: unknown = JSON.parse(value);
         if (!Array.isArray(parsed) || parsed.length !== 2) return null;
@@ -79,23 +98,23 @@ export function tryDeterministicAssertion(
         return null;
       }
     }
-    case 'tool_called': {
+    case DETERMINISTIC_KEYS.TOOL_CALLED: {
       const found = ctx.toolCalls.some(tc => tc.name === value);
       const passed = negated ? !found : found;
       return {passed, reason: found ? `Tool "${value}" was called` : `Tool "${value}" was not called`};
     }
-    case 'tool_not_called': {
+    case DETERMINISTIC_KEYS.TOOL_NOT_CALLED: {
       const found = ctx.toolCalls.some(tc => tc.name === value);
       const passed = negated ? found : !found;
       return {passed, reason: found ? `Tool "${value}" was called` : `Tool "${value}" was not called`};
     }
-    case 'max_latency': {
+    case DETERMINISTIC_KEYS.MAX_LATENCY: {
       const maxMs = Number(value);
       if (Number.isNaN(maxMs)) return null;
       const passed = negated ? ctx.durationMs > maxMs : ctx.durationMs <= maxMs;
       return {passed, reason: `Duration: ${ctx.durationMs}ms (max: ${maxMs}ms)`};
     }
-    case 'max_turns': {
+    case DETERMINISTIC_KEYS.MAX_TURNS: {
       const maxTurns = Number(value);
       if (Number.isNaN(maxTurns)) return null;
       const passed = negated ? ctx.turns > maxTurns : ctx.turns <= maxTurns;
@@ -104,4 +123,45 @@ export function tryDeterministicAssertion(
     default:
       return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Shared evaluation pipeline
+// ---------------------------------------------------------------------------
+
+/**
+ * Evaluate assertions using deterministic checks first, falling through
+ * to the LLM judge for any that can't be resolved programmatically.
+ *
+ * This consolidates the split-try-merge pattern that was duplicated in
+ * both the core eval-runner and the runtime evals route.
+ */
+export async function evaluateAssertions(
+  enrichedResponse: string,
+  assertions: Array<{text: string; negated: boolean}>,
+  deterministicCtx: DeterministicContext,
+  judgeProvider: JudgeProvider,
+): Promise<AssertionResult[]> {
+  // Try deterministic assertions first
+  const assertionSlots: Array<{text: string; negated: boolean; result: AssertionResult | null}> = assertions.map((a) => {
+    const det = tryDeterministicAssertion(a.text, a.negated, deterministicCtx);
+    return {
+      text: a.text,
+      negated: a.negated,
+      result: det ? {text: a.text, negated: a.negated, passed: det.passed, reason: det.reason} : null,
+    };
+  });
+
+  // Collect assertions that need LLM judging
+  const needsJudging = assertions.filter((_, i) => assertionSlots[i].result === null);
+  const judgedResults = needsJudging.length > 0
+    ? await judgeAllAssertions(enrichedResponse, needsJudging, judgeProvider)
+    : [];
+
+  // Merge results back in order
+  let judgeIdx = 0;
+  return assertionSlots.map((slot) => {
+    if (slot.result !== null) return slot.result;
+    return judgedResults[judgeIdx++];
+  });
 }

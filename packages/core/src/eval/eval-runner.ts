@@ -6,11 +6,10 @@
 
 import type {AgentBundle} from '../repo/repo-types.js';
 import type {LoadedEval} from '../repo/repo-types.js';
-import type {EvalResult, EvalSuiteResult, EvalProgress, EvalCostInfo, EvalModelInfo, AssertionResult} from './eval-types.js';
+import type {EvalResult, EvalSuiteResult, EvalProgress, EvalCostInfo, EvalModelInfo} from './eval-types.js';
 import type {JudgeProvider} from './eval-judge.js';
-import {judgeAllAssertions} from './eval-judge.js';
 import {computeEvalCost, aggregateRunCost} from './eval-cost.js';
-import {tryDeterministicAssertion} from './deterministic-assertions.js';
+import {evaluateAssertions} from './deterministic-assertions.js';
 import type {DeterministicContext} from './deterministic-assertions.js';
 
 /**
@@ -115,26 +114,13 @@ async function runSingleEval(
       turns: toolCalls.length,
     };
 
-    // Try deterministic assertions first, fall through to LLM judge for the rest
-    const assertionSlots: Array<{text: string; negated: boolean; result: AssertionResult | null}> = ev.assertions.map((a) => {
-      const det = tryDeterministicAssertion(a.text, a.negated, deterministicCtx);
-      return {
-        text: a.text,
-        negated: a.negated,
-        result: det ? {text: a.text, negated: a.negated, passed: det.passed, reason: det.reason} : null,
-      };
-    });
-
-    const needsJudging = ev.assertions.filter((_, i) => assertionSlots[i].result === null);
-    const judgedResults = needsJudging.length > 0
-      ? await judgeAllAssertions(enrichedResponse, needsJudging, options.judgeProvider)
-      : [];
-
-    let judgeIdx = 0;
-    const assertions: AssertionResult[] = assertionSlots.map((slot) => {
-      if (slot.result !== null) return slot.result;
-      return judgedResults[judgeIdx++];
-    });
+    // Evaluate assertions: deterministic first, then LLM judge for the rest
+    const assertions = await evaluateAssertions(
+      enrichedResponse,
+      ev.assertions,
+      deterministicCtx,
+      options.judgeProvider,
+    );
 
     const passed = assertions.every((a) => a.passed);
 
