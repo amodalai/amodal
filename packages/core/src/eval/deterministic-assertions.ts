@@ -56,11 +56,12 @@ export function tryDeterministicAssertion(
   negated: boolean,
   ctx: DeterministicContext,
 ): {passed: boolean; reason: string} | null {
-  const match = assertionText.match(/^(\w+):\s*(.+)$/);
-  if (!match) return null;
-
-  const [, key, rawValue] = match;
-  const value = rawValue.trim();
+  const colonIdx = assertionText.indexOf(':');
+  if (colonIdx <= 0) return null;
+  const key = assertionText.slice(0, colonIdx);
+  if (!/^\w+$/.test(key)) return null;
+  const value = assertionText.slice(colonIdx + 1).trim();
+  if (!value) return null;
 
   switch (key) {
     case DETERMINISTIC_KEYS.CONTAINS: {
