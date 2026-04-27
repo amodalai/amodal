@@ -1,5 +1,14 @@
 # @amodalai/runtime-app
 
+## 0.3.38
+
+### Patch Changes
+
+- d215ab5: Rebrand from blue to teal accent colors and update logo to new geometric "A" mark
+- Updated dependencies [d215ab5]
+  - @amodalai/react@0.3.38
+  - @amodalai/types@0.3.38
+
 ## 0.3.37
 
 ### Patch Changes
