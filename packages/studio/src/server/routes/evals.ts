@@ -59,21 +59,21 @@ evalsRoutes.get('/api/evals/arena/models', async (c) => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by typeof check
       ? modelsRaw as Record<string, unknown>
       : undefined;
-    if (!models) return c.json({ models: [] });
+    // Don't early-return — still check providerStatuses even without explicit models config
 
-    const defaultModelsPerProvider: Record<string, string> = {
-      google: 'gemini-2.5-flash',
-      anthropic: 'claude-sonnet-4-20250514',
-      openai: 'gpt-4o-mini',
-      groq: 'llama-3.3-70b-versatile',
-      deepseek: 'deepseek-chat',
-      xai: 'grok-2',
+    const modelsPerProvider: Record<string, string[]> = {
+      google: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-3-flash-preview', 'gemini-3.1-pro-preview'],
+      anthropic: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-20250514', 'claude-opus-4-20250514'],
+      openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
+      groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
+      deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+      xai: ['grok-2', 'grok-3-mini'],
     };
 
     const result: Array<{name: string; provider: string; model: string}> = [];
-    const includedProviders = new Set<string>();
+    const includedModels = new Set<string>();
 
-    for (const [name, cfg] of Object.entries(models)) {
+    for (const [name, cfg] of Object.entries(models ?? {})) {
       if (cfg && typeof cfg === 'object' && 'provider' in cfg && 'model' in cfg) {
         const provider = String((cfg as Record<string, unknown>)['provider']);
         result.push({
@@ -81,11 +81,11 @@ evalsRoutes.get('/api/evals/arena/models', async (c) => {
           provider,
           model: String((cfg as Record<string, unknown>)['model']),
         });
-        includedProviders.add(provider);
+        includedModels.add(`${provider}/${String((cfg as Record<string, unknown>)['model'])}`);
       }
     }
 
-    // Add default models for providers with API keys set but not already configured
+    // Add all known models for providers with API keys set
     const providerStatuses = config['providerStatuses'];
     if (Array.isArray(providerStatuses)) {
       for (const status of providerStatuses) {
@@ -99,13 +99,14 @@ evalsRoutes.get('/api/evals/arena/models', async (c) => {
           const ps = status as Record<string, unknown>;
           const provider = String(ps['provider']);
           const keySet = Boolean(ps['keySet']);
-          if (keySet && !includedProviders.has(provider) && provider in defaultModelsPerProvider) {
-            result.push({
-              name: provider,
-              provider,
-              model: defaultModelsPerProvider[provider],
-            });
-            includedProviders.add(provider);
+          if (keySet && provider in modelsPerProvider) {
+            for (const model of modelsPerProvider[provider]) {
+              const key = `${provider}/${model}`;
+              if (!includedModels.has(key)) {
+                result.push({name: `${provider}/${model}`, provider, model});
+                includedModels.add(key);
+              }
+            }
           }
         }
       }
