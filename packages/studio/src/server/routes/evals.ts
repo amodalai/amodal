@@ -61,16 +61,56 @@ evalsRoutes.get('/api/evals/arena/models', async (c) => {
       : undefined;
     if (!models) return c.json({ models: [] });
 
+    const defaultModelsPerProvider: Record<string, string> = {
+      google: 'gemini-2.5-flash',
+      anthropic: 'claude-sonnet-4-20250514',
+      openai: 'gpt-4o-mini',
+      groq: 'llama-3.3-70b-versatile',
+      deepseek: 'deepseek-chat',
+      xai: 'grok-2',
+    };
+
     const result: Array<{name: string; provider: string; model: string}> = [];
+    const includedProviders = new Set<string>();
+
     for (const [name, cfg] of Object.entries(models)) {
       if (cfg && typeof cfg === 'object' && 'provider' in cfg && 'model' in cfg) {
+        const provider = String((cfg as Record<string, unknown>)['provider']);
         result.push({
           name,
-          provider: String((cfg as Record<string, unknown>)['provider']),
+          provider,
           model: String((cfg as Record<string, unknown>)['model']),
         });
+        includedProviders.add(provider);
       }
     }
+
+    // Add default models for providers with API keys set but not already configured
+    const providerStatuses = config['providerStatuses'];
+    if (Array.isArray(providerStatuses)) {
+      for (const status of providerStatuses) {
+        if (
+          status &&
+          typeof status === 'object' &&
+          'provider' in status &&
+          'keySet' in status
+        ) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by typeof + in checks
+          const ps = status as Record<string, unknown>;
+          const provider = String(ps['provider']);
+          const keySet = Boolean(ps['keySet']);
+          if (keySet && !includedProviders.has(provider) && provider in defaultModelsPerProvider) {
+            result.push({
+              name: provider,
+              provider,
+              model: defaultModelsPerProvider[provider],
+            });
+            includedProviders.add(provider);
+          }
+        }
+      }
+    }
+
     return c.json({ models: result });
   } catch {
     return c.json({ models: [] });

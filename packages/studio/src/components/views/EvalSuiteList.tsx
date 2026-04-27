@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { FlaskConical, Play, Loader2 } from 'lucide-react';
+import { FlaskConical, Play, Loader2, ChevronDown } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,6 +31,19 @@ interface Props {
 export function EvalSuiteList({ suites, onRefresh }: Props) {
   const [runningName, setRunningName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   const handleRun = useCallback(
     async (evalName: string) => {
@@ -80,41 +93,93 @@ export function EvalSuiteList({ suites, onRefresh }: Props) {
         </div>
       )}
 
-      {suites.map((suite) => (
-        <div
-          key={suite.id}
-          className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3"
-        >
-          <div className="flex items-center gap-3">
-            <FlaskConical className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <p className="text-sm font-medium text-foreground">{suite.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {getCaseCount(suite.config)} test case
-                {getCaseCount(suite.config) !== 1 ? 's' : ''}
-              </p>
-            </div>
-          </div>
+      {suites.map((suite) => {
+        const expanded = expandedIds.has(suite.id);
+        const config = suite.config;
+        const title = typeof config['title'] === 'string' ? config['title'] : undefined;
+        const description =
+          typeof config['description'] === 'string' ? config['description'] : undefined;
+        const query = typeof config['query'] === 'string' ? config['query'] : undefined;
+        const assertions = Array.isArray(config['assertions'])
+          ? (config['assertions'] as unknown[])
+          : undefined;
 
-          <button
-            onClick={() => void handleRun(suite.name)}
-            disabled={runningName !== null}
-            className="flex items-center gap-1.5 rounded-md bg-primary-solid px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        return (
+          <div
+            key={suite.id}
+            className="rounded-lg border border-border bg-card"
           >
-            {runningName === suite.name ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Running
-              </>
-            ) : (
-              <>
-                <Play className="h-3.5 w-3.5" />
-                Run
-              </>
+            <div className="flex items-center justify-between px-4 py-3">
+              <button
+                type="button"
+                onClick={() => toggleExpanded(suite.id)}
+                className="flex items-center gap-3 text-left"
+              >
+                <ChevronDown
+                  className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? 'rotate-0' : '-rotate-90'}`}
+                />
+                <FlaskConical className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">{suite.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {getCaseCount(suite.config)} test case
+                    {getCaseCount(suite.config) !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => void handleRun(suite.name)}
+                disabled={runningName !== null}
+                className="flex items-center gap-1.5 rounded-md bg-primary-solid px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {runningName === suite.name ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Running
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3.5 w-3.5" />
+                    Run
+                  </>
+                )}
+              </button>
+            </div>
+
+            {expanded && (
+              <div className="border-t border-border px-4 py-3 space-y-2">
+                {title && (
+                  <p className="text-sm font-medium text-foreground">{title}</p>
+                )}
+                {description && (
+                  <p className="text-xs text-muted-foreground">{description}</p>
+                )}
+                {query && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Query</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap rounded-md bg-muted px-3 py-2">
+                      {query}
+                    </p>
+                  </div>
+                )}
+                {assertions && assertions.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Assertions</p>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {assertions.map((a, i) => (
+                        <li key={i} className="text-sm text-foreground">
+                          {typeof a === 'string' ? a : JSON.stringify(a)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
-          </button>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
