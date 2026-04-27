@@ -19,6 +19,7 @@ import type {AgentBundle} from '@amodalai/types';
 import {judgeAllAssertions, computeEvalCost} from '@amodalai/core';
 import type {JudgeProvider, EvalCostInfo} from '@amodalai/core';
 import {asyncHandler} from './route-helpers.js';
+import {log} from '../logger.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,10 +60,11 @@ interface EvalResultEvent {
  * Used for internal fetch calls to /chat.
  */
 function selfBaseUrl(req: Request): string {
-  // Use the server's actual listening address, not the Host header
-  // (Host header is user-controllable → SSRF risk)
-  const addr = req.socket.localAddress ?? '127.0.0.1';
-  const port = req.socket.localPort ?? 3847;
+  const addr = req.socket.localAddress;
+  const port = req.socket.localPort;
+  if (!addr || !port) {
+    throw new Error('Cannot determine server address from request socket');
+  }
   return `http://${addr}:${String(port)}`;
 }
 
@@ -135,7 +137,9 @@ async function queryChat(
           }
         }
       }
-    } catch { /* skip malformed SSE lines */ }
+    } catch (err) {
+      log.debug('eval_sse_parse_skip', {error: err instanceof Error ? err.message : String(err)});
+    }
   }
 
   // Estimate usage if runtime didn't report it
@@ -170,11 +174,13 @@ function createJudgeProvider(baseUrl: string): JudgeProvider {
         if (!line.startsWith('data: ')) continue;
         try {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse boundary
-      const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
+          const event = JSON.parse(line.substring(6)) as Record<string, unknown>;
           if (event['type'] === 'text_delta') {
             result += String(event['content'] ?? '');
           }
-        } catch { /* skip */ }
+        } catch (err) {
+          log.debug('judge_sse_parse_skip', {error: err instanceof Error ? err.message : String(err)});
+        }
       }
       return result;
     },
@@ -222,6 +228,8 @@ export function createEvalRouter(options: EvalRouterOptions): Router {
 
     const judgeProvider = createJudgeProvider(baseUrl);
     const modelName = model ? model.model : (bundle.config.models?.main?.model ?? 'unknown');
+
+    log.info('eval_run_started', {evalNames, model: modelName, evalCount: evalNames.length});
 
     try {
       for (const evalName of evalNames) {
