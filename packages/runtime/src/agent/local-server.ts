@@ -60,6 +60,7 @@ import {createStoresRouter} from './routes/stores.js';
 import {createSessionsHistoryRouter} from '../routes/sessions-history.js';
 import {createFilesRouter} from './routes/files.js';
 import {createContextRouter} from './routes/context.js';
+import {createEvalRouter} from '../routes/evals.js';
 import {errorHandler} from '../middleware/error-handler.js';
 import {asyncHandler} from '../routes/route-helpers.js';
 import type {LocalServerConfig} from './agent-types.js';
@@ -585,6 +586,9 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   if (storeBackend) {
     app.use(createStoresRouter({repo: bundle, storeBackend, appId}));
   }
+
+  // Eval runner
+  app.use(createEvalRouter({getBundle}));
 
   // Build user pages (if pages/ directory exists)
   let builtPages: BuiltPage[] = [];

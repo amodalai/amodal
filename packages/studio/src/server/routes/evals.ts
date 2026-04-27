@@ -45,7 +45,34 @@ evalsRoutes.get('/api/evals/runs/by-eval/:name', async (c) => {
 });
 
 // Arena models — returns available models for arena comparison
-evalsRoutes.get('/api/evals/arena/models', async (c) =>
-  // TODO: return configured models from agent config
-   c.json({ models: [] })
-);
+evalsRoutes.get('/api/evals/arena/models', async (c) => {
+  const { runtimeUrl } = await resolveRuntimeContext(c.req.raw);
+  try {
+    const res = await fetch(`${runtimeUrl}/api/config`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return c.json({ models: [] });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse boundary
+    const config = await res.json() as Record<string, unknown>;
+    const modelsRaw = config['models'];
+    const models = typeof modelsRaw === 'object' && modelsRaw !== null
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by typeof check
+      ? modelsRaw as Record<string, unknown>
+      : undefined;
+    if (!models) return c.json({ models: [] });
+
+    const result: Array<{name: string; provider: string; model: string}> = [];
+    for (const [name, cfg] of Object.entries(models)) {
+      if (cfg && typeof cfg === 'object' && 'provider' in cfg && 'model' in cfg) {
+        result.push({
+          name,
+          provider: String((cfg as Record<string, unknown>)['provider']),
+          model: String((cfg as Record<string, unknown>)['model']),
+        });
+      }
+    }
+    return c.json({ models: result });
+  } catch {
+    return c.json({ models: [] });
+  }
+});
