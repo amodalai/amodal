@@ -202,7 +202,7 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
     expect(text).toContain('SENTINEL_FILE_TOOLS_9923');
   }, 45_000);
 
-  it('runtime runs eval and returns SSE results', async () => {
+  it('runtime runs eval and returns results with assertions', async () => {
     const res = await fetch(`http://localhost:${RUNTIME_PORT}/api/evals/run`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -211,7 +211,16 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
     });
     expect(res.status).toBe(200);
     const text = await res.text();
-    expect(text).toContain('eval_complete');
+    // Parse the eval_complete event
+    const evalLine = text.split('\n').find((l) => l.includes('eval_complete'));
+    expect(evalLine).toBeDefined();
+    const event = JSON.parse(evalLine!.replace('data: ', '')) as Record<string, unknown>;
+    expect(event['evalName']).toBe('math-check');
+    expect(typeof event['passed']).toBe('boolean');
+    const result = event['result'] as Record<string, unknown>;
+    expect(result['response']).toBeDefined();
+    expect(Array.isArray(result['assertions'])).toBe(true);
+    expect(result['durationMs']).toBeDefined();
   }, 45_000);
 
   it('runtime runs arena eval with specified model', async () => {
@@ -226,6 +235,10 @@ describe.skipIf(!!skipReason)('subprocess smoke tests', () => {
     });
     expect(res.status).toBe(200);
     const text = await res.text();
-    expect(text).toContain('eval_complete');
+    const evalLine = text.split('\n').find((l) => l.includes('eval_complete'));
+    expect(evalLine).toBeDefined();
+    const event = JSON.parse(evalLine!.replace('data: ', '')) as Record<string, unknown>;
+    expect(event['evalName']).toBe('math-check');
+    expect(typeof event['passed']).toBe('boolean');
   }, 45_000);
 });

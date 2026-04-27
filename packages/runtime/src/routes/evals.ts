@@ -59,8 +59,11 @@ interface EvalResultEvent {
  * Used for internal fetch calls to /chat.
  */
 function selfBaseUrl(req: Request): string {
-  const host = req.headers['host'] ?? 'localhost:3000';
-  return `http://${host}`;
+  // Use the server's actual listening address, not the Host header
+  // (Host header is user-controllable → SSRF risk)
+  const addr = req.socket.localAddress ?? '127.0.0.1';
+  const port = req.socket.localPort ?? 3847;
+  return `http://${addr}:${String(port)}`;
 }
 
 /**
@@ -80,7 +83,7 @@ async function queryChat(
 }> {
   const body: Record<string, unknown> = {
     message,
-    session_id: `eval-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    session_id: `eval-${crypto.randomUUID()}`,
   };
   if (model) {
     body['model'] = `${model.provider}/${model.model}`;
@@ -157,7 +160,7 @@ function createJudgeProvider(baseUrl: string): JudgeProvider {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           message: prompt,
-          session_id: `judge-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          session_id: `judge-${crypto.randomUUID()}`,
         }),
         signal: AbortSignal.timeout(120_000),
       });
