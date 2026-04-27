@@ -41,6 +41,8 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-2.5-pro': {inputPerMToken: 1_250_000, outputPerMToken: 10_000_000},
   'gemini-2.5-flash': {inputPerMToken: 300_000, outputPerMToken: 2_500_000},
   'gemini-2.0-flash': {inputPerMToken: 100_000, outputPerMToken: 400_000},
+  'gemini-3-flash-preview': {inputPerMToken: 300_000, outputPerMToken: 2_500_000},
+  'gemini-3.1-pro-preview': {inputPerMToken: 1_250_000, outputPerMToken: 10_000_000},
   // DeepSeek — source: api-docs.deepseek.com (both models same price)
   'deepseek-chat': {inputPerMToken: 280_000, outputPerMToken: 420_000},
   'deepseek-reasoner': {inputPerMToken: 280_000, outputPerMToken: 420_000},
