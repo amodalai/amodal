@@ -1,5 +1,20 @@
 # @amodalai/runtime
 
+## 0.3.37
+
+### Patch Changes
+
+- 6d1aff9: Add deterministic eval assertions — skip LLM judge for programmatic checks
+
+  New `key: value` assertion format: contains, regex, starts_with, length_between,
+  tool_called, tool_not_called, max_latency, max_turns. Plain English assertions
+  still go to the LLM judge. Both types can be mixed in the same eval.
+
+- Updated dependencies [6d1aff9]
+  - @amodalai/core@0.3.37
+  - @amodalai/types@0.3.37
+  - @amodalai/db@0.3.37
+
 ## 0.3.36
 
 ### Patch Changes

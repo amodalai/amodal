@@ -1,5 +1,12 @@
 # @amodalai/studio
 
+## 0.3.37
+
+### Patch Changes
+
+- @amodalai/react@0.3.37
+- @amodalai/db@0.3.37
+
 ## 0.3.36
 
 ### Patch Changes
