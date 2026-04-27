@@ -386,14 +386,12 @@ export function CompareTable({ results, runningModel, runPhase, runStartTime }: 
                           {r.error}
                         </div>
                       )}
-                      {r.response && (
-                        <div>
-                          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Response</div>
-                          <div className="text-xs text-foreground bg-card border border-border rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
-                            {r.response}
-                          </div>
+                      <div>
+                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Response</div>
+                        <div className="text-xs text-foreground bg-card border border-border rounded px-3 py-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words">
+                          {r.response || <span className="text-muted-foreground italic">(empty response)</span>}
                         </div>
-                      )}
+                      </div>
                       {r.toolCalls.length > 0 && (
                         <div>
                           <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Tool Calls</div>
