@@ -5,6 +5,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { AgentOffline } from '@/components/AgentOffline';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import {
@@ -190,25 +191,25 @@ function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
           <div className="text-sm font-medium truncate">{pkg.displayName}</div>
           <div className="text-[11px] font-mono text-muted-foreground truncate">{pkg.name}</div>
         </div>
-        {pkg.isFulfilled ? (
-          <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ Configured</span>
-        ) : pkg.oauth?.available ? (
+        {pkg.isFulfilled && (
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 mr-2">✓ Configured</span>
+        )}
+        {!pkg.isFulfilled && pkg.oauth?.available && (
           <button
             type="button"
             onClick={() => void handleConnect()}
             disabled={connecting}
-            className="text-xs px-3 py-1 rounded bg-primary-solid text-white hover:opacity-90 disabled:opacity-50"
+            className="text-xs px-3 py-1 rounded bg-primary-solid text-white hover:opacity-90 disabled:opacity-50 mr-2"
           >
             {connecting ? 'Opening…' : `Connect ${pkg.oauth.appKey}`}
           </button>
-        ) : pkg.oauth && !pkg.oauth.available ? (
-          <span
-            className="text-xs text-muted-foreground"
-            title={`Set ${pkg.oauth.appKey.toUpperCase()}_CLIENT_ID and _CLIENT_SECRET in .env to enable OAuth`}
-          >
-            Set OAuth creds to connect
-          </span>
-        ) : null}
+        )}
+        <Link
+          to={`../connections/${encodeURIComponent(pkg.name)}`}
+          className="text-xs text-primary hover:underline whitespace-nowrap"
+        >
+          Configure →
+        </Link>
       </div>
       {oauthError && (
         <p className="text-[11px] text-destructive pl-8">OAuth start failed: {oauthError}</p>

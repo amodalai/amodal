@@ -743,6 +743,98 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     }
   }
 
+  // ---- Secrets write + per-connection detail -----------------------------
+
+  app.use('/api/secrets', express.json({ limit: '64kb' }));
+  app.post('/api/secrets/:name', (req, res) => {
+    const name = req.params.name;
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
+      res.status(400).json({ error: 'Secret name must be uppercase with underscores (e.g. SLACK_BOT_TOKEN)' });
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const value = typeof body['value'] === 'string' ? body['value'].trim() : '';
+    if (!value) {
+      res.status(400).json({ error: 'value is required' });
+      return;
+    }
+    process.env[name] = value;
+    persistSecret(name, value);
+    res.json({ name, set: true });
+  });
+
+  /**
+   * Per-package connection detail — what the studio's per-connection
+   * configure page reads. Returns the full amodal block (auth, oauth)
+   * plus per-envVar set/unset and oauth.available so the page can branch
+   * its UI on auth type without re-deriving from the package list.
+   */
+  app.get('/api/connections/:packageName', (req, res) => {
+    void (async () => {
+      const packageName = decodeURIComponent(req.params.packageName);
+      const bundleData = getBundle();
+      for (const conn of bundleData.connections.values()) {
+        const pkgDir = findPackageRoot(conn.location);
+        if (!pkgDir) continue;
+        const pkgJsonPath = path.join(pkgDir, 'package.json');
+        if (!existsSync(pkgJsonPath)) continue;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing trusted local JSON
+          const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as {
+            name?: string;
+            amodal?: {
+              displayName?: string;
+              name?: string;
+              description?: string;
+              icon?: string;
+              category?: string;
+              auth?: {
+                type?: string;
+                envVars?: Record<string, string>;
+                credentials?: Array<{ token?: string; envVar?: string; description?: string }>;
+              };
+              oauth?: { appKey: string; authorizeUrl: string; tokenUrl: string; scopes?: string[] };
+            };
+          };
+          if (pkg.name !== packageName || !pkg.amodal) continue;
+          const auth = pkg.amodal.auth ?? {};
+          const envVarsRaw = auth.envVars ?? {};
+          const envVars = Object.entries(envVarsRaw).map(([n, description]) => ({
+            name: n,
+            description,
+            set: !!process.env[n],
+          }));
+          let oauth: { appKey: string; available: boolean; scopes?: string[]; reason?: 'no_credentials' } | undefined;
+          if (pkg.amodal.oauth?.appKey) {
+            const upper = pkg.amodal.oauth.appKey.toUpperCase();
+            const haveCreds = !!process.env[`${upper}_CLIENT_ID`] && !!process.env[`${upper}_CLIENT_SECRET`];
+            oauth = haveCreds
+              ? { appKey: pkg.amodal.oauth.appKey, available: true, scopes: pkg.amodal.oauth.scopes }
+              : { appKey: pkg.amodal.oauth.appKey, available: false, scopes: pkg.amodal.oauth.scopes, reason: 'no_credentials' };
+          }
+          res.json({
+            name: pkg.name,
+            displayName: pkg.amodal.displayName ?? pkg.amodal.name ?? pkg.name,
+            description: pkg.amodal.description ?? null,
+            icon: pkg.amodal.icon ?? null,
+            category: pkg.amodal.category ?? null,
+            authType: auth.type ?? 'unknown',
+            envVars,
+            oauth: oauth ?? null,
+          });
+          return;
+        } catch {
+          // Skip malformed package.json
+        }
+      }
+      res.status(404).json({ error: `Package '${packageName}' not found in installed connections` });
+    })().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    });
+  });
+
   // ---- end OAuth broker --------------------------------------------------
 
   // Getting Started endpoint — returns per-package auth requirements
