@@ -133,8 +133,25 @@ export const AmodalConfigSchema = z.object({
       model: z.string().min(1).optional(),
     })
     .optional(),
-  /** Installed npm packages to load (content type detected from package structure) */
-  packages: z.array(z.string()).optional(),
+  /**
+   * Installed npm packages to load. Each entry is either:
+   *   - A bare string `"@scope/connection-foo"` — load every sub-thing in
+   *     the package (connections, skills, automations, knowledge, stores,
+   *     tools, channels). Default for single-role packages.
+   *   - An object `{ package, use }` — load only the listed sub-things.
+   *     Each `use` entry is `"<kind>.<name>"`, e.g. `"connections.slack"`
+   *     or `"channels.bot"`. Use this when a package ships multiple
+   *     roles and the agent only wants a subset.
+   */
+  packages: z.array(
+    z.union([
+      z.string().min(1),
+      z.object({
+        package: z.string().min(1),
+        use: z.array(z.string().min(1)).optional(),
+      }),
+    ]),
+  ).optional(),
   mcp: z
     .object({
       /** MCP servers to connect to as a client */
@@ -189,6 +206,46 @@ export const AmodalConfigSchema = z.object({
 });
 
 export type AmodalConfig = z.infer<typeof AmodalConfigSchema>;
+
+/**
+ * One entry from amodal.json#packages, normalized into the rich shape.
+ * A bare-string entry becomes `{ package, use: undefined }`, meaning
+ * "load every sub-thing".
+ */
+export interface NormalizedPackageEntry {
+  package: string;
+  /** When present, only sub-things with `<kind>.<name>` keys in this set load. */
+  use?: string[];
+}
+
+export function normalizePackageEntry(
+  entry: NonNullable<AmodalConfig['packages']>[number],
+): NormalizedPackageEntry {
+  if (typeof entry === 'string') return { package: entry };
+  return entry.use ? { package: entry.package, use: entry.use } : { package: entry.package };
+}
+
+/**
+ * Build an `accept(name)` predicate for a given sub-thing kind, based on
+ * a package entry's `use` list. When `use` is undefined the predicate
+ * accepts everything ("include all" default).
+ *
+ * `kind` examples: `'connections'`, `'skills'`, `'channels'`, etc.
+ */
+export type SubthingKind = 'connections' | 'skills' | 'automations' | 'knowledge' | 'stores' | 'tools' | 'channels';
+
+export function buildSubthingFilter(
+  use: string[] | undefined,
+  kind: SubthingKind,
+): (name: string) => boolean {
+  if (!use || use.length === 0) return () => true;
+  const accepted = new Set<string>();
+  for (const entry of use) {
+    const [k, n] = entry.split('.');
+    if (k === kind && n) accepted.add(n);
+  }
+  return (name) => accepted.has(name);
+}
 
 /**
  * Options for parseConfigJson.

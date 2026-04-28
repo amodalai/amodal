@@ -252,4 +252,87 @@ describe('resolveAllPackages', () => {
     expect(result.connections.size).toBe(1);
     expect(result.connections.has('custom')).toBe(true);
   });
+
+  // ---------------------------------------------------------------------------
+  // `use:` filter — opt into a subset of a multi-role package
+  // ---------------------------------------------------------------------------
+
+  it('rich entry without use loads everything (same as bare string)', async () => {
+    // Multi-role package: ships connections/foo + connections/bar
+    await setupConnectionPackage(tmpDir, '@org/multi', 'foo', {
+      'spec.json': makeSpec(),
+      'access.json': makeAccess(),
+    });
+    await setupConnectionPackage(tmpDir, '@org/multi', 'bar', {
+      'spec.json': makeSpec(),
+      'access.json': makeAccess(),
+    });
+
+    const result = await resolveAllPackages({
+      repoPath: tmpDir,
+      config: makeConfig({packages: [{package: '@org/multi'}]}),
+    });
+    expect(result.connections.size).toBe(2);
+    expect(result.connections.has('foo')).toBe(true);
+    expect(result.connections.has('bar')).toBe(true);
+  });
+
+  it('use filter only loads listed connections, ignoring siblings', async () => {
+    await setupConnectionPackage(tmpDir, '@org/multi', 'foo', {
+      'spec.json': makeSpec(),
+      'access.json': makeAccess(),
+    });
+    await setupConnectionPackage(tmpDir, '@org/multi', 'bar', {
+      'spec.json': makeSpec(),
+      'access.json': makeAccess(),
+    });
+
+    const result = await resolveAllPackages({
+      repoPath: tmpDir,
+      config: makeConfig({
+        packages: [{package: '@org/multi', use: ['connections.foo']}],
+      }),
+    });
+    expect(result.connections.size).toBe(1);
+    expect(result.connections.has('foo')).toBe(true);
+    expect(result.connections.has('bar')).toBe(false);
+  });
+
+  it('use filter is per-kind (connections.X does not match channels.X)', async () => {
+    // Package ships a connection and a channel both named 'slack'.
+    await setupConnectionPackage(tmpDir, '@org/slack', 'slack', {
+      'spec.json': makeSpec(),
+      'access.json': makeAccess(),
+    });
+    // Hand-build channel folder
+    const channelDir = path.join(
+      tmpDir, 'node_modules', '@org', 'slack', 'channels', 'slack',
+    );
+    await fs.mkdir(channelDir, {recursive: true});
+    await fs.writeFile(
+      path.join(channelDir, 'channel.json'),
+      JSON.stringify({type: 'slack', config: {}}),
+    );
+
+    // Pick the connection only
+    const onlyConn = await resolveAllPackages({
+      repoPath: tmpDir,
+      config: makeConfig({
+        packages: [{package: '@org/slack', use: ['connections.slack']}],
+      }),
+    });
+    expect(onlyConn.connections.has('slack')).toBe(true);
+    expect(onlyConn.channels).toHaveLength(0);
+
+    // Pick the channel only
+    const onlyChan = await resolveAllPackages({
+      repoPath: tmpDir,
+      config: makeConfig({
+        packages: [{package: '@org/slack', use: ['channels.slack']}],
+      }),
+    });
+    expect(onlyChan.connections.size).toBe(0);
+    expect(onlyChan.channels).toHaveLength(1);
+    expect(onlyChan.channels[0].channelType).toBe('slack');
+  });
 });
