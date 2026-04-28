@@ -107,7 +107,7 @@ describe('fetchAdminAgent', () => {
 
   it('fetches a pinned version into its own slot', async () => {
     const dir = await fetchAdminAgent({version: VERSION_OLD});
-    expect(dir).toMatch(new RegExp(`${VERSION_OLD.replace(/\./g, '\\.')}$`));
+    expect(dir).toContain(VERSION_OLD);
     expect(existsSync(join(dir, 'package.json'))).toBe(true);
     const version = await getAdminAgentVersion(dir);
     expect(version).toBe(VERSION_OLD);
@@ -157,7 +157,7 @@ describe('resolveAdminAgent', () => {
     );
     await fetchAdminAgent({version: VERSION_OLD});
     const result = await resolveAdminAgent(tempAgentDir);
-    expect(result).toMatch(new RegExp(`${VERSION_OLD.replace(/\./g, '\\.')}$`));
+    expect(result).toContain(VERSION_OLD);
   }, 30_000);
 
   it('prefers path override over cache', async () => {

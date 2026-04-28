@@ -230,7 +230,7 @@ export async function getAdminAgentVersion(agentDir: string): Promise<string | n
  */
 export async function checkRegistryVersion(registryUrl?: string): Promise<string | null> {
   const registry = registryUrl ?? DEFAULT_REGISTRY;
-  const encodedPkg = ADMIN_AGENT_NPM.replace('/', '%2f');
+  const encodedPkg = ADMIN_AGENT_NPM.replaceAll('/', '%2f');
   const url = `${registry}/${encodedPkg}/latest`;
 
   try {
