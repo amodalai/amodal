@@ -365,6 +365,8 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
         accessConfigs,
         isDelegated: false,
       }),
+      loadedConnections: bundle.connections,
+      scopeContext,
     }));
   }
 

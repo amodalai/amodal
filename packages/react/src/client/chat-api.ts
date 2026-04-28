@@ -32,6 +32,8 @@ export interface ChatStreamRequest {
   session_id?: string;
   session_type?: string;
   deploy_id?: string;
+  scope_id?: string;
+  context?: Record<string, string>;
 }
 
 export interface SessionInfo {
@@ -60,6 +62,8 @@ export async function* streamChat(
   if (request.session_id) body['session_id'] = request.session_id;
   if (request.session_type) body['session_type'] = request.session_type;
   if (request.deploy_id) body['deploy_id'] = request.deploy_id;
+  if (request.scope_id) body['scope_id'] = request.scope_id;
+  if (request.context) body['context'] = request.context;
 
   yield* streamSSE(url, body, {
     signal,

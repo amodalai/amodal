@@ -399,6 +399,10 @@ export interface WidgetConfig {
   initialMessage?: string;
   /** Load an existing session on mount (read-only history view). Takes precedence over initialMessage. */
   resumeSessionId?: string;
+  /** Scope ID for multi-tenant session isolation. Scopes sessions, memory, and stores per value. */
+  scopeId?: string;
+  /** Context key-value pairs injected into connection API calls via contextInjection. */
+  scopeContext?: Record<string, string>;
   /** Called when the SSE stream ends (agent finishes responding). */
   onStreamEnd?: () => void;
   /** Called when a session ID is received from the server (first stream init). */
