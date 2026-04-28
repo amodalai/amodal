@@ -12,7 +12,7 @@ import {spawn} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createLocalServer, initLogLevel, interceptConsole, log} from '@amodalai/runtime';
-import {ensureAdminAgent} from '@amodalai/core';
+import {ensureAdminAgent, getAdminAgentConfig, getAdminAgentVersion, checkRegistryVersion} from '@amodalai/core';
 import {findRepoRoot} from '../shared/repo-discovery.js';
 import {createServer} from 'node:net';
 import {runConnectionPreflight, printPreflightTable} from '../shared/connection-preflight.js';
@@ -286,6 +286,24 @@ async function spawnAdminAgent(opts: {
     });
     return null;
   }
+
+  // Non-blocking upgrade check for unpinned admin agent
+  void (async () => {
+    try {
+      const config = await getAdminAgentConfig(opts.repoPath);
+      if (config.pathOverride || config.pinnedVersion) return;
+      const cached = await getAdminAgentVersion(adminAgentPath);
+      if (!cached) return;
+      const registry = await checkRegistryVersion();
+      if (registry && registry !== cached) {
+        process.stderr.write(
+          `[admin] Admin agent v${cached} — v${registry} available (run \`amodal update --admin-agent\` to upgrade)\n`,
+        );
+      }
+    } catch {
+      // Non-blocking — silently ignore
+    }
+  })().catch(() => {});
 
   // Verify the admin agent directory has an amodal.json
   if (!existsSync(path.join(adminAgentPath, 'amodal.json'))) {
