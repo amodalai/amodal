@@ -186,6 +186,10 @@ export const AmodalConfigSchema = z.object({
    * Each channel's config block is validated by the plugin's own Zod schema
    * at runtime — the core schema only enforces the top-level shape.
    */
+  /** Local path override for the admin agent (skips the global cache entirely). */
+  adminAgent: z.string().optional(),
+  /** Pin the admin agent to a specific npm version (e.g. "0.5.0"). */
+  adminAgentVersion: z.string().optional(),
 });
 
 export type AmodalConfig = z.infer<typeof AmodalConfigSchema>;
