@@ -11,7 +11,11 @@ export {
   ensureAdminAgent,
   getAdminAgentVersion,
   getAdminCacheDir,
+  getAdminAgentConfig,
+  checkRegistryVersion,
+  AdminAgentFetchError,
 } from './admin-agent.js';
+export type {AdminAgentConfig, FetchOptions} from './admin-agent.js';
 
 export {loadAdminAgent} from './admin-loader.js';
 export type {AdminAgentContent} from './admin-loader.js';
