@@ -93,8 +93,14 @@ export interface AmodalConfig {
     postgresUrl?: string;
   };
   webTools?: WebToolsConfig;
-  /** Installed npm packages to load (content type detected from package structure) */
-  packages?: string[];
+  /**
+   * Installed npm packages to load. Each entry is either:
+   *   - A bare string `"@scope/connection-foo"` — load every sub-thing in
+   *     the package (default for single-role packages).
+   *   - `{ package, use }` — load only the listed sub-things. `use`
+   *     entries are `"<kind>.<name>"` strings, e.g. `"connections.slack"`.
+   */
+  packages?: Array<string | { package: string; use?: string[] }>;
   mcp?: {
     servers: Record<string, {
       transport: 'stdio' | 'sse' | 'http';

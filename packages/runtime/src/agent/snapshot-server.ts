@@ -92,7 +92,7 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
       const result = await bootstrapChannels({
         channels: bundle.channels,
         repoPath: '', // No local channel discovery in snapshot mode
-        packages: bundle.config.packages,
+        packages: bundle.config.packages?.map((e) => (typeof e === 'string' ? e : e.package)),
         sessionMapper: channelMapper,
         sessionManager,
         buildSessionComponents: () => buildSessionComponents({

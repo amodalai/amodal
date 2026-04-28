@@ -11,6 +11,8 @@ import {
   resolveEnvValues,
   parseConfigJson,
   AmodalConfigSchema,
+  normalizePackageEntry,
+  buildSubthingFilter,
 } from './config-schema.js';
 import {RepoError} from './repo-types.js';
 
@@ -264,5 +266,106 @@ describe('parseConfigJson', () => {
     // With flag — succeeds, keeps the literal
     const config = parseConfigJson(json, {skipEnvResolution: true});
     expect(config.models?.['main']?.model).toBe('env:NONEXISTENT');
+  });
+});
+
+describe('packages — bare-string and rich-object entries', () => {
+  it('AmodalConfigSchema accepts a bare string entry', () => {
+    const result = AmodalConfigSchema.parse({
+      name: 'a',
+      version: '1',
+      packages: ['@scope/connection-foo'],
+    });
+    expect(result.packages).toEqual(['@scope/connection-foo']);
+  });
+
+  it('AmodalConfigSchema accepts a rich-object entry with use[]', () => {
+    const result = AmodalConfigSchema.parse({
+      name: 'a',
+      version: '1',
+      packages: [
+        {package: '@scope/multi', use: ['connections.slack', 'channels.bot']},
+      ],
+    });
+    expect(result.packages).toEqual([
+      {package: '@scope/multi', use: ['connections.slack', 'channels.bot']},
+    ]);
+  });
+
+  it('AmodalConfigSchema accepts a mix of bare and rich entries', () => {
+    const result = AmodalConfigSchema.parse({
+      name: 'a',
+      version: '1',
+      packages: [
+        '@scope/connection-foo',
+        {package: '@scope/multi', use: ['skills.bar']},
+        {package: '@scope/connection-baz'},
+      ],
+    });
+    expect(result.packages).toHaveLength(3);
+  });
+
+  it('rejects empty package name', () => {
+    expect(() =>
+      AmodalConfigSchema.parse({
+        name: 'a',
+        version: '1',
+        packages: [''],
+      }),
+    ).toThrow();
+  });
+});
+
+describe('normalizePackageEntry', () => {
+  it('expands a bare string into {package} (no use)', () => {
+    expect(normalizePackageEntry('@scope/x')).toEqual({package: '@scope/x'});
+  });
+
+  it('passes through an object with use', () => {
+    expect(normalizePackageEntry({package: '@scope/x', use: ['skills.y']}))
+      .toEqual({package: '@scope/x', use: ['skills.y']});
+  });
+
+  it('passes through an object without use', () => {
+    expect(normalizePackageEntry({package: '@scope/x'}))
+      .toEqual({package: '@scope/x'});
+  });
+});
+
+describe('buildSubthingFilter', () => {
+  it('accepts everything when use is undefined', () => {
+    const accept = buildSubthingFilter(undefined, 'connections');
+    expect(accept('slack')).toBe(true);
+    expect(accept('anything')).toBe(true);
+  });
+
+  it('accepts everything when use is empty', () => {
+    const accept = buildSubthingFilter([], 'connections');
+    expect(accept('slack')).toBe(true);
+  });
+
+  it('only accepts names matching the kind', () => {
+    const accept = buildSubthingFilter(
+      ['connections.slack', 'channels.bot'],
+      'connections',
+    );
+    expect(accept('slack')).toBe(true);
+    expect(accept('bot')).toBe(false);
+    expect(accept('other')).toBe(false);
+  });
+
+  it('isolates filters per kind', () => {
+    const useList = ['connections.slack', 'channels.bot'];
+    const acceptConn = buildSubthingFilter(useList, 'connections');
+    const acceptChan = buildSubthingFilter(useList, 'channels');
+    expect(acceptConn('slack')).toBe(true);
+    expect(acceptConn('bot')).toBe(false);
+    expect(acceptChan('bot')).toBe(true);
+    expect(acceptChan('slack')).toBe(false);
+  });
+
+  it('ignores malformed entries (no dot)', () => {
+    const accept = buildSubthingFilter(['noKindSeparator'], 'connections');
+    expect(accept('anything')).toBe(false);
   });
 });

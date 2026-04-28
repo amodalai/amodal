@@ -381,7 +381,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       channelsResult = await bootstrapChannels({
         channels: bundle.channels,
         repoPath: config.repoPath,
-        packages: bundle.config.packages,
+        packages: bundle.config.packages?.map((e) => (typeof e === 'string' ? e : e.package)),
         sessionMapper: channelSessionMapper,
         sessionManager,
         buildSessionComponents: () => buildSessionComponents({

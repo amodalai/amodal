@@ -17,6 +17,7 @@ import {parseStoreJson} from '../repo/store-loader.js';
 import type {LoadedTool} from '../repo/tool-types.js';
 import {loadTools} from '../repo/tool-loader.js';
 import type {AmodalConfig} from '../repo/config-schema.js';
+import {buildSubthingFilter, normalizePackageEntry} from '../repo/config-schema.js';
 
 /**
  * The result of resolving all installed packages + local repo content.
@@ -103,10 +104,12 @@ async function loadLocalConnections(
   dir: string,
   existing: Map<string, LoadedConnection>,
   warnings: string[],
+  accept?: (name: string) => boolean,
 ): Promise<void> {
   const connDir = path.join(dir, 'connections');
   const subdirs = await listSubdirs(connDir);
   for (const name of subdirs) {
+    if (accept && !accept(name)) continue;
     if (existing.has(name)) continue;
     const connPath = path.join(connDir, name);
     const specJson = await readOptionalFile(path.join(connPath, 'spec.json'));
@@ -150,10 +153,12 @@ async function loadLocalSkills(
   existingNames: Set<string>,
   skills: LoadedSkill[],
   warnings: string[],
+  accept?: (name: string) => boolean,
 ): Promise<void> {
   const skillDir = path.join(dir, 'skills');
   const subdirs = await listSubdirs(skillDir);
   for (const name of subdirs) {
+    if (accept && !accept(name)) continue;
     if (existingNames.has(name)) continue;
     const skillMd = await readOptionalFile(path.join(skillDir, name, 'SKILL.md'));
     if (!skillMd) continue;
@@ -174,12 +179,14 @@ async function loadLocalAutomations(
   existingNames: Set<string>,
   automations: LoadedAutomation[],
   warnings: string[],
+  accept?: (name: string) => boolean,
 ): Promise<void> {
   const autoDir = path.join(dir, 'automations');
   const files = await listFiles(autoDir);
   for (const file of files) {
     if (!file.endsWith('.json') && !file.endsWith('.md')) continue;
     const name = file.replace(/\.(json|md)$/, '');
+    if (accept && !accept(name)) continue;
     if (existingNames.has(name)) continue;
     const content = await readOptionalFile(path.join(autoDir, file));
     if (!content) continue;
@@ -199,11 +206,13 @@ async function loadLocalKnowledge(
   existingNames: Set<string>,
   knowledge: LoadedKnowledge[],
   warnings: string[],
+  accept?: (name: string) => boolean,
 ): Promise<void> {
   const kbDir = path.join(dir, 'knowledge');
   const files = await listFiles(kbDir, '.md');
   for (const file of files) {
     const name = file.replace(/\.md$/, '');
+    if (accept && !accept(name)) continue;
     if (existingNames.has(name)) continue;
     const content = await readOptionalFile(path.join(kbDir, file));
     if (!content) continue;
@@ -223,11 +232,13 @@ async function loadLocalStores(
   existingNames: Set<string>,
   stores: LoadedStore[],
   warnings: string[],
+  accept?: (name: string) => boolean,
 ): Promise<void> {
   const storeDir = path.join(dir, 'stores');
   const files = await listFiles(storeDir, '.json');
   for (const file of files) {
     const name = file.replace(/\.json$/, '');
+    if (accept && !accept(name)) continue;
     if (existingNames.has(name)) continue;
     const content = await readOptionalFile(path.join(storeDir, file));
     if (!content) continue;
@@ -247,10 +258,12 @@ async function loadLocalTools(
   existingNames: Set<string>,
   tools: LoadedTool[],
   warnings: string[],
+  accept?: (name: string) => boolean,
 ): Promise<void> {
   try {
     const loaded = await loadTools(dir);
     for (const tool of loaded) {
+      if (accept && !accept(tool.name)) continue;
       if (existingNames.has(tool.name)) continue;
       tools.push(tool);
       existingNames.add(tool.name);
@@ -303,27 +316,40 @@ export async function resolveAllPackages(options: {
   await loadLocalStores(repoPath, storeNames, stores, warnings);
   await loadLocalTools(repoPath, toolNames, tools, warnings);
 
-  // 2. Load from declared npm packages (same nested structure as local repo)
-  const packageNames = config?.packages;
-  if (packageNames && packageNames.length > 0) {
-    for (const npmName of packageNames) {
+  // 2. Load from declared npm packages (same nested structure as local repo).
+  //    Each entry can be a bare string (load all sub-things) or an object
+  //    with `use: ["<kind>.<name>", ...]` to opt into a subset of a
+  //    multi-role package. See `normalizePackageEntry` / `buildSubthingFilter`.
+  const declaredPackages = config?.packages;
+  if (declaredPackages && declaredPackages.length > 0) {
+    for (const rawEntry of declaredPackages) {
+      const {package: npmName, use} = normalizePackageEntry(rawEntry);
       const pkgDir = resolvePackageDir(repoPath, npmName);
       if (!(await dirExists(pkgDir))) {
         warnings.push(`Package "${npmName}" declared in amodal.json but not installed. Run: npm install`);
         continue;
       }
+      const acceptConn = buildSubthingFilter(use, 'connections');
+      const acceptSkill = buildSubthingFilter(use, 'skills');
+      const acceptAuto = buildSubthingFilter(use, 'automations');
+      const acceptKb = buildSubthingFilter(use, 'knowledge');
+      const acceptStore = buildSubthingFilter(use, 'stores');
+      const acceptTool = buildSubthingFilter(use, 'tools');
+      const acceptChannel = buildSubthingFilter(use, 'channels');
+
       // Scan package for all content types — same loaders as local repo
-      await loadLocalConnections(pkgDir, connections, warnings);
-      await loadLocalSkills(pkgDir, skillNames, skills, warnings);
-      await loadLocalAutomations(pkgDir, automationNames, automations, warnings);
-      await loadLocalKnowledge(pkgDir, knowledgeNames, knowledge, warnings);
-      await loadLocalStores(pkgDir, storeNames, stores, warnings);
-      await loadLocalTools(pkgDir, toolNames, tools, warnings);
+      await loadLocalConnections(pkgDir, connections, warnings, acceptConn);
+      await loadLocalSkills(pkgDir, skillNames, skills, warnings, acceptSkill);
+      await loadLocalAutomations(pkgDir, automationNames, automations, warnings, acceptAuto);
+      await loadLocalKnowledge(pkgDir, knowledgeNames, knowledge, warnings, acceptKb);
+      await loadLocalStores(pkgDir, storeNames, stores, warnings, acceptStore);
+      await loadLocalTools(pkgDir, toolNames, tools, warnings, acceptTool);
 
       // Scan channels/<name>/channel.json — marks this package as a channel plugin
       const channelsDir = path.join(pkgDir, 'channels');
       const channelSubdirs = await listSubdirs(channelsDir);
       for (const channelName of channelSubdirs) {
+        if (!acceptChannel(channelName)) continue;
         const channelJson = await readOptionalFile(path.join(channelsDir, channelName, 'channel.json'));
         if (!channelJson) continue;
         try {
