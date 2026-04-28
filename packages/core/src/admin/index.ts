@@ -13,6 +13,7 @@ export {
   getAdminCacheDir,
   getAdminAgentConfig,
   checkRegistryVersion,
+  AdminAgentFetchError,
 } from './admin-agent.js';
 export type {AdminAgentConfig, FetchOptions} from './admin-agent.js';
 

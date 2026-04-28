@@ -287,6 +287,9 @@ async function spawnAdminAgent(opts: {
     return null;
   }
 
+  const adminVersion = await getAdminAgentVersion(adminAgentPath);
+  log.info('admin_agent_resolved', {path: adminAgentPath, version: adminVersion ?? 'unknown'});
+
   // Non-blocking upgrade check for unpinned admin agent
   void (async () => {
     try {

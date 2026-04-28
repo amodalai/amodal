@@ -17,6 +17,13 @@ const CACHE_DIR_NAME = 'admin-agent';
 const FETCH_TIMEOUT = 30_000;
 const REGISTRY_CHECK_TIMEOUT = 3_000;
 
+export class AdminAgentFetchError extends Error {
+  override readonly name = 'AdminAgentFetchError';
+  constructor(message: string, readonly packageSpec: string, options?: ErrorOptions) {
+    super(message, options);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Cache directory
 // ---------------------------------------------------------------------------
@@ -143,7 +150,10 @@ export async function fetchAdminAgent(options?: FetchOptions): Promise<string> {
     }
 
     if (!tarballName) {
-      throw new Error('Failed to download admin agent package');
+      throw new AdminAgentFetchError(
+        `npm pack returned no tarball for ${packageSpec}`,
+        packageSpec,
+      );
     }
 
     const tarballPath = path.join(tmpDir, tarballName);
@@ -156,8 +166,6 @@ export async function fetchAdminAgent(options?: FetchOptions): Promise<string> {
       timeout: 10_000,
     });
 
-    const fetchedVersion = await getAdminAgentVersion(cacheDir);
-    process.stderr.write(`[admin] Cached admin agent v${fetchedVersion ?? 'unknown'} at ${cacheDir}\n`);
     return cacheDir;
   } finally {
     await rm(tmpDir, {recursive: true, force: true}).catch(() => {});
