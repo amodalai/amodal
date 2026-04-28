@@ -1,7 +1,15 @@
 ---
 "@amodalai/studio": patch
+"@amodalai/runtime": patch
 ---
 
-Add a "Getting started" tab and `/agents/:agentId/getting-started` route.
+Add a "Getting started" tab + `/api/getting-started` runtime endpoint.
 
-Surfaces a stub page where first-run agent setup will live (slot picker, credentials checklist, identity prompts) — landing the route + nav entry first so the cloud onboarding flow can stop owning a separate `/setup` URL and route into the studio instead. Today the page just shows the agent's `envRefs` set/unset status; the rich configurator is a follow-up port from the cloud's old SetupPage.
+The tab is the universal home for first-run agent configuration. Two render modes, both backed by the same data:
+
+- **Templated agent** (`template.json` exists in the repo) — slot-by-slot list with the curated providers from each `template.connections[]` slot.
+- **No template** — flat list of every connection package the agent has installed.
+
+Each row shows the package's `amodal.displayName` / icon / description and its declared `auth.envVars`, with per-var ✓/○ for whether the env var is set. The data comes from the new runtime endpoint, which walks loaded connections back to their containing `package.json#amodal` and bundles the optional `template.json` from the repo root.
+
+Today this is read-only — Sally pastes credentials via the existing Secrets tab (or admin chat) and refreshes Getting Started to see ✓ flip on. Inline paste is a follow-up.

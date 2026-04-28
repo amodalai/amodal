@@ -20,6 +20,23 @@ import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+/**
+ * Walk upward from a file path until we find the directory containing
+ * package.json. Used by /api/getting-started to map a connection's
+ * `location` (which points at `…/connections/<name>/`) back to its npm
+ * package root so we can read its amodal block.
+ */
+function findPackageRoot(start: string): string | null {
+  let dir = start;
+  for (let i = 0; i < 10; i++) {
+    if (existsSync(path.join(dir, 'package.json'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
+
 // Read version from package.json at module load time so /api/config
 // always reflects the actual deployed runtime version.
 const __runtimeDir = path.dirname(fileURLToPath(import.meta.url));
@@ -482,6 +499,89 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     studioUrl: config.studioUrl ?? process.env['STUDIO_URL'] ?? null,
     adminAgentUrl: config.adminAgentUrl ?? process.env['ADMIN_AGENT_URL'] ?? null,
   }));
+
+  // Getting Started endpoint — returns per-package auth requirements
+  // (displayName/description/icon/envVars) plus the template manifest if
+  // the repo has a template.json. The studio's Getting Started tab
+  // renders either the slot view (when template is present) or a flat
+  // package list (when not).
+  app.get('/api/getting-started', (_req, res) => {
+    void (async () => {
+      const bundleData = getBundle();
+      const repoPath = config.repoPath;
+
+      // Walk each loaded connection's `location` upward to find the
+      // containing package.json, read its amodal block. Cache by package
+      // name so multi-connection packages only get read once.
+      type EnvVarStatus = { name: string; description: string; set: boolean };
+      const packageMap = new Map<string, {
+        name: string;
+        displayName: string;
+        description?: string;
+        icon?: string;
+        envVars: EnvVarStatus[];
+      }>();
+
+      for (const conn of bundleData.connections.values()) {
+        const pkgDir = findPackageRoot(conn.location);
+        if (!pkgDir) continue;
+        const pkgJsonPath = path.join(pkgDir, 'package.json');
+        if (!existsSync(pkgJsonPath)) continue;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing trusted local JSON
+          const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as {
+            name?: string;
+            amodal?: {
+              displayName?: string;
+              name?: string;
+              description?: string;
+              icon?: string;
+              auth?: { envVars?: Record<string, string> };
+            };
+          };
+          if (!pkg.name || !pkg.amodal) continue;
+          if (packageMap.has(pkg.name)) continue;
+          const envVarsRaw = pkg.amodal.auth?.envVars ?? {};
+          const envVars: EnvVarStatus[] = Object.entries(envVarsRaw).map(([name, description]) => ({
+            name,
+            description,
+            set: !!process.env[name],
+          }));
+          packageMap.set(pkg.name, {
+            name: pkg.name,
+            displayName: pkg.amodal.displayName ?? pkg.amodal.name ?? pkg.name,
+            ...(pkg.amodal.description ? { description: pkg.amodal.description } : {}),
+            ...(pkg.amodal.icon ? { icon: pkg.amodal.icon } : {}),
+            envVars,
+          });
+        } catch {
+          // Skip malformed package.json — best-effort enumeration.
+        }
+      }
+
+      // Package is "fulfilled" when every declared envVar is set in process.env.
+      const packages = [...packageMap.values()].map((p) => ({
+        ...p,
+        isFulfilled: p.envVars.length > 0 && p.envVars.every((v) => v.set),
+      }));
+
+      // Read template.json from repo root if present.
+      const templatePath = path.join(repoPath, 'template.json');
+      let template: unknown = null;
+      if (existsSync(templatePath)) {
+        try {
+          template = JSON.parse(readFileSync(templatePath, 'utf-8'));
+        } catch {
+          // Malformed template.json — return null and let UI fall back to flat list.
+        }
+      }
+
+      res.json({ template, packages });
+    })().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    });
+  });
 
   // Unified config endpoint
   app.get('/api/config', (_req, res) => {
