@@ -68,6 +68,7 @@ export function ConnectionConfigPage() {
     try {
       const r = await fetch(
         `${runtimeUrl}/api/oauth/start?package=${encodeURIComponent(packageName)}`,
+        {signal: AbortSignal.timeout(5_000)},
       );
       if (!r.ok) {
         const text = await r.text().catch(() => '');

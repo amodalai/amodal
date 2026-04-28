@@ -165,7 +165,7 @@ function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
     setConnecting(true);
     setOauthError(null);
     try {
-      const r = await fetch(`${runtimeUrl}/api/oauth/start?package=${encodeURIComponent(pkg.name)}`);
+      const r = await fetch(`${runtimeUrl}/api/oauth/start?package=${encodeURIComponent(pkg.name)}`, {signal: AbortSignal.timeout(5_000)});
       if (!r.ok) {
         const text = await r.text().catch(() => '');
         throw new Error(`Runtime returned ${String(r.status)}${text ? ` — ${text}` : ''}`);

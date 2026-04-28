@@ -570,8 +570,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           oauth: pkg.amodal.oauth,
           envVars: pkg.amodal.auth?.envVars ?? {},
         };
-      } catch {
-        // Skip malformed package.json
+      } catch (err: unknown) {
+        log.warn('malformed_package_json', {path: pkgJsonPath, error: err instanceof Error ? err.message : String(err)});
       }
     }
     return null;
@@ -592,6 +592,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     lines.push(`${name}=${value}`);
     content = lines.filter((l) => l.length > 0).join('\n') + '\n';
     writeFileSync(file, content, { mode: 0o600 });
+    log.info('secret_persisted', {name, file});
   }
 
   /**
@@ -632,6 +633,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       const clientId = process.env[`${upper}_CLIENT_ID`];
       const clientSecret = process.env[`${upper}_CLIENT_SECRET`];
       if (!clientId || !clientSecret) {
+        log.warn('oauth_missing_credentials', {packageName, appKey: upper});
         res.status(400).json({
           error: `Missing ${upper}_CLIENT_ID or ${upper}_CLIENT_SECRET in env. Register your own OAuth app and set them in .env, or use the cloud broker.`,
         });
@@ -663,6 +665,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         const sep = meta.oauth.scopeSeparator ?? ' ';
         url.searchParams.set('scope', meta.oauth.scopes.join(sep));
       }
+      log.info('oauth_flow_started', {packageName, appKey: meta.oauth.appKey});
       res.json({ authorizeUrl: url.toString() });
     })().catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
@@ -682,11 +685,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         return `${studioUrl}/agents/${appId}/getting-started?${params.toString()}`;
       };
       if (errParam) {
+        log.warn('oauth_provider_error', {error: errParam});
         res.redirect(studioReturn(new URLSearchParams({ error: 'oauth_failed', message: errParam })));
         return;
       }
       const pending = pendingOauth.get(state);
       if (!pending || !code) {
+        log.warn('oauth_invalid_callback', {hasState: !!pending, hasCode: !!code});
         res.redirect(studioReturn(new URLSearchParams({ error: 'oauth_failed', message: 'unknown state or missing code' })));
         return;
       }
@@ -703,6 +708,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
           body: body.toString(),
+          signal: AbortSignal.timeout(10_000),
         });
         if (!tokenResp.ok) {
           const text = await tokenResp.text().catch(() => '');
@@ -715,9 +721,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           process.env[name] = value;
           persistSecret(name, value);
         }
+        log.info('oauth_token_exchanged', {packageName: pending.packageName, envVarsSet: Object.keys(credentials)});
         res.redirect(studioReturn(new URLSearchParams({ connected: pending.packageName })));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        log.warn('oauth_token_exchange_failed', {packageName: pending.packageName, error: msg});
         res.redirect(studioReturn(new URLSearchParams({ error: 'oauth_failed', message: msg })));
       }
     })().catch((err: unknown) => {
@@ -733,13 +741,15 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     const file = path.join(config.repoPath, '.amodal', 'secrets.env');
     if (existsSync(file)) {
       const content = readFileSync(file, 'utf-8');
+      let count = 0;
       for (const line of content.split('\n')) {
         const eq = line.indexOf('=');
         if (eq <= 0) continue;
         const k = line.slice(0, eq).trim();
         const v = line.slice(eq + 1);
-        if (k) process.env[k] = v;
+        if (k) { process.env[k] = v; count++; }
       }
+      if (count > 0) log.info('secrets_loaded_from_disk', {count, file});
     }
   }
 
@@ -761,6 +771,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     }
     process.env[name] = value;
     persistSecret(name, value);
+    log.info('secret_saved', {name});
     res.json({ name, set: true });
   });
 
@@ -824,8 +835,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
             oauth: oauth ?? null,
           });
           return;
-        } catch {
-          // Skip malformed package.json
+        } catch (err: unknown) {
+          log.warn('malformed_package_json', {path: pkgJsonPath, error: err instanceof Error ? err.message : String(err)});
         }
       }
       res.status(404).json({ error: `Package '${packageName}' not found in installed connections` });
@@ -914,8 +925,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
             envVars,
             ...(oauth ? { oauth } : {}),
           });
-        } catch {
-          // Skip malformed package.json — best-effort enumeration.
+        } catch (err: unknown) {
+          log.warn('malformed_package_json', {path: pkgJsonPath, error: err instanceof Error ? err.message : String(err)});
         }
       }
 
@@ -931,8 +942,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       if (existsSync(templatePath)) {
         try {
           template = JSON.parse(readFileSync(templatePath, 'utf-8'));
-        } catch {
-          // Malformed template.json — return null and let UI fall back to flat list.
+        } catch (err: unknown) {
+          log.warn('malformed_template_json', {path: templatePath, error: err instanceof Error ? err.message : String(err)});
         }
       }
 

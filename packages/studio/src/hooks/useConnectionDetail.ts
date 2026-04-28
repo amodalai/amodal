@@ -71,6 +71,7 @@ export function useConnectionDetail(packageName: string): ConnectionDetailResult
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value }),
+        signal: AbortSignal.timeout(5_000),
       });
       if (!r.ok) {
         const text = await r.text().catch(() => '');
