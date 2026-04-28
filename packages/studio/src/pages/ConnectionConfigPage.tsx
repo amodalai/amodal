@@ -120,37 +120,45 @@ export function ConnectionConfigPage() {
         </div>
       )}
 
-      <OAuthSection
-        data={data}
-        connecting={connecting}
-        connectError={connectError}
-        onConnect={() => void handleConnect()}
-      />
-
-      {/* Paste form rules:
-          - OAuth declared + creds set + token already saved: hide entirely (configured)
-          - OAuth declared + creds set + no token yet: hide by default, show via
-            "Or paste manually" toggle (OAuth is the primary path)
-          - OAuth declared but creds missing: show paste — OAuth isn't usable yet
-          - No OAuth declared: show paste (it's the only path) */}
+      {/* Render exactly one primary surface based on what's actionable.
+          - OAuth available (creds set in env): big OAuth panel; paste is
+            an optional fallback behind a toggle.
+          - OAuth declared but creds missing: small banner pointing at
+            the env vars to set; paste shown as the actionable path.
+          - No OAuth: paste shown alone. */}
       {(() => {
-        const oauthPrimary = !!data.oauth?.available;
-        const fulfilledViaPaste = data.envVars.length > 0 && data.envVars.every((v) => v.set);
-        if (oauthPrimary && !fulfilledViaPaste && !showPasteFallback) {
+        const oauthAvailable = !!data.oauth?.available;
+        const fulfilledViaPaste =
+          data.envVars.length > 0 && data.envVars.every((v) => v.set);
+        if (oauthAvailable) {
           return (
-            <button
-              type="button"
-              onClick={() => setShowPasteFallback(true)}
-              className="text-xs text-muted-foreground hover:text-foreground underline"
-            >
-              Or paste credentials manually
-            </button>
+            <>
+              <OAuthSection
+                data={data}
+                connecting={connecting}
+                connectError={connectError}
+                onConnect={() => void handleConnect()}
+              />
+              {!fulfilledViaPaste && !showPasteFallback && (
+                <button
+                  type="button"
+                  onClick={() => setShowPasteFallback(true)}
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  Or paste credentials manually
+                </button>
+              )}
+              {(showPasteFallback || fulfilledViaPaste) &&
+                renderAuthForm(data, drafts, setDrafts, savingName, handleSave)}
+            </>
           );
         }
-        if (oauthPrimary && fulfilledViaPaste && !showPasteFallback) {
-          return null;
-        }
-        return renderAuthForm(data, drafts, setDrafts, savingName, handleSave);
+        return (
+          <>
+            {data.oauth && <OAuthHint data={data} />}
+            {renderAuthForm(data, drafts, setDrafts, savingName, handleSave)}
+          </>
+        );
       })()}
 
       <div className="pt-4 border-t border-border text-xs text-muted-foreground">
@@ -165,6 +173,26 @@ export function ConnectionConfigPage() {
 // OAuth panel — shown whenever amodal.oauth is declared
 // ---------------------------------------------------------------------------
 
+/**
+ * Compact banner shown when the package declares OAuth but the user
+ * hasn't set CLIENT_ID/_SECRET in env yet. Replaces the full OAuth
+ * panel for this state — OAuth isn't actionable yet, so paste is the
+ * primary path; this just signals OAuth is available once configured.
+ */
+function OAuthHint({ data }: { data: ConnectionDetail }) {
+  if (!data.oauth) return null;
+  const upper = data.oauth.appKey.toUpperCase().replace(/-/g, '_');
+  return (
+    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+      💡 This connection supports OAuth.
+      Set <code className="font-mono">{upper}_CLIENT_ID</code> and{' '}
+      <code className="font-mono">{upper}_CLIENT_SECRET</code> in your env (and register{' '}
+      <code className="font-mono">/api/oauth/callback</code> as the redirect URI on your{' '}
+      {data.oauth.appKey} OAuth app) to enable a Connect button — otherwise paste a token below.
+    </div>
+  );
+}
+
 function OAuthSection({
   data,
   connecting,
@@ -176,15 +204,14 @@ function OAuthSection({
   connectError: string | null;
   onConnect: () => void;
 }) {
-  if (!data.oauth) return null;
-  const upper = data.oauth.appKey.toUpperCase().replace(/-/g, "_");
+  if (!data.oauth?.available) return null;
   return (
     <section className="rounded-lg border border-border bg-card p-5 space-y-3">
       <div>
         <div className="font-medium text-sm">Connect with OAuth</div>
         <p className="text-xs text-muted-foreground mt-1">
-          Local broker hosted by the runtime — Sally&apos;s {data.oauth.appKey} app
-          credentials live in env vars.
+          One-click flow brokered locally — runtime mints the access token and
+          stores it as <code className="font-mono">{data.oauth.appKey}</code>&apos;s declared secret.
         </p>
       </div>
       {data.oauth.scopes && data.oauth.scopes.length > 0 && (
@@ -195,23 +222,14 @@ function OAuthSection({
           </span>
         </div>
       )}
-      {data.oauth.available ? (
-        <button
-          type="button"
-          onClick={onConnect}
-          disabled={connecting}
-          className="px-4 py-2 rounded bg-primary-solid text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
-          {connecting ? 'Opening…' : `Connect ${data.oauth.appKey}`}
-        </button>
-      ) : (
-        <div className="text-xs text-amber-700 dark:text-amber-300">
-          Set <code className="font-mono">{upper}_CLIENT_ID</code> and{' '}
-          <code className="font-mono">{upper}_CLIENT_SECRET</code> in your env to enable OAuth.
-          Register your OAuth app with the redirect URI{' '}
-          <code className="font-mono">/api/oauth/callback</code> on the runtime.
-        </div>
-      )}
+      <button
+        type="button"
+        onClick={onConnect}
+        disabled={connecting}
+        className="px-4 py-2 rounded bg-primary-solid text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+      >
+        {connecting ? 'Opening…' : `Connect ${data.oauth.appKey}`}
+      </button>
       {connectError && (
         <div className="text-xs text-destructive">OAuth start failed: {connectError}</div>
       )}
