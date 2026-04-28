@@ -17,6 +17,7 @@
 
 import {z} from 'zod';
 import type {FieldScrubber} from '@amodalai/core';
+import type {LoadedConnection} from '@amodalai/types';
 import {ConnectionError} from '../errors.js';
 import type {PermissionChecker} from '../security/permission-checker.js';
 import type {ToolDefinition, ToolContext} from './types.js';
@@ -137,7 +138,7 @@ export interface CreateRequestToolOptions {
   /** Callback to check if plan mode is active */
   planModeActive?: () => boolean;
   /** Loaded connections for context injection lookup */
-  loadedConnections?: Map<string, {spec: {contextInjection?: Record<string, {in: 'query' | 'header' | 'path' | 'body'; field: string; required?: boolean}>}}>;
+  loadedConnections?: Map<string, Pick<LoadedConnection, 'spec'>>;
   /** Scope context key-value pairs for context injection */
   scopeContext?: Record<string, string>;
 }

@@ -11,6 +11,8 @@ import type {ConnectionsMap} from './request-tool.js';
 import type {PermissionChecker, PermissionResult} from '../security/permission-checker.js';
 import {ConnectionError} from '../errors.js';
 import type {ToolContext} from './types.js';
+import type {LoadedConnection} from '@amodalai/types';
+import type {ConnectionSpec} from '@amodalai/core';
 
 // ---------------------------------------------------------------------------
 // Mock HTTP server
@@ -279,10 +281,17 @@ describe('createRequestTool', () => {
   // Context injection
   // ---------------------------------------------------------------------------
 
-  it('injects header from scopeContext via contextInjection', async () => {
-    const loadedConnections = new Map([
-      ['test-api', {spec: {contextInjection: {tenant_id: {in: 'header' as const, field: 'X-Tenant-Id', required: true}}}}],
+  /** Build a typed loadedConnections map with only contextInjection set. */
+  function makeLoadedConnections(
+    injection: NonNullable<ConnectionSpec['contextInjection']>,
+  ): Map<string, Pick<LoadedConnection, 'spec'>> {
+    return new Map([
+      ['test-api', {spec: {protocol: 'rest', contextInjection: injection} as ConnectionSpec}],
     ]);
+  }
+
+  it('injects header from scopeContext via contextInjection', async () => {
+    const loadedConnections = makeLoadedConnections({tenant_id: {in: 'header', field: 'X-Tenant-Id', required: true}});
 
     const tool = createRequestTool({
       connectionsMap: makeConnectionsMap(),
@@ -305,9 +314,7 @@ describe('createRequestTool', () => {
   });
 
   it('injects query param from scopeContext via contextInjection', async () => {
-    const loadedConnections = new Map([
-      ['test-api', {spec: {contextInjection: {org_id: {in: 'query' as const, field: 'org_id'}}}}],
-    ]);
+    const loadedConnections = makeLoadedConnections({org_id: {in: 'query', field: 'org_id'}});
 
     const tool = createRequestTool({
       connectionsMap: makeConnectionsMap(),
@@ -328,9 +335,7 @@ describe('createRequestTool', () => {
   });
 
   it('throws when required context injection key is missing', async () => {
-    const loadedConnections = new Map([
-      ['test-api', {spec: {contextInjection: {tenant_id: {in: 'header' as const, field: 'X-Tenant-Id', required: true}}}}],
-    ]);
+    const loadedConnections = makeLoadedConnections({tenant_id: {in: 'header', field: 'X-Tenant-Id', required: true}});
 
     const tool = createRequestTool({
       connectionsMap: makeConnectionsMap(),
@@ -350,9 +355,7 @@ describe('createRequestTool', () => {
   });
 
   it('skips optional context injection key when missing', async () => {
-    const loadedConnections = new Map([
-      ['test-api', {spec: {contextInjection: {tenant_id: {in: 'header' as const, field: 'X-Tenant-Id'}}}}],
-    ]);
+    const loadedConnections = makeLoadedConnections({tenant_id: {in: 'header', field: 'X-Tenant-Id'}});
 
     const tool = createRequestTool({
       connectionsMap: makeConnectionsMap(),
@@ -375,9 +378,7 @@ describe('createRequestTool', () => {
   });
 
   it('throws when body injection has no request body', async () => {
-    const loadedConnections = new Map([
-      ['test-api', {spec: {contextInjection: {tenant_id: {in: 'body' as const, field: 'tenant_id', required: true}}}}],
-    ]);
+    const loadedConnections = makeLoadedConnections({tenant_id: {in: 'body', field: 'tenant_id', required: true}});
 
     const tool = createRequestTool({
       connectionsMap: makeConnectionsMap(),
