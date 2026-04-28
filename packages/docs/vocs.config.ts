@@ -112,6 +112,7 @@ export default defineConfig({
         { text: 'Providers', link: '/guide/providers' },
         { text: 'Admin Agent', link: '/guide/admin-agent' },
         { text: 'Security & Guardrails', link: '/guide/security' },
+        { text: 'Embedding & Multi-tenancy', link: '/guide/embedding' },
         { text: 'Agents (Prompt Overrides)', link: '/guide/agents' },
         { text: 'Engineering Standards', link: '/guide/engineering-standards' },
       ],

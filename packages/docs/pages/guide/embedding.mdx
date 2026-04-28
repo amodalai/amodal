@@ -1,0 +1,276 @@
+---
+description: "Embedding Amodal agents in multi-tenant applications — scope isolation, context injection, per-scope credentials, and the React SDK."
+---
+
+# Embedding & Multi-tenancy
+
+This guide is for SaaS builders who want to embed an Amodal agent in their application with per-user or per-tenant data isolation. The key primitive is `scope_id` — a string that partitions sessions, memory, and stores so each tenant sees only their own data.
+
+## How Scope Works
+
+When a chat request includes a `scope_id`, the runtime uses it to partition every stateful resource:
+
+- **Sessions** — conversation history is isolated per scope
+- **Memory** — agent memories are stored and recalled per scope
+- **Stores** — store documents are partitioned per scope
+- **Credentials** — `scope:KEY` resolves to per-scope secrets
+
+The embedding application controls who gets which `scope_id`. The runtime does not enforce authentication itself — it trusts the value it receives. Your app is the security boundary.
+
+## Passing Scope
+
+Two methods, depending on your auth setup.
+
+### Request Body
+
+Include `scope_id` and `context` in the POST body to `/chat/stream`:
+
+```json
+{
+  "message": "Show me my recent transactions",
+  "scope_id": "household-abc-123",
+  "context": {
+    "household_id": "abc-123",
+    "plan": "premium"
+  }
+}
+```
+
+### JWT Claims
+
+If using JWT authentication, include `scope_id` and `scopeContext` as claims in the token payload:
+
+```json
+{
+  "sub": "user-456",
+  "scope_id": "household-abc-123",
+  "scopeContext": {
+    "household_id": "abc-123",
+    "plan": "premium"
+  }
+}
+```
+
+JWT claims take precedence over body fields. This is the recommended approach for production — it prevents clients from spoofing scope.
+
+## React SDK
+
+The `ChatWidget` accepts `scopeId` and `scopeContext` props. The SDK sends these with every chat request automatically.
+
+```tsx
+import { ChatWidget } from '@amodalai/react';
+
+function AgentPanel({ userId, tenantId }: { userId: string; tenantId: string }) {
+  return (
+    <ChatWidget
+      serverUrl="https://your-agent.example.com"
+      user={{ id: userId }}
+      scopeId={tenantId}
+      scopeContext={{ tenant_id: tenantId }}
+      getToken={() => getAccessToken()}
+    />
+  );
+}
+```
+
+The `getToken` callback should return a JWT or API key for authenticating requests to your agent server. It can be async to support token refresh.
+
+## Context Injection
+
+Scope context values can be injected into outbound API calls automatically. This is how the agent passes tenant identifiers to your backend without the LLM needing to know about them.
+
+Configure `contextInjection` in a connection's `spec.json`:
+
+```json
+{
+  "baseUrl": "https://api.your-app.com",
+  "auth": {
+    "type": "bearer",
+    "token": "env:APP_API_TOKEN"
+  },
+  "contextInjection": {
+    "tenant_id": {
+      "in": "header",
+      "field": "X-Tenant-Id",
+      "required": true
+    }
+  }
+}
+```
+
+Every API call the agent makes to this connection will include the `X-Tenant-Id` header, populated from the `tenant_id` key in scope context. If `required` is `true` and the key is missing, the request fails with an error instead of silently omitting it.
+
+Injection targets: `header`, `query`, `path`, `body`. See [Connections — Context Injection](/guide/connections#context-injection) for the full reference.
+
+## What Gets Scoped
+
+| Resource | Behavior | Configured in |
+|----------|----------|---------------|
+| Sessions | Each scope gets independent conversation history | Automatic |
+| Memory | Agent memories are stored and recalled per scope | [Memory](/guide/config#memory) |
+| Stores | Store documents are partitioned per scope | [Stores](/guide/stores#scoped-vs-shared-stores) |
+| Credentials | `scope:KEY` resolves per-scope secrets | [Connections](/guide/connections) |
+
+Without a `scope_id`, all requests share a single global partition (the empty-string scope). This is fine for single-tenant or development use.
+
+## Shared Stores
+
+By default, stores are partitioned per scope. To make a store shared across all scopes — for example, a product catalog or reference data — add `"shared": true` to the store definition:
+
+```json
+{
+  "name": "product-catalog",
+  "shared": true,
+  "entity": {
+    "name": "Product",
+    "key": "{sku}",
+    "schema": {
+      "sku": { "type": "string" },
+      "name": { "type": "string" },
+      "price": { "type": "number" }
+    }
+  }
+}
+```
+
+Shared stores are readable by all scopes. See [Stores — Scoped vs. Shared](/guide/stores#scoped-vs-shared-stores) for details.
+
+## Per-scope Credentials
+
+Connection auth values can reference per-scope secrets using the `scope:KEY` prefix:
+
+```json
+{
+  "auth": {
+    "type": "bearer",
+    "token": "scope:USER_API_TOKEN"
+  }
+}
+```
+
+The runtime resolves `scope:USER_API_TOKEN` by looking up `USER_API_TOKEN` in the current scope's credential store.
+
+**Local development:** Define scope credentials in `.amodal/scopes.json`:
+
+```json
+{
+  "household-abc-123": {
+    "credentials": {
+      "USER_API_TOKEN": "tok_dev_abc123"
+    }
+  },
+  "household-def-456": {
+    "credentials": {
+      "USER_API_TOKEN": "tok_dev_def456"
+    }
+  }
+}
+```
+
+**Production:** Credentials are managed by the platform's credential resolver, keyed by scope ID.
+
+## requireScope
+
+In production, enable `requireScope` in `amodal.json` to reject any request that does not include a `scope_id`:
+
+```json
+{
+  "scope": {
+    "requireScope": true
+  }
+}
+```
+
+This prevents accidental unscoped access — if a client forgets to pass a scope, the request fails immediately instead of writing to the global partition.
+
+## Example: Finance SaaS
+
+A personal finance application where each household has its own agent scope.
+
+**amodal.json** — require scope in production:
+
+```json
+{
+  "name": "finance-agent",
+  "version": "0.1.0",
+  "models": {
+    "main": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514"
+    }
+  },
+  "scope": {
+    "requireScope": true
+  }
+}
+```
+
+**connections/app-api/spec.json** — inject household_id into every API call:
+
+```json
+{
+  "baseUrl": "https://api.finance-app.com",
+  "auth": {
+    "type": "bearer",
+    "token": "env:FINANCE_API_TOKEN"
+  },
+  "contextInjection": {
+    "household_id": {
+      "in": "header",
+      "field": "X-Household-Id",
+      "required": true
+    }
+  }
+}
+```
+
+**stores/preferences.json** — household preferences, scoped by default:
+
+```json
+{
+  "name": "preferences",
+  "entity": {
+    "name": "HouseholdPreference",
+    "key": "{key}",
+    "schema": {
+      "key": { "type": "string" },
+      "value": { "type": "string" }
+    }
+  }
+}
+```
+
+**stores/categories.json** — shared transaction categories across all households:
+
+```json
+{
+  "name": "categories",
+  "shared": true,
+  "entity": {
+    "name": "Category",
+    "key": "{slug}",
+    "schema": {
+      "slug": { "type": "string" },
+      "label": { "type": "string" }
+    }
+  }
+}
+```
+
+**React embedding** — pass the household as scope:
+
+```tsx
+<ChatWidget
+  serverUrl="https://finance-agent.example.com"
+  user={{ id: userId }}
+  scopeId={householdId}
+  scopeContext={{ household_id: householdId }}
+  getToken={() => getHouseholdToken(householdId)}
+/>
+```
+
+With this setup:
+- Each household's conversations, memories, and preferences are isolated
+- The agent's API calls automatically include the household identifier
+- The shared `categories` store is readable by all households
+- Requests without a scope are rejected
