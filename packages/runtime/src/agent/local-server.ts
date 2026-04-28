@@ -16,9 +16,27 @@
 
 import express from 'express';
 import type http from 'node:http';
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync, readFileSync, mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {randomUUID} from 'node:crypto';
+
+/**
+ * Walk upward from a file path until we find the directory containing
+ * package.json. Used by /api/getting-started to map a connection's
+ * `location` (which points at `…/connections/<name>/`) back to its npm
+ * package root so we can read its amodal block.
+ */
+function findPackageRoot(start: string): string | null {
+  let dir = start;
+  for (let i = 0; i < 10; i++) {
+    if (existsSync(path.join(dir, 'package.json'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
 
 // Read version from package.json at module load time so /api/config
 // always reflects the actual deployed runtime version.
@@ -482,6 +500,459 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     studioUrl: config.studioUrl ?? process.env['STUDIO_URL'] ?? null,
     adminAgentUrl: config.adminAgentUrl ?? process.env['ADMIN_AGENT_URL'] ?? null,
   }));
+
+  // ---- OAuth broker (local) ----------------------------------------------
+  //
+  // Per-package OAuth flows hosted in the runtime itself. Sally registers
+  // her own OAuth app at the provider, drops `<APPKEY>_CLIENT_ID` and
+  // `<APPKEY>_CLIENT_SECRET` into her local env, and the runtime brokers
+  // the redirect dance entirely on localhost. Resulting tokens are
+  // persisted to `.amodal/secrets.env` (auto-loaded on next startup) and
+  // pushed into the running process.env immediately so the agent picks
+  // them up without a restart.
+  //
+  // The cloud uses the platform-api's broker instead — same protocol,
+  // different home.
+
+  /** Pending OAuth state — keyed by random nonce, TTL ~10 min. */
+  type PendingOauth = {
+    packageName: string;
+    appKey: string;
+    tokenUrl: string;
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    envVars: Record<string, string>;
+    createdAt: number;
+  };
+  const pendingOauth = new Map<string, PendingOauth>();
+  const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
+  function reapExpiredOauthStates(): void {
+    const now = Date.now();
+    for (const [k, v] of pendingOauth) {
+      if (now - v.createdAt > OAUTH_STATE_TTL_MS) pendingOauth.delete(k);
+    }
+  }
+
+  /**
+   * Look up `amodal.oauth` for a package by walking each loaded
+   * connection's location back to its package.json. Returns the parsed
+   * oauth block + display-friendly metadata.
+   */
+  function readPackageOauth(packageName: string): {
+    oauth: {
+      appKey: string;
+      authorizeUrl: string;
+      tokenUrl: string;
+      scopes?: string[];
+      scopeSeparator?: string;
+    };
+    envVars: Record<string, string>;
+  } | null {
+    const bundleData = getBundle();
+    for (const conn of bundleData.connections.values()) {
+      const pkgDir = findPackageRoot(conn.location);
+      if (!pkgDir) continue;
+      const pkgJsonPath = path.join(pkgDir, 'package.json');
+      if (!existsSync(pkgJsonPath)) continue;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing trusted local JSON
+        const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as {
+          name?: string;
+          amodal?: {
+            oauth?: { appKey: string; authorizeUrl: string; tokenUrl: string; scopes?: string[]; scopeSeparator?: string };
+            auth?: { envVars?: Record<string, string> };
+          };
+        };
+        if (pkg.name !== packageName || !pkg.amodal?.oauth) continue;
+        return {
+          oauth: pkg.amodal.oauth,
+          envVars: pkg.amodal.auth?.envVars ?? {},
+        };
+      } catch (err: unknown) {
+        log.warn('malformed_package_json', {path: pkgJsonPath, error: err instanceof Error ? err.message : String(err)});
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Append/replace KEY=value in `<repoPath>/.amodal/secrets.env`. We use
+   * a runtime-managed file rather than the user's `.env` to avoid
+   * stomping their hand-edited values.
+   */
+  function persistSecret(name: string, value: string): void {
+    const dir = path.join(config.repoPath, '.amodal');
+    const file = path.join(dir, 'secrets.env');
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    let content = existsSync(file) ? readFileSync(file, 'utf-8') : '';
+    // Replace existing line if present, otherwise append.
+    const lines = content.split('\n').filter((l) => !l.startsWith(`${name}=`));
+    lines.push(`${name}=${value}`);
+    content = lines.filter((l) => l.length > 0).join('\n') + '\n';
+    writeFileSync(file, content, { mode: 0o600 });
+    log.info('secret_persisted', {name, file});
+  }
+
+  /**
+   * Map raw token-exchange response onto the package's declared envVars.
+   * Heuristic: `*REFRESH*` → refresh_token, `*ACCESS*`/everything else →
+   * access_token. Mirrors the CLI's mapTokensToEnvVars.
+   */
+  function mapTokensToEnvVars(
+    tokens: Record<string, unknown>,
+    envVars: Record<string, string>,
+  ): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const name of Object.keys(envVars)) {
+      const lower = name.toLowerCase();
+      if (lower.includes('refresh') && typeof tokens['refresh_token'] === 'string') {
+        out[name] = tokens['refresh_token'];
+      } else if (typeof tokens['access_token'] === 'string') {
+        out[name] = tokens['access_token'];
+      }
+    }
+    return out;
+  }
+
+  app.get('/api/oauth/start', (req, res) => {
+    void (async () => {
+      reapExpiredOauthStates();
+      const packageName = typeof req.query['package'] === 'string' ? req.query['package'] : '';
+      if (!packageName) {
+        res.status(400).json({ error: 'package query param required' });
+        return;
+      }
+      const meta = readPackageOauth(packageName);
+      if (!meta) {
+        res.status(404).json({ error: `${packageName} has no amodal.oauth metadata` });
+        return;
+      }
+      const upper = meta.oauth.appKey.toUpperCase().replace(/-/g, "_");
+      const clientId = process.env[`${upper}_CLIENT_ID`];
+      const clientSecret = process.env[`${upper}_CLIENT_SECRET`];
+      if (!clientId || !clientSecret) {
+        log.warn('oauth_missing_credentials', {packageName, appKey: upper});
+        res.status(400).json({
+          error: `Missing ${upper}_CLIENT_ID or ${upper}_CLIENT_SECRET in env. Register your own OAuth app and set them in .env, or use the cloud broker.`,
+        });
+        return;
+      }
+      // Build the local callback URL using the inbound request's host so
+      // the redirect lands back on the same runtime that's hosting Sally.
+      const protoHeader = req.headers['x-forwarded-proto'];
+      const proto = typeof protoHeader === 'string' ? protoHeader : 'http';
+      const host = req.headers.host ?? `localhost:${String(config.port ?? 3847)}`;
+      const redirectUri = `${proto}://${host}/api/oauth/callback`;
+      const state = randomUUID();
+      pendingOauth.set(state, {
+        packageName,
+        appKey: meta.oauth.appKey,
+        tokenUrl: meta.oauth.tokenUrl,
+        clientId,
+        clientSecret,
+        redirectUri,
+        envVars: meta.envVars,
+        createdAt: Date.now(),
+      });
+      const url = new URL(meta.oauth.authorizeUrl);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('client_id', clientId);
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set('state', state);
+      if (meta.oauth.scopes && meta.oauth.scopes.length > 0) {
+        const sep = meta.oauth.scopeSeparator ?? ' ';
+        url.searchParams.set('scope', meta.oauth.scopes.join(sep));
+      }
+      log.info('oauth_flow_started', {packageName, appKey: meta.oauth.appKey});
+      res.json({ authorizeUrl: url.toString() });
+    })().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    });
+  });
+
+  app.get('/api/oauth/callback', (req, res) => {
+    void (async () => {
+      reapExpiredOauthStates();
+      const code = typeof req.query['code'] === 'string' ? req.query['code'] : '';
+      const state = typeof req.query['state'] === 'string' ? req.query['state'] : '';
+      const errParam = typeof req.query['error'] === 'string' ? req.query['error'] : '';
+      const studioUrl = config.studioUrl ?? process.env['STUDIO_URL'] ?? '';
+      const studioReturn = (params: URLSearchParams): string => {
+        if (!studioUrl) return `/?${params.toString()}`;
+        return `${studioUrl}/agents/${appId}/getting-started?${params.toString()}`;
+      };
+      if (errParam) {
+        log.warn('oauth_provider_error', {error: errParam});
+        res.redirect(studioReturn(new URLSearchParams({ error: 'oauth_failed', message: errParam })));
+        return;
+      }
+      const pending = pendingOauth.get(state);
+      if (!pending || !code) {
+        log.warn('oauth_invalid_callback', {hasState: !!pending, hasCode: !!code});
+        res.redirect(studioReturn(new URLSearchParams({ error: 'oauth_failed', message: 'unknown state or missing code' })));
+        return;
+      }
+      pendingOauth.delete(state);
+      try {
+        const body = new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: pending.redirectUri,
+          client_id: pending.clientId,
+          client_secret: pending.clientSecret,
+        });
+        const tokenResp = await fetch(pending.tokenUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+          body: body.toString(),
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!tokenResp.ok) {
+          const text = await tokenResp.text().catch(() => '');
+          throw new Error(`token exchange failed: HTTP ${String(tokenResp.status)} ${text}`);
+        }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
+        const tokens = (await tokenResp.json()) as Record<string, unknown>;
+        const credentials = mapTokensToEnvVars(tokens, pending.envVars);
+        for (const [name, value] of Object.entries(credentials)) {
+          process.env[name] = value;
+          persistSecret(name, value);
+        }
+        log.info('oauth_token_exchanged', {packageName: pending.packageName, envVarsSet: Object.keys(credentials)});
+        res.redirect(studioReturn(new URLSearchParams({ connected: pending.packageName })));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn('oauth_token_exchange_failed', {packageName: pending.packageName, error: msg});
+        res.redirect(studioReturn(new URLSearchParams({ error: 'oauth_failed', message: msg })));
+      }
+    })().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    });
+  });
+
+  // Load any previously-persisted OAuth secrets into process.env on startup.
+  // (Idempotent — overwrites any existing value with the persisted one,
+  // which is what users want after a runtime restart.)
+  {
+    const file = path.join(config.repoPath, '.amodal', 'secrets.env');
+    if (existsSync(file)) {
+      const content = readFileSync(file, 'utf-8');
+      let count = 0;
+      for (const line of content.split('\n')) {
+        const eq = line.indexOf('=');
+        if (eq <= 0) continue;
+        const k = line.slice(0, eq).trim();
+        const v = line.slice(eq + 1);
+        if (k) { process.env[k] = v; count++; }
+      }
+      if (count > 0) log.info('secrets_loaded_from_disk', {count, file});
+    }
+  }
+
+  // ---- Secrets write + per-connection detail -----------------------------
+
+  app.use('/api/secrets', express.json({ limit: '64kb' }));
+  app.post('/api/secrets/:name', (req, res) => {
+    const name = req.params.name;
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
+      res.status(400).json({ error: 'Secret name must be uppercase with underscores (e.g. SLACK_BOT_TOKEN)' });
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- request body
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const value = typeof body['value'] === 'string' ? body['value'].trim() : '';
+    if (!value) {
+      res.status(400).json({ error: 'value is required' });
+      return;
+    }
+    process.env[name] = value;
+    persistSecret(name, value);
+    log.info('secret_saved', {name});
+    res.json({ name, set: true });
+  });
+
+  /**
+   * Per-package connection detail — what the studio's per-connection
+   * configure page reads. Returns the full amodal block (auth, oauth)
+   * plus per-envVar set/unset and oauth.available so the page can branch
+   * its UI on auth type without re-deriving from the package list.
+   */
+  app.get('/api/connections/:packageName', (req, res) => {
+    void (async () => {
+      const packageName = decodeURIComponent(req.params.packageName);
+      const bundleData = getBundle();
+      for (const conn of bundleData.connections.values()) {
+        const pkgDir = findPackageRoot(conn.location);
+        if (!pkgDir) continue;
+        const pkgJsonPath = path.join(pkgDir, 'package.json');
+        if (!existsSync(pkgJsonPath)) continue;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing trusted local JSON
+          const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as {
+            name?: string;
+            amodal?: {
+              displayName?: string;
+              name?: string;
+              description?: string;
+              icon?: string;
+              category?: string;
+              auth?: {
+                type?: string;
+                envVars?: Record<string, string>;
+                credentials?: Array<{ token?: string; envVar?: string; description?: string }>;
+              };
+              oauth?: { appKey: string; authorizeUrl: string; tokenUrl: string; scopes?: string[] };
+            };
+          };
+          if (pkg.name !== packageName || !pkg.amodal) continue;
+          const auth = pkg.amodal.auth ?? {};
+          const envVarsRaw = auth.envVars ?? {};
+          const envVars = Object.entries(envVarsRaw).map(([n, description]) => ({
+            name: n,
+            description,
+            set: !!process.env[n],
+          }));
+          let oauth: { appKey: string; available: boolean; scopes?: string[]; reason?: 'no_credentials' } | undefined;
+          if (pkg.amodal.oauth?.appKey) {
+            const upper = pkg.amodal.oauth.appKey.toUpperCase().replace(/-/g, "_");
+            const haveCreds = !!process.env[`${upper}_CLIENT_ID`] && !!process.env[`${upper}_CLIENT_SECRET`];
+            oauth = haveCreds
+              ? { appKey: pkg.amodal.oauth.appKey, available: true, scopes: pkg.amodal.oauth.scopes }
+              : { appKey: pkg.amodal.oauth.appKey, available: false, scopes: pkg.amodal.oauth.scopes, reason: 'no_credentials' };
+          }
+          res.json({
+            name: pkg.name,
+            displayName: pkg.amodal.displayName ?? pkg.amodal.name ?? pkg.name,
+            description: pkg.amodal.description ?? null,
+            icon: pkg.amodal.icon ?? null,
+            category: pkg.amodal.category ?? null,
+            authType: auth.type ?? 'unknown',
+            envVars,
+            oauth: oauth ?? null,
+          });
+          return;
+        } catch (err: unknown) {
+          log.warn('malformed_package_json', {path: pkgJsonPath, error: err instanceof Error ? err.message : String(err)});
+        }
+      }
+      res.status(404).json({ error: `Package '${packageName}' not found in installed connections` });
+    })().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    });
+  });
+
+  // ---- end OAuth broker --------------------------------------------------
+
+  // Getting Started endpoint — returns per-package auth requirements
+  // (displayName/description/icon/envVars) plus the template manifest if
+  // the repo has a template.json. The studio's Getting Started tab
+  // renders either the slot view (when template is present) or a flat
+  // package list (when not).
+  app.get('/api/getting-started', (_req, res) => {
+    void (async () => {
+      const bundleData = getBundle();
+      const repoPath = config.repoPath;
+
+      // Walk each loaded connection's `location` upward to find the
+      // containing package.json, read its amodal block. Cache by package
+      // name so multi-connection packages only get read once.
+      type EnvVarStatus = { name: string; description: string; set: boolean };
+      type OauthStatus = {
+        appKey: string;
+        available: boolean;
+        /** Why OAuth isn't usable. Surfaced for UI hint copy. */
+        reason?: 'no_metadata' | 'no_credentials';
+      };
+      const packageMap = new Map<string, {
+        name: string;
+        displayName: string;
+        description?: string;
+        icon?: string;
+        envVars: EnvVarStatus[];
+        oauth?: OauthStatus;
+      }>();
+
+      for (const conn of bundleData.connections.values()) {
+        const pkgDir = findPackageRoot(conn.location);
+        if (!pkgDir) continue;
+        const pkgJsonPath = path.join(pkgDir, 'package.json');
+        if (!existsSync(pkgJsonPath)) continue;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing trusted local JSON
+          const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as {
+            name?: string;
+            amodal?: {
+              displayName?: string;
+              name?: string;
+              description?: string;
+              icon?: string;
+              auth?: { envVars?: Record<string, string> };
+            };
+          };
+          if (!pkg.name || !pkg.amodal) continue;
+          if (packageMap.has(pkg.name)) continue;
+          const envVarsRaw = pkg.amodal.auth?.envVars ?? {};
+          const envVars: EnvVarStatus[] = Object.entries(envVarsRaw).map(([name, description]) => ({
+            name,
+            description,
+            set: !!process.env[name],
+          }));
+          // Project OAuth status if the package declares amodal.oauth.
+          // OAuth is "available" when client credentials env vars are
+          // present — the runtime broker can drive the flow.
+          let oauth: OauthStatus | undefined;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing trusted local JSON
+          const oauthMeta = (pkg.amodal as Record<string, unknown>)['oauth'] as
+            | { appKey: string }
+            | undefined;
+          if (oauthMeta && typeof oauthMeta.appKey === 'string') {
+            const upper = oauthMeta.appKey.toUpperCase().replace(/-/g, "_");
+            const haveCreds = !!process.env[`${upper}_CLIENT_ID`] && !!process.env[`${upper}_CLIENT_SECRET`];
+            oauth = haveCreds
+              ? { appKey: oauthMeta.appKey, available: true }
+              : { appKey: oauthMeta.appKey, available: false, reason: 'no_credentials' };
+          }
+          packageMap.set(pkg.name, {
+            name: pkg.name,
+            displayName: pkg.amodal.displayName ?? pkg.amodal.name ?? pkg.name,
+            ...(pkg.amodal.description ? { description: pkg.amodal.description } : {}),
+            ...(pkg.amodal.icon ? { icon: pkg.amodal.icon } : {}),
+            envVars,
+            ...(oauth ? { oauth } : {}),
+          });
+        } catch (err: unknown) {
+          log.warn('malformed_package_json', {path: pkgJsonPath, error: err instanceof Error ? err.message : String(err)});
+        }
+      }
+
+      // Package is "fulfilled" when every declared envVar is set in process.env.
+      const packages = [...packageMap.values()].map((p) => ({
+        ...p,
+        isFulfilled: p.envVars.length > 0 && p.envVars.every((v) => v.set),
+      }));
+
+      // Read template.json from repo root if present.
+      const templatePath = path.join(repoPath, 'template.json');
+      let template: unknown = null;
+      if (existsSync(templatePath)) {
+        try {
+          template = JSON.parse(readFileSync(templatePath, 'utf-8'));
+        } catch (err: unknown) {
+          log.warn('malformed_template_json', {path: templatePath, error: err instanceof Error ? err.message : String(err)});
+        }
+      }
+
+      res.json({ template, packages });
+    })().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    });
+  });
 
   // Unified config endpoint
   app.get('/api/config', (_req, res) => {
