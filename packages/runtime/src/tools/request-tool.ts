@@ -255,11 +255,14 @@ export function createRequestTool(options: CreateRequestToolOptions): ToolDefini
               url = url.replace(`{${injection.field}}`, encodeURIComponent(value));
               break;
             case 'body':
-              if (typeof data === 'object' && data !== null) {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- data is validated as object above
-                const dataObj = data as Record<string, unknown>;
-                dataObj[injection.field] = value;
+              if (typeof data !== 'object' || data === null) {
+                throw new ConnectionError(
+                  `Context injection target "body" requires a request body for connection "${connection}"`,
+                  {connection, action: `${method} ${endpoint}`},
+                );
               }
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- data is validated as object above
+              (data as Record<string, unknown>)[injection.field] = value;
               break;
             default: {
               const _exhaustive: never = injection.in;
