@@ -1,5 +1,19 @@
 # @amodalai/amodal
 
+## 0.3.40
+
+### Patch Changes
+
+- 336502b: Add versioned admin agent cache with pinning and upgrade notices
+- Updated dependencies [336502b]
+- Updated dependencies [9a6f63a]
+  - @amodalai/core@0.3.40
+  - @amodalai/runtime@0.3.40
+  - @amodalai/runtime-app@0.3.40
+  - @amodalai/studio@0.3.40
+  - @amodalai/types@0.3.40
+  - @amodalai/db@0.3.40
+
 ## 0.3.39
 
 ### Patch Changes
