@@ -37,6 +37,7 @@ export function ConnectionConfigPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [showPasteFallback, setShowPasteFallback] = useState(false);
 
   if (error) return <AgentOffline page="connection" detail={error} />;
   if (loading || !data) return null;
@@ -126,7 +127,31 @@ export function ConnectionConfigPage() {
         onConnect={() => void handleConnect()}
       />
 
-      {renderAuthForm(data, drafts, setDrafts, savingName, handleSave)}
+      {/* Paste form rules:
+          - OAuth declared + creds set + token already saved: hide entirely (configured)
+          - OAuth declared + creds set + no token yet: hide by default, show via
+            "Or paste manually" toggle (OAuth is the primary path)
+          - OAuth declared but creds missing: show paste — OAuth isn't usable yet
+          - No OAuth declared: show paste (it's the only path) */}
+      {(() => {
+        const oauthPrimary = !!data.oauth?.available;
+        const fulfilledViaPaste = data.envVars.length > 0 && data.envVars.every((v) => v.set);
+        if (oauthPrimary && !fulfilledViaPaste && !showPasteFallback) {
+          return (
+            <button
+              type="button"
+              onClick={() => setShowPasteFallback(true)}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Or paste credentials manually
+            </button>
+          );
+        }
+        if (oauthPrimary && fulfilledViaPaste && !showPasteFallback) {
+          return null;
+        }
+        return renderAuthForm(data, drafts, setDrafts, savingName, handleSave);
+      })()}
 
       <div className="pt-4 border-t border-border text-xs text-muted-foreground">
         Auth type from <code className="font-mono">amodal.auth.type</code>:{' '}
@@ -152,7 +177,7 @@ function OAuthSection({
   onConnect: () => void;
 }) {
   if (!data.oauth) return null;
-  const upper = data.oauth.appKey.toUpperCase();
+  const upper = data.oauth.appKey.toUpperCase().replace(/-/g, "_");
   return (
     <section className="rounded-lg border border-border bg-card p-5 space-y-3">
       <div>

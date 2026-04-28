@@ -628,7 +628,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         res.status(404).json({ error: `${packageName} has no amodal.oauth metadata` });
         return;
       }
-      const upper = meta.oauth.appKey.toUpperCase();
+      const upper = meta.oauth.appKey.toUpperCase().replace(/-/g, "_");
       const clientId = process.env[`${upper}_CLIENT_ID`];
       const clientSecret = process.env[`${upper}_CLIENT_SECRET`];
       if (!clientId || !clientSecret) {
@@ -807,7 +807,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           }));
           let oauth: { appKey: string; available: boolean; scopes?: string[]; reason?: 'no_credentials' } | undefined;
           if (pkg.amodal.oauth?.appKey) {
-            const upper = pkg.amodal.oauth.appKey.toUpperCase();
+            const upper = pkg.amodal.oauth.appKey.toUpperCase().replace(/-/g, "_");
             const haveCreds = !!process.env[`${upper}_CLIENT_ID`] && !!process.env[`${upper}_CLIENT_SECRET`];
             oauth = haveCreds
               ? { appKey: pkg.amodal.oauth.appKey, available: true, scopes: pkg.amodal.oauth.scopes }
@@ -900,7 +900,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
             | { appKey: string }
             | undefined;
           if (oauthMeta && typeof oauthMeta.appKey === 'string') {
-            const upper = oauthMeta.appKey.toUpperCase();
+            const upper = oauthMeta.appKey.toUpperCase().replace(/-/g, "_");
             const haveCreds = !!process.env[`${upper}_CLIENT_ID`] && !!process.env[`${upper}_CLIENT_SECRET`];
             oauth = haveCreds
               ? { appKey: oauthMeta.appKey, available: true }
