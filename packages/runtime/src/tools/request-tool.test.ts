@@ -275,6 +275,132 @@ describe('createRequestTool', () => {
     expect(url).toContain('active=true');
   });
 
+  // ---------------------------------------------------------------------------
+  // Context injection
+  // ---------------------------------------------------------------------------
+
+  it('injects header from scopeContext via contextInjection', async () => {
+    const loadedConnections = new Map([
+      ['test-api', {spec: {contextInjection: {tenant_id: {in: 'header' as const, field: 'X-Tenant-Id', required: true}}}}],
+    ]);
+
+    const tool = createRequestTool({
+      connectionsMap: makeConnectionsMap(),
+      permissionChecker: allowAllChecker,
+      loadedConnections,
+      scopeContext: {tenant_id: 'abc-123'},
+    });
+
+    const result = await tool.execute({
+      connection: 'test-api',
+      method: 'GET',
+      endpoint: '/data',
+      intent: 'read',
+    }, mockCtx) as Record<string, unknown>;
+
+    expect(result['status']).toBe(200);
+    const data = result['data'] as Record<string, unknown>;
+    const headers = data['headers'] as Record<string, unknown>;
+    expect(headers['x-tenant-id']).toBe('abc-123');
+  });
+
+  it('injects query param from scopeContext via contextInjection', async () => {
+    const loadedConnections = new Map([
+      ['test-api', {spec: {contextInjection: {org_id: {in: 'query' as const, field: 'org_id'}}}}],
+    ]);
+
+    const tool = createRequestTool({
+      connectionsMap: makeConnectionsMap(),
+      permissionChecker: allowAllChecker,
+      loadedConnections,
+      scopeContext: {org_id: 'org-456'},
+    });
+
+    const result = await tool.execute({
+      connection: 'test-api',
+      method: 'GET',
+      endpoint: '/items',
+      intent: 'read',
+    }, mockCtx) as Record<string, unknown>;
+
+    const data = result['data'] as Record<string, unknown>;
+    expect(data['url']).toContain('org_id=org-456');
+  });
+
+  it('throws when required context injection key is missing', async () => {
+    const loadedConnections = new Map([
+      ['test-api', {spec: {contextInjection: {tenant_id: {in: 'header' as const, field: 'X-Tenant-Id', required: true}}}}],
+    ]);
+
+    const tool = createRequestTool({
+      connectionsMap: makeConnectionsMap(),
+      permissionChecker: allowAllChecker,
+      loadedConnections,
+      scopeContext: {}, // missing tenant_id
+    });
+
+    await expect(
+      tool.execute({
+        connection: 'test-api',
+        method: 'GET',
+        endpoint: '/data',
+        intent: 'read',
+      }, mockCtx),
+    ).rejects.toThrow(ConnectionError);
+  });
+
+  it('skips optional context injection key when missing', async () => {
+    const loadedConnections = new Map([
+      ['test-api', {spec: {contextInjection: {tenant_id: {in: 'header' as const, field: 'X-Tenant-Id'}}}}],
+    ]);
+
+    const tool = createRequestTool({
+      connectionsMap: makeConnectionsMap(),
+      permissionChecker: allowAllChecker,
+      loadedConnections,
+      scopeContext: {}, // missing but not required
+    });
+
+    const result = await tool.execute({
+      connection: 'test-api',
+      method: 'GET',
+      endpoint: '/data',
+      intent: 'read',
+    }, mockCtx) as Record<string, unknown>;
+
+    expect(result['status']).toBe(200);
+    const data = result['data'] as Record<string, unknown>;
+    const headers = data['headers'] as Record<string, unknown>;
+    expect(headers['x-tenant-id']).toBeUndefined();
+  });
+
+  it('throws when body injection has no request body', async () => {
+    const loadedConnections = new Map([
+      ['test-api', {spec: {contextInjection: {tenant_id: {in: 'body' as const, field: 'tenant_id', required: true}}}}],
+    ]);
+
+    const tool = createRequestTool({
+      connectionsMap: makeConnectionsMap(),
+      permissionChecker: allowAllChecker,
+      loadedConnections,
+      scopeContext: {tenant_id: 'abc'},
+    });
+
+    await expect(
+      tool.execute({
+        connection: 'test-api',
+        method: 'GET',
+        endpoint: '/data',
+        intent: 'read',
+        // no data — body injection should throw
+      }, mockCtx),
+    ).rejects.toThrow(ConnectionError);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Permission checker shape
+  // ---------------------------------------------------------------------------
+
   it('passes permission checker the correct request shape', async () => {
     const checkSpy = vi.fn().mockReturnValue({allowed: true});
     const spyChecker: PermissionChecker = {check: checkSpy};
