@@ -13,6 +13,14 @@ export interface EnvVarStatus {
   set: boolean;
 }
 
+export interface PackageOauthStatus {
+  /** appKey from the package's amodal.oauth — used to look up CLIENT_ID env var. */
+  appKey: string;
+  /** Whether the runtime has credentials configured to broker the flow. */
+  available: boolean;
+  reason?: 'no_metadata' | 'no_credentials';
+}
+
 export interface GettingStartedPackage {
   name: string;
   displayName: string;
@@ -20,6 +28,8 @@ export interface GettingStartedPackage {
   icon?: string;
   envVars: EnvVarStatus[];
   isFulfilled: boolean;
+  /** Present iff the package declares amodal.oauth. */
+  oauth?: PackageOauthStatus;
 }
 
 export interface TemplateConnectionSlot {

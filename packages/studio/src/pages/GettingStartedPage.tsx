@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { useState, type ReactNode } from 'react';
 import { AgentOffline } from '@/components/AgentOffline';
+import { useStudioConfig } from '../contexts/StudioConfigContext';
 import {
   useGettingStarted,
   type GettingStartedPackage,
@@ -29,6 +31,7 @@ import {
  */
 export function GettingStartedPage() {
   const { data, error, loading, refetch } = useGettingStarted();
+  const callback = useOAuthCallbackBanner();
 
   if (error) return <AgentOffline page="getting-started" detail={error} />;
   if (loading || !data) return null;
@@ -46,6 +49,8 @@ export function GettingStartedPage() {
             : `Configure the connections this agent depends on. Each card lists the credentials a package declares; ✓ means the secret is set in the runtime's environment.`}
         </p>
       </header>
+
+      {callback}
 
       {template && template.connections && template.connections.length > 0 && (
         <SlotList slots={template.connections} packagesByName={packagesByName} />
@@ -150,6 +155,29 @@ function FlatPackageList({ packages }: { packages: GettingStartedPackage[] }) {
 // ---------------------------------------------------------------------------
 
 function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
+  const { runtimeUrl } = useStudioConfig();
+  const [connecting, setConnecting] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+
+  async function handleConnect() {
+    if (!pkg.oauth?.available || connecting) return;
+    setConnecting(true);
+    setOauthError(null);
+    try {
+      const r = await fetch(`${runtimeUrl}/api/oauth/start?package=${encodeURIComponent(pkg.name)}`);
+      if (!r.ok) {
+        const text = await r.text().catch(() => '');
+        throw new Error(`Runtime returned ${String(r.status)}${text ? ` — ${text}` : ''}`);
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
+      const { authorizeUrl } = (await r.json()) as { authorizeUrl: string };
+      window.location.href = authorizeUrl;
+    } catch (err) {
+      setOauthError(err instanceof Error ? err.message : String(err));
+      setConnecting(false);
+    }
+  }
+
   return (
     <div className="px-4 py-3 space-y-2">
       <div className="flex items-center gap-3">
@@ -162,10 +190,29 @@ function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
           <div className="text-sm font-medium truncate">{pkg.displayName}</div>
           <div className="text-[11px] font-mono text-muted-foreground truncate">{pkg.name}</div>
         </div>
-        {pkg.isFulfilled && (
+        {pkg.isFulfilled ? (
           <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ Configured</span>
-        )}
+        ) : pkg.oauth?.available ? (
+          <button
+            type="button"
+            onClick={() => void handleConnect()}
+            disabled={connecting}
+            className="text-xs px-3 py-1 rounded bg-primary-solid text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {connecting ? 'Opening…' : `Connect ${pkg.oauth.appKey}`}
+          </button>
+        ) : pkg.oauth && !pkg.oauth.available ? (
+          <span
+            className="text-xs text-muted-foreground"
+            title={`Set ${pkg.oauth.appKey.toUpperCase()}_CLIENT_ID and _CLIENT_SECRET in .env to enable OAuth`}
+          >
+            Set OAuth creds to connect
+          </span>
+        ) : null}
       </div>
+      {oauthError && (
+        <p className="text-[11px] text-destructive pl-8">OAuth start failed: {oauthError}</p>
+      )}
       {pkg.envVars.length > 0 && (
         <ul className="space-y-1 pl-8">
           {pkg.envVars.map((v) => (
@@ -181,6 +228,51 @@ function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * Reads `?connected=…` / `?error=…` from the URL — the runtime's OAuth
+ * callback redirects here with those params on success/failure. Surfaces
+ * the banner once and clears the params so a refresh doesn't repeat.
+ */
+function useOAuthCallbackBanner(): ReactNode {
+  const [info, setInfo] = useState<{ kind: 'success' | 'error'; message: string } | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('connected');
+    const errorParam = params.get('error');
+    if (connected) return { kind: 'success', message: `Connected ${connected}.` };
+    if (errorParam) return { kind: 'error', message: params.get('message') ?? errorParam };
+    return null;
+  });
+  // Strip the params on first render so a refresh doesn't surface them again.
+  if (info && typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('connected') || params.has('error') || params.has('message')) {
+      params.delete('connected');
+      params.delete('error');
+      params.delete('message');
+      const search = params.toString();
+      const next = window.location.pathname + (search ? `?${search}` : '') + window.location.hash;
+      window.history.replaceState({}, '', next);
+    }
+  }
+  if (!info) return null;
+  const cls =
+    info.kind === 'success'
+      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+      : 'border-destructive/30 bg-destructive/5 text-destructive';
+  return (
+    <div className={`rounded-md border px-4 py-3 text-sm ${cls} flex items-center justify-between gap-3`}>
+      <span>{info.message}</span>
+      <button
+        type="button"
+        onClick={() => setInfo(null)}
+        className="text-xs hover:underline"
+      >
+        Dismiss
+      </button>
     </div>
   );
 }
