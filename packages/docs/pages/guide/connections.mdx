@@ -85,6 +85,62 @@ MCP connections do not require `access.json`, `baseUrl`, or `format`. See [MCP S
 | `url` | Server URL (MCP sse/http only) |
 | `headers` | HTTP headers, e.g. for auth (MCP sse/http only) |
 | `trust` | Trust unsigned responses (MCP http only) |
+| `contextInjection` | Inject scope context values into API requests (see below) |
+
+### Context Injection
+
+When embedding an agent in a multi-tenant app, you need API calls to include tenant-specific identifiers (user ID, org ID, household ID, etc.) so the downstream API returns only that tenant's data. `contextInjection` automates this — the runtime reads values from the scope context (passed with the chat request) and injects them into every API call to this connection.
+
+```json
+{
+  "baseUrl": "https://api.example.com",
+  "auth": {
+    "type": "bearer",
+    "token": "env:API_TOKEN"
+  },
+  "contextInjection": {
+    "tenant_id": {
+      "in": "header",
+      "field": "X-Tenant-Id",
+      "required": true
+    },
+    "org_id": {
+      "in": "query",
+      "field": "org_id"
+    }
+  }
+}
+```
+
+Each key in `contextInjection` maps to a key in the scope context object. When the agent makes a request to this connection, the runtime looks up that key in the context and injects the value.
+
+| Field | Description |
+|-------|-------------|
+| `in` | Where to inject: `"header"`, `"query"`, `"path"`, or `"body"` |
+| `field` | The header name, query param name, path placeholder, or body field name |
+| `required` | If `true`, requests fail with an error when the key is missing from scope context. Defaults to `false` (silently skipped). |
+
+**Injection targets:**
+
+- **header** — adds `field: value` to request headers (e.g., `X-Tenant-Id: abc123`)
+- **query** — appends `field=value` to the URL query string
+- **path** — replaces `{field}` in the endpoint URL (e.g., `/tenants/{tenant_id}/data`)
+- **body** — adds `field: value` to the JSON request body (POST/PUT/PATCH only)
+
+**How context is passed:** The embedding app includes a `context` object in the chat request body alongside `scope_id`:
+
+```json
+{
+  "message": "What are my recent orders?",
+  "scope_id": "user-123",
+  "context": {
+    "tenant_id": "tenant-abc",
+    "org_id": "org-456"
+  }
+}
+```
+
+See [Scope](/guide/config#scope) for full details on multi-tenant configuration.
 
 ## access.json
 
