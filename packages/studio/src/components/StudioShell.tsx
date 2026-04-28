@@ -46,6 +46,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: readonly NavItem[] = [
+  { href: '/getting-started', label: 'Getting started', icon: Sparkles },
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/files', label: 'Files', icon: FileCode },
   { href: '/evals', label: 'Evals', icon: FlaskConical },
