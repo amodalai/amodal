@@ -55,6 +55,10 @@ export interface UseChatOptions {
   sessionType?: string;
   /** Specific deployment ID to load instead of the active deployment. */
   deployId?: string;
+  /** Scope ID for multi-tenant session isolation. Scopes sessions, memory, and stores per value. */
+  scopeId?: string;
+  /** Context key-value pairs injected into connection API calls via contextInjection. */
+  scopeContext?: Record<string, string>;
   /** Auto-send this message when the hook mounts. Sent exactly once via ref guard. */
   initialMessage?: string;
   /** Load an existing session on mount (read-only history view). Takes precedence over initialMessage. */
@@ -101,6 +105,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     entityExtractors,
     sessionType,
     deployId,
+    scopeId,
+    scopeContext,
     initialMessage,
     resumeSessionId,
     onStreamEnd,
@@ -109,8 +115,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
   // We keep callbacks + request metadata in refs so the streamFn closure
   // captured by useChatStream stays stable while still using fresh values.
-  const authRef = useRef({ getToken, sessionType, deployId });
-  authRef.current = { getToken, sessionType, deployId };
+  const authRef = useRef({ getToken, sessionType, deployId, scopeId, scopeContext });
+  authRef.current = { getToken, sessionType, deployId, scopeId, scopeContext };
 
   // Track current session id in a ref so the streamFn closure can pass it
   // with every POST (used to resume an in-flight session).
@@ -130,6 +136,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           session_id: sessionIdRef.current ?? undefined,
           session_type: authRef.current.sessionType,
           deploy_id: authRef.current.deployId,
+          scope_id: authRef.current.scopeId,
+          context: authRef.current.scopeContext,
         },
         signal,
         token,

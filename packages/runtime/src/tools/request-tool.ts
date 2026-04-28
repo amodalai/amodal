@@ -136,6 +136,10 @@ export interface CreateRequestToolOptions {
   readOnly?: boolean;
   /** Callback to check if plan mode is active */
   planModeActive?: () => boolean;
+  /** Loaded connections for context injection lookup */
+  loadedConnections?: Map<string, {spec: {contextInjection?: Record<string, {in: 'query' | 'header' | 'path' | 'body'; field: string; required?: boolean}>}}>;
+  /** Scope context key-value pairs for context injection */
+  scopeContext?: Record<string, string>;
 }
 
 /**
@@ -222,6 +226,48 @@ export function createRequestTool(options: CreateRequestToolOptions): ToolDefini
 
       // Build headers
       const resolvedHeaders = buildHeaders(connConfig, requestConfig, extraHeaders);
+
+      // Apply context injection from connection spec
+      const loadedConn = options.loadedConnections?.get(connection);
+      const contextInjection = loadedConn?.spec.contextInjection;
+      if (contextInjection) {
+        for (const [contextKey, injection] of Object.entries(contextInjection)) {
+          const value = options.scopeContext?.[contextKey];
+          if (value === undefined) {
+            if (injection.required) {
+              throw new ConnectionError(
+                `Required context injection key "${contextKey}" is missing from scope context for connection "${connection}"`,
+                {connection, action: `${method} ${endpoint}`},
+              );
+            }
+            continue;
+          }
+          switch (injection.in) {
+            case 'header':
+              resolvedHeaders[injection.field] = value;
+              break;
+            case 'query': {
+              const separator = url.includes('?') ? '&' : '?';
+              url += `${separator}${encodeURIComponent(injection.field)}=${encodeURIComponent(value)}`;
+              break;
+            }
+            case 'path':
+              url = url.replace(`{${injection.field}}`, encodeURIComponent(value));
+              break;
+            case 'body':
+              if (typeof data === 'object' && data !== null) {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- data is validated as object above
+                const dataObj = data as Record<string, unknown>;
+                dataObj[injection.field] = value;
+              }
+              break;
+            default: {
+              const _exhaustive: never = injection.in;
+              throw new ConnectionError(`Unknown injection target: ${String(_exhaustive)}`, {connection, action: `${method} ${endpoint}`});
+            }
+          }
+        }
+      }
 
       // Execute HTTP request
       const fetchOptions: RequestInit = {
