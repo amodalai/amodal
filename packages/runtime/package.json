@@ -1,6 +1,6 @@
 {
   "name": "@amodalai/runtime",
-  "version": "0.3.39",
+  "version": "0.3.40",
   "description": "Agent Runtime Platform — HTTP server for repo and platform modes",
   "license": "MIT",
   "repository": {

@@ -1,5 +1,12 @@
 # @amodalai/core
 
+## 0.3.40
+
+### Patch Changes
+
+- 336502b: Add versioned admin agent cache with pinning and upgrade notices
+  - @amodalai/types@0.3.40
+
 ## 0.3.39
 
 ### Patch Changes
