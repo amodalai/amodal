@@ -6,12 +6,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Brain, Plus, Trash2, Pencil, X, Check, AlertCircle } from 'lucide-react';
+import { studioApiUrl } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const MEMORY_API_BASE = '/api/memory';
+const MEMORY_API_PATH = '/api/memory';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,7 +42,7 @@ export function MemoryPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchEntries = useCallback(() => {
-    fetch(MEMORY_API_BASE, { signal: AbortSignal.timeout(5_000) })
+    fetch(studioApiUrl(MEMORY_API_PATH), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON response boundary
@@ -63,7 +64,7 @@ export function MemoryPage() {
     setSaving(true);
     setActionError(null);
     try {
-      const res = await fetch(MEMORY_API_BASE, {
+      const res = await fetch(studioApiUrl(MEMORY_API_PATH), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: newContent.trim() }),
@@ -82,7 +83,7 @@ export function MemoryPage() {
   const handleDelete = async (id: string) => {
     setActionError(null);
     try {
-      const res = await fetch(`${MEMORY_API_BASE}/${id}`, {
+      const res = await fetch(studioApiUrl(`${MEMORY_API_PATH}/${id}`), {
         method: 'DELETE',
         signal: AbortSignal.timeout(5_000),
       });
@@ -98,7 +99,7 @@ export function MemoryPage() {
     setSaving(true);
     setActionError(null);
     try {
-      const res = await fetch(`${MEMORY_API_BASE}/${editingId}`, {
+      const res = await fetch(studioApiUrl(`${MEMORY_API_PATH}/${editingId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: editContent.trim() }),

@@ -5,6 +5,7 @@
  */
 
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
+import { getBasePath } from './lib/api';
 import { StudioShell } from './components/StudioShell';
 import { OverviewPage } from './pages/OverviewPage';
 import { GettingStartedPage } from './pages/GettingStartedPage';
@@ -59,15 +60,18 @@ const agentRoutes = [
   { path: '*', element: <NotFoundPage /> },
 ];
 
-export const router = createBrowserRouter([
-  {
-    element: <Layout />,
-    children: [
-      // Root redirects to the default local agent
-      { path: '/', element: <Navigate to="/agents/local" replace /> },
-      // Agent-scoped routes
-      { path: '/agents/:agentId/*', children: agentRoutes },
-      { path: '*', element: <NotFoundPage /> },
-    ],
-  },
-]);
+export const router = createBrowserRouter(
+  [
+    {
+      element: <Layout />,
+      children: [
+        // Root redirects to the default local agent
+        { path: '/', element: <Navigate to="/agents/local" replace /> },
+        // Agent-scoped routes
+        { path: '/agents/:agentId/*', children: agentRoutes },
+        { path: '*', element: <NotFoundPage /> },
+      ],
+    },
+  ],
+  { basename: getBasePath() || undefined },
+);

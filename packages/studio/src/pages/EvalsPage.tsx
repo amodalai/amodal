@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { studioApiUrl } from '@/lib/api';
 import { useEvalSuites } from '@/hooks/useEvalSuites';
 import {
   EvalCard,
@@ -31,7 +32,7 @@ export function EvalsPage() {
 
   // Fetch available models so EvalCard has the main model info
   useEffect(() => {
-    fetch(`/api/evals/arena/models`, { signal: AbortSignal.timeout(5_000) })
+    fetch(studioApiUrl('/api/evals/arena/models'), { signal: AbortSignal.timeout(5_000) })
       .then((res) => {
         if (!res.ok) return;
         return res.json();
@@ -50,7 +51,7 @@ export function EvalsPage() {
   // Fetch per-eval history
   useEffect(() => {
     for (const suite of suites) {
-      fetch(`/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`, { signal: AbortSignal.timeout(5_000) })
+      fetch(studioApiUrl(`/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`), { signal: AbortSignal.timeout(5_000) })
         .then((res) => {
           if (!res.ok) return;
           return res.json();

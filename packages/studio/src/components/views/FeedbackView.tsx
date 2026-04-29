@@ -6,6 +6,7 @@
 
 import { useState, useCallback } from 'react';
 import { useStudioEvents } from '@/contexts/StudioEventsContext';
+import { studioApiUrl } from '@/lib/api';
 import { ThumbsUp, ThumbsDown, CheckCircle, Loader2 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ interface Props {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MARK_REVIEWED_ENDPOINT = '/api/feedback/mark-reviewed';
+const MARK_REVIEWED_PATH = '/api/feedback/mark-reviewed';
 const QUERY_PREVIEW_LENGTH = 120;
 const RESPONSE_PREVIEW_LENGTH = 200;
 
@@ -103,7 +104,7 @@ export function FeedbackView({ initialEntries, initialSummary, agentId, onRefres
     setError(null);
 
     try {
-      const res = await fetch(MARK_REVIEWED_ENDPOINT, {
+      const res = await fetch(studioApiUrl(MARK_REVIEWED_PATH), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: Array.from(selected) }),

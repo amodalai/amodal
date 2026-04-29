@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ChatWidget } from '@amodalai/react/widget';
 import { streamSSE } from '@amodalai/react';
 import type { SSEEvent, ChatMessage } from '@amodalai/react';
+import { studioApiUrl } from '@/lib/api';
 import { useTheme } from '../ThemeProvider';
 
 // ---------------------------------------------------------------------------
@@ -68,7 +69,7 @@ export function AdminChat({ compact = true }: { compact?: boolean }) {
     (text: string, signal: AbortSignal): AsyncIterable<SSEEvent> => {
       const body: Record<string, unknown> = { message: text, app_id: 'admin' };
       if (sessionIdRef.current) body['session_id'] = sessionIdRef.current;
-      return streamSSE('/api/studio/admin-chat/stream', body, { signal });
+      return streamSSE(studioApiUrl('/api/studio/admin-chat/stream'), body, { signal });
     },
     [],
   );
