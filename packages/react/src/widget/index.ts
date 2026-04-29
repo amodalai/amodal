@@ -6,7 +6,7 @@
 
 // Main widget component
 export { ChatWidget } from './ChatWidget';
-export type { ChatWidgetProps } from './ChatWidget';
+export type { ChatWidgetProps, ChatWidgetHandle } from './ChatWidget';
 
 // Widget sub-components
 export { MessageList } from './MessageList';

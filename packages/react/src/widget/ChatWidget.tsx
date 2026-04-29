@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { WidgetConfig, SSEEvent } from '../types';
 import type { InteractionEvent } from '../events/types';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
@@ -34,6 +34,13 @@ function CloseIcon() {
   );
 }
 
+export interface ChatWidgetHandle {
+  /** Send a message in the current session, as if the user typed it. */
+  sendMessage: (text: string) => void;
+  /** Get the current session ID. */
+  getSessionId: () => string | null;
+}
+
 export type ChatWidgetProps = WidgetConfig & {
   widgets?: WidgetRegistry;
   /** Enable session history drawer. */
@@ -52,7 +59,7 @@ export type ChatWidgetProps = WidgetConfig & {
   onStateChange?: (state: { sessionId: string | null; messages: Array<import('../types').ChatMessage> }) => void;
 };
 
-export function ChatWidget({
+export const ChatWidget = forwardRef<ChatWidgetHandle, ChatWidgetProps>(({
   serverUrl,
   user,
   getToken,
@@ -78,7 +85,7 @@ export function ChatWidget({
   onSessionCreated,
   streamFn: customStreamFn,
   onStateChange,
-}: ChatWidgetProps) {
+}: ChatWidgetProps, ref: React.ForwardedRef<ChatWidgetHandle>) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [showHistory, setShowHistory] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -122,6 +129,11 @@ export function ChatWidget({
   const submitAskUserResponse = customStreamFn ? noopAskUser : chatHook.submitAskUserResponse;
   const loadSession = customStreamFn ? noopLoadSession : chatHook.loadSession;
   const session = customStreamFn ? { id: directStream.sessionId } : chatHook.session;
+
+  useImperativeHandle(ref, () => ({
+    sendMessage: (text: string) => { send(text); },
+    getSessionId: () => session.id ?? null,
+  }), [send, session.id]);
 
   // Track elapsed time during streaming
   const [streamStartTime, setStreamStartTime] = useState(0);
@@ -273,7 +285,8 @@ export function ChatWidget({
       )}
     </div>
   );
-}
+});
+ChatWidget.displayName = 'ChatWidget';
 
 function HistoryIcon() {
   return (
