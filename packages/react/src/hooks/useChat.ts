@@ -194,8 +194,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   );
 
   // Resume an existing session on mount (takes precedence over initialMessage).
-  // If the session doesn't exist (404), silently proceed as a new session and
-  // notify the host app via onSessionCreated on the next stream init.
   useEffect(() => {
     if (!resumeSessionId || resumeLoadedRef.current) return;
     resumeLoadedRef.current = true;
@@ -209,17 +207,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         const chatMessages = rehydrateHistory(detail.messages);
         stream.dispatch({ type: 'LOAD_HISTORY', sessionId: resumeSessionId, messages: chatMessages });
       } catch (err: unknown) {
-        // Module boundary: session resume is an expected-failure site.
-        // 404 means the session was deleted or never existed — fall through
-        // to a fresh session instead of surfacing an error to the user.
-        if (err instanceof ChatApiError && err.status === 404) {
-          // Allow initialMessage to fire if present by resetting the guard.
-          initialMessageDeliveredRef.current = false;
-          return;
-        }
+        const is404 = err instanceof ChatApiError && err.status === 404;
         stream.dispatch({
           type: 'STREAM_ERROR',
-          message: err instanceof Error ? err.message : 'Failed to resume session',
+          message: is404
+            ? 'Previous session no longer exists. Start a new conversation.'
+            : err instanceof Error ? err.message : 'Failed to resume session',
         });
       }
     };
