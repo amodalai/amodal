@@ -142,7 +142,13 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
 
       // SPA catch-all: serve index.html for non-API routes.
       // Inject __STUDIO_BASE_PATH__ so the frontend knows its prefix.
-      const rawIndexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf-8');
+      let rawIndexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf-8');
+      // Rewrite asset paths to include base path prefix (Vite bakes base: '/' at build time)
+      if (basePath) {
+        rawIndexHtml = rawIndexHtml
+          .replace(/href="\//g, `href="${basePath}/`)
+          .replace(/src="\//g, `src="${basePath}/`);
+      }
       const basePathScript = `<script>window.__STUDIO_BASE_PATH__=${JSON.stringify(basePath)};</script>`;
       const indexHtml = rawIndexHtml.replace('</head>', `${basePathScript}\n</head>`);
 
