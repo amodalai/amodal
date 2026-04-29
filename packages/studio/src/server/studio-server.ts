@@ -7,7 +7,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
-import { serveStatic } from '@hono/node-server/serve-static';
+// serveStatic removed — we serve files manually with correct MIME types
 import path from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -135,15 +135,23 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
       : path.resolve(__dirname, '..', 'dist');
 
     if (existsSync(path.join(distDir, 'index.html'))) {
-      // Compute the relative path from cwd to distDir for serveStatic
-      const relativeRoot = path.relative(process.cwd(), distDir);
+      // MIME type map for static assets
+      const MIME_TYPES: Record<string, string> = {
+        '.js': 'application/javascript',
+        '.css': 'text/css',
+        '.html': 'text/html',
+        '.json': 'application/json',
+        '.svg': 'image/svg+xml',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.ico': 'image/x-icon',
+        '.woff': 'font/woff',
+        '.woff2': 'font/woff2',
+        '.map': 'application/json',
+      };
 
-      sub.use('/*', serveStatic({ root: relativeRoot }));
-
-      // SPA catch-all: serve index.html for non-API routes.
-      // Inject __STUDIO_BASE_PATH__ so the frontend knows its prefix.
+      // SPA catch-all + static file serving with correct MIME types
       let rawIndexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf-8');
-      // Rewrite asset paths to include base path prefix (Vite bakes base: '/' at build time)
       if (basePath) {
         rawIndexHtml = rawIndexHtml
           .replace(/href="\//g, `href="${basePath}/`)
@@ -153,14 +161,25 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
       const indexHtml = rawIndexHtml.replace('</head>', `${basePathScript}\n</head>`);
 
       sub.get('*', (c) => {
-        // c.req.path includes the base path prefix; strip it for the check
         const reqPath = basePath && c.req.path.startsWith(basePath)
           ? c.req.path.slice(basePath.length)
           : c.req.path;
-        // Don't serve HTML for API routes or static assets
-        if (reqPath.startsWith('/api/') || reqPath.startsWith('/assets/')) {
+
+        // Don't serve HTML for API routes
+        if (reqPath.startsWith('/api/')) {
           return c.notFound();
         }
+
+        // Try to serve static file from dist
+        const filePath = path.join(distDir, reqPath);
+        if (existsSync(filePath) && !filePath.includes('..')) {
+          const ext = path.extname(filePath);
+          const mime = MIME_TYPES[ext] ?? 'application/octet-stream';
+          const body = readFileSync(filePath);
+          return c.body(body, 200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=31536000, immutable' });
+        }
+
+        // SPA fallback — return index.html for all other routes
         return c.html(indexHtml);
       });
     }
