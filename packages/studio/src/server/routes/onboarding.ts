@@ -90,9 +90,20 @@ onboardingRoutes.post('/api/studio/onboarding/clone', async (c) => {
 
     rmSync(tmpDir, {recursive: true, force: true});
 
-    // Install packages
-    execSync('npm install --no-audit --no-fund', {cwd: repoPath, timeout: 120_000});
-    logger.info('onboarding_clone_complete', {repo, repoPath});
+    // Read packages from merged amodal.json and install them
+    let pkgList: string[] = [];
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing local JSON
+      const mergedCfg = JSON.parse(readFileSync(userConfigPath, 'utf-8')) as Record<string, unknown>;
+      if (Array.isArray(mergedCfg['packages'])) {
+        pkgList = mergedCfg['packages'].filter((p): p is string => typeof p === 'string');
+      }
+    } catch { /* */ }
+
+    if (pkgList.length > 0) {
+      execSync(`npm install --no-audit --no-fund ${pkgList.join(' ')}`, {cwd: repoPath, timeout: 120_000});
+    }
+    logger.info('onboarding_clone_complete', {repo, repoPath, packages: pkgList.length});
 
     // Discover credentials from installed packages
     const credentials: Array<{name: string; envVar: string; description: string; status: string}> = [];

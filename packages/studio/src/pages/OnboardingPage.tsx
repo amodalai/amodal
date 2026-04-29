@@ -7,14 +7,12 @@
 import { OnboardingWizard } from './OnboardingWizard';
 
 /**
- * Onboarding page for fresh repos. Renders a deterministic wizard
- * (gallery → clone → credentials → customize → summary) that doesn't
- * require an LLM. The admin chat panel is available for "Build custom"
- * and questions.
+ * Onboarding page for fresh repos. Fixed height container — the wizard
+ * scrolls internally without pushing the page layout.
  */
 export function OnboardingPage() {
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto scrollbar-thin">
       <OnboardingWizard />
     </div>
   );

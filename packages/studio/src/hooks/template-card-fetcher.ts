@@ -58,8 +58,7 @@ export function parseCard(raw: unknown): AgentCard | null {
   if (typeof obj.tagline !== 'string' || obj.tagline === '') return null;
 
   const platforms = readStringArray(obj.platforms);
-  const turns = readTurns(obj.thumbnailConversation);
-  if (turns === null || turns.length === 0) return null;
+  const turns = readTurns(obj.thumbnailConversation) ?? [];
 
   const snippet =
     typeof obj.snippet === 'string' && obj.snippet !== '' ? obj.snippet : undefined;
