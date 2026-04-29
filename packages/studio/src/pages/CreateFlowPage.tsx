@@ -387,7 +387,7 @@ function PickerView({
               onClick={onQuestionnaire}
               className="text-[12px] font-medium text-muted-foreground hover:text-foreground underline underline-offset-2 decoration-muted-foreground/40 transition-colors"
             >
-              Need help coming up with ideas?
+              Need guidance? Take our questionnaire →
             </button>
           </div>
         </section>
