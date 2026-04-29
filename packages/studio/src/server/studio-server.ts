@@ -31,6 +31,7 @@ import { memoryRoutes } from './routes/memory.js';
 import { eventsRoutes } from './routes/events.js';
 import { adminChatRoutes } from './routes/admin-chat.js';
 import { runtimeProxyRoutes } from './routes/runtime-proxy.js';
+import { onboardingRoutes } from './routes/onboarding.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -116,6 +117,7 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
   sub.route('', eventsRoutes);
   sub.route('', adminChatRoutes);
   sub.route('', runtimeProxyRoutes);
+  sub.route('', onboardingRoutes);
 
   // ---------------------------------------------------------------------------
   // Error handler

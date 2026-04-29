@@ -12,7 +12,7 @@ import { ToolCallCard } from './ToolCallCard';
 import { KBProposalCard } from './KBProposalCard';
 
 /** Tools that render their own UI via inline SSE events. Hide the ToolCallCard chrome for these. */
-const UI_TOOLS = new Set(['show_gallery', 'collect_secret', 'start_oauth', 'ask_choice', 'show_preview', 'clone_template', 'setup_connections', 'customize_agent', 'show_setup_summary']);
+const UI_TOOLS = new Set(['show_gallery', 'collect_secret', 'start_oauth', 'ask_choice', 'show_preview', 'clone_template', 'setup_connections', 'customize_agent', 'show_setup_summary', 'onboarding_step']);
 import { SkillPill } from './SkillPill';
 import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';

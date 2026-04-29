@@ -514,6 +514,243 @@ function registerShowSetupSummary(registry: ToolRegistry, opts: OnboardingToolsO
 }
 
 // ---------------------------------------------------------------------------
+// onboarding_step — stateful flow controller
+// ---------------------------------------------------------------------------
+
+type OnboardingStepName = 'gallery' | 'clone' | 'connections' | 'customize' | 'summary' | 'done';
+
+interface OnboardingState {
+  step: OnboardingStepName;
+  selectedTemplate?: string;
+}
+
+const sessionStates = new Map<string, OnboardingState>();
+
+function registerOnboardingStep(registry: ToolRegistry, opts: OnboardingToolsOptions): void {
+  const {repoRoot, logger} = opts;
+
+  // Template catalog — same repos the show_gallery tool uses
+  const TEMPLATES = [
+    {repo: 'amodalai/template-content-marketing', branch: 'main'},
+    {repo: 'amodalai/template-support-triage', branch: 'main'},
+    {repo: 'amodalai/template-sales-pipeline', branch: 'main'},
+  ];
+
+  registry.register('onboarding_step', {
+    description:
+      'Advance the onboarding flow to the next step. Call this tool repeatedly — ' +
+      'it tracks progress and emits the right UI for each step. ' +
+      'Pass user_input with the user\'s choice or response from the previous step.',
+    parameters: z.object({
+      user_input: z.string().optional().describe('The user\'s response to the previous step (e.g. template name, "skip", form data)'),
+    }),
+    readOnly: false,
+    metadata: {category: 'admin'},
+
+    async execute(params: {user_input?: string}, ctx: ToolContext) {
+      const state = sessionStates.get(ctx.sessionId) ?? {step: 'gallery' as OnboardingStepName};
+
+      switch (state.step) {
+        // ----- GALLERY -----
+        case 'gallery': {
+          const templates: SSEShowGalleryEvent['templates'] = [];
+          for (const t of TEMPLATES) {
+            try {
+              const cardUrl = `https://raw.githubusercontent.com/${t.repo}/${t.branch}/card/card.json`;
+              const res = await fetch(cardUrl, {signal: AbortSignal.timeout(CARD_FETCH_TIMEOUT_MS)});
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
+              const card = res.ok ? await res.json() as Record<string, unknown> : {};
+              templates.push({
+                repo: t.repo,
+                title: typeof card['title'] === 'string' ? card['title'] : t.repo.split('/').pop()?.replace(/^template-/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) ?? t.repo,
+                tagline: typeof card['tagline'] === 'string' ? card['tagline'] : '',
+                author: typeof card['author'] === 'string' ? card['author'] : 'unknown',
+                verified: card['verified'] === true,
+              });
+            } catch {
+              const name = t.repo.split('/').pop()?.replace(/^template-/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) ?? t.repo;
+              templates.push({repo: t.repo, title: name, tagline: '', author: 'unknown', verified: false});
+            }
+          }
+
+          ctx.emit?.({
+            type: SSEEventType.ShowGallery,
+            title: 'Start with an agent',
+            templates,
+            allow_custom: true,
+            timestamp: new Date().toISOString(),
+          });
+
+          state.step = 'clone';
+          sessionStates.set(ctx.sessionId, state);
+          return {step: 'gallery', wait_for_user: true, say: 'Pick a template or describe what you need.'};
+        }
+
+        // ----- CLONE -----
+        case 'clone': {
+          const input = params.user_input ?? '';
+          const template = TEMPLATES.find((t) => input.toLowerCase().includes(t.repo.split('/').pop()?.replace(/^template-/, '').replace(/-/g, ' ') ?? ''));
+          if (!template) {
+            // Custom build — skip to done, let agent handle conversationally
+            state.step = 'done';
+            sessionStates.set(ctx.sessionId, state);
+            return {step: 'custom', message: 'User wants a custom agent. Help them with search_packages and install_package.'};
+          }
+
+          // Validate and clone
+          if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(template.repo)) {
+            return {step: 'clone', error: 'Invalid repo format'};
+          }
+          const tmpDir = path.join(repoRoot, '.amodal', '.tmp-clone');
+          try {
+            if (existsSync(tmpDir)) await rm(tmpDir, {recursive: true, force: true});
+            await mkdir(tmpDir, {recursive: true});
+            await execFileAsync('git', ['clone', '--depth', '1', '--branch', template.branch, '--', `https://github.com/${template.repo}.git`, tmpDir], {timeout: CLONE_TIMEOUT_MS});
+            await rm(path.join(tmpDir, '.git'), {recursive: true, force: true});
+            const entries = await readdir(tmpDir);
+            for (const entry of entries) {
+              if (entry === 'card' || entry === '.git') continue;
+              const dst = path.join(repoRoot, entry);
+              if (existsSync(dst)) continue;
+              await cp(path.join(tmpDir, entry), dst, {recursive: true});
+            }
+            await mergeAmodalJson(repoRoot, tmpDir, logger);
+            await rm(tmpDir, {recursive: true, force: true});
+
+            // Install npm packages so connection metadata is available
+            await execFileAsync('npm', ['install', '--no-audit', '--no-fund'], {cwd: repoRoot, timeout: 120_000});
+            logger.info('template_packages_installed', {repoRoot});
+          } catch (err: unknown) {
+            await rm(tmpDir, {recursive: true, force: true}).catch(() => {});
+            return {step: 'clone', error: err instanceof Error ? err.message : String(err)};
+          }
+
+          state.selectedTemplate = template.repo;
+          state.step = 'connections';
+          sessionStates.set(ctx.sessionId, state);
+          return {step: 'cloned', repo: template.repo, say: 'Template installed. Setting up connections now.', call_again: true};
+        }
+
+        // ----- CONNECTIONS -----
+        case 'connections': {
+          let packages: string[] = [];
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing local JSON
+            const config = JSON.parse(await readFile(path.join(repoRoot, 'amodal.json'), 'utf-8')) as Record<string, unknown>;
+            if (Array.isArray(config['packages'])) packages = config['packages'].filter((p): p is string => typeof p === 'string');
+          } catch { /* */ }
+
+          const connections: SSESetupConnectionsEvent['connections'] = [];
+          for (const pkg of packages) {
+            try {
+              const pkgJsonPath = path.join(repoRoot, 'node_modules', pkg, 'package.json');
+              if (!existsSync(pkgJsonPath)) continue;
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing package.json
+              const pkgJson = JSON.parse(await readFile(pkgJsonPath, 'utf-8')) as Record<string, unknown>;
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- amodal block
+              const amodal = pkgJson['amodal'] as Record<string, unknown> | undefined;
+              if (!amodal?.['auth']) continue;
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- auth block
+              const auth = amodal['auth'] as Record<string, unknown>;
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- envVars
+              const envVars = (auth['envVars'] ?? {}) as Record<string, string>;
+              const displayName = typeof amodal['displayName'] === 'string' ? amodal['displayName'] : typeof amodal['name'] === 'string' ? amodal['name'] : pkg.split('/').pop() ?? pkg;
+              for (const [envVar, description] of Object.entries(envVars)) {
+                connections.push({name: displayName, label: envVar, auth_type: 'api_key', env_var: envVar, description, status: process.env[envVar] ? 'connected' : 'pending'});
+              }
+            } catch { /* skip */ }
+          }
+
+          if (connections.length > 0) {
+            ctx.emit?.({type: SSEEventType.SetupConnections, connections, timestamp: new Date().toISOString()});
+          }
+
+          state.step = 'customize';
+          sessionStates.set(ctx.sessionId, state);
+          return {step: 'connections', count: connections.length, wait_for_user: true, say: connections.length > 0 ? 'Fill in your API keys above, then click Continue.' : 'No credentials needed — moving on.'};
+        }
+
+        // ----- CUSTOMIZE -----
+        case 'customize': {
+          ctx.emit?.({
+            type: SSEEventType.CustomizeAgent,
+            prompts: [
+              {id: 'website', label: 'Your website or company URL', placeholder: 'https://example.com', required: false},
+              {id: 'description', label: 'What does your company do? (1-2 sentences)', placeholder: 'We build developer tools for...', required: false},
+            ],
+            skip_label: 'Skip for now',
+            timestamp: new Date().toISOString(),
+          });
+
+          state.step = 'summary';
+          sessionStates.set(ctx.sessionId, state);
+          return {step: 'customize', wait_for_user: true, say: 'Tell me about your company so I can personalize your agent.'};
+        }
+
+        // ----- SUMMARY -----
+        case 'summary': {
+          let agentName = 'Your agent';
+          let packages: string[] = [];
+          let skills: string[] = [];
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing local JSON
+            const config = JSON.parse(await readFile(path.join(repoRoot, 'amodal.json'), 'utf-8')) as Record<string, unknown>;
+            if (typeof config['name'] === 'string') agentName = config['name'];
+            if (Array.isArray(config['packages'])) packages = config['packages'].filter((p): p is string => typeof p === 'string');
+          } catch { /* */ }
+          try {
+            if (existsSync(path.join(repoRoot, 'skills'))) skills = await readdir(path.join(repoRoot, 'skills'));
+          } catch { /* */ }
+
+          const connections: SSESetupSummaryEvent['connections'] = [];
+          for (const pkg of packages) {
+            try {
+              const pkgJsonPath = path.join(repoRoot, 'node_modules', pkg, 'package.json');
+              if (!existsSync(pkgJsonPath)) continue;
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing package.json
+              const pkgJson = JSON.parse(await readFile(pkgJsonPath, 'utf-8')) as Record<string, unknown>;
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- amodal block
+              const amodal = pkgJson['amodal'] as Record<string, unknown> | undefined;
+              if (!amodal) continue;
+              const name = typeof amodal['displayName'] === 'string' ? amodal['displayName'] : typeof amodal['name'] === 'string' ? amodal['name'] : pkg.split('/').pop() ?? pkg;
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- auth block
+              const auth = (amodal['auth'] ?? {}) as Record<string, unknown>;
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- envVars
+              const envVars = (auth['envVars'] ?? {}) as Record<string, string>;
+              const allSet = Object.keys(envVars).every((k) => !!process.env[k]);
+              connections.push({name, status: Object.keys(envVars).length === 0 ? 'connected' : allSet ? 'connected' : 'pending'});
+            } catch { /* skip */ }
+          }
+
+          // Determine runtime URL from env
+          const runtimePort = process.env['PORT'] ?? '3847';
+          const agentUrl = `http://localhost:${runtimePort}`;
+
+          ctx.emit?.({
+            type: SSEEventType.SetupSummary,
+            agent_name: agentName,
+            connections,
+            skills,
+            agent_url: agentUrl,
+            timestamp: new Date().toISOString(),
+          });
+
+          state.step = 'done';
+          sessionStates.set(ctx.sessionId, state);
+          return {step: 'summary', done: true};
+        }
+
+        case 'done':
+          return {step: 'done', message: 'Onboarding is complete. Help the user with any customization requests.'};
+
+        default:
+          return {step: 'unknown', error: 'Unknown onboarding state'};
+      }
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -524,4 +761,5 @@ export function registerOnboardingTools(registry: ToolRegistry, opts: Onboarding
   registerSetupConnections(registry, opts);
   registerCustomizeAgent(registry, opts);
   registerShowSetupSummary(registry, opts);
+  registerOnboardingStep(registry, opts);
 }
