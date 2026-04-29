@@ -99,9 +99,8 @@ jobs:
 
       - name: Verify endpoints
         run: |
-          # Wait for Studio to be ready (it starts after the runtime)
-          # Wait for Studio to be ready
-          for i in $(seq 1 15); do
+          # Wait for Studio to be ready (starts as a subprocess after the runtime)
+          for i in $(seq 1 30); do
             curl -sf http://localhost:3848/api/config > /dev/null 2>&1 && break
             sleep 2
           done
