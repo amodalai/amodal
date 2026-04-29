@@ -127,6 +127,9 @@ export enum SSEEventType {
   StartOAuth = 'start_oauth',
   ShowGallery = 'show_gallery',
   CollectSecret = 'collect_secret',
+  SetupConnections = 'setup_connections',
+  SetupSummary = 'setup_summary',
+  CustomizeAgent = 'customize_agent',
 }
 
 export interface SSEInitEvent {
@@ -325,7 +328,10 @@ export type SSEEvent =
   | SSEShowPreviewEvent
   | SSEStartOAuthEvent
   | SSEShowGalleryEvent
-  | SSECollectSecretEvent;
+  | SSECollectSecretEvent
+  | SSESetupConnectionsEvent
+  | SSESetupSummaryEvent
+  | SSECustomizeAgentEvent;
 
 export interface SSEToolLogEvent {
   type: SSEEventType.ToolLog;
@@ -390,6 +396,41 @@ export interface SSECollectSecretEvent {
   description?: string;
   link?: string;
   required: boolean;
+  timestamp: string;
+}
+
+export interface SSESetupConnectionsEvent {
+  type: SSEEventType.SetupConnections;
+  connections: Array<{
+    name: string;
+    label: string;
+    auth_type: 'api_key' | 'oauth' | 'none';
+    env_var?: string;
+    description?: string;
+    link?: string;
+    status: 'pending' | 'connected' | 'skipped';
+  }>;
+  timestamp: string;
+}
+
+export interface SSESetupSummaryEvent {
+  type: SSEEventType.SetupSummary;
+  agent_name: string;
+  connections: Array<{name: string; status: 'connected' | 'pending' | 'skipped'}>;
+  skills: string[];
+  agent_url: string;
+  timestamp: string;
+}
+
+export interface SSECustomizeAgentEvent {
+  type: SSEEventType.CustomizeAgent;
+  prompts: Array<{
+    id: string;
+    label: string;
+    placeholder: string;
+    required: boolean;
+  }>;
+  skip_label: string;
   timestamp: string;
 }
 

@@ -23,7 +23,7 @@ import {z} from 'zod';
 import type {ToolRegistry, ToolContext} from './types.js';
 import type {Logger} from '../logger.js';
 import {SSEEventType} from '../types.js';
-import type {SSEShowGalleryEvent, SSECollectSecretEvent} from '../types.js';
+import type {SSEShowGalleryEvent, SSECollectSecretEvent, SSESetupConnectionsEvent, SSESetupSummaryEvent, SSECustomizeAgentEvent} from '../types.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -294,6 +294,226 @@ function registerCollectSecret(registry: ToolRegistry, _opts: OnboardingToolsOpt
 }
 
 // ---------------------------------------------------------------------------
+// setup_connections
+// ---------------------------------------------------------------------------
+
+function registerSetupConnections(registry: ToolRegistry, opts: OnboardingToolsOptions): void {
+  const {repoRoot, logger} = opts;
+
+  registry.register('setup_connections', {
+    description:
+      'Show credential input cards for all connections in the agent. ' +
+      'Reads connection packages from amodal.json and renders a card for each one. ' +
+      'Use this after cloning a template to walk the user through connecting their accounts.',
+    parameters: z.object({}),
+    readOnly: true,
+    metadata: {category: 'admin'},
+
+    async execute(_params: Record<string, never>, ctx: ToolContext) {
+      // Read amodal.json to find packages
+      let packages: string[] = [];
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing local JSON
+        const config = JSON.parse(await readFile(path.join(repoRoot, 'amodal.json'), 'utf-8')) as Record<string, unknown>;
+        if (Array.isArray(config['packages'])) {
+          packages = config['packages'].filter((p): p is string => typeof p === 'string');
+        }
+      } catch {
+        return {error: 'Could not read agent configuration'};
+      }
+
+      // Read each package's auth metadata from node_modules
+      const connections: SSESetupConnectionsEvent['connections'] = [];
+      for (const pkg of packages) {
+        try {
+          const pkgJsonPath = path.join(repoRoot, 'node_modules', pkg, 'package.json');
+          if (!existsSync(pkgJsonPath)) continue;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing package.json
+          const pkgJson = JSON.parse(await readFile(pkgJsonPath, 'utf-8')) as Record<string, unknown>;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- amodal metadata block
+          const amodal = pkgJson['amodal'] as Record<string, unknown> | undefined;
+          if (!amodal) continue;
+
+          const displayName = typeof amodal['displayName'] === 'string' ? amodal['displayName']
+            : typeof amodal['name'] === 'string' ? amodal['name']
+            : pkg.split('/').pop() ?? pkg;
+
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- auth block
+          const auth = amodal['auth'] as Record<string, unknown> | undefined;
+          if (!auth?.['envVars']) continue;
+
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- envVars record
+          const envVars = auth['envVars'] as Record<string, string>;
+          for (const [envVar, description] of Object.entries(envVars)) {
+            const isSet = !!process.env[envVar];
+            connections.push({
+              name: displayName,
+              label: envVar,
+              auth_type: 'api_key',
+              env_var: envVar,
+              description,
+              status: isSet ? 'connected' : 'pending',
+            });
+          }
+        } catch (err: unknown) {
+          logger.debug('setup_connections_pkg_error', {pkg, error: err instanceof Error ? err.message : String(err)});
+        }
+      }
+
+      if (connections.length === 0) {
+        return {connections: 0, message: 'No connections require credentials'};
+      }
+
+      const event: SSESetupConnectionsEvent = {
+        type: SSEEventType.SetupConnections,
+        connections,
+        timestamp: new Date().toISOString(),
+      };
+
+      ctx.emit?.(event);
+
+      const pending = connections.filter((c) => c.status === 'pending').length;
+      const connected = connections.filter((c) => c.status === 'connected').length;
+      return {connections: connections.length, pending, connected};
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// customize_agent
+// ---------------------------------------------------------------------------
+
+function registerCustomizeAgent(registry: ToolRegistry, _opts: OnboardingToolsOptions): void {
+
+  registry.register('customize_agent', {
+    description:
+      'Ask the user about their company/brand so the agent can generate relevant content. ' +
+      'Renders input fields for website URL and a brief description. ' +
+      'Writes a brand-context knowledge doc to the agent repo. ' +
+      'Use this after setting up connections.',
+    parameters: z.object({}),
+    readOnly: true,
+    metadata: {category: 'admin'},
+
+    async execute(_params: Record<string, never>, ctx: ToolContext) {
+      const event: SSECustomizeAgentEvent = {
+        type: SSEEventType.CustomizeAgent,
+        prompts: [
+          {
+            id: 'website',
+            label: 'Your website or company URL',
+            placeholder: 'https://example.com',
+            required: false,
+          },
+          {
+            id: 'description',
+            label: 'What does your company do? (1-2 sentences)',
+            placeholder: 'We build developer tools for...',
+            required: false,
+          },
+        ],
+        skip_label: 'Skip for now — I\'ll customize later',
+        timestamp: new Date().toISOString(),
+      };
+
+      ctx.emit?.(event);
+
+      // The widget handles the form submission. When the user submits,
+      // it sends the values as a chat message. The agent then calls
+      // write_knowledge or write_repo_file to create the brand context doc.
+      // When the user skips, the widget sends "Skip customization" as a message.
+      return {ok: true, message: 'Waiting for user input'};
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// show_setup_summary
+// ---------------------------------------------------------------------------
+
+function registerShowSetupSummary(registry: ToolRegistry, opts: OnboardingToolsOptions): void {
+  const {repoRoot} = opts;
+
+  registry.register('show_setup_summary', {
+    description:
+      'Show a summary card of the agent setup: what\'s connected, what\'s pending, ' +
+      'and a link to start using the agent. Use this as the final step of onboarding.',
+    parameters: z.object({
+      agent_url: z.string().describe('URL to the agent runtime (e.g. http://localhost:6847)'),
+    }),
+    readOnly: true,
+    metadata: {category: 'admin'},
+
+    async execute(params: {agent_url: string}, ctx: ToolContext) {
+      // Read current state
+      let agentName = 'Your agent';
+      let packages: string[] = [];
+      let skills: string[] = [];
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing local JSON
+        const config = JSON.parse(await readFile(path.join(repoRoot, 'amodal.json'), 'utf-8')) as Record<string, unknown>;
+        if (typeof config['name'] === 'string') agentName = config['name'];
+        if (Array.isArray(config['packages'])) {
+          packages = config['packages'].filter((p): p is string => typeof p === 'string');
+        }
+      } catch { /* non-fatal */ }
+
+      try {
+        if (existsSync(path.join(repoRoot, 'skills'))) {
+          skills = await readdir(path.join(repoRoot, 'skills'));
+        }
+      } catch { /* non-fatal */ }
+
+      // Check connection status
+      const connections: SSESetupSummaryEvent['connections'] = [];
+      for (const pkg of packages) {
+        try {
+          const pkgJsonPath = path.join(repoRoot, 'node_modules', pkg, 'package.json');
+          if (!existsSync(pkgJsonPath)) continue;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing package.json
+          const pkgJson = JSON.parse(await readFile(pkgJsonPath, 'utf-8')) as Record<string, unknown>;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- amodal block
+          const amodal = pkgJson['amodal'] as Record<string, unknown> | undefined;
+          if (!amodal) continue;
+
+          const name = typeof amodal['displayName'] === 'string' ? amodal['displayName']
+            : typeof amodal['name'] === 'string' ? amodal['name']
+            : pkg.split('/').pop() ?? pkg;
+
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- auth block
+          const auth = amodal['auth'] as Record<string, unknown> | undefined;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- envVars
+          const envVars = (auth?.['envVars'] ?? {}) as Record<string, string>;
+          const allSet = Object.keys(envVars).every((k) => !!process.env[k]);
+          connections.push({
+            name,
+            status: Object.keys(envVars).length === 0 ? 'connected' : allSet ? 'connected' : 'pending',
+          });
+        } catch { /* skip */ }
+      }
+
+      const event: SSESetupSummaryEvent = {
+        type: SSEEventType.SetupSummary,
+        agent_name: agentName,
+        connections,
+        skills,
+        agent_url: params.agent_url,
+        timestamp: new Date().toISOString(),
+      };
+
+      ctx.emit?.(event);
+
+      return {
+        agent_name: agentName,
+        connected: connections.filter((c) => c.status === 'connected').length,
+        pending: connections.filter((c) => c.status === 'pending').length,
+        skills: skills.length,
+      };
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -301,4 +521,7 @@ export function registerOnboardingTools(registry: ToolRegistry, opts: Onboarding
   registerShowGallery(registry, opts);
   registerCloneTemplate(registry, opts);
   registerCollectSecret(registry, opts);
+  registerSetupConnections(registry, opts);
+  registerCustomizeAgent(registry, opts);
+  registerShowSetupSummary(registry, opts);
 }
