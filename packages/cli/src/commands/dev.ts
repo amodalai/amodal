@@ -375,9 +375,20 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
   let repoPath: string;
   try {
     repoPath = findRepoRoot(options.cwd);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[dev] ${msg}\n`);
+  } catch {
+    process.stderr.write(`
+  No amodal.json found.
+
+  Create a new agent:
+
+    amodal init        Initialize this directory
+    amodal dev         Start the dev server
+
+  Or if your agent is in another directory:
+
+    cd /path/to/agent && amodal dev
+
+`);
     process.exit(1);
   }
 
