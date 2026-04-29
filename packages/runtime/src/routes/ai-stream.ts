@@ -279,6 +279,38 @@ export function translateEvent(
       break;
     }
 
+    case SSEEventType.AskChoice: {
+      out.push({
+        type: 'data-ask-choice',
+        data: {
+          ask_id: event.ask_id,
+          question: event.question,
+          options: event.options,
+          multi: event.multi ?? false,
+        },
+      });
+      break;
+    }
+
+    case SSEEventType.ShowPreview: {
+      out.push({
+        type: 'data-show-preview',
+        data: {card: event.card},
+      });
+      break;
+    }
+
+    case SSEEventType.StartOAuth: {
+      out.push({
+        type: 'data-start-oauth',
+        data: {
+          package_name: event.package_name,
+          display_name: event.display_name,
+        },
+      });
+      break;
+    }
+
     case SSEEventType.KBProposal: {
       out.push({
         type: 'data-kb-proposal',

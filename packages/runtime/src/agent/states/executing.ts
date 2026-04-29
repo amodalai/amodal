@@ -212,7 +212,10 @@ export async function handleExecuting(
 
   // Single-call path: execute the current tool, emit events, advance state.
   effects.push(buildToolCallStartEvent(current, timestamp));
-  const {result, duration} = await runToolCall(current, toolDef, ctx);
+  const {result, duration, inlineEvents} = await runToolCall(current, toolDef, ctx);
+  // Inline events (show_preview / ask_choice) appear before the result so
+  // chat UIs can render the card / button row above the result block.
+  effects.push(...inlineEvents);
   effects.push(buildToolCallResultEvent(current, result, duration));
   ctx.logger.info('tool_call', {
     tool: current.toolName,
@@ -311,7 +314,8 @@ async function executeBatch(
   // Emit result events + structured logs in the original order
   for (let i = 0; i < batch.calls.length; i++) {
     const {call} = batch.calls[i];
-    const {result, duration} = runs[i];
+    const {result, duration, inlineEvents} = runs[i];
+    effects.push(...inlineEvents);
     effects.push(buildToolCallResultEvent(call, result, duration));
     ctx.logger.info('tool_call', {
       tool: call.toolName,
@@ -357,12 +361,20 @@ async function runToolCall(
   call: ToolCall,
   toolDef: ToolDefinition,
   ctx: AgentContext,
-): Promise<{result: ToolResult; duration: number}> {
+): Promise<{result: ToolResult; duration: number; inlineEvents: SSEEvent[]}> {
   const startedAt = Date.now();
   try {
     // Check pre-execution cache first (read-only tools started during streaming)
     const cached = ctx.preExecutionCache.get(call.toolCallId);
-    const output = cached ? await cached : await executeTool(call, toolDef, ctx);
+    let output: unknown;
+    let inlineEvents: SSEEvent[] = [];
+    if (cached) {
+      output = await cached;
+    } else {
+      const executed = await executeToolWithEvents(call, toolDef, ctx);
+      output = executed.output;
+      inlineEvents = executed.inlineEvents;
+    }
 
     // Detect structured content blocks from tools that return images
     // (e.g. MCP adapter returns {output: ToolResultContentBlock[]}).
@@ -383,6 +395,7 @@ async function runToolCall(
       ctx.logger.warn('tool_returned_error', {
         tool: call.toolName,
         callId: call.toolCallId,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- isErrorResult guard above proves output is a Record with a string `error` key
         error: (output as Record<string, unknown>)['error'],
         session: ctx.sessionId,
         duration,
@@ -396,6 +409,7 @@ async function runToolCall(
         content: isErrorResult && typeof content !== 'string' ? contentBlocksToString(content) : content,
       },
       duration,
+      inlineEvents,
     };
   } catch (err) {
     const duration = Date.now() - startedAt;
@@ -414,6 +428,7 @@ async function runToolCall(
         content: `Tool execution failed: ${err instanceof Error ? err.message : String(err)}`,
       },
       duration,
+      inlineEvents: [],
     };
   }
 }
@@ -472,6 +487,20 @@ export async function executeTool(
   toolDef: ToolDefinition,
   ctx: AgentContext,
 ): Promise<unknown> {
+  const result = await executeToolWithEvents(call, toolDef, ctx);
+  return result.output;
+}
+
+/**
+ * Inner executor that returns both the tool's output and any inline SSE
+ * events the tool emitted via `ctx.emit()`. Used by `runToolCall` to
+ * surface emissions alongside the tool_call_result event.
+ */
+export async function executeToolWithEvents(
+  call: ToolCall,
+  toolDef: ToolDefinition,
+  ctx: AgentContext,
+): Promise<{output: unknown; inlineEvents: SSEEvent[]}> {
   const toolCtx = ctx.buildToolContext(call.toolCallId);
 
   // Combine session abort signal with a per-tool timeout.
@@ -481,7 +510,9 @@ export async function executeTool(
   const timeoutSignal = AbortSignal.timeout(ctx.config.toolTimeoutMs);
   toolCtx.signal = AbortSignal.any([ctx.signal, timeoutSignal]);
 
-  return toolDef.execute(call.args, toolCtx);
+  const output = await toolDef.execute(call.args, toolCtx);
+  const inlineEvents: SSEEvent[] = toolCtx.inlineEvents ? [...toolCtx.inlineEvents] : [];
+  return {output, inlineEvents};
 }
 
 /**

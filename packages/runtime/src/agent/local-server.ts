@@ -72,6 +72,7 @@ import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createChatRouter} from '../routes/chat.js';
 import {createTaskRouter} from './routes/task.js';
 import {createInspectRouter} from './routes/inspect.js';
+import {createPackageUpdatesRouter} from './routes/package-updates.js';
 import {createFeedbackRouter} from './routes/feedback.js';
 import {FeedbackStore} from './feedback-store.js';
 import {createStoresRouter} from './routes/stores.js';
@@ -1046,6 +1047,9 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Inspect
   app.use(createInspectRouter({getBundle, repoPath: config.repoPath}));
+
+  // Package updates (npm view + cache)
+  app.use(createPackageUpdatesRouter({repoPath: config.repoPath, logger: log}));
 
   // Messaging channels
   if (channelsResult) {

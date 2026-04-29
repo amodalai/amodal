@@ -21,6 +21,9 @@ export type SSEEventType =
   | 'credential_saved'
   | 'approved'
   | 'ask_user'
+  | 'ask_choice'
+  | 'show_preview'
+  | 'start_oauth'
   | 'explore_start'
   | 'explore_end'
   | 'plan_mode'
@@ -140,6 +143,59 @@ export interface SSEAskUserEvent {
   timestamp: string;
 }
 
+/**
+ * Single- or multi-select chat-inline question rendered as a button row.
+ * Mirrored from @amodalai/types — see SSEAskChoiceEvent for full docs.
+ */
+export interface SSEAskChoiceEvent {
+  type: 'ask_choice';
+  ask_id: string;
+  question: string;
+  options: AskChoiceOption[];
+  multi?: boolean;
+  timestamp: string;
+}
+
+export interface AskChoiceOption {
+  label: string;
+  value: string;
+}
+
+/**
+ * Inline preview card emitted by the admin agent's `show_preview` tool to
+ * surface a template's curated card snippet inside the chat stream.
+ * Mirrored from @amodalai/types.
+ */
+export interface SSEShowPreviewEvent {
+  type: 'show_preview';
+  card: AgentCardInline;
+  timestamp: string;
+}
+
+/**
+ * Inline OAuth Connect button emitted by `start_oauth_connection`.
+ * Mirrored from @amodalai/types — see SSEStartOAuthEvent for full docs.
+ */
+export interface SSEStartOAuthEvent {
+  type: 'start_oauth';
+  package_name: string;
+  display_name?: string;
+  timestamp: string;
+}
+
+/** Mirrored from @amodalai/types AgentCard — see card-types.ts. */
+export interface AgentCardInline {
+  title: string;
+  tagline: string;
+  platforms: string[];
+  thumbnailConversation: AgentCardInlineTurn[];
+}
+
+export interface AgentCardInlineTurn {
+  role: 'user' | 'agent';
+  content: string;
+}
+
 export interface SSEExploreStartEvent {
   type: 'explore_start';
   query: string;
@@ -217,6 +273,9 @@ export type SSEEvent =
   | SSECredentialSavedEvent
   | SSEApprovedEvent
   | SSEAskUserEvent
+  | SSEAskChoiceEvent
+  | SSEShowPreviewEvent
+  | SSEStartOAuthEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent
@@ -307,6 +366,35 @@ export interface AskUserBlock {
   answers?: Record<string, string>;
 }
 
+/**
+ * Inline button row asking the user to pick one (or several) of a small set.
+ * Status mirrors AskUserBlock — once the user clicks, we lock the buttons
+ * to prevent double-submit and show the chosen value(s) as a summary.
+ */
+export interface AskChoiceBlock {
+  type: 'ask_choice';
+  askId: string;
+  question: string;
+  options: AskChoiceOption[];
+  multi: boolean;
+  status: AskUserStatus;
+  /** Selected value(s) after the user picks. Single-select stores one entry. */
+  answer?: string[];
+}
+
+/** Inline template-card preview surfaced by the `show_preview` tool. */
+export interface ShowPreviewBlock {
+  type: 'show_preview';
+  card: AgentCardInline;
+}
+
+/** Inline OAuth Connect button surfaced by the `start_oauth_connection` tool. */
+export interface StartOAuthBlock {
+  type: 'start_oauth';
+  packageName: string;
+  displayName?: string;
+}
+
 export interface UserMessage {
   type: 'user';
   id: string;
@@ -345,7 +433,10 @@ export type ContentBlock =
   | { type: 'widget'; widgetType: string; data: Record<string, unknown> }
   | { type: 'tool_calls'; calls: ToolCallInfo[] }
   | { type: 'confirmation'; confirmation: ConfirmationInfo }
-  | AskUserBlock;
+  | AskUserBlock
+  | AskChoiceBlock
+  | ShowPreviewBlock
+  | StartOAuthBlock;
 
 // ---------------------------------------------------------------------------
 // Widget configuration
@@ -439,6 +530,10 @@ export type ChatAction =
   | { type: 'STREAM_APPROVED'; resourceType: string; previewId: string }
   | { type: 'STREAM_ASK_USER'; askId: string; questions: AskUserQuestion[] }
   | { type: 'ASK_USER_SUBMITTED'; askId: string; answers: Record<string, string> }
+  | { type: 'STREAM_ASK_CHOICE'; askId: string; question: string; options: AskChoiceOption[]; multi: boolean }
+  | { type: 'ASK_CHOICE_SUBMITTED'; askId: string; values: string[] }
+  | { type: 'STREAM_SHOW_PREVIEW'; card: AgentCardInline }
+  | { type: 'STREAM_START_OAUTH'; packageName: string; displayName?: string }
   | { type: 'STREAM_CONFIRMATION_REQUIRED'; confirmation: ConfirmationInfo }
   | { type: 'CONFIRMATION_RESPONDED'; correlationId: string; approved: boolean }
   | { type: 'STREAM_ERROR'; message: string }

@@ -2542,3 +2542,171 @@
 .pcw-feedback__submit:hover {
   background: rgba(239,68,68,0.2);
 }
+
+/* Ask choice — inline button row for single/multi-select questions */
+.pcw-ask-choice {
+  border: 1px solid var(--pcw-border);
+  border-radius: 6px;
+  padding: 10px;
+  margin: 4px 0;
+  background: var(--pcw-bg);
+}
+.pcw-ask-choice--submitted {
+  background: var(--pcw-tool-call-bg);
+}
+.pcw-ask-choice__question {
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: var(--pcw-text);
+}
+.pcw-ask-choice__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pcw-ask-choice__btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--pcw-border);
+  background: var(--pcw-bg);
+  color: var(--pcw-text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pcw-ask-choice__btn:hover {
+  border-color: var(--pcw-primary);
+}
+.pcw-ask-choice__btn--active {
+  background: var(--pcw-primary);
+  color: white;
+  border-color: var(--pcw-primary);
+}
+.pcw-ask-choice__submit {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--pcw-primary);
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pcw-ask-choice__submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pcw-ask-choice__summary {
+  font-size: 12px;
+  color: var(--pcw-muted);
+  font-style: italic;
+}
+
+/* Inline agent-card preview emitted by the show_preview tool */
+.pcw-agent-card {
+  border: 1px solid var(--pcw-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 6px 0;
+  background: var(--pcw-bg);
+}
+.pcw-agent-card__title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--pcw-text);
+  margin-bottom: 8px;
+}
+.pcw-agent-card__convo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--pcw-tool-call-bg);
+  margin-bottom: 8px;
+}
+.pcw-agent-card__turn {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.pcw-agent-card__icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.pcw-agent-card__content {
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  color: var(--pcw-text);
+}
+.pcw-agent-card__turn--user .pcw-agent-card__content {
+  color: var(--pcw-muted);
+}
+.pcw-agent-card__tagline {
+  font-size: 11px;
+  color: var(--pcw-muted);
+  margin-bottom: 6px;
+}
+.pcw-agent-card__platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pcw-agent-card__chip {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--pcw-tool-call-bg);
+  font-size: 10px;
+  color: var(--pcw-muted);
+}
+
+/* Inline OAuth Connect button — emitted by the start_oauth_connection tool */
+.pcw-oauth {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+.pcw-oauth__btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: none;
+  background: var(--pcw-primary);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.pcw-oauth__btn:hover {
+  filter: brightness(1.05);
+}
+.pcw-oauth__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pcw-oauth__label {
+  font-size: 13px;
+  color: var(--pcw-text);
+  font-weight: 500;
+}
+.pcw-oauth__status {
+  font-size: 11px;
+  color: var(--pcw-muted);
+}
+.pcw-oauth__error {
+  font-size: 11px;
+  color: #dc2626;
+}
+.pcw-oauth--opened {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--pcw-border);
+  background: var(--pcw-tool-call-bg);
+}

@@ -6,7 +6,10 @@
 
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { StudioShell } from './components/StudioShell';
-import { OverviewPage } from './pages/OverviewPage';
+import { IndexPage } from './pages/IndexPage';
+import { BrowsePage } from './pages/BrowsePage';
+import { TemplateDetailPage } from './pages/TemplateDetailPage';
+import { TemplateUpdatePage } from './pages/TemplateUpdatePage';
 import { GettingStartedPage } from './pages/GettingStartedPage';
 import { ConnectionConfigPage } from './pages/ConnectionConfigPage';
 import { AgentPage } from './pages/AgentPage';
@@ -37,7 +40,10 @@ function Layout() {
 
 /** Agent-scoped routes — all Studio pages live under /agents/:agentId/ */
 const agentRoutes = [
-  { index: true, element: <OverviewPage /> },
+  { index: true, element: <IndexPage /> },
+  { path: 'browse', element: <BrowsePage /> },
+  { path: 'browse/:slug', element: <TemplateDetailPage /> },
+  { path: 'updates/:slug', element: <TemplateUpdatePage /> },
   { path: 'getting-started', element: <GettingStartedPage /> },
   { path: 'connections/:packageName', element: <ConnectionConfigPage /> },
   { path: 'agent', element: <AgentPage /> },

@@ -78,6 +78,9 @@ export type {
   SSECredentialSavedEvent,
   SSEApprovedEvent,
   SSEAskUserEvent,
+  SSEAskChoiceEvent,
+  SSEShowPreviewEvent,
+  SSEStartOAuthEvent,
   SSEDoneEvent,
   SSEExploreStartEvent,
   SSEExploreEndEvent,
@@ -167,6 +170,13 @@ export type {
   ChannelSessionCreatedEvent,
   ChannelAuthRejectedEvent,
 } from './runtime-event-types.js';
+
+// Agent card types
+export type {
+  AgentCard,
+  AgentCardPreview,
+  AgentCardTurn,
+} from './card-types.js';
 
 // Snapshot types
 export type {

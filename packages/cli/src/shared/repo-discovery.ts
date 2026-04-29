@@ -38,3 +38,21 @@ export function findRepoRoot(startDir?: string): string {
     'Run `amodal init` to create a new project, or change to a directory containing an amodal.json file.',
   );
 }
+
+/**
+ * Like `findRepoRoot`, but returns `{root, hasManifest}` instead of throwing
+ * when no `amodal.json` is found. Used by `amodal dev` so the create flow
+ * (Studio + admin agent) can run in an empty directory and scaffold the
+ * project. The caller is responsible for skipping anything that needs a
+ * loaded agent bundle (e.g. the runtime).
+ */
+export function findRepoRootOrCwd(
+  startDir?: string,
+): {root: string; hasManifest: boolean} {
+  const cwd = resolve(startDir ?? process.cwd());
+  try {
+    return {root: findRepoRoot(cwd), hasManifest: true};
+  } catch {
+    return {root: cwd, hasManifest: false};
+  }
+}

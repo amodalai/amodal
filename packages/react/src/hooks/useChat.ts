@@ -83,6 +83,7 @@ export interface UseChatReturn {
   eventBus: WidgetEventBus;
   /** Submit answers to a pending ask_user prompt. */
   submitAskUserResponse: (askId: string, answers: Record<string, string>) => void;
+  submitAskChoiceResponse: (askId: string, values: string[], message: string) => void;
   /** Respond to a confirmation request (approve or deny). */
   respondToConfirmation: (correlationId: string, approved: boolean) => void;
   /** Load a historical session for read-only viewing. */
@@ -276,6 +277,21 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     [serverUrl],
   );
 
+  // ---------------------------------------------------------------------
+  // submitAskChoiceResponse — for `ask_choice` button rows. No server
+  // round-trip: clicking a button posts the chosen value as the next user
+  // turn, same as if the user had typed it.
+  // ---------------------------------------------------------------------
+
+  const submitAskChoiceResponse = useCallback(
+    (askId: string, values: string[], message: string): void => {
+      stream.dispatch({ type: 'ASK_CHOICE_SUBMITTED', askId, values });
+      stream.send(message);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   return {
     messages: stream.messages,
     send: stream.send,
@@ -287,6 +303,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     reset: stream.reset,
     eventBus: stream.eventBus,
     submitAskUserResponse,
+    submitAskChoiceResponse,
     respondToConfirmation: stream.respondToConfirmation,
     loadSession,
     isHistorical: stream.isHistorical,

@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono';
-import { getAgentId, getAgentName, getRuntimeUrl } from '../../lib/config.js';
+import { getAgentId, getAgentName, getRegistryUrl, getRuntimeUrl } from '../../lib/config.js';
 
 export const configRoutes = new Hono();
 
@@ -13,4 +13,5 @@ configRoutes.get('/api/config', async (c) => c.json({
     agentName: getAgentName(),
     runtimeUrl: getRuntimeUrl(),
     agentId: getAgentId(),
+    registryUrl: getRegistryUrl(),
   }));

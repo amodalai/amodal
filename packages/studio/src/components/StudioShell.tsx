@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAgentInventory } from '../hooks/useAgentInventory';
+import { useViewConfig } from '../hooks/useViewConfig';
 import { CollapsibleSection } from './studio/CollapsibleSection';
 
 interface Props {
@@ -45,8 +46,13 @@ interface NavItem {
   readonly icon: LucideIcon;
 }
 
-const NAV_ITEMS: readonly NavItem[] = [
-  { href: '/getting-started', label: 'Getting started', icon: Sparkles },
+interface NavItemDef extends NavItem {
+  /** When true, only render when the "View config" toggle is on. */
+  readonly powerUserOnly?: boolean;
+}
+
+const NAV_ITEMS: readonly NavItemDef[] = [
+  { href: '/getting-started', label: 'Getting started', icon: Sparkles, powerUserOnly: true },
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/files', label: 'Files', icon: FileCode },
   { href: '/evals', label: 'Evals', icon: FlaskConical },
@@ -102,7 +108,10 @@ export function StudioShell({ children }: Props) {
   const { agentName, runtimeUrl } = useStudioConfig();
   const { dark, toggle } = useTheme();
   const inventory = useAgentInventory();
+  const { viewConfig } = useViewConfig();
   const [chatOpen, setChatOpen] = useState(false);
+
+  const visibleNavItems = NAV_ITEMS.filter((item) => viewConfig || !item.powerUserOnly);
 
   const basePath = `/agents/${agentId ?? 'local'}`;
 
@@ -135,7 +144,7 @@ export function StudioShell({ children }: Props) {
         {/* Primary nav */}
         <nav className="flex-1 py-2 overflow-y-auto">
           <div className="px-2 space-y-0.5">
-            {NAV_ITEMS.map((item) => (
+            {visibleNavItems.map((item) => (
               <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} to={agentPath(item.href)} />
             ))}
           </div>

@@ -258,6 +258,69 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
+    case 'STREAM_ASK_CHOICE': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'ask_choice',
+          askId: action.askId,
+          question: action.question,
+          options: action.options,
+          multi: action.multi,
+          status: 'pending',
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'ASK_CHOICE_SUBMITTED': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const blocks = last.contentBlocks.map((block) =>
+          block.type === 'ask_choice' && block.askId === action.askId
+            ? { ...block, status: 'submitted' as const, answer: action.values }
+            : block,
+        );
+        msgs[msgs.length - 1] = { ...last, contentBlocks: blocks };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_SHOW_PREVIEW': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'show_preview',
+          card: action.card,
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_START_OAUTH': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'start_oauth',
+          packageName: action.packageName,
+          ...(action.displayName ? {displayName: action.displayName} : {}),
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
     case 'STREAM_CONFIRMATION_REQUIRED': {
       const msgs = [...state.messages];
       const last = msgs[msgs.length - 1];
@@ -698,6 +761,25 @@ function processEvent(
         type: 'STREAM_ASK_USER',
         askId: event.ask_id,
         questions: event.questions,
+      });
+      return;
+    case 'ask_choice':
+      dispatch({
+        type: 'STREAM_ASK_CHOICE',
+        askId: event.ask_id,
+        question: event.question,
+        options: event.options,
+        multi: event.multi ?? false,
+      });
+      return;
+    case 'show_preview':
+      dispatch({ type: 'STREAM_SHOW_PREVIEW', card: event.card });
+      return;
+    case 'start_oauth':
+      dispatch({
+        type: 'STREAM_START_OAUTH',
+        packageName: event.package_name,
+        ...(event.display_name ? {displayName: event.display_name} : {}),
       });
       return;
     case 'credential_saved':

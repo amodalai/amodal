@@ -13,6 +13,9 @@ import { KBProposalCard } from './KBProposalCard';
 import { SkillPill } from './SkillPill';
 import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
+import { AskChoiceCard } from './AskChoiceCard';
+import { AgentCardInlinePreview } from './AgentCardInline';
+import { StartOAuthCard } from './StartOAuthCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { ConfirmCard } from '../components/ConfirmCard';
@@ -91,6 +94,7 @@ interface MessageListProps {
   customWidgets?: WidgetRegistry;
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
+  onAskChoiceSubmit?: (askId: string, values: string[], message: string) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
   emptyStateText?: string;
   sessionId?: string;
@@ -114,6 +118,7 @@ function AssistantBubble({
   customWidgets,
   onInteraction,
   onAskUserSubmit,
+  onAskChoiceSubmit,
   onConfirmationRespond,
 }: {
   message: AssistantTextMessage;
@@ -121,6 +126,7 @@ function AssistantBubble({
   customWidgets?: WidgetRegistry;
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
+  onAskChoiceSubmit?: (askId: string, values: string[], message: string) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
 }) {
   const hasContentBlocks = message.contentBlocks && message.contentBlocks.length > 0;
@@ -171,6 +177,28 @@ function AssistantBubble({
                   key={`ask-${block.askId}`}
                   block={block}
                   onSubmit={onAskUserSubmit ?? (() => {})}
+                />
+              );
+            case 'ask_choice':
+              return (
+                <AskChoiceCard
+                  key={`choice-${block.askId}`}
+                  block={block}
+                  onSubmit={onAskChoiceSubmit ?? (() => {})}
+                />
+              );
+            case 'show_preview':
+              return (
+                <AgentCardInlinePreview
+                  key={`preview-${String(i)}`}
+                  card={block.card}
+                />
+              );
+            case 'start_oauth':
+              return (
+                <StartOAuthCard
+                  key={`oauth-${String(i)}`}
+                  block={block}
                 />
               );
             case 'confirmation': {
@@ -224,7 +252,7 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onAskChoiceSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -289,6 +317,7 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
                   customWidgets={customWidgets}
                   onInteraction={onInteraction}
                   onAskUserSubmit={onAskUserSubmit}
+                  onAskChoiceSubmit={onAskChoiceSubmit}
                   onConfirmationRespond={onConfirmationRespond}
                 />
                 {showFeedback && !isStreaming && (

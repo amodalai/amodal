@@ -118,8 +118,15 @@ export function ChatWidget({
   const active = customStreamFn ? directStream : chatHook;
   const { messages, send, stop, isStreaming, error, reset, eventBus, respondToConfirmation, isHistorical } = active;
   const noopAskUser = useCallback((_askId: string, _answers: Record<string, string>) => { /* noop */ }, []);
+  const noopAskChoice = useCallback((_askId: string, _values: string[], message: string) => {
+    // Custom streamFn flows can still send the value as a normal user turn —
+    // we just can't mark the block submitted because we don't own the reducer.
+    void send(message);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `send` is stable across renders for this hook
+  }, []);
   const noopLoadSession = useCallback((_sessionId: string) => { /* noop */ }, []);
   const submitAskUserResponse = customStreamFn ? noopAskUser : chatHook.submitAskUserResponse;
+  const submitAskChoiceResponse = customStreamFn ? noopAskChoice : chatHook.submitAskChoiceResponse;
   const loadSession = customStreamFn ? noopLoadSession : chatHook.loadSession;
   const session = customStreamFn ? { id: directStream.sessionId } : chatHook.session;
 
@@ -204,7 +211,7 @@ export function ChatWidget({
             onUpdateTags={history.updateTags}
           />
         )}
-        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
+        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onAskChoiceSubmit={submitAskChoiceResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
         {error && <div className="pcw-error">{error}</div>}
         {showInput && (
           <InputBar

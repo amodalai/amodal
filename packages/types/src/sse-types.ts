@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type {AgentCard} from './card-types.js';
+
 export enum SSEEventType {
   Init = 'init',
   TextDelta = 'text_delta',
@@ -16,6 +18,9 @@ export enum SSEEventType {
   CredentialSaved = 'credential_saved',
   Approved = 'approved',
   AskUser = 'ask_user',
+  AskChoice = 'ask_choice',
+  ShowPreview = 'show_preview',
+  StartOAuth = 'start_oauth',
   ExploreStart = 'explore_start',
   ExploreEnd = 'explore_end',
   PlanMode = 'plan_mode',
@@ -144,6 +149,51 @@ export interface SSEAskUserEvent {
   timestamp: string;
 }
 
+/**
+ * Single- or multi-select question rendered inline in chat as a row of
+ * buttons. Distinct from `ask_user` which is a free-form Q&A panel — a choice
+ * fits the "Which analytics platform do you use? [Google Analytics] [Adobe]
+ * [Other]" pattern from the v4 onboarding flow.
+ *
+ * Studio renders the buttons; clicking one posts the chosen value back as
+ * the next user turn (ask_id round-trips so the agent matches reply to ask).
+ */
+export interface SSEAskChoiceEvent {
+  type: SSEEventType.AskChoice;
+  ask_id: string;
+  question: string;
+  options: Array<{label: string; value: string}>;
+  /** When true, the user can pick more than one option. */
+  multi?: boolean;
+  timestamp: string;
+}
+
+/**
+ * Inline preview card. Used by the admin agent's `show_preview` tool to
+ * surface a template's curated card snippet inside the chat stream.
+ */
+export interface SSEShowPreviewEvent {
+  type: SSEEventType.ShowPreview;
+  card: AgentCard;
+  timestamp: string;
+}
+
+/**
+ * Inline OAuth Connect button. Emitted by the admin agent's
+ * `start_oauth_connection` tool. Studio renders a button that opens the
+ * provider's authorize URL — fetched at click-time from the runtime's
+ * `/api/oauth/start?package=<package_name>` endpoint (cloud-studio-app
+ * proxies that to platform-api's `/connections/start/<provider>`).
+ */
+export interface SSEStartOAuthEvent {
+  type: SSEEventType.StartOAuth;
+  /** npm package name with the connection (e.g. "@amodalai/connection-slack"). */
+  package_name: string;
+  /** Optional human-readable label for the button ("Connect Slack"). */
+  display_name?: string;
+  timestamp: string;
+}
+
 export interface SSEDoneEvent {
   type: SSEEventType.Done;
   timestamp: string;
@@ -212,6 +262,9 @@ export type SSEEvent =
   | SSECredentialSavedEvent
   | SSEApprovedEvent
   | SSEAskUserEvent
+  | SSEAskChoiceEvent
+  | SSEShowPreviewEvent
+  | SSEStartOAuthEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent

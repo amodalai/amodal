@@ -111,6 +111,9 @@ export enum SSEEventType {
   KBProposal = 'kb_proposal',
   CredentialSaved = 'credential_saved',
   Approved = 'approved',
+  AskChoice = 'ask_choice',
+  ShowPreview = 'show_preview',
+  StartOAuth = 'start_oauth',
   ExploreStart = 'explore_start',
   ExploreEnd = 'explore_end',
   PlanMode = 'plan_mode',
@@ -279,6 +282,39 @@ export interface SSEConfirmationRequiredEvent {
   timestamp: string;
 }
 
+/**
+ * Single- or multi-select chat-inline question rendered as a button row.
+ * Mirrored from @amodalai/types.
+ */
+export interface SSEAskChoiceEvent {
+  type: SSEEventType.AskChoice;
+  ask_id: string;
+  question: string;
+  options: Array<{label: string; value: string}>;
+  multi?: boolean;
+  timestamp: string;
+}
+
+/** Inline template-card preview emitted by the admin agent's `show_preview` tool. */
+export interface SSEShowPreviewEvent {
+  type: SSEEventType.ShowPreview;
+  card: {
+    title: string;
+    tagline: string;
+    platforms: string[];
+    thumbnailConversation: Array<{role: 'user' | 'agent'; content: string}>;
+  };
+  timestamp: string;
+}
+
+/** Inline OAuth Connect button. */
+export interface SSEStartOAuthEvent {
+  type: SSEEventType.StartOAuth;
+  package_name: string;
+  display_name?: string;
+  timestamp: string;
+}
+
 export interface SSECompactionStartEvent {
   type: SSEEventType.CompactionStart;
   estimated_tokens: number;
@@ -310,6 +346,9 @@ export type SSEEvent =
   | SSEPlanModeEvent
   | SSEFieldScrubEvent
   | SSEConfirmationRequiredEvent
+  | SSEAskChoiceEvent
+  | SSEShowPreviewEvent
+  | SSEStartOAuthEvent
   | SSECompactionStartEvent
   | SSECompactionEndEvent
   | SSEToolLogEvent

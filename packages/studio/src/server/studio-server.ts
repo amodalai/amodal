@@ -29,6 +29,8 @@ import { feedbackRoutes } from './routes/feedback.js';
 import { memoryRoutes } from './routes/memory.js';
 import { eventsRoutes } from './routes/events.js';
 import { adminChatRoutes } from './routes/admin-chat.js';
+import { repoStateRoutes } from './routes/repo-state.js';
+import { initRepoRoutes } from './routes/init-repo.js';
 import { runtimeProxyRoutes } from './routes/runtime-proxy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -93,6 +95,8 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
   // ---------------------------------------------------------------------------
 
   app.route('', configRoutes);
+  app.route('', repoStateRoutes);
+  app.route('', initRepoRoutes);
   app.route('', workspaceRoutes);
   app.route('', draftsRoutes);
   app.route('', publishRoutes);

@@ -13,7 +13,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createLocalServer, initLogLevel, interceptConsole, log} from '@amodalai/runtime';
 import {ensureAdminAgent, getAdminAgentConfig, getAdminAgentVersion, checkRegistryVersion} from '@amodalai/core';
-import {findRepoRoot} from '../shared/repo-discovery.js';
+import {findRepoRootOrCwd} from '../shared/repo-discovery.js';
 import {createServer} from 'node:net';
 import {runConnectionPreflight, printPreflightTable} from '../shared/connection-preflight.js';
 import {resolveEnv} from '../shared/env-resolution.js';
@@ -372,13 +372,13 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
   initLogLevel({verbosity: options.verbose ?? 0, quiet: options.quiet ?? false});
   interceptConsole();
 
-  let repoPath: string;
-  try {
-    repoPath = findRepoRoot(options.cwd);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[dev] ${msg}\n`);
-    process.exit(1);
+  // Empty directories are allowed: the create flow in Studio scaffolds
+  // amodal.json from a chosen template (or admin-agent conversation), so
+  // the user can `amodal dev` before they have a project at all. We just
+  // skip the runtime in that case — it can't loadRepo without a manifest.
+  const {root: repoPath, hasManifest} = findRepoRootOrCwd(options.cwd);
+  if (!hasManifest) {
+    log.info('dev_create_flow_mode', {repoPath});
   }
 
   // -------------------------------------------------------------------------
@@ -459,12 +459,14 @@ Or add it to your agent's .env file:
   const studioPort = DEFAULT_STUDIO_PORT;
   const adminPort = DEFAULT_ADMIN_PORT;
 
-  await assertPortFree(runtimePort);
+  if (hasManifest) {
+    await assertPortFree(runtimePort);
+  }
   if (!options.noStudio) await assertPortFree(studioPort);
   if (!options.noAdmin) await assertPortFree(adminPort);
 
   log.debug('ports_allocated', {
-    runtime: runtimePort,
+    runtime: hasManifest ? runtimePort : null,
     studio: options.noStudio ? null : studioPort,
     admin: options.noAdmin ? null : adminPort,
   });
@@ -506,52 +508,63 @@ Or add it to your agent's .env file:
   }
 
   // -------------------------------------------------------------------------
-  // Start the runtime server
+  // Start the runtime server (skipped when there's no amodal.json — the
+  // runtime can't loadRepo on an empty directory; the create flow in Studio
+  // takes the user from an empty repo to a configured one, after which they
+  // ctrl+C and re-run `amodal dev` to pick up the runtime).
   // -------------------------------------------------------------------------
 
-  log.debug('starting_dev_server', {repoPath});
+  log.debug('starting_dev_server', {repoPath, hasManifest});
 
   try {
-    let staticAppDir: string | undefined;
+    let server: Awaited<ReturnType<typeof createLocalServer>> | null = null;
 
-    // Use pre-built static assets for the SPA.
-    // Vite dev middleware is only used inside the monorepo with `pnpm dev`.
-    const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-    const candidates = [
-      // esbuild bundle: bundle/app/
-      path.resolve(scriptDir, 'app'),
-    ];
+    if (hasManifest) {
+      let staticAppDir: string | undefined;
 
-    // Resolve @amodalai/runtime-app via Node module resolution (works regardless of install layout)
-    const require = createRequire(import.meta.url);
-    const runtimeAppPkg = require.resolve('@amodalai/runtime-app/package.json');
-    candidates.push(path.join(path.dirname(runtimeAppPkg), 'dist'));
+      // Use pre-built static assets for the SPA.
+      // Vite dev middleware is only used inside the monorepo with `pnpm dev`.
+      const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+      const candidates = [
+        // esbuild bundle: bundle/app/
+        path.resolve(scriptDir, 'app'),
+      ];
 
-    for (const dir of candidates) {
-      if (existsSync(path.join(dir, 'index.html'))) {
-        log.debug('serving_prebuilt_app', {path: staticAppDir});
-        staticAppDir = dir;
-        break;
+      // Resolve @amodalai/runtime-app via Node module resolution (works regardless of install layout)
+      const require = createRequire(import.meta.url);
+      const runtimeAppPkg = require.resolve('@amodalai/runtime-app/package.json');
+      candidates.push(path.join(path.dirname(runtimeAppPkg), 'dist'));
+
+      for (const dir of candidates) {
+        if (existsSync(path.join(dir, 'index.html'))) {
+          log.debug('serving_prebuilt_app', {path: staticAppDir});
+          staticAppDir = dir;
+          break;
+        }
       }
+
+      server = await createLocalServer({
+        repoPath,
+        port: runtimePort,
+        host,
+        hotReload: true,
+        corsOrigin: '*',
+        staticAppDir,
+        resumeSessionId: options.resume,
+        studioUrl: studioUrl ?? undefined,
+        adminAgentUrl: adminAgentUrl ?? undefined,
+      });
+
+      await server.start();
     }
-
-    const server = await createLocalServer({
-      repoPath,
-      port: runtimePort,
-      host,
-      hotReload: true,
-      corsOrigin: '*',
-      staticAppDir,
-      resumeSessionId: options.resume,
-      studioUrl: studioUrl ?? undefined,
-      adminAgentUrl: adminAgentUrl ?? undefined,
-    });
-
-    await server.start();
 
     // Print clean startup summary
     process.stderr.write('\n');
-    process.stderr.write(`  Runtime:     http://localhost:${String(runtimePort)}\n`);
+    if (server) {
+      process.stderr.write(`  Runtime:     http://localhost:${String(runtimePort)}\n`);
+    } else {
+      process.stderr.write('  Runtime:     skipped (no amodal.json — open Studio to scaffold)\n');
+    }
     if (studioUrl) {
       process.stderr.write(`  Studio:      ${studioUrl}\n`);
     }
@@ -565,15 +578,18 @@ Or add it to your agent's .env file:
     process.stderr.write(`  Database:    ${redactedUrl}\n`);
     process.stderr.write('\n');
 
-    // Preflight connection check (non-blocking)
-    const preflight = await runConnectionPreflight(repoPath);
-    if (preflight.results.length > 0) {
-      process.stderr.write('\n');
-      printPreflightTable(preflight.results);
-      if (preflight.hasFailures) {
-        process.stderr.write('\n  WARNING: Some connections failed. The agent may not work correctly.\n');
+    // Preflight connection check (non-blocking) — only meaningful when
+    // there's a manifest to load connections from.
+    if (hasManifest) {
+      const preflight = await runConnectionPreflight(repoPath);
+      if (preflight.results.length > 0) {
+        process.stderr.write('\n');
+        printPreflightTable(preflight.results);
+        if (preflight.hasFailures) {
+          process.stderr.write('\n  WARNING: Some connections failed. The agent may not work correctly.\n');
+        }
+        process.stderr.write('\n');
       }
-      process.stderr.write('\n');
     }
 
     // Graceful shutdown
@@ -586,7 +602,9 @@ Or add it to your agent's .env file:
         await killAll(managedProcesses);
       }
 
-      await server.stop();
+      if (server) {
+        await server.stop();
+      }
       process.exit(0);
     };
 

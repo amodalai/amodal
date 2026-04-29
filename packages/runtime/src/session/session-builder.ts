@@ -53,6 +53,7 @@ import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-too
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
 import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import {registerFileTools, DEFAULT_ALLOWED_DIRS, DEFAULT_BLOCKED_FILES} from '../tools/file-tools.js';
+import {registerAdminTools} from '../tools/admin-tools.js';
 import type {Logger} from '../logger.js';
 import type {CredentialResolver} from '../credentials.js';
 
@@ -476,6 +477,16 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     logger.debug('file_tools_registered', {repoRoot});
   } else if (fileToolsConfig) {
     logger.debug('file_tools_not_registered', {reason: 'no_repo_root'});
+  }
+
+  // -------------------------------------------------------------------------
+  // 10d. Register admin onboarding tools when this is an admin session
+  //      (show_preview, ask_choice, search_packages, install_package, write_skill)
+  // -------------------------------------------------------------------------
+
+  if (sessionType === 'admin' && repoRoot) {
+    registerAdminTools(registry, {repoRoot, logger});
+    logger.debug('admin_tools_registered', {repoRoot});
   }
 
   // -------------------------------------------------------------------------

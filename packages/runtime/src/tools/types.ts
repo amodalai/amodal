@@ -15,6 +15,14 @@
 import type {z} from 'zod';
 import type {FlexibleSchema} from 'ai';
 import type {SearchProvider} from '../providers/search-provider.js';
+import type {SSEAskChoiceEvent, SSEShowPreviewEvent, SSEStartOAuthEvent} from '../types.js';
+
+// ---------------------------------------------------------------------------
+// Inline tool events (emitted via ctx.emit)
+// ---------------------------------------------------------------------------
+
+/** Discriminated set of SSE events tools can emit inline. */
+export type ToolInlineEvent = SSEAskChoiceEvent | SSEShowPreviewEvent | SSEStartOAuthEvent;
 
 // ---------------------------------------------------------------------------
 // Tool context (provided to execute functions)
@@ -44,6 +52,21 @@ export interface ToolContext {
 
   /** Log a message (emitted as tool_log SSE event) */
   log(message: string): void;
+
+  /**
+   * Emit an inline SSE event (e.g. `show_preview`, `ask_choice`). Drained by
+   * the executing state and pushed onto the stream alongside the tool result.
+   * Tools that don't need inline UI never call this — keep the API surface
+   * narrow.
+   */
+  emit?(event: ToolInlineEvent): void;
+
+  /**
+   * Sink populated by `emit()` and drained by the executing state. Public on
+   * the type so the caller can read it; not part of the documented tool API.
+   * @internal
+   */
+  inlineEvents?: ToolInlineEvent[];
 
   /** Abort signal for cancellation/timeout */
   signal: AbortSignal;
