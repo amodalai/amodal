@@ -1,5 +1,12 @@
 # @amodalai/react
 
+## 0.3.44
+
+### Patch Changes
+
+- 8909a18: Add imperative `sendMessage` API to ChatWidget via React ref, and gracefully handle 404 when resuming a deleted session
+- e99a932: Studio sidebar reorg, dashboard with cost tracking, sessions page, incremental text streaming, markdown fix, CLI port flags
+
 ## 0.3.43
 
 ## 0.3.42

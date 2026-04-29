@@ -1,5 +1,14 @@
 # @amodalai/runtime
 
+## 0.3.44
+
+### Patch Changes
+
+- e99a932: Studio sidebar reorg, dashboard with cost tracking, sessions page, incremental text streaming, markdown fix, CLI port flags
+  - @amodalai/types@0.3.44
+  - @amodalai/core@0.3.44
+  - @amodalai/db@0.3.44
+
 ## 0.3.43
 
 ### Patch Changes
