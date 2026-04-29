@@ -100,8 +100,17 @@ jobs:
       - name: Verify endpoints
         run: |
           # Wait for Studio to be ready (it starts after the runtime)
-          for i in $(seq 1 15); do
-            curl -sf http://localhost:3848/api/studio/config > /dev/null 2>&1 && break
+          echo "Waiting for Studio..."
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:3848/api/studio/config > /dev/null 2>&1; then
+              echo "Studio ready after ${i}s"
+              break
+            fi
+            # Show what Studio returns for debugging
+            if [ "$i" = "10" ]; then
+              echo "Studio not ready after 10 attempts, checking port..."
+              curl -v http://localhost:3848/ 2>&1 | head -20 || true
+            fi
             sleep 2
           done
 
