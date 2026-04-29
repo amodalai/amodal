@@ -33,8 +33,13 @@ import {executeTool} from './executing.js';
 export async function handleStreaming(
   state: StreamingState,
   ctx: AgentContext,
+  onEffect?: (event: SSEEvent) => void,
 ): Promise<TransitionResult> {
   const effects: SSEEvent[] = [];
+  const emit = (event: SSEEvent) => {
+    if (onEffect) onEffect(event);
+    else effects.push(event);
+  };
   const toolCalls: ToolCall[] = [...state.pendingToolCalls];
 
   // Attach passive error handlers to the derived promises BEFORE iterating
@@ -59,7 +64,7 @@ export async function handleStreaming(
 
     switch (event.type) {
       case 'text-delta': {
-        effects.push({
+        emit({
           type: SSEEventType.TextDelta,
           content: event.textDelta,
           timestamp: new Date().toISOString(),
@@ -132,7 +137,7 @@ export async function handleStreaming(
           error: event.error instanceof Error ? event.error.message : String(event.error),
           turn: ctx.turnCount,
         });
-        effects.push({
+        emit({
           type: SSEEventType.Error,
           message: event.error instanceof Error ? event.error.message : String(event.error),
           timestamp: new Date().toISOString(),
@@ -170,5 +175,115 @@ export async function handleStreaming(
     next: {type: 'executing', queue: rest, current: first, results: []},
     effects,
   };
+}
+
+/**
+ * Async generator variant of handleStreaming that yields SSE events
+ * incrementally as the LLM generates tokens. The final yield is a
+ * TransitionResult so the caller knows the next state.
+ */
+export async function* handleStreamingIncremental(
+  state: StreamingState,
+  ctx: AgentContext,
+): AsyncGenerator<SSEEvent | TransitionResult> {
+  const toolCalls: ToolCall[] = [...state.pendingToolCalls];
+
+  Promise.resolve(state.stream.text).catch(() => {});
+  Promise.resolve(state.stream.usage).catch(() => {});
+  Promise.resolve(state.stream.responseMessages).catch(() => {});
+
+  for await (const event of state.stream.fullStream) {
+    if (ctx.signal.aborted) break;
+
+    switch (event.type) {
+      case 'text-delta': {
+        yield {
+          type: SSEEventType.TextDelta,
+          content: event.textDelta,
+          timestamp: new Date().toISOString(),
+        };
+        break;
+      }
+
+      case 'tool-call': {
+        const call: ToolCall = {
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: event.args,
+        };
+        toolCalls.push(call);
+
+        const toolDef = ctx.toolRegistry.get(event.toolName);
+        if (toolDef?.readOnly) {
+          const promise = executeTool(call, toolDef, ctx);
+          promise.catch((err: unknown) => {
+            ctx.logger.debug('preexec_suppressed', {
+              tool: event.toolName,
+              callId: event.toolCallId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+          ctx.preExecutionCache.set(event.toolCallId, promise);
+        }
+        break;
+      }
+
+      case 'finish': {
+        const usage = event.usage;
+        ctx.usage.inputTokens += usage.inputTokens;
+        ctx.usage.outputTokens += usage.outputTokens;
+        ctx.usage.totalTokens += usage.inputTokens + usage.outputTokens;
+        if (usage.cachedInputTokens) {
+          ctx.usage.cachedInputTokens = (ctx.usage.cachedInputTokens ?? 0) + usage.cachedInputTokens;
+        }
+        if (usage.cacheCreationInputTokens) {
+          ctx.usage.cacheCreationInputTokens = (ctx.usage.cacheCreationInputTokens ?? 0) + usage.cacheCreationInputTokens;
+        }
+        if (ctx.onUsage) {
+          ctx.onUsage({
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cachedInputTokens: usage.cachedInputTokens ?? 0,
+            cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
+            totalTokens: usage.inputTokens + usage.outputTokens,
+            turnNumber: ctx.turnCount,
+          });
+        }
+        break;
+      }
+
+      case 'tool-result':
+        break;
+
+      case 'error': {
+        ctx.logger.error('provider_stream_error', {
+          session: ctx.sessionId,
+          error: event.error instanceof Error ? event.error.message : String(event.error),
+          turn: ctx.turnCount,
+        });
+        yield {
+          type: SSEEventType.Error,
+          message: event.error instanceof Error ? event.error.message : String(event.error),
+          timestamp: new Date().toISOString(),
+        };
+        yield {next: {type: 'done', usage: {...ctx.usage}, reason: 'error'}, effects: []};
+        return;
+      }
+
+      default:
+        break;
+    }
+  }
+
+  const responseMessages = await state.stream.responseMessages;
+  ctx.messages = [...ctx.messages, ...responseMessages];
+
+  if (toolCalls.length === 0) {
+    yield {next: {type: 'done', usage: {...ctx.usage}, reason: 'model_stop'}, effects: []};
+    return;
+  }
+
+  const [first, ...rest] = toolCalls;
+  yield {next: {type: 'executing', queue: rest, current: first, results: []}, effects: []};
 }
 
