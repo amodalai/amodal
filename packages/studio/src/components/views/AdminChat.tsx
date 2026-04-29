@@ -12,6 +12,7 @@ import { ChatWidget } from '@amodalai/react/widget';
 import { streamSSE } from '@amodalai/react';
 import type { SSEEvent, ChatMessage } from '@amodalai/react';
 import { studioApiUrl } from '@/lib/api';
+import { useStudioConfig } from '../../contexts/StudioConfigContext';
 import { useTheme } from '../ThemeProvider';
 
 // ---------------------------------------------------------------------------
@@ -61,8 +62,9 @@ function persistChat(chat: PersistedChat): void {
 // Panel
 // ---------------------------------------------------------------------------
 
-export function AdminChat({ compact = true }: { compact?: boolean }) {
+export function AdminChat({ compact = true, initialMessage }: { compact?: boolean; initialMessage?: string }) {
   const { dark } = useTheme();
+  const { runtimeUrl } = useStudioConfig();
   const sessionIdRef = useRef<string | null>(loadPersistedChat().sessionId);
 
   const streamFn = useCallback(
@@ -113,13 +115,14 @@ export function AdminChat({ compact = true }: { compact?: boolean }) {
   return (
     <div ref={widgetRef} className="h-full">
       <ChatWidget
-        serverUrl=""
+        serverUrl={runtimeUrl}
         user={{ id: 'admin' }}
         position="inline"
         defaultOpen
         showInput
         streamFn={streamFn}
         onStateChange={handleStateChange}
+        initialMessage={initialMessage}
         theme={{
           mode: dark ? 'dark' : 'light',
           headerText: 'Admin Agent',

@@ -483,9 +483,14 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // 10b. Onboarding tools (admin sessions only)
   // -------------------------------------------------------------------------
 
-  if (sessionType === 'admin' && repoRoot) {
-    registerOnboardingTools(registry, {repoRoot, logger});
-    logger.debug('onboarding_tools_registered', {repoRoot});
+  // Register onboarding tools when running as the admin agent subprocess.
+  // AMODAL_NO_ADMIN=1 means this IS the admin agent (it doesn't spawn
+  // another admin). REPO_PATH points to the user's project directory.
+  const isAdminAgent = process.env['AMODAL_NO_ADMIN'] === '1';
+  const userRepoPath = process.env['REPO_PATH'];
+  if (isAdminAgent && userRepoPath) {
+    registerOnboardingTools(registry, {repoRoot: userRepoPath, logger});
+    logger.debug('onboarding_tools_registered', {repoRoot: userRepoPath});
   }
 
   // -------------------------------------------------------------------------

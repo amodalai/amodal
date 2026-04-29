@@ -10,6 +10,9 @@ import type { ChatMessage, AssistantTextMessage, ConfirmationInfo } from '../typ
 import type { InteractionEvent } from '../events/types';
 import { ToolCallCard } from './ToolCallCard';
 import { KBProposalCard } from './KBProposalCard';
+
+/** Tools that render their own UI via inline SSE events. Hide the ToolCallCard chrome for these. */
+const UI_TOOLS = new Set(['show_gallery', 'collect_secret', 'start_oauth', 'ask_choice', 'show_preview', 'clone_template']);
 import { SkillPill } from './SkillPill';
 import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
@@ -165,14 +168,17 @@ function AssistantBubble({
                   onInteraction={onInteraction}
                 />
               );
-            case 'tool_calls':
+            case 'tool_calls': {
+              const visibleCalls = block.calls.filter((tc) => !UI_TOOLS.has(tc.toolName));
+              if (visibleCalls.length === 0) return null;
               return (
                 <div key={`tools-${String(i)}`} className="pcw-bubble__extras">
-                  {block.calls.map((tc) => (
+                  {visibleCalls.map((tc) => (
                     <ToolCallCard key={tc.toolId} toolCall={tc} />
                   ))}
                 </div>
               );
+            }
             case 'ask_user':
               return (
                 <AskUserCard

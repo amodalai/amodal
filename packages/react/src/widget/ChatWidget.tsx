@@ -135,6 +135,16 @@ export const ChatWidget = forwardRef<ChatWidgetHandle, ChatWidgetProps>(({
     getSessionId: () => session.id ?? null,
   }), [send, session.id]);
 
+  // Auto-send initialMessage for custom streamFn (useChat handles its own)
+  const initialSentRef = useRef(false);
+  useEffect(() => {
+    if (!customStreamFn || !initialMessage || initialSentRef.current) return;
+    initialSentRef.current = true;
+    const timer = setTimeout(() => { send(initialMessage); }, 0);
+    return () => { clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMessage]);
+
   // Track elapsed time during streaming
   const [streamStartTime, setStreamStartTime] = useState(0);
   const prevStreamingRef = useRef(false);

@@ -65,7 +65,17 @@ function registerShowGallery(registry: ToolRegistry, opts: OnboardingToolsOption
           const cardUrl = `https://raw.githubusercontent.com/${t.repo}/${t.branch}/card/card.json`;
           const res = await fetch(cardUrl, {signal: AbortSignal.timeout(CARD_FETCH_TIMEOUT_MS)});
           if (!res.ok) {
-            logger.warn('show_gallery_card_fetch_failed', {repo: t.repo, status: res.status});
+            logger.debug('show_gallery_card_fetch_failed', {repo: t.repo, status: res.status});
+            // Fallback: use repo name as the card title
+            const repoName = t.repo.split('/').pop() ?? t.repo;
+            const displayName = repoName.replace(/^template-/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+            templates.push({
+              repo: t.repo,
+              title: displayName,
+              tagline: '',
+              author: t.repo.split('/')[0] ?? 'unknown',
+              verified: false,
+            });
             continue;
           }
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing external JSON
@@ -78,9 +88,18 @@ function registerShowGallery(registry: ToolRegistry, opts: OnboardingToolsOption
             verified: card['verified'] === true,
           });
         } catch (err: unknown) {
-          logger.warn('show_gallery_card_error', {
+          logger.debug('show_gallery_card_error', {
             repo: t.repo,
             error: err instanceof Error ? err.message : String(err),
+          });
+          const repoName = t.repo.split('/').pop() ?? t.repo;
+          const displayName = repoName.replace(/^template-/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+          templates.push({
+            repo: t.repo,
+            title: displayName,
+            tagline: '',
+            author: t.repo.split('/')[0] ?? 'unknown',
+            verified: false,
           });
         }
       }
