@@ -7,7 +7,7 @@
 // Chat UI lives in @amodalai/react/widget — feature changes go there, not here.
 // This file is intentionally thin.
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { ChatWidget } from '@amodalai/react/widget';
 import { streamSSE } from '@amodalai/react';
 import type { SSEEvent, ChatMessage } from '@amodalai/react';
@@ -60,7 +60,18 @@ function persistChat(chat: PersistedChat): void {
 // Panel
 // ---------------------------------------------------------------------------
 
-export function AdminChat({ compact = true }: { compact?: boolean }) {
+export function AdminChat({
+  compact = true,
+  initialMessage,
+}: {
+  compact?: boolean;
+  /**
+   * Auto-send this message on mount (exactly once). Used by the create
+   * flow to seed the admin agent with the user's setup intent without
+   * the user having to type or click Send.
+   */
+  initialMessage?: string;
+}) {
   const { dark } = useTheme();
   const sessionIdRef = useRef<string | null>(loadPersistedChat().sessionId);
 
@@ -81,36 +92,8 @@ export function AdminChat({ compact = true }: { compact?: boolean }) {
     [],
   );
 
-  // Listen for programmatic sends (e.g. from Feedback synthesis)
-  const widgetRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handler = (e: Event) => {
-      if (!('detail' in e)) return;
-      // After the `in` guard, access the property via index to avoid type assertions
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- extracting detail from CustomEvent-like Event
-      const obj = e as unknown as Record<string, unknown>;
-      const detail: unknown = obj['detail'];
-      if (typeof detail === 'string' && widgetRef.current) {
-        // Dispatch an input event to ChatWidget's InputBar
-        const input = widgetRef.current.querySelector('textarea');
-        if (input) {
-          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-            window.HTMLTextAreaElement.prototype, 'value',
-          )?.set;
-          nativeInputValueSetter?.call(input, detail);
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          // Submit via form
-          const form = input.closest('form');
-          form?.requestSubmit();
-        }
-      }
-    };
-    window.addEventListener('admin-chat-send', handler);
-    return () => { window.removeEventListener('admin-chat-send', handler); };
-  }, []);
-
   return (
-    <div ref={widgetRef} className="h-full">
+    <div className="h-full">
       <ChatWidget
         serverUrl=""
         user={{ id: 'admin' }}
@@ -119,6 +102,7 @@ export function AdminChat({ compact = true }: { compact?: boolean }) {
         showInput
         streamFn={streamFn}
         onStateChange={handleStateChange}
+        {...(initialMessage ? { initialMessage } : {})}
         theme={{
           mode: dark ? 'dark' : 'light',
           headerText: 'Admin Agent',

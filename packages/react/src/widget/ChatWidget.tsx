@@ -130,6 +130,23 @@ export function ChatWidget({
   const loadSession = customStreamFn ? noopLoadSession : chatHook.loadSession;
   const session = customStreamFn ? { id: directStream.sessionId } : chatHook.session;
 
+  // Auto-send initialMessage on the customStreamFn path. The default path
+  // already handles this inside `useChat`; this catch-up is for embedders
+  // (like Studio's AdminChat) that supply their own streamFn and would
+  // otherwise miss the auto-send. Fires exactly once per widget instance.
+  const customInitialSentRef = useRef(false);
+  useEffect(() => {
+    if (!customStreamFn || !initialMessage) return;
+    if (customInitialSentRef.current) return;
+    if (messages.length > 0) return;
+    customInitialSentRef.current = true;
+    const timer = setTimeout(() => { send(initialMessage); }, 0);
+    return () => { clearTimeout(timer); };
+    // Only re-evaluate when initialMessage changes; `send` is stable enough
+    // for our purposes (we guard with the ref).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customStreamFn, initialMessage]);
+
   // Track elapsed time during streaming
   const [streamStartTime, setStreamStartTime] = useState(0);
   const prevStreamingRef = useRef(false);

@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils';
 const POPULAR_TAB = 'Popular';
 const TAB_ORDER: readonly string[] = [POPULAR_TAB, 'Marketing', 'Sales', 'Support', 'Ops'];
 const PICKER_LIMIT = 8;
-const SEED_DELAY_MS = 50;
 
 const SUGGESTION_CHIPS: readonly string[] = [
   'Send me a weekly marketing report every Monday',
@@ -945,22 +944,12 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
 // ---------------------------------------------------------------------------
 
 function ChatView({ seed }: { title: string; seed: string }) {
-  // Send the seed message once on mount via the AdminChat's CustomEvent
-  // listener. Small timeout lets AdminChat finish wiring its event handler
-  // before we dispatch — without it the very first chat-view mount can
-  // miss the event.
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('admin-chat-send', { detail: seed }));
-    }, SEED_DELAY_MS);
-    return () => {
-      window.clearTimeout(handle);
-    };
-  }, [seed]);
-
+  // The seed flows into AdminChat → ChatWidget's `initialMessage` config,
+  // which auto-sends it once the widget mounts. Replaces the older
+  // window-event dispatch hack that raced AdminChat's listener wiring.
   return (
     <div className="flex-1 min-h-0">
-      <AdminChat compact={false} />
+      <AdminChat compact={false} initialMessage={seed} />
     </div>
   );
 }
