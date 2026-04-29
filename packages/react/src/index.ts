@@ -100,6 +100,9 @@ export type {
 // Theme
 export { defaultTheme, applyTheme, mergeTheme } from './theme';
 
+// Widget handle
+export type { ChatWidgetHandle } from './widget/ChatWidget';
+
 // Types
 export type {
   SSEEvent,

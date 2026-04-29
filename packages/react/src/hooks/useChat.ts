@@ -29,7 +29,7 @@ import type {
   ChatUser,
   SSEEvent,
 } from '../types';
-import { streamChat, getSessionHistory } from '../client/chat-api';
+import { ChatApiError, streamChat, getSessionHistory } from '../client/chat-api';
 import type { WidgetEventBus } from '../events/event-bus';
 import type { WidgetEvent, EntityExtractor } from '../events/types';
 import { useChatStream } from './useChatStream';
@@ -198,7 +198,25 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     if (!resumeSessionId || resumeLoadedRef.current) return;
     resumeLoadedRef.current = true;
     initialMessageDeliveredRef.current = true;
-    loadSession(resumeSessionId);
+
+    const doResume = async (): Promise<void> => {
+      try {
+        const rawToken = authRef.current.getToken?.();
+        const token = (rawToken instanceof Promise ? await rawToken : rawToken) ?? undefined;
+        const detail = await getSessionHistory(serverUrl, resumeSessionId, token);
+        const chatMessages = rehydrateHistory(detail.messages);
+        stream.dispatch({ type: 'LOAD_HISTORY', sessionId: resumeSessionId, messages: chatMessages });
+      } catch (err: unknown) {
+        const is404 = err instanceof ChatApiError && err.status === 404;
+        stream.dispatch({
+          type: 'STREAM_ERROR',
+          message: is404
+            ? 'Previous session no longer exists. Start a new conversation.'
+            : err instanceof Error ? err.message : 'Failed to resume session',
+        });
+      }
+    };
+    void doResume();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeSessionId]);
 

@@ -9,7 +9,7 @@ import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 // serveStatic removed — we serve files manually with correct MIME types
 import path from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { logger } from '../lib/logger.js';
 import { getBasePath } from '../lib/config.js';
@@ -170,9 +170,9 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
           return c.notFound();
         }
 
-        // Try to serve static file from dist
+        // Try to serve static file from dist (must be a file, not a directory)
         const filePath = path.join(distDir, reqPath);
-        if (existsSync(filePath) && !filePath.includes('..')) {
+        if (existsSync(filePath) && !filePath.includes('..') && statSync(filePath).isFile()) {
           const ext = path.extname(filePath);
           const mime = MIME_TYPES[ext] ?? 'application/octet-stream';
           const body = readFileSync(filePath);

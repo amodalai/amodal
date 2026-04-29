@@ -641,4 +641,41 @@ describe('useChat hook', () => {
       expect(callCount).toBe(1);
     });
   });
+
+  describe('resumeSessionId', () => {
+    it('shows error when session does not exist (404)', async () => {
+      server.use(
+        http.get('http://localhost:4555/sessions/history/:id', () => new HttpResponse(JSON.stringify({ error: 'not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          })),
+      );
+
+      const { result } = renderHook(() =>
+        useChat({ ...defaultOptions, resumeSessionId: 'deleted-session-123' }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.error).toBe('Previous session no longer exists. Start a new conversation.');
+      });
+    });
+
+    it('shows generic error for non-404 failures', async () => {
+      server.use(
+        http.get('http://localhost:4555/sessions/history/:id', () => new HttpResponse(JSON.stringify({ error: 'internal' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          })),
+      );
+
+      const { result } = renderHook(() =>
+        useChat({ ...defaultOptions, resumeSessionId: 'broken-session' }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.error).toBeTruthy();
+        expect(result.current.error).not.toContain('no longer exists');
+      });
+    });
+  });
 });
