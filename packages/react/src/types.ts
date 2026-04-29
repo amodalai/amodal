@@ -29,7 +29,9 @@ export type SSEEventType =
   | 'tool_log'
   | 'warning'
   | 'error'
-  | 'done';
+  | 'done'
+  | 'show_gallery'
+  | 'collect_secret';
 
 export interface SSEInitEvent {
   type: 'init';
@@ -225,7 +227,34 @@ export type SSEEvent =
   | SSEToolLogEvent
   | SSEWarningEvent
   | SSEErrorEvent
-  | SSEDoneEvent;
+  | SSEDoneEvent
+  | SSEShowGalleryEvent
+  | SSECollectSecretEvent;
+
+export interface SSEShowGalleryEvent {
+  type: 'show_gallery';
+  title: string;
+  templates: Array<{
+    repo: string;
+    title: string;
+    tagline: string;
+    author: string;
+    verified: boolean;
+  }>;
+  allow_custom: boolean;
+  timestamp: string;
+}
+
+export interface SSECollectSecretEvent {
+  type: 'collect_secret';
+  secret_id: string;
+  name: string;
+  label: string;
+  description?: string;
+  link?: string;
+  required: boolean;
+  timestamp: string;
+}
 
 // ---------------------------------------------------------------------------
 // Ask user types
@@ -340,12 +369,38 @@ export interface ErrorMessage {
 
 export type ChatMessage = UserMessage | AssistantTextMessage | ErrorMessage;
 
+export interface ShowGalleryBlock {
+  type: 'show_gallery';
+  title: string;
+  templates: Array<{
+    repo: string;
+    title: string;
+    tagline: string;
+    author: string;
+    verified: boolean;
+  }>;
+  allow_custom: boolean;
+}
+
+export interface CollectSecretBlock {
+  type: 'collect_secret';
+  secretId: string;
+  name: string;
+  label: string;
+  description?: string;
+  link?: string;
+  required: boolean;
+  status: 'pending' | 'saved' | 'skipped';
+}
+
 export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'widget'; widgetType: string; data: Record<string, unknown> }
   | { type: 'tool_calls'; calls: ToolCallInfo[] }
   | { type: 'confirmation'; confirmation: ConfirmationInfo }
-  | AskUserBlock;
+  | AskUserBlock
+  | ShowGalleryBlock
+  | CollectSecretBlock;
 
 // ---------------------------------------------------------------------------
 // Widget configuration
@@ -444,6 +499,9 @@ export type ChatAction =
   | { type: 'STREAM_ERROR'; message: string }
   | { type: 'STREAM_TOOL_LOG'; toolName: string; message: string }
   | { type: 'STREAM_DONE'; usage?: {inputTokens: number; outputTokens: number} }
+  | { type: 'STREAM_SHOW_GALLERY'; title: string; templates: ShowGalleryBlock['templates']; allow_custom: boolean }
+  | { type: 'STREAM_COLLECT_SECRET'; secretId: string; name: string; label: string; description?: string; link?: string; required: boolean }
+  | { type: 'COLLECT_SECRET_SAVED'; secretId: string }
   | { type: 'LOAD_HISTORY'; sessionId: string; messages: ChatMessage[] }
   | { type: 'RESET' };
 

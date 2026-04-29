@@ -2542,3 +2542,174 @@
 .pcw-feedback__submit:hover {
   background: rgba(239,68,68,0.2);
 }
+
+/* ---------------------------------------------------------------------------
+ * Gallery card (show_gallery tool)
+ * --------------------------------------------------------------------------- */
+
+.pcw-gallery {
+  margin: 8px 0;
+}
+.pcw-gallery__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pcw-text);
+  margin-bottom: 12px;
+}
+.pcw-gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.pcw-gallery__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--pcw-border);
+  border-radius: 8px;
+  background: var(--pcw-bg);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pcw-gallery__card:hover {
+  border-color: var(--pcw-primary, #0d9e87);
+  box-shadow: 0 0 0 1px var(--pcw-primary, #0d9e87);
+}
+.pcw-gallery__card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pcw-text);
+}
+.pcw-gallery__card-tagline {
+  font-size: 11px;
+  color: var(--pcw-text-muted);
+  line-height: 1.4;
+}
+.pcw-gallery__card-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--pcw-text-muted);
+  margin-top: auto;
+}
+.pcw-gallery__badge {
+  color: var(--pcw-primary, #0d9e87);
+  font-weight: 600;
+}
+.pcw-gallery__author {
+  font-weight: 500;
+}
+.pcw-gallery__custom {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--pcw-primary, #0d9e87);
+  background: none;
+  border: 1px solid var(--pcw-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.pcw-gallery__custom:hover {
+  background: rgba(13, 158, 135, 0.05);
+}
+
+/* ---------------------------------------------------------------------------
+ * Collect secret card (collect_secret tool)
+ * --------------------------------------------------------------------------- */
+
+.pcw-collect-secret {
+  margin: 8px 0;
+  padding: 14px;
+  border: 1px solid var(--pcw-border);
+  border-radius: 8px;
+  background: var(--pcw-bg);
+}
+.pcw-collect-secret--saved {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.05);
+}
+.pcw-collect-secret--saved .pcw-collect-secret__label {
+  color: #10b981;
+}
+.pcw-collect-secret--skipped {
+  opacity: 0.5;
+}
+.pcw-collect-secret__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pcw-text);
+  margin-bottom: 4px;
+}
+.pcw-collect-secret__description {
+  font-size: 11px;
+  color: var(--pcw-text-muted);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+.pcw-collect-secret__link {
+  color: var(--pcw-primary, #0d9e87);
+  text-decoration: none;
+}
+.pcw-collect-secret__link:hover {
+  text-decoration: underline;
+}
+.pcw-collect-secret__input-row {
+  margin-bottom: 8px;
+}
+.pcw-collect-secret__input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: monospace;
+  border: 1px solid var(--pcw-border);
+  border-radius: 6px;
+  background: var(--pcw-bg);
+  color: var(--pcw-text);
+  outline: none;
+}
+.pcw-collect-secret__input:focus {
+  border-color: var(--pcw-primary, #0d9e87);
+}
+.pcw-collect-secret__error {
+  font-size: 11px;
+  color: #ef4444;
+  margin-bottom: 8px;
+}
+.pcw-collect-secret__actions {
+  display: flex;
+  gap: 8px;
+}
+.pcw-collect-secret__save {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+  background: var(--pcw-primary, #0d9e87);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.pcw-collect-secret__save:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.pcw-collect-secret__save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pcw-collect-secret__skip {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--pcw-text-muted);
+  background: none;
+  border: 1px solid var(--pcw-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.pcw-collect-secret__skip:hover {
+  color: var(--pcw-text);
+}

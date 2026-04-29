@@ -13,6 +13,8 @@ import { KBProposalCard } from './KBProposalCard';
 import { SkillPill } from './SkillPill';
 import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
+import { ShowGalleryCard } from './ShowGalleryCard';
+import { CollectSecretCard } from './CollectSecretCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { ConfirmCard } from '../components/ConfirmCard';
@@ -92,6 +94,8 @@ interface MessageListProps {
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
+  onCollectSecretSaved?: (secretId: string) => void;
+  serverUrl?: string;
   emptyStateText?: string;
   sessionId?: string;
   showFeedback?: boolean;
@@ -115,6 +119,8 @@ function AssistantBubble({
   onInteraction,
   onAskUserSubmit,
   onConfirmationRespond,
+  onCollectSecretSaved,
+  serverUrl,
 }: {
   message: AssistantTextMessage;
   sendMessage?: (text: string) => void;
@@ -122,6 +128,8 @@ function AssistantBubble({
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
+  onCollectSecretSaved?: (secretId: string) => void;
+  serverUrl?: string;
 }) {
   const hasContentBlocks = message.contentBlocks && message.contentBlocks.length > 0;
   const hasExtras =
@@ -184,6 +192,24 @@ function AssistantBubble({
                 />
               );
             }
+            case 'show_gallery':
+              return (
+                <ShowGalleryCard
+                  key={`gallery-${String(i)}`}
+                  block={block}
+                  sendMessage={sendMessage}
+                />
+              );
+            case 'collect_secret':
+              return (
+                <CollectSecretCard
+                  key={`secret-${block.secretId}`}
+                  block={block}
+                  serverUrl={serverUrl ?? window.location.origin}
+                  sendMessage={sendMessage}
+                  onSaved={onCollectSecretSaved}
+                />
+              );
             default:
               return null;
           }
@@ -224,7 +250,7 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, onCollectSecretSaved, serverUrl, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -290,6 +316,8 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
                   onInteraction={onInteraction}
                   onAskUserSubmit={onAskUserSubmit}
                   onConfirmationRespond={onConfirmationRespond}
+                  onCollectSecretSaved={onCollectSecretSaved}
+                  serverUrl={serverUrl}
                 />
                 {showFeedback && !isStreaming && (
                   <FeedbackButtons messageId={msg.id} sessionId={sessionId} query={qText} response={rText} />

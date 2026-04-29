@@ -258,6 +258,57 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
+    case 'STREAM_SHOW_GALLERY': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'show_gallery',
+          title: action.title,
+          templates: action.templates,
+          allow_custom: action.allow_custom,
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_COLLECT_SECRET': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'collect_secret',
+          secretId: action.secretId,
+          name: action.name,
+          label: action.label,
+          description: action.description,
+          link: action.link,
+          required: action.required,
+          status: 'pending',
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'COLLECT_SECRET_SAVED': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const blocks = last.contentBlocks.map((block) =>
+          block.type === 'collect_secret' && block.secretId === action.secretId
+            ? { ...block, status: 'saved' as const }
+            : block,
+        );
+        msgs[msgs.length - 1] = { ...last, contentBlocks: blocks };
+      }
+      return { ...state, messages: msgs };
+    }
     case 'STREAM_CONFIRMATION_REQUIRED': {
       const msgs = [...state.messages];
       const last = msgs[msgs.length - 1];
@@ -742,6 +793,25 @@ function processEvent(
           : undefined,
       });
       callbacks.onStreamEnd?.();
+      return;
+    case 'show_gallery':
+      dispatch({
+        type: 'STREAM_SHOW_GALLERY',
+        title: event.title,
+        templates: event.templates,
+        allow_custom: event.allow_custom,
+      });
+      return;
+    case 'collect_secret':
+      dispatch({
+        type: 'STREAM_COLLECT_SECRET',
+        secretId: event.secret_id,
+        name: event.name,
+        label: event.label,
+        description: event.description,
+        link: event.link,
+        required: event.required,
+      });
       return;
     case 'explore_start':
     case 'explore_end':
