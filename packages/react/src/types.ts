@@ -173,13 +173,15 @@ export interface SSEShowPreviewEvent {
 }
 
 /**
- * Inline OAuth Connect button emitted by `start_oauth_connection`.
+ * Inline OAuth Connect card emitted by `start_oauth_connection`.
  * Mirrored from @amodalai/types — see SSEStartOAuthEvent for full docs.
  */
 export interface SSEStartOAuthEvent {
   type: 'start_oauth';
   package_name: string;
   display_name?: string;
+  description?: string;
+  skippable?: boolean;
   timestamp: string;
 }
 
@@ -388,11 +390,13 @@ export interface ShowPreviewBlock {
   card: AgentCardInline;
 }
 
-/** Inline OAuth Connect button surfaced by the `start_oauth_connection` tool. */
+/** Inline OAuth Connect card surfaced by the `start_oauth_connection` tool. */
 export interface StartOAuthBlock {
   type: 'start_oauth';
   packageName: string;
   displayName?: string;
+  description?: string;
+  skippable?: boolean;
 }
 
 export interface UserMessage {
@@ -533,7 +537,7 @@ export type ChatAction =
   | { type: 'STREAM_ASK_CHOICE'; askId: string; question: string; options: AskChoiceOption[]; multi: boolean }
   | { type: 'ASK_CHOICE_SUBMITTED'; askId: string; values: string[] }
   | { type: 'STREAM_SHOW_PREVIEW'; card: AgentCardInline }
-  | { type: 'STREAM_START_OAUTH'; packageName: string; displayName?: string }
+  | { type: 'STREAM_START_OAUTH'; packageName: string; displayName?: string; description?: string; skippable?: boolean }
   | { type: 'STREAM_CONFIRMATION_REQUIRED'; confirmation: ConfirmationInfo }
   | { type: 'CONFIRMATION_RESPONDED'; correlationId: string; approved: boolean }
   | { type: 'STREAM_ERROR'; message: string }

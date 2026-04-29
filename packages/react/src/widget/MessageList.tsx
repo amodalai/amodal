@@ -199,6 +199,7 @@ function AssistantBubble({
                 <StartOAuthCard
                   key={`oauth-${String(i)}`}
                   block={block}
+                  sendMessage={sendMessage}
                 />
               );
             case 'confirmation': {

@@ -6,12 +6,13 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Loader2, Search } from 'lucide-react';
-import { AgentCard } from '@/components/AgentCard';
+import { Loader2 } from 'lucide-react';
+import { PickerCard } from '@/components/PickerCard';
 import { useTemplateCatalog, type CatalogAgent } from '../hooks/useTemplateCatalog';
 import { cn } from '@/lib/utils';
 
 const ALL_TAB = 'All';
+const FIXED_CATEGORIES: readonly string[] = [ALL_TAB, 'Marketing', 'Sales', 'Support', 'Ops'];
 
 export function BrowsePage() {
   const navigate = useNavigate();
@@ -20,10 +21,18 @@ export function BrowsePage() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string>(ALL_TAB);
 
+  // Spec's fixed five tabs first, plus any extra categories the catalog
+  // surfaces (e.g. a community-published "Reporting" template).
   const categories = useMemo(() => {
-    const set = new Set<string>();
-    for (const a of agents) set.add(a.category);
-    return [ALL_TAB, ...Array.from(set).sort()];
+    const seen = new Set<string>(FIXED_CATEGORIES);
+    const extras: string[] = [];
+    for (const a of agents) {
+      if (!seen.has(a.category)) {
+        seen.add(a.category);
+        extras.push(a.category);
+      }
+    }
+    return [...FIXED_CATEGORIES, ...extras];
   }, [agents]);
 
   const filtered = useMemo(() => filterAgents(agents, category, query), [agents, category, query]);
@@ -33,27 +42,19 @@ export function BrowsePage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 px-6 py-6 max-w-6xl mx-auto w-full">
-      <header className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold text-foreground">Template gallery</h1>
+    <div className="flex flex-col gap-6 px-6 py-6 max-w-3xl mx-auto w-full">
+      <h1 className="text-xl font-semibold text-foreground tracking-tight">All agents</h1>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search templates…"
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
-          />
-        </div>
-
-        <CategoryTabs
-          categories={categories}
-          selected={category}
-          onSelect={setCategory}
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search agents..."
+          className="flex-1 min-w-[220px] rounded-lg border border-border bg-card px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-foreground/30 transition-colors"
         />
-      </header>
+        <CategoryPills categories={categories} selected={category} onSelect={setCategory} />
+      </div>
 
       <CatalogGrid
         loading={loading}
@@ -66,7 +67,7 @@ export function BrowsePage() {
   );
 }
 
-function CategoryTabs({
+function CategoryPills({
   categories,
   selected,
   onSelect,
@@ -76,16 +77,17 @@ function CategoryTabs({
   onSelect: (c: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1 border-b border-border">
+    <div className="flex gap-0.5">
       {categories.map((c) => (
         <button
           key={c}
+          type="button"
           onClick={() => onSelect(c)}
           className={cn(
-            'px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+            'text-[12px] rounded-md px-3 py-1.5 transition-all',
             selected === c
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground',
+              ? 'bg-card border border-border text-foreground font-semibold shadow-sm'
+              : 'border border-transparent text-muted-foreground hover:text-foreground font-medium',
           )}
         >
           {c}
@@ -112,7 +114,7 @@ function CatalogGrid({
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-12 justify-center border border-dashed border-border rounded-lg">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Loading templates…
+        Loading agents…
       </div>
     );
   }
@@ -120,29 +122,29 @@ function CatalogGrid({
   if (error) {
     return (
       <div className="text-sm text-muted-foreground py-12 text-center border border-dashed border-border rounded-lg">
-        Couldn&apos;t load templates. {error}
+        Couldn&apos;t load agents. {error}
       </div>
     );
   }
 
   if (agents.length === 0) {
     const reason = totalCount === 0
-      ? 'No templates available yet.'
-      : 'No templates match your search.';
+      ? 'No agents available yet.'
+      : 'No agents match your search.';
     return (
-      <div className="text-sm text-muted-foreground py-12 text-center border border-dashed border-border rounded-lg">
+      <div className="text-sm text-muted-foreground py-10 text-center">
         {reason}
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {agents.map((a) => (
-        <AgentCard
+        <PickerCard
           key={a.slug}
           card={a.card}
-          variant="thumbnail"
+          category={a.category}
           onClick={() => onCardClick(a.slug)}
         />
       ))}

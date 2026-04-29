@@ -312,6 +312,8 @@ export interface SSEStartOAuthEvent {
   type: SSEEventType.StartOAuth;
   package_name: string;
   display_name?: string;
+  description?: string;
+  skippable?: boolean;
   timestamp: string;
 }
 

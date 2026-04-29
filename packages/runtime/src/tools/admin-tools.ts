@@ -198,19 +198,26 @@ export function registerAdminTools(registry: ToolRegistry, opts: AdminToolsOptio
   // -------------------------------------------------------------------------
   registry.register('start_oauth_connection', {
     description:
-      'Render an inline OAuth Connect button in the chat for an installed package. Use after the user agrees to connect a service (e.g. Slack, Google Analytics). The button opens the provider\'s authorize flow in a popup.',
+      'Render an inline OAuth Connect card in the chat for an installed connection package. Use during template setup after the user agrees to connect a service (e.g. Slack, Google Analytics). The card shows the connection name + description and a Connect button (opens the provider\'s authorize flow in a popup); set `skippable` for non-required connections so the user can defer with a "Later" button.',
     parameters: z.object({
       packageName: z.string().describe('npm package providing the connection (e.g. "@amodalai/connection-slack")'),
-      displayName: z.string().optional().describe('Optional label for the button ("Connect Slack"). Defaults to package name.'),
+      displayName: z.string().optional().describe('Human-readable name shown on the card ("Slack"). Defaults to package name.'),
+      description: z.string().optional().describe('Short one-line description ("Digest delivery", "Website traffic + conversions").'),
+      skippable: z.boolean().optional().describe('When true, the card includes a Later button so the user can skip. Required connections should leave this false.'),
     }),
     readOnly: true,
     metadata: {category: 'admin'},
 
-    async execute(params: {packageName: string; displayName?: string}, ctx: ToolContext) {
+    async execute(
+      params: {packageName: string; displayName?: string; description?: string; skippable?: boolean},
+      ctx: ToolContext,
+    ) {
       ctx.emit?.({
         type: SSEEventType.StartOAuth,
         package_name: params.packageName,
         ...(params.displayName ? {display_name: params.displayName} : {}),
+        ...(params.description ? {description: params.description} : {}),
+        ...(params.skippable ? {skippable: true} : {}),
         timestamp: new Date().toISOString(),
       });
       return {ok: true, package: params.packageName};

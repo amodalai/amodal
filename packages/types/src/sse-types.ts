@@ -180,10 +180,12 @@ export interface SSEShowPreviewEvent {
 
 /**
  * Inline OAuth Connect button. Emitted by the admin agent's
- * `start_oauth_connection` tool. Studio renders a button that opens the
- * provider's authorize URL — fetched at click-time from the runtime's
- * `/api/oauth/start?package=<package_name>` endpoint (cloud-studio-app
- * proxies that to platform-api's `/connections/start/<provider>`).
+ * `start_oauth_connection` tool. Studio renders a card with a Connect
+ * button (which opens the provider's authorize URL — fetched at
+ * click-time from the runtime's `/api/oauth/start?package=<package_name>`
+ * endpoint; cloud-studio-app proxies that to platform-api's
+ * `/connections/start/<provider>`) plus a "Later" skip option for
+ * non-blocking flows.
  */
 export interface SSEStartOAuthEvent {
   type: SSEEventType.StartOAuth;
@@ -191,6 +193,10 @@ export interface SSEStartOAuthEvent {
   package_name: string;
   /** Optional human-readable label for the button ("Connect Slack"). */
   display_name?: string;
+  /** Optional one-line description shown next to the name (e.g. "Website traffic + conversions"). */
+  description?: string;
+  /** When true, the card shows a Later button so the user can skip. */
+  skippable?: boolean;
   timestamp: string;
 }
 

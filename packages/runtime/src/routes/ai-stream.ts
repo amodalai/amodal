@@ -306,6 +306,8 @@ export function translateEvent(
         data: {
           package_name: event.package_name,
           display_name: event.display_name,
+          description: event.description,
+          skippable: event.skippable,
         },
       });
       break;

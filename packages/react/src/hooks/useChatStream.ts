@@ -313,6 +313,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           type: 'start_oauth',
           packageName: action.packageName,
           ...(action.displayName ? {displayName: action.displayName} : {}),
+          ...(action.description ? {description: action.description} : {}),
+          ...(action.skippable ? {skippable: true} : {}),
         };
         msgs[msgs.length - 1] = {
           ...last,
@@ -780,6 +782,8 @@ function processEvent(
         type: 'STREAM_START_OAUTH',
         packageName: event.package_name,
         ...(event.display_name ? {displayName: event.display_name} : {}),
+        ...(event.description ? {description: event.description} : {}),
+        ...(event.skippable ? {skippable: true} : {}),
       });
       return;
     case 'credential_saved':
