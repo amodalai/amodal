@@ -1,5 +1,11 @@
 # @amodalai/core
 
+## 0.3.42
+
+### Patch Changes
+
+- @amodalai/types@0.3.42
+
 ## 0.3.41
 
 ### Patch Changes
