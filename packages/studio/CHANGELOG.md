@@ -1,5 +1,13 @@
 # @amodalai/studio
 
+## 0.3.43
+
+### Patch Changes
+
+- 6dcaf1c: Fix static asset MIME types when BASE_PATH is set by excluding /assets/ paths from the SPA catch-all route
+  - @amodalai/react@0.3.43
+  - @amodalai/db@0.3.43
+
 ## 0.3.42
 
 ### Patch Changes
