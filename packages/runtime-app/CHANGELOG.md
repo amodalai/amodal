@@ -1,5 +1,15 @@
 # @amodalai/runtime-app
 
+## 0.3.44
+
+### Patch Changes
+
+- e99a932: Studio sidebar reorg, dashboard with cost tracking, sessions page, incremental text streaming, markdown fix, CLI port flags
+- Updated dependencies [8909a18]
+- Updated dependencies [e99a932]
+  - @amodalai/react@0.3.44
+  - @amodalai/types@0.3.44
+
 ## 0.3.43
 
 ### Patch Changes
