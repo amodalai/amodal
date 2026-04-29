@@ -14,6 +14,7 @@ import {
   rmSync,
   readdirSync,
   cpSync,
+  statSync,
 } from 'node:fs';
 import * as path from 'node:path';
 import { logger } from '../../lib/logger.js';
@@ -60,12 +61,19 @@ onboardingRoutes.post('/api/studio/onboarding/clone', async (c) => {
     );
     rmSync(path.join(tmpDir, '.git'), {recursive: true, force: true});
 
-    // Copy contents, skip card/ and existing files
+    // Copy contents, skip card/ and .git. For directories, merge
+    // (don't skip empty dirs from amodal init). For files, skip if
+    // they already exist (preserves user's .env, .gitignore).
     for (const entry of readdirSync(tmpDir)) {
       if (entry === 'card' || entry === '.git') continue;
+      const src = path.join(tmpDir, entry);
       const dst = path.join(repoPath, entry);
-      if (existsSync(dst)) continue;
-      cpSync(path.join(tmpDir, entry), dst, {recursive: true});
+      const srcStat = statSync(src);
+      if (srcStat.isDirectory()) {
+        cpSync(src, dst, {recursive: true, force: false});
+      } else if (!existsSync(dst)) {
+        cpSync(src, dst);
+      }
     }
 
     // Merge amodal.json: template's packages + settings, user's model config

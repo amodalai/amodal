@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AgentCard } from '@amodalai/types';
 import { PickerCard } from '@/components/PickerCard';
+import { AdminChat } from '@/components/views/AdminChat';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { fetchAgentCard } from '../hooks/template-card-fetcher';
 
@@ -50,7 +51,7 @@ export function OnboardingWizard() {
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [companyUrl, setCompanyUrl] = useState('');
   const [companyDesc, setCompanyDesc] = useState('');
-  const [summaryData, setSummaryData] = useState<{name: string; connections: Array<{name: string; status: string}>} | null>(null);
+  const [summaryData, setSummaryData] = useState<{name: string; connections: Array<{name: string; status: string}>; customizeContext?: string} | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom on step change
@@ -119,26 +120,21 @@ export function OnboardingWizard() {
     setCredentials((prev) => prev.map((c) => c.envVar === envVar ? { ...c, status: 'skipped' } : c));
   }, []);
 
-  const handleCustomize = useCallback(async () => {
-    if (companyUrl.trim() || companyDesc.trim()) {
-      const content = [
-        '# Brand Context', '',
-        companyUrl.trim() ? `Website: ${companyUrl.trim()}` : '',
-        companyDesc.trim() ? `\n${companyDesc.trim()}` : '',
-      ].filter(Boolean).join('\n');
-      try {
-        await fetch(`${runtimeUrl}/api/files/knowledge/brand-context.md`, {
-          method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: content,
-          signal: AbortSignal.timeout(5_000),
-        });
-      } catch { /* non-fatal */ }
-    }
+  const handleCustomize = useCallback(() => {
+    // Seed the admin chat with the customize context. The agent
+    // will write the actual knowledge doc using file tools.
+    const context = [
+      companyUrl.trim() ? `Website: ${companyUrl.trim()}` : '',
+      companyDesc.trim() ? companyDesc.trim() : '',
+    ].filter(Boolean).join('\n');
+
     setSummaryData({
       name: selectedName || 'Your agent',
       connections: credentials.map((c) => ({ name: c.name, status: c.status === 'connected' ? 'connected' : 'pending' })),
+      customizeContext: context || undefined,
     });
     setStep('summary');
-  }, [runtimeUrl, companyUrl, companyDesc, selectedName, credentials]);
+  }, [companyUrl, companyDesc, selectedName, credentials]);
 
   const allCredsAddressed = credentials.every((c) => c.status === 'connected' || c.status === 'skipped');
   const pastGallery = step !== 'gallery';
@@ -277,22 +273,40 @@ export function OnboardingWizard() {
         <div className="text-sm text-muted-foreground">✓ Brand context saved</div>
       ) : null}
 
-      {/* ---- SUMMARY ---- */}
+      {/* ---- SUMMARY + ADMIN CHAT ---- */}
       {step === 'summary' && summaryData && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-5 space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">{summaryData.name} is ready!</h2>
-          <div className="space-y-1">
-            {summaryData.connections.map((c) => (
-              <div key={c.name} className={`text-sm ${c.status === 'connected' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
-                {c.status === 'connected' ? '✓' : '○'} {c.name}
-              </div>
-            ))}
+        <>
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-5 space-y-3">
+            <h2 className="text-lg font-semibold text-foreground">{summaryData.name} is ready!</h2>
+            <div className="space-y-1">
+              {summaryData.connections.map((c) => (
+                <div key={c.name} className={`text-sm ${c.status === 'connected' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                  {c.status === 'connected' ? '✓' : '○'} {c.name}
+                </div>
+              ))}
+            </div>
+            <a href={runtimeUrl} target="_blank" rel="noopener noreferrer"
+              className="inline-block px-5 py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90">
+              Start using your agent →
+            </a>
           </div>
-          <a href={runtimeUrl} target="_blank" rel="noopener noreferrer"
-            className="inline-block px-5 py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90">
-            Start using your agent →
-          </a>
-        </div>
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold text-foreground">Customize your agent</h2>
+            <p className="text-sm text-muted-foreground">
+              The admin agent can write skills, knowledge docs, and fine-tune your setup.
+            </p>
+          </div>
+          <div className="h-[400px] border border-border rounded-lg overflow-hidden">
+            <AdminChat
+              compact={false}
+              initialMessage={
+                summaryData.customizeContext
+                  ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nPlease write a brand-context knowledge doc for my agent based on this information. Also review the installed skills and knowledge and suggest any improvements.`
+                  : `I just set up a ${summaryData.name} agent. Review the installed skills and knowledge and help me customize it.`
+              }
+            />
+          </div>
+        </>
       )}
 
       <div ref={bottomRef} />
