@@ -26,6 +26,8 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
     githubRepo: 'whodatdev/template-marketing-operations-hub',
     defaultBranch: 'main',
     featured: true,
+    author: '@amodal',
+    verified: true,
     card: {
       title: 'Monday Marketing Digest',
       tagline: 'Weekly metrics → Slack',
@@ -87,6 +89,8 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
     githubRepo: 'amodalai/template-support-triage',
     defaultBranch: 'main',
     featured: true,
+    author: '@amodal',
+    verified: true,
     card: {
       title: 'Support Triage Bot',
       tagline: 'Classify, route, auto-reply',
@@ -142,6 +146,8 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
     githubRepo: 'amodalai/template-sales-pipeline',
     defaultBranch: 'main',
     featured: true,
+    author: '@amodal',
+    verified: true,
     card: {
       title: 'Sales Pipeline Update',
       tagline: 'Morning snapshot → Slack',
@@ -199,6 +205,8 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
     githubRepo: 'amodalai/template-job-scheduler',
     defaultBranch: 'main',
     featured: true,
+    author: '@amodal',
+    verified: true,
     card: {
       title: 'Job Scheduler',
       tagline: 'Schedule jobs, text reminders',
@@ -254,6 +262,8 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
     githubRepo: 'amodalai/template-content-calendar',
     defaultBranch: 'main',
     featured: false,
+    author: '@amodal',
+    verified: true,
     card: {
       title: 'Content Calendar',
       tagline: 'Plan + queue posts',
@@ -295,6 +305,8 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
     githubRepo: 'amodalai/template-competitor-monitor',
     defaultBranch: 'main',
     featured: false,
+    author: '@growthlab',
+    verified: false,
     card: {
       title: 'Competitor Monitor',
       tagline: 'Track competitor activity',
@@ -334,6 +346,8 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
     githubRepo: 'amodalai/template-lead-qualifier',
     defaultBranch: 'main',
     featured: false,
+    author: '@revops-co',
+    verified: false,
     card: {
       title: 'Lead Qualifier',
       tagline: 'Score + route inbound leads',
@@ -373,6 +387,8 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
     githubRepo: 'amodalai/template-csat-digest',
     defaultBranch: 'main',
     featured: false,
+    author: '@amodal',
+    verified: true,
     card: {
       title: 'CSAT Weekly Digest',
       tagline: 'Satisfaction trends → Slack',
@@ -412,6 +428,8 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
     githubRepo: 'amodalai/template-invoice-reminder',
     defaultBranch: 'main',
     featured: false,
+    author: '@ledgerbot',
+    verified: false,
     card: {
       title: 'Invoice Reminder',
       tagline: 'Chase overdue invoices',

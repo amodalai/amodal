@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
+import { AuthorBadge } from '@/components/AuthorBadge';
 import { PickerCard } from '@/components/PickerCard';
 import { AdminChat } from '@/components/views/AdminChat';
 import { useTemplateCatalog, type CatalogAgent, type CatalogAgentDetail } from '../hooks/useTemplateCatalog';
@@ -464,7 +465,7 @@ function CardGrid({
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
       {agents.map((a) => (
-        <PickerCard key={a.slug} card={a.card} category={a.category} onClick={() => onPick(a)} />
+        <PickerCard key={a.slug} card={a.card} category={a.category} author={a.author} verified={a.verified} onClick={() => onPick(a)} />
       ))}
     </div>
   );
@@ -563,6 +564,8 @@ function BrowseView({ onPick }: { onPick: (agent: CatalogAgent) => void }) {
                 key={a.slug}
                 card={a.card}
                 category={a.category}
+                author={a.author}
+                verified={a.verified}
                 onClick={() => onPick(a)}
               />
             ))}
@@ -594,20 +597,28 @@ function DetailView({ agent, onSetup }: { agent: CatalogAgent; onSetup: () => vo
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-8 flex flex-col gap-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
+        <div>
+          <div className="flex items-start justify-between gap-4">
             <h1 className="text-[22px] font-semibold text-foreground tracking-tight leading-tight">
               {agent.card.title}
             </h1>
-            <p className="text-[13.5px] text-muted-foreground mt-1">
-              {detail.description}
-            </p>
+            {usesLabel && (
+              <span className="font-mono text-[11px] text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md whitespace-nowrap shrink-0 mt-1">
+                {usesLabel}
+              </span>
+            )}
           </div>
-          {usesLabel && (
-            <span className="font-mono text-[11px] text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md whitespace-nowrap shrink-0 mt-1">
-              {usesLabel}
-            </span>
+          {agent.author && (
+            <AuthorBadge
+              author={agent.author}
+              verified={agent.verified}
+              size="md"
+              className="mt-2"
+            />
           )}
+          <p className="text-[13.5px] text-muted-foreground mt-3">
+            {detail.description}
+          </p>
         </div>
 
         {/* Example output */}

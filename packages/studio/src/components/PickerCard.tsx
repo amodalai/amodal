@@ -5,12 +5,17 @@
  */
 
 import type { AgentCard, AgentCardTurn } from '@amodalai/types';
+import { AuthorBadge } from '@/components/AuthorBadge';
 import { cn } from '@/lib/utils';
 
 interface PickerCardProps {
   card: AgentCard;
   /** Marketplace category — drives the snippet-zone background tint. */
   category?: string;
+  /** Author handle ('@amodal' for first-party). Renders as an avatar + name pill. */
+  author?: string;
+  /** True for trusted creators — adds a blue checkmark next to the author name. */
+  verified?: boolean;
   onClick?: () => void;
   className?: string;
 }
@@ -25,7 +30,7 @@ interface PickerCardProps {
  * when the card doesn't ship an explicit `snippet` field. Category tint
  * defaults to the muted card surface when the category is unknown.
  */
-export function PickerCard({ card, category, onClick, className }: PickerCardProps) {
+export function PickerCard({ card, category, author, verified, onClick, className }: PickerCardProps) {
   const snippet = card.snippet ?? deriveSnippet(card.thumbnailConversation);
   const usesLabel = formatUses(card.uses);
   const tintClass = categoryTint(category);
@@ -63,6 +68,9 @@ export function PickerCard({ card, category, onClick, className }: PickerCardPro
             </span>
           )}
         </div>
+        {author && (
+          <AuthorBadge author={author} verified={verified} size="sm" className="mt-1" />
+        )}
       </div>
     </Container>
   );

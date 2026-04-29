@@ -18,6 +18,8 @@ interface CatalogEntry {
   slug: string;
   name: string;
   description: string;
+  author: string;
+  verified: boolean;
   category: string;
   githubRepo: string;
   defaultBranch: string;
@@ -70,6 +72,10 @@ export interface CatalogAgent {
   defaultBranch: string;
   /** True when the template is in the staff-curated featured set. Drives the "Popular" tab. */
   featured: boolean;
+  /** Author handle ('@amodal' for first-party, '@some-author' for community). */
+  author: string;
+  /** True when the author is in the trusted-creator set; drives the blue checkmark. */
+  verified: boolean;
   card: AgentCard;
   /** Optional rich detail (description, connections, skills, first setup question). */
   detail?: CatalogAgentDetail;
@@ -127,6 +133,8 @@ export function useTemplateCatalog(): UseTemplateCatalogResult {
               githubRepo: entry.githubRepo,
               defaultBranch: entry.defaultBranch,
               featured: entry.featured === true,
+              author: entry.author,
+              verified: entry.verified,
               card,
             };
             return result;
