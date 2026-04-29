@@ -5,7 +5,6 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { PickerCard } from '@/components/PickerCard';
 import { AdminChat } from '@/components/views/AdminChat';
@@ -51,35 +50,50 @@ const PAINS: readonly string[] = [
 
 type Mode =
   | { kind: 'pick' }
-  | { kind: 'detail'; agent: CatalogAgent }
+  | { kind: 'browse' }
+  | { kind: 'detail'; agent: CatalogAgent; from: 'pick' | 'browse' }
   | { kind: 'questionnaire' }
-  | { kind: 'chat'; title: string; seed: string; from: 'detail' | 'pick' | 'questionnaire'; agent?: CatalogAgent };
+  | { kind: 'chat'; title: string; seed: string; from: 'detail' | 'pick' | 'questionnaire'; agent?: CatalogAgent; detailFrom?: 'pick' | 'browse' };
 
 /**
  * Empty-repo boot screen — full-screen overlay (the StudioShell sidebar is
- * hidden behind it). Four modes:
+ * hidden behind it). Five modes:
  *
  *   - **pick** — tabs + cards + custom textarea + questionnaire link.
+ *   - **browse** — full marketplace gallery with search + category pills.
  *   - **detail** — rich preview (description, example output, connections,
  *     skills) with a "Set this up" CTA.
  *   - **questionnaire** — 3-step wizard (role / pains / tools) that compiles
  *     into a chat seed for the admin agent.
  *   - **chat** — full-screen AdminChat seeded with the user's intent.
+ *
+ * Detail tracks where it was opened from (pick / browse) so the Back
+ * button returns to the right mode. Chat tracks the same so Back from
+ * chat → detail → originating list mode.
  */
 export function CreateFlowPage() {
   const [mode, setMode] = useState<Mode>({ kind: 'pick' });
 
   const goBack = (): void => {
     if (mode.kind === 'chat') {
-      // Back from chat returns to the originating mode where possible
       if (mode.from === 'detail' && mode.agent) {
-        setMode({ kind: 'detail', agent: mode.agent });
+        setMode({
+          kind: 'detail',
+          agent: mode.agent,
+          from: mode.detailFrom ?? 'pick',
+        });
         return;
       }
       if (mode.from === 'questionnaire') {
         setMode({ kind: 'questionnaire' });
         return;
       }
+      setMode({ kind: 'pick' });
+      return;
+    }
+    if (mode.kind === 'detail') {
+      setMode(mode.from === 'browse' ? { kind: 'browse' } : { kind: 'pick' });
+      return;
     }
     setMode({ kind: 'pick' });
   };
@@ -93,7 +107,8 @@ export function CreateFlowPage() {
 
       {mode.kind === 'pick' && (
         <PickerView
-          onPick={(agent) => setMode({ kind: 'detail', agent })}
+          onPick={(agent) => setMode({ kind: 'detail', agent, from: 'pick' })}
+          onBrowseAll={() => setMode({ kind: 'browse' })}
           onDescribe={(description) =>
             setMode({
               kind: 'chat',
@@ -103,6 +118,12 @@ export function CreateFlowPage() {
             })
           }
           onQuestionnaire={() => setMode({ kind: 'questionnaire' })}
+        />
+      )}
+
+      {mode.kind === 'browse' && (
+        <BrowseView
+          onPick={(agent) => setMode({ kind: 'detail', agent, from: 'browse' })}
         />
       )}
 
@@ -116,6 +137,7 @@ export function CreateFlowPage() {
               seed: `Set up the "${mode.agent.card.title}" template.`,
               from: 'detail',
               agent: mode.agent,
+              detailFrom: mode.from,
             })
           }
         />
@@ -222,16 +244,16 @@ function SkipOnboardingButton() {
 
 function PickerView({
   onPick,
+  onBrowseAll,
   onDescribe,
   onQuestionnaire,
 }: {
   onPick: (agent: CatalogAgent) => void;
+  onBrowseAll: () => void;
   onDescribe: (description: string) => void;
   onQuestionnaire: () => void;
 }) {
-  const { agentId = 'local' } = useParams<{ agentId: string }>();
   const { agents, loading, error } = useTemplateCatalog();
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>(POPULAR_TAB);
   const [pickerInput, setPickerInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -287,7 +309,7 @@ function PickerView({
             <div className="text-center">
               <button
                 type="button"
-                onClick={() => { void navigate(`/agents/${agentId}/browse`); }}
+                onClick={onBrowseAll}
                 className="text-[11.5px] font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 Browse all agents →
@@ -445,6 +467,109 @@ function CardGrid({
       {agents.map((a) => (
         <PickerCard key={a.slug} card={a.card} category={a.category} onClick={() => onPick(a)} />
       ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Browse view — full marketplace gallery (search + category pills + grid)
+// ---------------------------------------------------------------------------
+
+const BROWSE_ALL_TAB = 'All';
+const BROWSE_FIXED_CATEGORIES: readonly string[] = [BROWSE_ALL_TAB, 'Marketing', 'Sales', 'Support', 'Ops'];
+
+function BrowseView({ onPick }: { onPick: (agent: CatalogAgent) => void }) {
+  const { agents, loading, error } = useTemplateCatalog();
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<string>(BROWSE_ALL_TAB);
+
+  const categories = useMemo(() => {
+    const seen = new Set<string>(BROWSE_FIXED_CATEGORIES);
+    const extras: string[] = [];
+    for (const a of agents) {
+      if (!seen.has(a.category)) {
+        seen.add(a.category);
+        extras.push(a.category);
+      }
+    }
+    return [...BROWSE_FIXED_CATEGORIES, ...extras];
+  }, [agents]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return agents.filter((a) => {
+      if (category !== BROWSE_ALL_TAB && a.category !== category) return false;
+      if (q === '') return true;
+      const haystack = [
+        a.card.title,
+        a.card.tagline,
+        ...a.card.platforms,
+        ...a.tags,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [agents, category, query]);
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col gap-6">
+        <h1 className="text-[20px] font-semibold text-foreground tracking-tight">All agents</h1>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search agents..."
+            className="flex-1 min-w-[220px] rounded-lg border border-border bg-card px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-foreground/30 transition-colors"
+          />
+          <div className="flex gap-0.5">
+            {categories.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(c)}
+                className={cn(
+                  'text-[12px] rounded-md px-3 py-1.5 transition-all',
+                  category === c
+                    ? 'bg-card border border-border text-foreground font-semibold shadow-sm'
+                    : 'border border-transparent text-muted-foreground hover:text-foreground font-medium',
+                )}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-12 justify-center border border-dashed border-border rounded-lg">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading agents…
+          </div>
+        ) : error ? (
+          <div className="text-sm text-muted-foreground py-12 text-center border border-dashed border-border rounded-lg">
+            Couldn&apos;t load agents. {error}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-10 text-center">
+            {agents.length === 0 ? 'No agents available yet.' : 'No agents match your search.'}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filtered.map((a) => (
+              <PickerCard
+                key={a.slug}
+                card={a.card}
+                category={a.category}
+                onClick={() => onPick(a)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
