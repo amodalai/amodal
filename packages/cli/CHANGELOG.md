@@ -1,5 +1,22 @@
 # @amodalai/amodal
 
+## 0.3.41
+
+### Patch Changes
+
+- f235fee: Add BASE_PATH support to Studio for subpath deployments
+
+  Studio can now be mounted at a subpath (e.g., `/studio/`) via the `BASE_PATH` env var. Server routes, Vite asset paths, and frontend API calls all respect the prefix. Default is empty string (root), preserving existing behavior.
+
+- Updated dependencies [b4d056c]
+- Updated dependencies [f235fee]
+  - @amodalai/studio@0.3.41
+  - @amodalai/runtime@0.3.41
+  - @amodalai/types@0.3.41
+  - @amodalai/core@0.3.41
+  - @amodalai/runtime-app@0.3.41
+  - @amodalai/db@0.3.41
+
 ## 0.3.40
 
 ### Patch Changes

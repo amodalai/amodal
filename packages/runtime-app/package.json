@@ -1,6 +1,6 @@
 {
   "name": "@amodalai/runtime-app",
-  "version": "0.3.40",
+  "version": "0.3.41",
   "files": [
     "dist",
     "dist-dev",
