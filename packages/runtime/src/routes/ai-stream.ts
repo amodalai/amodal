@@ -384,6 +384,11 @@ export function translateEvent(
     case SSEEventType.ExploreEnd:
     case SSEEventType.PlanMode:
     case SSEEventType.FieldScrub:
+    case SSEEventType.AskChoice:
+    case SSEEventType.ShowPreview:
+    case SSEEventType.StartOAuth:
+    case SSEEventType.ShowGallery:
+    case SSEEventType.CollectSecret:
       break;
 
     default: {

@@ -682,7 +682,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       const studioUrl = config.studioUrl ?? process.env['STUDIO_URL'] ?? '';
       const studioReturn = (params: URLSearchParams): string => {
         if (!studioUrl) return `/?${params.toString()}`;
-        return `${studioUrl}/agents/${appId}/getting-started?${params.toString()}`;
+        return `${studioUrl}/agents/${appId}/connections?${params.toString()}`;
       };
       if (errParam) {
         log.warn('oauth_provider_error', {error: errParam});

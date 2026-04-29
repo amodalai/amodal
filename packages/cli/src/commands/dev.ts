@@ -24,8 +24,6 @@ import {getDb, ensureSchema, closeDb} from '@amodalai/db';
 // ---------------------------------------------------------------------------
 
 const DEFAULT_RUNTIME_PORT = 3847;
-const DEFAULT_STUDIO_PORT = 3848;
-const DEFAULT_ADMIN_PORT = 3849;
 
 // ---------------------------------------------------------------------------
 // Port checking
@@ -81,6 +79,8 @@ function resolveStudioDir(): string | null {
 export interface DevOptions {
   cwd?: string;
   port?: number;
+  studioPort?: number;
+  adminPort?: number;
   host?: string;
   resume?: string;
   verbose?: number;
@@ -377,9 +377,20 @@ export async function runDev(options: DevOptions = {}): Promise<void> {
   let repoPath: string;
   try {
     repoPath = findRepoRoot(options.cwd);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`[dev] ${msg}\n`);
+  } catch {
+    process.stderr.write(`
+  No amodal.json found.
+
+  Create a new agent:
+
+    amodal init        Initialize this directory
+    amodal dev         Start the dev server
+
+  Or if your agent is in another directory:
+
+    cd /path/to/agent && amodal dev
+
+`);
     process.exit(1);
   }
 
@@ -458,8 +469,8 @@ Or add it to your agent's .env file:
   // -------------------------------------------------------------------------
 
   const runtimePort = options.port ?? DEFAULT_RUNTIME_PORT;
-  const studioPort = DEFAULT_STUDIO_PORT;
-  const adminPort = DEFAULT_ADMIN_PORT;
+  const studioPort = options.studioPort ?? runtimePort + 1;
+  const adminPort = options.adminPort ?? runtimePort + 2;
 
   await assertPortFree(runtimePort);
   if (!options.noStudio) await assertPortFree(studioPort);
@@ -633,6 +644,14 @@ export const devCommand: CommandModule = {
       describe: 'Only show errors',
       default: false,
     },
+    'studio-port': {
+      type: 'number',
+      describe: 'Port for Studio (defaults to port + 1)',
+    },
+    'admin-port': {
+      type: 'number',
+      describe: 'Port for admin agent (defaults to port + 2)',
+    },
     'no-studio': {
       type: 'boolean',
       describe: 'Do not spawn Studio subprocess',
@@ -655,12 +674,17 @@ export const devCommand: CommandModule = {
     const verbose = argv['verbose'] as number;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const quiet = argv['quiet'] as boolean;
+     
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const studioPort = argv['studio-port'] as number | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const adminPort = argv['admin-port'] as number | undefined;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const noStudio = (argv['no-studio'] as boolean) || process.env['AMODAL_NO_STUDIO'] === '1';
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const noAdmin = (argv['no-admin'] as boolean) || process.env['AMODAL_NO_ADMIN'] === '1';
     try {
-      await runDev({port, host, resume, verbose, quiet, noStudio, noAdmin});
+      await runDev({port, studioPort, adminPort, host, resume, verbose, quiet, noStudio, noAdmin});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`\n  Error: ${msg}\n\n`);

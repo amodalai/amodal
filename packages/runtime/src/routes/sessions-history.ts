@@ -134,14 +134,21 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
     const filter = {appId};
     const {sessions: rows} = await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
     const items = rows.map((s) => {
-      const title = typeof s.metadata['title'] === 'string' ? s.metadata['title'] : undefined;
+      const meta = s.metadata;
       return {
         id: s.id,
-        app_id: typeof s.metadata['appId'] === 'string' ? s.metadata['appId'] : appId,
-        title: title ?? extractFirstUserText(s.messages) ?? 'Untitled',
-        tags: extractStringArray(s.metadata['tags']),
+        app_id: meta.appId ?? appId,
+        title: meta.title ?? extractFirstUserText(s.messages) ?? 'Untitled',
+        tags: extractStringArray(meta['tags']),
         status: 'active',
         message_count: s.messages.length,
+        token_usage: {
+          input_tokens: s.tokenUsage.inputTokens,
+          output_tokens: s.tokenUsage.outputTokens,
+          total_tokens: s.tokenUsage.totalTokens,
+        },
+        model: meta.model ?? null,
+        provider: meta.provider ?? null,
         created_at: s.createdAt.toISOString(),
         updated_at: s.updatedAt.toISOString(),
       };
@@ -156,7 +163,7 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
       res.status(404).json({error: 'Session not found'});
       return;
     }
-    const title = typeof persisted.metadata['title'] === 'string' ? persisted.metadata['title'] : undefined;
+    const meta = persisted.metadata;
     const rawMessages = persisted.messages.map(flattenModelMessage).filter((m) => m !== null);
     const messages = rawMessages.map((m) => ({
       type: m.role === 'user' ? 'user' : 'assistant_text',
@@ -167,11 +174,18 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
     }));
     res.json({
       id: persisted.id,
-      app_id: typeof persisted.metadata['appId'] === 'string' ? persisted.metadata['appId'] : appId,
-      title: title ?? extractFirstUserText(persisted.messages) ?? 'Untitled',
-      tags: extractStringArray(persisted.metadata['tags']),
+      app_id: meta.appId ?? appId,
+      title: meta.title ?? extractFirstUserText(persisted.messages) ?? 'Untitled',
+      tags: extractStringArray(meta['tags']),
       status: 'active',
       message_count: persisted.messages.length,
+      token_usage: {
+        input_tokens: persisted.tokenUsage.inputTokens,
+        output_tokens: persisted.tokenUsage.outputTokens,
+        total_tokens: persisted.tokenUsage.totalTokens,
+      },
+      model: meta.model ?? null,
+      provider: meta.provider ?? null,
       created_at: persisted.createdAt.toISOString(),
       updated_at: persisted.updatedAt.toISOString(),
       messages,
@@ -206,6 +220,52 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
     }
     eventBus.emit({type: 'session_updated', sessionId, appId, title: typeof updates['title'] === 'string' ? updates['title'] : undefined});
     res.json({ok: true});
+  }));
+
+  // Aggregate stats for the dashboard
+  router.get('/api/stats', asyncHandler(async (_req: Request, res: Response) => {
+    const filter = {appId};
+    const {sessions: rows} = await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
+
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let totalTokens = 0;
+    let lastActive: Date | null = null;
+    const modelCounts = new Map<string, {sessions: number; inputTokens: number; outputTokens: number; totalTokens: number}>();
+
+    for (const s of rows) {
+      inputTokens += s.tokenUsage.inputTokens;
+      outputTokens += s.tokenUsage.outputTokens;
+      totalTokens += s.tokenUsage.totalTokens;
+      if (!lastActive || s.updatedAt > lastActive) lastActive = s.updatedAt;
+
+      const model = s.metadata.model ?? 'unknown';
+      const existing = modelCounts.get(model);
+      if (existing) {
+        existing.sessions += 1;
+        existing.inputTokens += s.tokenUsage.inputTokens;
+        existing.outputTokens += s.tokenUsage.outputTokens;
+        existing.totalTokens += s.tokenUsage.totalTokens;
+      } else {
+        modelCounts.set(model, {
+          sessions: 1,
+          inputTokens: s.tokenUsage.inputTokens,
+          outputTokens: s.tokenUsage.outputTokens,
+          totalTokens: s.tokenUsage.totalTokens,
+        });
+      }
+    }
+
+    const topModels = [...modelCounts.entries()]
+      .sort((a, b) => b[1].totalTokens - a[1].totalTokens)
+      .map(([model, counts]) => ({model, ...counts}));
+
+    res.json({
+      sessions: rows.length,
+      tokens: {input: inputTokens, output: outputTokens, total: totalTokens},
+      lastActive: lastActive?.toISOString() ?? null,
+      topModels,
+    });
   }));
 
   // Delete session

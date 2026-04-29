@@ -15,6 +15,19 @@
 import type {z} from 'zod';
 import type {FlexibleSchema} from 'ai';
 import type {SearchProvider} from '../providers/search-provider.js';
+import type {SSEAskChoiceEvent, SSEShowPreviewEvent, SSEStartOAuthEvent, SSEShowGalleryEvent, SSECollectSecretEvent} from '../types.js';
+
+// ---------------------------------------------------------------------------
+// Inline tool events (emitted via ctx.emit)
+// ---------------------------------------------------------------------------
+
+/** SSE events tools can emit inline during execution. */
+export type ToolInlineEvent =
+  | SSEAskChoiceEvent
+  | SSEShowPreviewEvent
+  | SSEStartOAuthEvent
+  | SSEShowGalleryEvent
+  | SSECollectSecretEvent;
 
 // ---------------------------------------------------------------------------
 // Tool context (provided to execute functions)
@@ -63,6 +76,19 @@ export interface ToolContext {
 
   /** Scope context key-value pairs associated with this scope */
   scopeContext?: Record<string, string>;
+
+  /**
+   * Emit an inline SSE event (e.g. `show_gallery`, `ask_choice`).
+   * Drained by the executing state and pushed onto the stream
+   * alongside the tool result.
+   */
+  emit?(event: ToolInlineEvent): void;
+
+  /**
+   * Sink populated by `emit()` and drained by the executing state.
+   * @internal
+   */
+  inlineEvents?: ToolInlineEvent[];
 }
 
 // ---------------------------------------------------------------------------

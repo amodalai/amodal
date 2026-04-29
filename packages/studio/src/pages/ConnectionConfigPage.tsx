@@ -89,10 +89,10 @@ export function ConnectionConfigPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <Link
-        to="../getting-started"
+        to="../connections"
         className="text-xs text-muted-foreground hover:text-foreground"
       >
-        ← Back to getting started
+        ← Back to connections
       </Link>
 
       <header className="flex items-start gap-4">

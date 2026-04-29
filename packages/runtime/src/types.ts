@@ -122,6 +122,11 @@ export enum SSEEventType {
   Warning = 'warning',
   Error = 'error',
   Done = 'done',
+  AskChoice = 'ask_choice',
+  ShowPreview = 'show_preview',
+  StartOAuth = 'start_oauth',
+  ShowGallery = 'show_gallery',
+  CollectSecret = 'collect_secret',
 }
 
 export interface SSEInitEvent {
@@ -315,12 +320,76 @@ export type SSEEvent =
   | SSEToolLogEvent
   | SSEWarningEvent
   | SSEErrorEvent
-  | SSEDoneEvent;
+  | SSEDoneEvent
+  | SSEAskChoiceEvent
+  | SSEShowPreviewEvent
+  | SSEStartOAuthEvent
+  | SSEShowGalleryEvent
+  | SSECollectSecretEvent;
 
 export interface SSEToolLogEvent {
   type: SSEEventType.ToolLog;
   tool_name: string;
   message: string;
+  timestamp: string;
+}
+
+// ---------------------------------------------------------------------------
+// Inline tool events (emitted via ctx.emit during tool execution)
+// ---------------------------------------------------------------------------
+
+export interface SSEAskChoiceEvent {
+  type: SSEEventType.AskChoice;
+  ask_id: string;
+  question: string;
+  options: Array<{label: string; value: string}>;
+  multi?: boolean;
+  timestamp: string;
+}
+
+export interface SSEShowPreviewEvent {
+  type: SSEEventType.ShowPreview;
+  card: {
+    title: string;
+    tagline: string;
+    platforms: string[];
+    thumbnailConversation: Array<{role: 'user' | 'agent'; content: string}>;
+  };
+  timestamp: string;
+}
+
+export interface SSEStartOAuthEvent {
+  type: SSEEventType.StartOAuth;
+  package_name: string;
+  display_name?: string;
+  description?: string;
+  skippable?: boolean;
+  timestamp: string;
+}
+
+export interface SSEShowGalleryEvent {
+  type: SSEEventType.ShowGallery;
+  title: string;
+  templates: Array<{
+    repo: string;
+    title: string;
+    tagline: string;
+    author: string;
+    verified: boolean;
+    preview?: unknown;
+  }>;
+  allow_custom: boolean;
+  timestamp: string;
+}
+
+export interface SSECollectSecretEvent {
+  type: SSEEventType.CollectSecret;
+  secret_id: string;
+  name: string;
+  label: string;
+  description?: string;
+  link?: string;
+  required: boolean;
   timestamp: string;
 }
 

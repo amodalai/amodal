@@ -136,7 +136,7 @@ export class StandaloneSessionManager {
     const scopeId = opts.scopeId ?? '';
     // Persist appId into metadata so SessionStore.list() can filter by it
     // (e.g. exclude eval-runner / admin sessions from the chat history UI).
-    const metadata = {...(opts.metadata ?? {}), appId};
+    const metadata = {...(opts.metadata ?? {}), appId, model: opts.provider.model, provider: opts.provider.provider};
 
     // Create a child logger with scopeId so all downstream log events for this
     // session automatically include scope_id for correlation and filtering.

@@ -34,7 +34,7 @@ export function GettingStartedPage() {
   const { data, error, loading, refetch } = useGettingStarted();
   const callback = useOAuthCallbackBanner();
 
-  if (error) return <AgentOffline page="getting-started" detail={error} />;
+  if (error) return <AgentOffline page="connections" detail={error} />;
   if (loading || !data) return null;
 
   const { template, packages } = data;
@@ -43,10 +43,10 @@ export function GettingStartedPage() {
   return (
     <div className="space-y-8 max-w-3xl">
       <header>
-        <h1 className="text-xl font-semibold text-foreground">Getting started</h1>
+        <h1 className="text-xl font-semibold text-foreground">Connections</h1>
         <p className="text-sm text-muted-foreground mt-1">
           {template
-            ? `Configure the connections this template needs. Each row shows the providers you can pick from and what credentials they require.`
+            ? `Configure the connections this agent needs. Each row shows the providers you can pick from and what credentials they require.`
             : `Configure the connections this agent depends on. Each card lists the credentials a package declares; ✓ means the secret is set in the runtime's environment.`}
         </p>
       </header>

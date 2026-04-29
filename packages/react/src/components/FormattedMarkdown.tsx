@@ -25,7 +25,7 @@ interface FormattedMarkdownProps {
  */
 export function FormattedMarkdown({ children, className }: FormattedMarkdownProps) {
   return (
-    <div className={`prose prose-sm dark:prose-invert max-w-none ${className ?? ''}`}>
+    <div className={`prose dark:prose-invert max-w-none ${className ?? ''}`}>
       <Markdown>{children}</Markdown>
     </div>
   );

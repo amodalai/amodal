@@ -25,7 +25,7 @@ import type {
   RunAgentOptions,
 } from './loop-types.js';
 import {handleThinking} from './states/thinking.js';
-import {handleStreaming} from './states/streaming.js';
+import {handleStreaming, handleStreamingIncremental} from './states/streaming.js';
 import {handleExecuting} from './states/executing.js';
 import {handleConfirming} from './states/confirming.js';
 import {handleCompacting} from './states/compacting.js';
@@ -116,11 +116,27 @@ export async function* runAgent(
   });
 
   while (state.type !== 'done') {
-    const result = await transition(state, ctx);
+    let result: TransitionResult;
 
-    // Yield all effects (SSE events) to the caller
-    for (const event of result.effects) {
-      yield event;
+    if (state.type === 'streaming') {
+      // Yield text deltas as the LLM generates them instead of buffering.
+      result = {next: state, effects: []};
+      for await (const item of handleStreamingIncremental(state, ctx)) {
+        if ('next' in item) {
+          result = item;
+        } else {
+          yield item;
+        }
+      }
+      // Yield any remaining batched effects (e.g. error events)
+      for (const event of result.effects) {
+        yield event;
+      }
+    } else {
+      result = await transition(state, ctx);
+      for (const event of result.effects) {
+        yield event;
+      }
     }
 
     // Check abort between every state transition
