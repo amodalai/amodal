@@ -179,6 +179,7 @@ function spawnStudio(opts: {
   repoPath: string;
   agentId?: string;
   adminAgentUrl?: string;
+  basePath?: string;
 }): StudioSpawnResult | null {
   const studioDir = resolveStudioDir();
   if (!studioDir) {
@@ -197,6 +198,7 @@ function spawnStudio(opts: {
     HOSTNAME: '0.0.0.0',
     ...(opts.agentId ? {AGENT_ID: opts.agentId} : {}),
     ...(opts.adminAgentUrl ? {ADMIN_AGENT_URL: opts.adminAgentUrl} : {}),
+    ...(opts.basePath ? {BASE_PATH: opts.basePath} : {}),
   };
 
   // Pre-built server (npm install): dist-server/studio-server.js

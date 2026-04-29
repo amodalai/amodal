@@ -9,6 +9,8 @@
  * Avoids magic strings scattered across components.
  */
 
+import { studioApiUrl } from './api';
+
 // ---------------------------------------------------------------------------
 // Page routes
 // ---------------------------------------------------------------------------
@@ -30,9 +32,9 @@ export function documentPath(storeName: string, key: string): string {
 export const API_STORES_BASE = '/api/stores';
 
 export function apiStoreDocumentsPath(storeName: string): string {
-  return `${API_STORES_BASE}/${encodeURIComponent(storeName)}/documents`;
+  return studioApiUrl(`${API_STORES_BASE}/${encodeURIComponent(storeName)}/documents`);
 }
 
 export function apiDocumentPath(storeName: string, key: string): string {
-  return `${API_STORES_BASE}/${encodeURIComponent(storeName)}/documents/${encodeURIComponent(key)}`;
+  return studioApiUrl(`${API_STORES_BASE}/${encodeURIComponent(storeName)}/documents/${encodeURIComponent(key)}`);
 }

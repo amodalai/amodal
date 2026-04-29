@@ -12,6 +12,7 @@ import path from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { logger } from '../lib/logger.js';
+import { getBasePath } from '../lib/config.js';
 import { getAllowedOrigins } from './middleware/cors.js';
 import { handleError } from './middleware/error-handler.js';
 import { initEventBridge } from '../lib/event-bridge.js';
@@ -60,6 +61,8 @@ export type { PreviewHandler } from './routes/preview.js';
 export interface CreateStudioAppOptions {
   /** Whether to serve the Vite SPA static files. Defaults to true. */
   serveStaticFiles?: boolean;
+  /** Override the base path. Defaults to `getBasePath()` (reads `BASE_PATH` env). */
+  basePath?: string;
 }
 
 /**
@@ -71,14 +74,21 @@ export interface CreateStudioAppOptions {
  * - Cloud deployments that need the Hono app as a serverless handler
  */
 export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
-  const { serveStaticFiles = true } = options;
+  const { serveStaticFiles = true, basePath: basePathOverride } = options;
+  const basePath = basePathOverride ?? getBasePath();
   const app = new Hono();
+
+  // ---------------------------------------------------------------------------
+  // Sub-app: all API routes and static files live under the base path
+  // ---------------------------------------------------------------------------
+
+  const sub = new Hono();
 
   // ---------------------------------------------------------------------------
   // Middleware
   // ---------------------------------------------------------------------------
 
-  app.use('/api/*', cors({
+  sub.use('/api/*', cors({
     origin: (origin) => {
       const allowed = getAllowedOrigins();
       return allowed.includes(origin) ? origin : '';
@@ -92,26 +102,26 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
   // API routes
   // ---------------------------------------------------------------------------
 
-  app.route('', configRoutes);
-  app.route('', workspaceRoutes);
-  app.route('', draftsRoutes);
-  app.route('', publishRoutes);
-  app.route('', discardRoutes);
-  app.route('', previewRoutes);
-  app.route('', storesRoutes);
-  app.route('', automationsRoutes);
-  app.route('', evalsRoutes);
-  app.route('', feedbackRoutes);
-  app.route('', memoryRoutes);
-  app.route('', eventsRoutes);
-  app.route('', adminChatRoutes);
-  app.route('', runtimeProxyRoutes);
+  sub.route('', configRoutes);
+  sub.route('', workspaceRoutes);
+  sub.route('', draftsRoutes);
+  sub.route('', publishRoutes);
+  sub.route('', discardRoutes);
+  sub.route('', previewRoutes);
+  sub.route('', storesRoutes);
+  sub.route('', automationsRoutes);
+  sub.route('', evalsRoutes);
+  sub.route('', feedbackRoutes);
+  sub.route('', memoryRoutes);
+  sub.route('', eventsRoutes);
+  sub.route('', adminChatRoutes);
+  sub.route('', runtimeProxyRoutes);
 
   // ---------------------------------------------------------------------------
   // Error handler
   // ---------------------------------------------------------------------------
 
-  app.onError(handleError);
+  sub.onError(handleError);
 
   // ---------------------------------------------------------------------------
   // Static files + SPA catch-all (production)
@@ -128,17 +138,38 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
       // Compute the relative path from cwd to distDir for serveStatic
       const relativeRoot = path.relative(process.cwd(), distDir);
 
-      app.use('/*', serveStatic({ root: relativeRoot }));
+      sub.use('/*', serveStatic({ root: relativeRoot }));
 
-      // SPA catch-all: serve index.html for non-API routes
-      const indexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf-8');
-      app.get('*', (c) => {
-        if (c.req.path.startsWith('/api/')) {
+      // SPA catch-all: serve index.html for non-API routes.
+      // Inject __STUDIO_BASE_PATH__ so the frontend knows its prefix.
+      const rawIndexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf-8');
+      const basePathScript = `<script>window.__STUDIO_BASE_PATH__=${JSON.stringify(basePath)};</script>`;
+      const indexHtml = rawIndexHtml.replace('</head>', `${basePathScript}\n</head>`);
+
+      sub.get('*', (c) => {
+        // c.req.path includes the base path prefix; strip it for the check
+        const reqPath = basePath && c.req.path.startsWith(basePath)
+          ? c.req.path.slice(basePath.length)
+          : c.req.path;
+        if (reqPath.startsWith('/api/')) {
           return c.notFound();
         }
         return c.html(indexHtml);
       });
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mount under base path
+  // ---------------------------------------------------------------------------
+
+  if (basePath) {
+    app.route(basePath, sub);
+
+    // Redirect bare base path without trailing slash to the SPA
+    app.get(basePath, (c) => c.redirect(`${basePath}/`, 301));
+  } else {
+    app.route('', sub);
   }
 
   return app;

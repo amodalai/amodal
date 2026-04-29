@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Database } from 'lucide-react';
 import { AgentOffline } from '@/components/AgentOffline';
+import { studioApiUrl } from '@/lib/api';
 import { storePath } from '@/lib/routes';
 
 // ---------------------------------------------------------------------------
@@ -29,7 +30,7 @@ export function StoresPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/stores', { signal: AbortSignal.timeout(5_000) })
+    fetch(studioApiUrl('/api/stores'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response

@@ -11,6 +11,7 @@ import { ThemeProvider } from './components/ThemeProvider';
 import { StudioEventsProvider } from './contexts/StudioEventsContext';
 import { StudioConfigContext } from './contexts/StudioConfigContext';
 import type { StudioConfig } from './contexts/StudioConfigContext';
+import { studioApiUrl } from './lib/api';
 import { router } from './router';
 import '@amodalai/react/widget/style.css';
 
@@ -21,13 +22,13 @@ interface AppProps {
    * that implements the same StudioEventsContext contract.
    */
   eventsProvider?: ComponentType<{ children: ReactNode }>;
-  /** Override the config endpoint URL. Defaults to '/api/config'. */
+  /** Override the config endpoint URL. Defaults to the base-path-prefixed '/api/config'. */
   configUrl?: string;
 }
 
 export function App({
   eventsProvider: EventsProvider = StudioEventsProvider,
-  configUrl = '/api/config',
+  configUrl = studioApiUrl('/api/config'),
 }: AppProps = {}) {
   const [config, setConfig] = useState<StudioConfig | null>(null);
 

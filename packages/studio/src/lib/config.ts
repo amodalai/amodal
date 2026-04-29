@@ -18,6 +18,7 @@ const AGENT_ID_ENV_KEY = 'AGENT_ID';
 const AGENT_NAME_ENV_KEY = 'AGENT_NAME';
 const RUNTIME_URL_ENV_KEY = 'RUNTIME_URL';
 const ADMIN_AGENT_URL_ENV_KEY = 'ADMIN_AGENT_URL';
+const BASE_PATH_ENV_KEY = 'BASE_PATH';
 
 const DEFAULT_AGENT_ID = 'default';
 const DEFAULT_AGENT_NAME = 'default';
@@ -48,4 +49,17 @@ export function getRuntimeUrl(): string {
 /** Returns the admin agent URL, or null if not configured. */
 export function getAdminAgentUrl(): string | null {
   return process.env[ADMIN_AGENT_URL_ENV_KEY] ?? null;
+}
+
+/**
+ * Returns the base path prefix for Studio (e.g. '/studio').
+ * Empty string when Studio is served at root (default).
+ * Never includes a trailing slash.
+ */
+export function getBasePath(): string {
+  const raw = process.env[BASE_PATH_ENV_KEY] ?? '';
+  // Normalize: strip trailing slash, ensure leading slash if non-empty
+  if (!raw) return '';
+  const trimmed = raw.endsWith('/') ? raw.slice(0, -1) : raw;
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }

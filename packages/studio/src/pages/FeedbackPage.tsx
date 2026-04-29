@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { studioApiUrl } from '@/lib/api';
 import { FeedbackView } from '@/components/views/FeedbackView';
 
 // ---------------------------------------------------------------------------
@@ -41,14 +42,14 @@ export function FeedbackPage() {
   const fetchData = useCallback(() => {
     const encodedId = encodeURIComponent(agentId);
     Promise.all([
-      fetch(`/api/feedback?agentId=${encodedId}`, {
+      fetch(studioApiUrl(`/api/feedback?agentId=${encodedId}`), {
         signal: AbortSignal.timeout(5_000),
       }).then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
         return r.json() as Promise<{ entries: FeedbackEntry[] }>;
       }),
-      fetch(`/api/feedback/summary?agentId=${encodedId}`, {
+      fetch(studioApiUrl(`/api/feedback/summary?agentId=${encodedId}`), {
         signal: AbortSignal.timeout(5_000),
       }).then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
