@@ -18,7 +18,7 @@ import type {LoadedStore, StoreBackend, LoadedConnection} from '@amodalai/types'
 import type {FieldScrubber} from '@amodalai/core';
 import type {ConnectionsMap} from '../tools/request-tool.js';
 import type {SearchProvider} from '../providers/search-provider.js';
-import type {ToolContext} from '../tools/types.js';
+import type {ToolContext, ToolInlineEvent} from '../tools/types.js';
 import type {Logger} from '../logger.js';
 import type {CredentialResolver} from '../credentials.js';
 import {ConnectionError, StoreError} from '../errors.js';
@@ -369,6 +369,11 @@ export function createToolContextFactory(
           message,
           session: opts.sessionId,
         });
+      },
+
+      inlineEvents: [] as ToolInlineEvent[],
+      emit(event) {
+        ctx.inlineEvents?.push(event);
       },
 
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
