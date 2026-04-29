@@ -121,15 +121,24 @@ function registerCloneTemplate(registry: ToolRegistry, opts: OnboardingToolsOpti
     metadata: {category: 'admin'},
 
     async execute(params: {repo: string; branch: string}) {
+      // Validate repo format to prevent command injection via --upload-pack
+      if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(params.repo)) {
+        return {cloned: false, error: `Invalid repo format: ${params.repo}. Expected "owner/repo".`};
+      }
+      if (!/^[a-zA-Z0-9_.-]+$/.test(params.branch)) {
+        return {cloned: false, error: `Invalid branch format: ${params.branch}.`};
+      }
+
       const tmpDir = path.join(repoRoot, '.amodal', '.tmp-clone');
 
       try {
         if (existsSync(tmpDir)) await rm(tmpDir, {recursive: true, force: true});
         await mkdir(tmpDir, {recursive: true});
 
+        const repoUrl = `https://github.com/${params.repo}.git`;
         await execFileAsync('git', [
           'clone', '--depth', '1', '--branch', params.branch,
-          `https://github.com/${params.repo}.git`, tmpDir,
+          '--', repoUrl, tmpDir,
         ], {timeout: CLONE_TIMEOUT_MS});
 
         await rm(path.join(tmpDir, '.git'), {recursive: true, force: true});
