@@ -21,7 +21,7 @@ interface Props {
  * Inline API key input form. The secret value goes directly to
  * /api/secrets via browser fetch — never sent to the LLM.
  */
-export function CollectSecretCard({ block, serverUrl, sendMessage, onSaved }: Props) {
+export function CollectSecretCard({ block, serverUrl, onSaved }: Props) {
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +61,8 @@ export function CollectSecretCard({ block, serverUrl, sendMessage, onSaved }: Pr
         throw new Error(`Save failed: ${String(res.status)}${text ? ` — ${text}` : ''}`);
       }
       onSaved?.(block.secretId);
-      sendMessage?.(`Saved ${block.name}`);
+      // Don't send a chat message — just update the card UI silently.
+      // The agent doesn't need to know about each credential individually.
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setSaving(false);
@@ -69,7 +70,9 @@ export function CollectSecretCard({ block, serverUrl, sendMessage, onSaved }: Pr
   };
 
   const handleSkip = (): void => {
-    sendMessage?.(`Skip ${block.label} for now`);
+    onSaved?.(block.secretId);
+    // Silent skip — no chat message. The agent continues when the user
+    // clicks a "Continue" button on the setup_connections card.
   };
 
   return (

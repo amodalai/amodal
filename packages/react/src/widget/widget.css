@@ -2713,3 +2713,174 @@
 .pcw-collect-secret__skip:hover {
   color: var(--pcw-text);
 }
+
+/* ---------------------------------------------------------------------------
+ * Setup connections card (setup_connections tool)
+ * --------------------------------------------------------------------------- */
+
+.pcw-setup-connections {
+  margin: 8px 0;
+  border: 1px solid var(--pcw-border);
+  border-radius: 8px;
+  background: var(--pcw-bg);
+  overflow: hidden;
+}
+.pcw-setup-connections--done {
+  padding: 12px 14px;
+}
+.pcw-setup-connections__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pcw-text);
+  padding: 14px 14px 10px;
+}
+.pcw-setup-connections__row {
+  padding: 12px 14px;
+  border-top: 1px solid var(--pcw-border);
+}
+.pcw-setup-connections__row--connected,
+.pcw-setup-connections__row--done {
+  padding: 8px 14px;
+  color: #10b981;
+  font-size: 13px;
+}
+.pcw-setup-connections__row--skipped {
+  padding: 8px 14px;
+  color: var(--pcw-text-muted);
+  font-size: 13px;
+}
+.pcw-setup-connections__header {
+  margin-bottom: 8px;
+}
+.pcw-setup-connections__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pcw-text);
+}
+.pcw-setup-connections__check {
+  margin-right: 6px;
+}
+.pcw-setup-connections__desc {
+  display: block;
+  font-size: 11px;
+  color: var(--pcw-text-muted);
+  margin-top: 2px;
+}
+.pcw-setup-connections__link {
+  color: var(--pcw-primary, #0d9e87);
+  text-decoration: none;
+}
+.pcw-setup-connections__link:hover {
+  text-decoration: underline;
+}
+.pcw-setup-connections__input-row {
+  display: flex;
+  gap: 6px;
+}
+.pcw-setup-connections__input {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: monospace;
+  border: 1px solid var(--pcw-border);
+  border-radius: 4px;
+  background: var(--pcw-bg);
+  color: var(--pcw-text);
+  outline: none;
+}
+.pcw-setup-connections__input:focus {
+  border-color: var(--pcw-primary, #0d9e87);
+}
+.pcw-setup-connections__save {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: white;
+  background: var(--pcw-primary, #0d9e87);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.pcw-setup-connections__save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pcw-setup-connections__skip {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--pcw-text-muted);
+  background: none;
+  border: 1px solid var(--pcw-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.pcw-setup-connections__skip:hover {
+  color: var(--pcw-text);
+}
+.pcw-setup-connections__error {
+  font-size: 11px;
+  color: #ef4444;
+  margin-top: 4px;
+}
+.pcw-setup-connections__continue {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  background: var(--pcw-primary, #0d9e87);
+  border: none;
+  border-top: 1px solid var(--pcw-border);
+  cursor: pointer;
+}
+.pcw-setup-connections__continue:disabled {
+  background: var(--pcw-border);
+  color: var(--pcw-text-muted);
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+ * Setup summary card (show_setup_summary tool)
+ * --------------------------------------------------------------------------- */
+
+.pcw-setup-summary {
+  margin: 8px 0;
+  padding: 16px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.05);
+}
+.pcw-setup-summary__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pcw-text);
+  margin-bottom: 10px;
+}
+.pcw-setup-summary__connections {
+  margin-bottom: 12px;
+}
+.pcw-setup-summary__conn {
+  font-size: 13px;
+  padding: 2px 0;
+}
+.pcw-setup-summary__conn--connected {
+  color: #10b981;
+}
+.pcw-setup-summary__conn--pending,
+.pcw-setup-summary__conn--skipped {
+  color: var(--pcw-text-muted);
+}
+.pcw-setup-summary__link {
+  display: inline-block;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  background: var(--pcw-primary, #0d9e87);
+  border-radius: 6px;
+  text-decoration: none;
+}
+.pcw-setup-summary__link:hover {
+  opacity: 0.9;
+}

@@ -309,6 +309,56 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
+    case 'STREAM_SETUP_CONNECTIONS': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'setup_connections',
+          connections: action.connections,
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_SETUP_SUMMARY': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'setup_summary',
+          agent_name: action.agent_name,
+          connections: action.connections,
+          skills: action.skills,
+          agent_url: action.agent_url,
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_CUSTOMIZE_AGENT': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'customize_agent',
+          prompts: action.prompts,
+          skip_label: action.skip_label,
+          status: 'pending',
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
     case 'STREAM_CONFIRMATION_REQUIRED': {
       const msgs = [...state.messages];
       const last = msgs[msgs.length - 1];
@@ -811,6 +861,28 @@ function processEvent(
         description: event.description,
         link: event.link,
         required: event.required,
+      });
+      return;
+    case 'setup_connections':
+      dispatch({
+        type: 'STREAM_SETUP_CONNECTIONS',
+        connections: event.connections,
+      });
+      return;
+    case 'setup_summary':
+      dispatch({
+        type: 'STREAM_SETUP_SUMMARY',
+        agent_name: event.agent_name,
+        connections: event.connections,
+        skills: event.skills,
+        agent_url: event.agent_url,
+      });
+      return;
+    case 'customize_agent':
+      dispatch({
+        type: 'STREAM_CUSTOMIZE_AGENT',
+        prompts: event.prompts,
+        skip_label: event.skip_label,
       });
       return;
     case 'explore_start':

@@ -18,6 +18,7 @@ import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
 import { ShowGalleryCard } from './ShowGalleryCard';
 import { CollectSecretCard } from './CollectSecretCard';
+import { SetupConnectionsCard } from './SetupConnectionsCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { ConfirmCard } from '../components/ConfirmCard';
@@ -216,6 +217,36 @@ function AssistantBubble({
                   onSaved={onCollectSecretSaved}
                 />
               );
+            case 'setup_connections':
+              return (
+                <SetupConnectionsCard
+                  key={`setup-conn-${String(i)}`}
+                  block={block}
+                  serverUrl={serverUrl ?? window.location.origin}
+                  sendMessage={sendMessage}
+                />
+              );
+            case 'setup_summary':
+              return (
+                <div key={`summary-${String(i)}`} className="pcw-setup-summary">
+                  <div className="pcw-setup-summary__title">{block.agent_name} is ready!</div>
+                  <div className="pcw-setup-summary__connections">
+                    {block.connections.map((c) => (
+                      <div key={c.name} className={`pcw-setup-summary__conn pcw-setup-summary__conn--${c.status}`}>
+                        {c.status === 'connected' ? '✓' : '○'} {c.name}
+                      </div>
+                    ))}
+                  </div>
+                  {block.agent_url && (
+                    <a href={block.agent_url} target="_blank" rel="noopener noreferrer" className="pcw-setup-summary__link">
+                      Start using your agent →
+                    </a>
+                  )}
+                </div>
+              );
+            case 'customize_agent':
+              // TODO: build CustomizeAgentCard component
+              return null;
             default:
               return null;
           }
