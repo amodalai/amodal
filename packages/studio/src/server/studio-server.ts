@@ -157,7 +157,8 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
         const reqPath = basePath && c.req.path.startsWith(basePath)
           ? c.req.path.slice(basePath.length)
           : c.req.path;
-        if (reqPath.startsWith('/api/')) {
+        // Don't serve HTML for API routes or static assets
+        if (reqPath.startsWith('/api/') || reqPath.startsWith('/assets/')) {
           return c.notFound();
         }
         return c.html(indexHtml);
