@@ -12,7 +12,7 @@ describe('getBasePath (browser)', () => {
     // Clean up any injected global
     delete (globalThis as Record<string, unknown>)['__STUDIO_BASE_PATH__'];
     if (typeof window !== 'undefined') {
-      delete (window as Record<string, unknown>)['__STUDIO_BASE_PATH__'];
+      delete (window as unknown as Record<string, unknown>)['__STUDIO_BASE_PATH__'];
     }
   });
 
@@ -32,7 +32,7 @@ describe('getBasePath (browser)', () => {
 describe('studioApiUrl', () => {
   afterEach(() => {
     if (typeof window !== 'undefined') {
-      delete (window as Record<string, unknown>)['__STUDIO_BASE_PATH__'];
+      delete (window as unknown as Record<string, unknown>)['__STUDIO_BASE_PATH__'];
     }
   });
 
