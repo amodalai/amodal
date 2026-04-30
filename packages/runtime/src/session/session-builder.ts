@@ -54,6 +54,7 @@ import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.j
 import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import {registerFileTools, DEFAULT_ALLOWED_DIRS, DEFAULT_BLOCKED_FILES} from '../tools/file-tools.js';
 import {registerCollectSecretTool} from '../tools/collect-secret-tool.js';
+import {registerAgentConfigTool} from '../tools/agent-config-tool.js';
 import type {Logger} from '../logger.js';
 import type {CredentialResolver} from '../credentials.js';
 
@@ -484,8 +485,12 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // -------------------------------------------------------------------------
 
   const isAdminAgent = process.env['AMODAL_NO_ADMIN'] === '1';
+  const userRepoPath = process.env['REPO_PATH'];
   if (isAdminAgent) {
     registerCollectSecretTool(registry);
+    if (userRepoPath) {
+      registerAgentConfigTool(registry, userRepoPath);
+    }
   }
 
   // -------------------------------------------------------------------------
