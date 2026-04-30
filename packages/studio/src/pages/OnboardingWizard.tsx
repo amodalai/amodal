@@ -65,17 +65,12 @@ export function OnboardingWizard() {
     // Open the admin chat panel
     window.dispatchEvent(new CustomEvent('admin-chat-open'));
 
-    // Build the seed message
+    // Build the seed message and pass it via the event
     const seed = summaryData.customizeContext
-      ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nPlease fetch my website using the fetch_url tool to understand what we do. Then write a brand-context knowledge doc for my agent that captures our voice, audience, and content themes.`
+      ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nFetch my website using fetch_url to understand what we do. Then write a brand-context knowledge doc (knowledge/brand-context.md) that captures our voice, target audience, and content themes.`
       : `I just set up a ${summaryData.name} agent. Review the installed skills and knowledge and help me customize it.`;
 
-    // Small delay to let the panel open before sending
-    const timer = setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('admin-chat-send', { detail: seed }));
-    }, 500);
-
-    return () => clearTimeout(timer);
+    window.dispatchEvent(new CustomEvent('admin-chat-open', { detail: seed }));
   }, [step, summaryData]);
 
   // Fetch template cards on mount
