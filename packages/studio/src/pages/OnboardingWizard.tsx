@@ -65,9 +65,10 @@ export function OnboardingWizard() {
     // Clear persisted admin chat so a fresh session is created with current tools
     try { localStorage.removeItem('amodal-admin-chat-v2'); } catch { /* */ }
 
+    const agentUrl = runtimeUrl;
     const seed = summaryData.customizeContext
-      ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nFetch my website using fetch_url to understand what we do. Then write a brand-context knowledge doc (knowledge/brand-context.md) that captures our voice, target audience, and content themes.`
-      : `I just set up a ${summaryData.name} agent. Review the installed skills and knowledge and help me customize it.`;
+      ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nFetch my website using fetch_url to understand what we do. Then write a brand-context knowledge doc (knowledge/brand-context.md) that captures our voice, target audience, and content themes. After you write the file, tell me setup is complete and I can start chatting with my agent at ${agentUrl}.`
+      : `I just set up a ${summaryData.name} agent. Use read_agent_config to check what's installed, then give me a quick summary. After that, tell me setup is complete and I can start chatting with my agent at ${agentUrl}.`;
 
     window.dispatchEvent(new CustomEvent('admin-chat-open', { detail: seed }));
   }, [step, summaryData]);
