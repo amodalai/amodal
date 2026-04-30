@@ -278,6 +278,57 @@ export const setupStateSchema: z.ZodType<SetupState> = z.object({
   plan: setupPlanSnapshotSchema.nullable(),
 });
 
+// ---------------------------------------------------------------------------
+// Setup readiness — Phase E
+// ---------------------------------------------------------------------------
+
+/**
+ * One reason setup isn't (or only optionally is) ready to commit. The
+ * Phase E `validateSetupReadiness` function walks the Plan + state and
+ * emits a warning per issue; both the agent's `request_complete_setup`
+ * tool and the Studio "Finish setup" button render these to the user.
+ *
+ * `kind` drives the prompt copy (the agent has different lines for
+ * "missing required slot" vs "skipped slot with impact" vs "missing
+ * config answer"). `severity: 'block'` warnings prevent a non-forced
+ * commit; `severity: 'soft'` warnings surface in the UI but don't
+ * block the agent's completion path.
+ */
+export interface SetupWarning {
+  kind: 'missing_required_slot' | 'skipped_with_impact' | 'missing_config_answer';
+  severity: 'block' | 'soft';
+  /** Slot label or config key the warning concerns. */
+  target: string;
+  /** Human-readable one-line message the chat surface uses verbatim. */
+  message: string;
+}
+
+/**
+ * Result of `validateSetupReadiness(state, plan, connectionsStatus)`.
+ * `ready` is true iff there are no `severity: 'block'` warnings; soft
+ * warnings still get surfaced but don't gate the commit.
+ */
+export interface SetupReadinessResult {
+  ready: boolean;
+  warnings: SetupWarning[];
+}
+
+/**
+ * Live env-var-derived status of one connection package, mirrored from
+ * the Phase H.9 `/api/connections-status` endpoint shape. Phase E
+ * accepts this as an optional second source of truth — when absent,
+ * `validateSetupReadiness` falls back to `state.completed[]` alone.
+ */
+export interface ConnectionStatusEntry {
+  /** True iff every required env var declared in package.json#amodal.auth.envVars is non-empty. */
+  configured: boolean;
+  /** Names of env vars that have a non-empty value. */
+  envVarsSet: string[];
+}
+
+/** Map keyed by npm package name (`@amodalai/connection-slack` etc). */
+export type ConnectionsStatusMap = Record<string, ConnectionStatusEntry>;
+
 export const setupStatePatchSchema: z.ZodType<SetupStatePatch> = z.object({
   phase: setupPhaseSchema.optional(),
   currentStep: z.number().nullable().optional(),

@@ -22,3 +22,6 @@ export {
 
 export {composePlan} from './setup-plan.js';
 export type {ComposePlanOptions} from './setup-plan.js';
+
+export {validateSetupReadiness} from './setup-readiness.js';
+export type {ValidateSetupReadinessInput} from './setup-readiness.js';

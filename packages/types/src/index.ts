@@ -223,6 +223,10 @@ export type {
   SetupPlanSnapshot,
   SetupState,
   SetupStatePatch,
+  SetupWarning,
+  SetupReadinessResult,
+  ConnectionStatusEntry,
+  ConnectionsStatusMap,
 } from './setup-state.js';
 export {
   SETUP_PHASES,
