@@ -182,6 +182,17 @@ function buildCustomToolContext(
       runtimeCtx.log(message);
     },
 
+    emit(event) {
+      // Structural pass-through — the @amodalai/types CustomToolInlineEvent
+      // union and the runtime-internal ToolInlineEvent are structurally
+      // identical (same SSE event shapes) but live in two packages that
+      // each declare their own SSEEventType enum. Cast through unknown
+      // at the boundary; the legacy custom-tool surface keeps emitting
+      // exactly the same SSE wire shape it always did.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- cross-package SSE type alignment
+      runtimeCtx.emit?.(event as unknown as Parameters<NonNullable<typeof runtimeCtx.emit>>[0]);
+    },
+
     signal: combinedSignal,
   };
 }

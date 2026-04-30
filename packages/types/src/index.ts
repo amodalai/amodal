@@ -27,6 +27,7 @@ export type {
   ResponseShaping,
   LoadedTool,
   CustomToolContext,
+  CustomToolInlineEvent,
   ToolHandlerDefinition,
   CustomToolExecutor,
   CustomShellExecutor,

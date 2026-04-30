@@ -54,6 +54,7 @@ import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.j
 import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import {registerFileTools, DEFAULT_ALLOWED_DIRS, DEFAULT_BLOCKED_FILES} from '../tools/file-tools.js';
 import {registerAdminTools} from '../tools/admin-tools.js';
+import {ASK_CHOICE_TOOL_NAME, createAskChoiceTool} from '../tools/builtin/ask-choice.js';
 import type {Logger} from '../logger.js';
 import type {CredentialResolver} from '../credentials.js';
 
@@ -410,6 +411,14 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // -------------------------------------------------------------------------
 
   registry.register(DISPATCH_TOOL_NAME, createDispatchTool());
+
+  // -------------------------------------------------------------------------
+  // 10a-pre. Register ask_choice as a runtime built-in (Phase 0.6).
+  //          Every agent gets it without declaring — templates and custom
+  //          agents can prompt the user with structured options.
+  // -------------------------------------------------------------------------
+
+  registry.register(ASK_CHOICE_TOOL_NAME, createAskChoiceTool());
 
   // -------------------------------------------------------------------------
   // 10a. Build search provider + register web tools (if webTools configured)

@@ -4,6 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type {
+  SSEAskChoiceEvent,
+  SSEShowPreviewEvent,
+  SSEStartOAuthEvent,
+} from './sse-types.js';
+
+/**
+ * Inline SSE events a custom tool handler may emit through `ctx.emit`.
+ *
+ * Kept narrow on purpose — only events the chat widget renders inline
+ * are reachable from a tool. Tool-call events, errors, and stream-level
+ * events are emitted by the runtime, not by handlers.
+ */
+export type CustomToolInlineEvent =
+  | SSEAskChoiceEvent
+  | SSEShowPreviewEvent
+  | SSEStartOAuthEvent;
+
 /**
  * Tool definition shape used by amodal tools.
  */
@@ -65,6 +83,12 @@ export interface CustomToolContext {
   env(name: string): string | undefined;
   log(message: string): void;
   signal: AbortSignal;
+  /**
+   * Emit an inline SSE event the chat widget renders alongside the
+   * agent's prose. Used by handlers that produce inline UI (e.g.
+   * `show_preview` cards). Optional — most tools never call it.
+   */
+  emit?(event: CustomToolInlineEvent): void;
 }
 
 /**

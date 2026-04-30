@@ -7,17 +7,23 @@
 /**
  * Admin agent tools for the Onboarding v4 conversational setup flow.
  *
- * - `show_preview` — emits an inline `show_preview` SSE event with a curated
- *   template card.
- * - `ask_choice` — emits a button-row question; user's click posts the chosen
- *   value as the next user turn (no server round-trip needed).
  * - `search_packages` — searches the public npm registry for keyword matches
  *   (e.g. `keywords:amodal-connection`) and returns top-N hits.
  * - `install_package` — adds an npm package to `amodal.json#packages` and
  *   runs `npm install` in the agent repo.
+ * - `start_oauth_connection` — renders an inline OAuth Connect card; on
+ *   the deprecation path (Phase H.1 deletes it once `present_connection`
+ *   ships as a custom tool inside agent-admin).
  * - `write_skill` — scaffolds a `skills/<name>/SKILL.md` with frontmatter.
  *
  * These are gated by `sessionType === 'admin'` in the session builder.
+ *
+ * `show_preview` migrated to `@amodalai/agent-admin/tools/show_preview/`
+ * in Phase 0.6 — it is auto-discovered via the package's own tools
+ * directory, not hardcoded here.
+ *
+ * `ask_choice` was promoted to a runtime built-in in Phase 0.6 — see
+ * `tools/builtin/ask-choice.ts`. Every agent gets it, not just admin.
  */
 
 import {execFile} from 'node:child_process';
@@ -47,89 +53,6 @@ export interface AdminToolsOptions {
 export function registerAdminTools(registry: ToolRegistry, opts: AdminToolsOptions): void {
   const {repoRoot, logger} = opts;
   const registryUrl = opts.registryUrl ?? DEFAULT_NPM_REGISTRY;
-
-  // -------------------------------------------------------------------------
-  // show_preview — inline template card snippet
-  // -------------------------------------------------------------------------
-  registry.register('show_preview', {
-    description:
-      'Show an agent card preview inline in chat. Use when recommending a template or showing what an agent will look like.',
-    parameters: z.object({
-      title: z.string().describe('Display title (e.g. "Monday Marketing Digest")'),
-      tagline: z.string().describe('One-line "what it does" line under the title'),
-      platforms: z.array(z.string()).default([]).describe('Connected services to surface as chips'),
-      thumbnailConversation: z
-        .array(
-          z.object({
-            role: z.enum(['user', 'agent']),
-            content: z.string(),
-          }),
-        )
-        .min(1)
-        .describe('2-4 turn conversation snippet showing the agent in action'),
-    }),
-    readOnly: true,
-    metadata: {category: 'admin'},
-
-    async execute(
-      params: {
-        title: string;
-        tagline: string;
-        platforms: string[];
-        thumbnailConversation: Array<{role: 'user' | 'agent'; content: string}>;
-      },
-      ctx: ToolContext,
-    ) {
-      ctx.emit?.({
-        type: SSEEventType.ShowPreview,
-        card: {
-          title: params.title,
-          tagline: params.tagline,
-          platforms: params.platforms,
-          thumbnailConversation: params.thumbnailConversation,
-        },
-        timestamp: new Date().toISOString(),
-      });
-      return {ok: true};
-    },
-  });
-
-  // -------------------------------------------------------------------------
-  // ask_choice — button-row single/multi-select question
-  // -------------------------------------------------------------------------
-  registry.register('ask_choice', {
-    description:
-      'Ask the user a single- or multi-select question with predefined options. Renders inline as buttons; the user\'s choice arrives as their next message.',
-    parameters: z.object({
-      question: z.string().describe('Short question shown above the buttons'),
-      options: z
-        .array(z.object({label: z.string(), value: z.string()}))
-        .min(2)
-        .describe('Choice options. `label` is shown on the button; `value` is what the user "says".'),
-      multi: z
-        .boolean()
-        .default(false)
-        .describe('When true, the user can pick more than one option before submitting'),
-    }),
-    readOnly: true,
-    metadata: {category: 'admin'},
-
-    async execute(
-      params: {question: string; options: Array<{label: string; value: string}>; multi: boolean},
-      ctx: ToolContext,
-    ) {
-      const askId = `choice_${ctx.sessionId}_${Date.now().toString(36)}`;
-      ctx.emit?.({
-        type: SSEEventType.AskChoice,
-        ask_id: askId,
-        question: params.question,
-        options: params.options,
-        multi: params.multi,
-        timestamp: new Date().toISOString(),
-      });
-      return {ok: true, ask_id: askId};
-    },
-  });
 
   // -------------------------------------------------------------------------
   // search_packages — keyword-based npm registry search
