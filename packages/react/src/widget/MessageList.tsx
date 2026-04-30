@@ -129,18 +129,19 @@ function renderInlineBlock(
   dispatch: React.Dispatch<ChatAction> | undefined,
   postUserMessage: ((text: string) => void) | undefined,
 ): React.ReactNode {
+  const key = `${block.type}-${String(index)}`;
   if (!registry || !dispatch) {
-    return <InlineBlockPlaceholder type={block.type} index={index} />;
+    return <InlineBlockPlaceholder key={key} type={block.type} />;
   }
   const Renderer = registry[block.type];
   if (!Renderer) {
-    return <InlineBlockPlaceholder type={block.type} index={index} />;
+    return <InlineBlockPlaceholder key={key} type={block.type} />;
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- registry maps each block type to a renderer for that exact type via Extract<>
   const Typed = Renderer as React.ComponentType<{block: ContentBlock; dispatch: React.Dispatch<ChatAction>; postUserMessage: (text: string) => void}>;
   return (
     <Typed
-      key={`${block.type}-${String(index)}`}
+      key={key}
       block={block}
       dispatch={dispatch}
       postUserMessage={postUserMessage ?? (() => undefined)}
@@ -148,13 +149,9 @@ function renderInlineBlock(
   );
 }
 
-function InlineBlockPlaceholder({ type, index }: { type: string; index: number }) {
+function InlineBlockPlaceholder({ type }: { type: string }) {
   return (
-    <div
-      key={`placeholder-${type}-${String(index)}`}
-      className="pcw-bubble__placeholder"
-      role="status"
-    >
+    <div className="pcw-bubble__placeholder" role="status">
       [{type} — no renderer registered]
     </div>
   );

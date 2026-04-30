@@ -114,6 +114,11 @@ export function ConnectionConfigForm({
 
   const oauthAvailable = !!data.oauth?.available;
   const fulfilledViaPaste = data.envVars.length > 0 && data.envVars.every((v) => v.set);
+  // Hide the "paste credentials manually" toggle for OAuth-only
+  // packages with no envVars to paste into — there's nothing to
+  // expand. Build plan H.4: "OAuth-only — Connect button + scopes
+  // preview. Manual paste hidden (the package doesn't expect it)."
+  const hasPasteFields = data.envVars.length > 0;
 
   return (
     <div className="space-y-4">
@@ -132,7 +137,7 @@ export function ConnectionConfigForm({
         />
       )}
 
-      {oauthAvailable && !fulfilledViaPaste && !showPasteFallback && (
+      {oauthAvailable && hasPasteFields && !fulfilledViaPaste && !showPasteFallback && (
         <button
           type="button"
           onClick={() => setShowPasteFallback(true)}

@@ -94,6 +94,12 @@ export interface ConnectionPanelBlock {
   /**
    * Persisted hint that the user clicked Later on this panel. The only
    * field that survives reload; everything else is derived.
+   *
+   * Naming note: the admin-setup build plan describes this as
+   * `meta.userSkipped`. The flat field here is functionally
+   * equivalent and matches the convention used by other block types
+   * (e.g. `state` is also flat on this block). No nested `meta`
+   * sub-object.
    */
   userSkipped?: boolean;
   /** Optional inline data point shown beside the success state. */
