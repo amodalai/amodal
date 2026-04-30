@@ -62,10 +62,9 @@ export function OnboardingWizard() {
   useEffect(() => {
     if (step !== 'summary' || !summaryData) return;
 
-    // Open the admin chat panel
-    window.dispatchEvent(new CustomEvent('admin-chat-open'));
+    // Clear persisted admin chat so a fresh session is created with current tools
+    try { localStorage.removeItem('amodal-admin-chat-v2'); } catch { /* */ }
 
-    // Build the seed message and pass it via the event
     const seed = summaryData.customizeContext
       ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nFetch my website using fetch_url to understand what we do. Then write a brand-context knowledge doc (knowledge/brand-context.md) that captures our voice, target audience, and content themes.`
       : `I just set up a ${summaryData.name} agent. Review the installed skills and knowledge and help me customize it.`;
