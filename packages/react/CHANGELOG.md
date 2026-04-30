@@ -1,5 +1,15 @@
 # @amodalai/react
 
+## 0.3.45
+
+### Patch Changes
+
+- 2589dab: Onboarding polish: template card previews, scrolling wizard, bare URL auto-linking, dead SSE cleanup, admin agent file write fix
+- 87f5214: Onboarding wizard, Studio proxy refactor, hot-reload improvements, admin agent tools
+- 054a9ce: Runtime: Disable tool loop detection by default (all thresholds set to 0). The maxTurns limit (default 50) is sufficient to prevent runaway loops. Loop detection can be re-enabled by setting non-zero values.
+
+  React: Block send during streaming with shake feedback. Text stays in input box until stream ends. Silent 404 on session resume (starts fresh instead of error).
+
 ## 0.3.44
 
 ### Patch Changes
