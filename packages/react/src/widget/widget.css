@@ -2624,6 +2624,52 @@
   font-style: italic;
 }
 
+/* Checkbox-list variant — used when options carry descriptions
+ * (the optional-connection batch question). */
+.pcw-ask-choice__checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pcw-ask-choice__check-row {
+  border-radius: 6px;
+  padding: 6px 8px;
+  transition: background 0.15s;
+}
+.pcw-ask-choice__check-row:hover {
+  background: var(--pcw-tool-call-bg);
+}
+.pcw-ask-choice__check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  width: 100%;
+}
+.pcw-ask-choice__check-input {
+  margin-top: 3px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.pcw-ask-choice__check-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pcw-ask-choice__check-name {
+  font-size: 13px;
+  color: var(--pcw-text);
+}
+.pcw-ask-choice__check-desc {
+  font-size: 11.5px;
+  color: var(--pcw-muted);
+  line-height: 1.35;
+}
+
 /* Proposal card emitted by the propose_plan tool (Phase D — Path B custom flow) */
 .pcw-proposal {
   border: 1px solid var(--pcw-border);

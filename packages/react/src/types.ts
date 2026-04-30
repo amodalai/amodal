@@ -159,6 +159,12 @@ export interface SSEAskChoiceEvent {
 export interface AskChoiceOption {
   label: string;
   value: string;
+  /**
+   * Optional one-line description shown beneath the label. When any
+   * option in a `multi: true` block has a description, the card
+   * renders as a checkbox list (used for optional-connection batches).
+   */
+  description?: string;
 }
 
 /**
