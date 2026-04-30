@@ -207,12 +207,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         const chatMessages = rehydrateHistory(detail.messages);
         stream.dispatch({ type: 'LOAD_HISTORY', sessionId: resumeSessionId, messages: chatMessages });
       } catch (err: unknown) {
-        const is404 = err instanceof ChatApiError && err.status === 404;
+        if (err instanceof ChatApiError && err.status === 404) {
+          // Session was deleted — not an error, just start fresh.
+          // Notify host so it can clear the stale session ID.
+          initialMessageDeliveredRef.current = false;
+          callbacksRef.current.onSessionCreated?.('');
+          return;
+        }
         stream.dispatch({
           type: 'STREAM_ERROR',
-          message: is404
-            ? 'Previous session no longer exists. Start a new conversation.'
-            : err instanceof Error ? err.message : 'Failed to resume session',
+          message: err instanceof Error ? err.message : 'Failed to resume session',
         });
       }
     };

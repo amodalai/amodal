@@ -457,12 +457,9 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
     Map<string, { toolName: string; parameters: Record<string, unknown> }>
   >(new Map());
 
-  const send = useCallback(
+  // Inner send that actually dispatches — no streaming guard.
+  const doSend = useCallback(
     (text: string, images?: Array<{mimeType: string; data: string; preview: string}>): void => {
-      if (state.isStreaming) {
-        queuedMessageRef.current = { text, images };
-        return;
-      }
 
       dispatch({ type: 'SEND_MESSAGE', text, images: images?.map((i) => i.preview) });
 
@@ -497,8 +494,8 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
           const queued = queuedMessageRef.current;
           if (queued) {
             queuedMessageRef.current = null;
-            // Defer so isStreaming flips to false first
-            setTimeout(() => send(queued.text, queued.images), 0);
+            // Call doSend directly — no streaming guard needed since we just finished
+            doSend(queued.text, queued.images);
           }
         }
       };
@@ -508,7 +505,19 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
     // streamFn is read via callbacksRef on each call, so it doesn't need
     // to be a dep here. Keeping send() identity stable across streamFn
     // changes prevents downstream consumers from re-running effects.
-    [state.isStreaming, eventBus],
+    [eventBus],
+  );
+
+  // Public send — queues if streaming, otherwise dispatches immediately
+  const send = useCallback(
+    (text: string, images?: Array<{mimeType: string; data: string; preview: string}>): void => {
+      if (state.isStreaming) {
+        queuedMessageRef.current = { text, images };
+        return;
+      }
+      doSend(text, images);
+    },
+    [state.isStreaming, doSend],
   );
 
   const stop = useCallback((): void => {
