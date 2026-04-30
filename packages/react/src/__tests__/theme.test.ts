@@ -20,9 +20,19 @@ describe('defaultTheme', () => {
     expect(defaultTheme.headerText).toBeDefined();
     expect(defaultTheme.placeholder).toBeDefined();
   });
+
+  it('includes verboseTools default', () => {
+    expect(defaultTheme.verboseTools).toBe(false);
+  });
 });
 
 describe('applyTheme', () => {
+  it('does not set CSS property for boolean theme values', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { verboseTools: true });
+    expect(el.style.length).toBe(0);
+  });
+
   it('sets CSS custom properties on element', () => {
     const el = document.createElement('div');
     applyTheme(el, { primaryColor: '#ff0000' });

@@ -109,6 +109,7 @@ interface MessageListProps {
   emptyStateText?: string;
   sessionId?: string;
   showFeedback?: boolean;
+  verboseTools?: boolean;
 }
 
 function ConfirmationCard({ confirmation, onApprove, onDeny }: {
@@ -131,6 +132,7 @@ function AssistantBubble({
   onConfirmationRespond,
   onCollectSecretSaved,
   serverUrl,
+  verboseTools,
 }: {
   message: AssistantTextMessage;
   sendMessage?: (text: string) => void;
@@ -140,12 +142,17 @@ function AssistantBubble({
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
   onCollectSecretSaved?: (secretId: string) => void;
   serverUrl?: string;
+  verboseTools?: boolean;
 }) {
   const hasContentBlocks = message.contentBlocks && message.contentBlocks.length > 0;
   const hasExtras =
     message.toolCalls.length > 0 ||
     message.skillActivations.length > 0 ||
     message.kbProposals.length > 0;
+
+  // Don't render an empty bubble while waiting for content
+  const hasAnyContent = hasContentBlocks || message.text.length > 0 || hasExtras;
+  if (!hasAnyContent) return null;
 
   // If we have content blocks, render them in order for proper interleaving
   if (hasContentBlocks) {
@@ -181,7 +188,7 @@ function AssistantBubble({
               return (
                 <div key={`tools-${String(i)}`} className="pcw-bubble__extras">
                   {visibleCalls.map((tc) => (
-                    <ToolCallCard key={tc.toolId} toolCall={tc} />
+                    <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
                   ))}
                 </div>
               );
@@ -243,7 +250,7 @@ function AssistantBubble({
       {hasExtras && (
         <div className="pcw-bubble__extras">
           {message.toolCalls.map((tc) => (
-            <ToolCallCard key={tc.toolId} toolCall={tc} />
+            <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
           ))}
           {message.kbProposals.map((proposal, idx) => (
             <KBProposalCard key={`${proposal.title}-${String(idx)}`} proposal={proposal} />
@@ -254,9 +261,26 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, onCollectSecretSaved, serverUrl, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, onCollectSecretSaved, serverUrl, emptyStateText, sessionId, showFeedback = false, verboseTools = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+  const [fadingElapsed, setFadingElapsed] = useState<number | null>(null);
+  const wasStreamingRef = useRef(false);
+
+  useEffect(() => {
+    if (isStreaming) {
+      wasStreamingRef.current = true;
+      setFadingElapsed(null);
+    } else if (wasStreamingRef.current && streamStartTime) {
+      const elapsed = Math.floor((Date.now() - streamStartTime) / 1000);
+      wasStreamingRef.current = false;
+      if (elapsed >= 1) {
+        setFadingElapsed(elapsed);
+        const timer = setTimeout(() => setFadingElapsed(null), 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isStreaming, streamStartTime]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -322,6 +346,7 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
                   onConfirmationRespond={onConfirmationRespond}
                   onCollectSecretSaved={onCollectSecretSaved}
                   serverUrl={serverUrl}
+                  verboseTools={verboseTools}
                 />
                 {showFeedback && !isStreaming && (
                   <FeedbackButtons messageId={msg.id} sessionId={sessionId} query={qText} response={rText} />
@@ -340,6 +365,9 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
         }
       })}
       {isStreaming && <StreamingIndicator startTime={streamStartTime} />}
+      {fadingElapsed !== null && (
+        <div className="pcw-elapsed pcw-elapsed--fading">{String(fadingElapsed)}s</div>
+      )}
     </div>
   );
 }

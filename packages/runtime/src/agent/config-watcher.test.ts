@@ -89,6 +89,57 @@ describe('ConfigWatcher', () => {
     watcher.stop();
   });
 
+  it('should establish watchers for directories that appear after reload', async () => {
+    const {ConfigWatcher} = await import('./config-watcher.js');
+
+    // First call to watch: ENOENT for knowledge/, success for amodal.json
+    let callCount = 0;
+    vi.mocked(fs.watch).mockImplementation(((path: string) => {
+      callCount++;
+      if (String(path).includes('knowledge') && callCount <= 11) {
+        const err = new Error('ENOENT') as NodeJS.ErrnoException;
+        err.code = 'ENOENT';
+        throw err;
+      }
+      return {close: vi.fn()};
+    }) as unknown as typeof fs.watch);
+
+    const watcher = new ConfigWatcher('/repo', onChange);
+    watcher.start();
+
+    const initialCalls = vi.mocked(fs.watch).mock.calls.filter(
+      (c) => String(c[0]).includes('knowledge'),
+    );
+    // knowledge/ watch should have failed
+    expect(initialCalls.length).toBe(1);
+
+    // Trigger a reload (simulates config change after clone creates knowledge/)
+    const watchCall = vi.mocked(fs.watch).mock.calls[0] as unknown[];
+    const callback = watchCall?.[2] as ((event: string, filename: string) => void) | undefined;
+    if (callback) callback('change', 'amodal.json');
+
+    await vi.advanceTimersByTimeAsync(400);
+
+    // After reload, refreshWatchers should retry and succeed for knowledge/
+    const knowledgeCalls = vi.mocked(fs.watch).mock.calls.filter(
+      (c) => String(c[0]).includes('knowledge'),
+    );
+    expect(knowledgeCalls.length).toBe(2);
+
+    watcher.stop();
+  });
+
+  it('should re-throw non-ENOENT errors from fs.watch', async () => {
+    const {ConfigWatcher} = await import('./config-watcher.js');
+
+    vi.mocked(fs.watch).mockImplementation((() => {
+      throw new Error('EPERM: permission denied');
+    }) as unknown as typeof fs.watch);
+
+    const watcher = new ConfigWatcher('/repo', onChange);
+    expect(() => watcher.start()).toThrow('EPERM');
+  });
+
   it('should debounce reload on file changes', async () => {
     const {ConfigWatcher} = await import('./config-watcher.js');
     const watcher = new ConfigWatcher('/repo', onChange);

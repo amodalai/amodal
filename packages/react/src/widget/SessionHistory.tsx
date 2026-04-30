@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import type { SessionHistoryItem } from '../client/chat-api';
 import { TagEditor } from './TagEditor';
 
@@ -16,6 +16,8 @@ export interface SessionHistoryProps {
   onNewChat: () => void;
   onClose: () => void;
   onUpdateTags: (sessionId: string, tags: string[]) => void;
+  onUpdateTitle?: (sessionId: string, title: string) => void;
+  onDeleteSession?: (sessionId: string) => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -31,6 +33,36 @@ function timeAgo(dateStr: string): string {
   return `${String(days)}d ago`;
 }
 
+function InlineRenameTitle({
+  title,
+  onSave,
+  onCancel,
+}: {
+  title: string;
+  onSave: (newTitle: string) => void;
+  onCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState(title);
+
+  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      className="pcw-history-rename-input"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { onSave(value.trim() || title); }
+        if (e.key === 'Escape') { onCancel(); }
+      }}
+      onBlur={() => onSave(value.trim() || title)}
+    />
+  );
+}
+
 export function SessionHistory({
   sessions,
   isLoading,
@@ -39,9 +71,12 @@ export function SessionHistory({
   onNewChat,
   onClose,
   onUpdateTags,
+  onUpdateTitle,
+  onDeleteSession,
 }: SessionHistoryProps) {
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [editingTagsId, setEditingTagsId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
 
   const toggleFilter = useCallback((tag: string) => {
     setFilterTags((prev) =>
@@ -59,14 +94,14 @@ export function SessionHistory({
   return (
     <div className="pcw-history-drawer" data-testid="session-history">
       <div className="pcw-history-header">
-        <h3 className="pcw-history-title">Session History</h3>
+        <h3 className="pcw-history-title">History</h3>
         <button
           type="button"
           className="pcw-history-close"
           onClick={onClose}
           aria-label="Close history"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={16} height={16}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={14} height={14}>
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
@@ -115,9 +150,20 @@ export function SessionHistory({
               className="pcw-history-item-content"
               onClick={() => onSelectSession(session.id)}
             >
-              <div className="pcw-history-item-title">
-                {session.title ?? `Session ${session.id.slice(0, 8)}`}
-              </div>
+              {renamingId === session.id ? (
+                <InlineRenameTitle
+                  title={session.title ?? `Session ${session.id.slice(0, 8)}`}
+                  onSave={(newTitle) => {
+                    onUpdateTitle?.(session.id, newTitle);
+                    setRenamingId(null);
+                  }}
+                  onCancel={() => setRenamingId(null)}
+                />
+              ) : (
+                <div className="pcw-history-item-title">
+                  {session.title ?? `Session ${session.id.slice(0, 8)}`}
+                </div>
+              )}
               <div className="pcw-history-item-meta">
                 <span className="pcw-history-item-time">{timeAgo(session.created_at)}</span>
                 <span className="pcw-history-item-count">
@@ -125,6 +171,36 @@ export function SessionHistory({
                 </span>
               </div>
             </button>
+
+            <div className="pcw-history-item-actions">
+              {onUpdateTitle && (
+                <button
+                  type="button"
+                  className="pcw-history-action-btn"
+                  onClick={(e) => { e.stopPropagation(); setRenamingId(session.id); }}
+                  aria-label="Rename session"
+                  title="Rename"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={12} height={12}>
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  </svg>
+                </button>
+              )}
+              {onDeleteSession && (
+                <button
+                  type="button"
+                  className="pcw-history-action-btn pcw-history-action-btn--danger"
+                  onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }}
+                  aria-label="Delete session"
+                  title="Delete"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} width={12} height={12}>
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              )}
+            </div>
 
             <div className="pcw-history-item-tags">
               {editingTagsId === session.id ? (

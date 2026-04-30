@@ -62,6 +62,20 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [step]);
 
+  // Enter key advances the wizard (unless focus is in an input/textarea)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- DOM event target
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const btn = document.querySelector<HTMLButtonElement>('[data-wizard-continue]');
+      if (btn && !btn.disabled) btn.click();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   // Open admin chat panel and send seed message when reaching summary
   useEffect(() => {
     if (step !== 'summary' || !summaryData) return;
@@ -76,7 +90,7 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
       : `I just set up a ${summaryData.name} agent. Use read_agent_config to check what's installed, then give me a quick summary.${closing}`;
 
     window.dispatchEvent(new CustomEvent('admin-chat-open', { detail: seed }));
-  }, [step, summaryData]);
+  }, [step, summaryData, runtimeUrl]);
 
   // Fetch template cards on mount
   useEffect(() => {
@@ -266,6 +280,7 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
               ) : null}
               <button
                 className="w-full py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90"
+                data-wizard-continue
                 onClick={() => void handleClone(selectedTemplate.repo, selectedTemplate.branch, selectedName)}
               >
                 Set this up →
@@ -312,6 +327,7 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
           </div>
           <button
             className="w-full py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90"
+            data-wizard-continue
             onClick={() => setStep(credentials.length > 0 ? 'credentials' : 'customize')}
           >
             {credentials.length > 0 ? 'Set up connections →' : 'Continue →'}
@@ -370,6 +386,7 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
             ))}
           </div>
           <button className="w-full py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90 disabled:opacity-50 disabled:bg-muted disabled:text-muted-foreground"
+            data-wizard-continue
             onClick={() => setStep('customize')} disabled={!allCredsAddressed}>
             {allCredsAddressed ? 'Continue →' : `${credentials.filter((c) => c.status !== 'pending' && c.status !== 'saving').length}/${credentials.length} — address all to continue`}
           </button>
@@ -405,6 +422,7 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
           </div>
           <div className="flex gap-3">
             <button className="flex-1 py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90"
+              data-wizard-continue
               onClick={() => void handleCustomize()}>Continue →</button>
             <button className="px-4 py-2 text-sm text-muted-foreground border border-border rounded-lg hover:text-foreground"
               onClick={() => { setSummaryData({ name: selectedName || 'Your agent', connections: credentials.map((c) => ({ name: c.name, status: c.status === 'connected' ? 'connected' : 'pending' })) }); setStep('summary'); }}>
@@ -431,6 +449,7 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
             <div className="flex gap-3">
               <button
                 className="px-5 py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90"
+                data-wizard-continue
                 onClick={onComplete}
               >
                 Go to dashboard

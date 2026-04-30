@@ -224,9 +224,11 @@ export const ChatWidget = forwardRef<ChatWidgetHandle, ChatWidgetProps>(({
             onNewChat={handleNewChat}
             onClose={() => setShowHistory(false)}
             onUpdateTags={history.updateTags}
+            onUpdateTitle={history.updateTitle}
+            onDeleteSession={history.removeSession}
           />
         )}
-        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} serverUrl={serverUrl} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
+        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} serverUrl={serverUrl} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} verboseTools={mergedTheme.verboseTools} />
         {error && <div className="pcw-error">{error}</div>}
         {showInput && (
           <InputBar
