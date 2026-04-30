@@ -2803,6 +2803,13 @@
   padding: 2px 0;
   align-self: flex-start;
 }
+.pcw-elapsed--fading {
+  animation: pcw-fade-out 3s ease-out forwards;
+}
+@keyframes pcw-fade-out {
+  0%, 50% { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 @keyframes pcw-breathe {
   0%, 100% { width: 16px; opacity: 0.4; }

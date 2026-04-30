@@ -99,7 +99,9 @@ export function useSessionHistory(options: UseSessionHistoryOptions): UseSession
           const rawToken = getTokenRef.current?.();
           const token = (rawToken instanceof Promise ? await rawToken : rawToken) ?? undefined;
           await deleteSession(serverUrl, sessionId, token);
-        } catch {
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setError(`Failed to delete session: ${msg}`);
           refresh();
         }
       };

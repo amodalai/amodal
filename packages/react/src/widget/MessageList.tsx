@@ -264,16 +264,21 @@ function AssistantBubble({
 export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, onCollectSecretSaved, serverUrl, emptyStateText, sessionId, showFeedback = false, verboseTools = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
-  const [lastElapsed, setLastElapsed] = useState<number | null>(null);
+  const [fadingElapsed, setFadingElapsed] = useState<number | null>(null);
   const wasStreamingRef = useRef(false);
 
   useEffect(() => {
     if (isStreaming) {
       wasStreamingRef.current = true;
-      setLastElapsed(null);
+      setFadingElapsed(null);
     } else if (wasStreamingRef.current && streamStartTime) {
-      setLastElapsed(Math.floor((Date.now() - streamStartTime) / 1000));
+      const elapsed = Math.floor((Date.now() - streamStartTime) / 1000);
       wasStreamingRef.current = false;
+      if (elapsed >= 1) {
+        setFadingElapsed(elapsed);
+        const timer = setTimeout(() => setFadingElapsed(null), 3000);
+        return () => clearTimeout(timer);
+      }
     }
   }, [isStreaming, streamStartTime]);
 
@@ -360,8 +365,8 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
         }
       })}
       {isStreaming && <StreamingIndicator startTime={streamStartTime} />}
-      {!isStreaming && lastElapsed !== null && lastElapsed >= 1 && (
-        <div className="pcw-elapsed">{String(lastElapsed)}s</div>
+      {fadingElapsed !== null && (
+        <div className="pcw-elapsed pcw-elapsed--fading">{String(fadingElapsed)}s</div>
       )}
     </div>
   );

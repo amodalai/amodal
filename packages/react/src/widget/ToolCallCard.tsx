@@ -314,6 +314,11 @@ type InlineSegment =
   | { kind: 'text'; text: string }
   | { kind: 'tool'; event: SubagentEventInfo };
 
+/**
+ * Collapse consecutive thought events into text blocks, keeping tool call
+ * events inline between them. 'complete' and 'error' events are skipped —
+ * they're handled by the caller separately.
+ */
 function buildInlineSegments(events: SubagentEventInfo[] | undefined): InlineSegment[] {
   if (!events || events.length === 0) return [];
   const segments: InlineSegment[] = [];
