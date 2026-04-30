@@ -1,7 +1,7 @@
 ---
 "@amodalai/runtime": patch
 "@amodalai/react": patch
-"@amodalai/cli": patch
+"@amodalai/amodal": patch
 "@amodalai/types": patch
 ---
 
