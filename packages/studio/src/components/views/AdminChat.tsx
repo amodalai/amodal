@@ -173,10 +173,11 @@ export function AdminChat({
   // Phase F.8: the full-screen chat-mode AdminChat (compact=false) is
   // the create-flow setup chat — the input belongs to a continuing
   // back-and-forth, so the placeholder reads "Reply or ask a
-  // question…". The compact post-setup admin panel keeps its terse
-  // generic prompt.
+  // question…". The compact post-setup admin panel reads "Ask
+  // anything…" — the user is in workspace mode at that point, not
+  // in a guided flow.
   const placeholder = compact
-    ? 'Message admin agent...'
+    ? 'Ask anything...'
     : 'Reply or ask a question...';
 
   return (
