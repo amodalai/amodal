@@ -1,5 +1,14 @@
 # @amodalai/runtime
 
+## 0.3.47
+
+### Patch Changes
+
+- 0cbf502: Show directory-based connections in Studio's connections page
+  - @amodalai/types@0.3.47
+  - @amodalai/core@0.3.47
+  - @amodalai/db@0.3.47
+
 ## 0.3.46
 
 ### Patch Changes
