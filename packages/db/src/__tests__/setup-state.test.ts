@@ -154,9 +154,13 @@ describeWhenDb('setup-state queries (integration)', () => {
   });
 
   it('plan: null is distinct from plan: undefined', async () => {
-
     await upsertSetupState(db, agentId, scopeId, {
-      plan: {summary: 'draft'},
+      plan: {
+        templatePackage: '@amodalai/test-template',
+        slots: [],
+        config: [],
+        completion: {title: 'Draft Plan', suggestions: [], automationTitle: null},
+      },
     });
     const cleared = await upsertSetupState(db, agentId, scopeId, {plan: null});
     expect(cleared.state.plan).toBeNull();

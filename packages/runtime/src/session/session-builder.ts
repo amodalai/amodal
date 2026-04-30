@@ -42,6 +42,7 @@ import {
   upsertSetupState,
   markComplete,
 } from '@amodalai/db';
+import {composePlan} from '@amodalai/core';
 import {registerMcpTools} from '../tools/mcp-tool-adapter.js';
 import {
   AccessJsonPermissionChecker,
@@ -260,6 +261,10 @@ function buildCustomToolSessionContext(
   const agentId = bundle.config.name;
   const setupStateFactory = buildSetupStateFactory(agentId);
 
+  // Phase C: expose ctx.plan. The composer reads node_modules under
+  // repoPath, so this is undefined when no repoPath is resolvable.
+  const plan = repoRoot ? buildPlanOps(repoRoot) : undefined;
+
   return {
     config: {
       getConnections(): Record<string, unknown> {
@@ -280,6 +285,55 @@ function buildCustomToolSessionContext(
     fs,
     agentId,
     ...(setupStateFactory ? {setupStateFactory} : {}),
+    ...(plan ? {plan} : {}),
+  };
+}
+
+/**
+ * Build the `ctx.plan` ops bound to the agent's repo path. The
+ * composer reads files under `<repoPath>/node_modules/<pkg>/`; when
+ * the package isn't installed we surface a typed `not_installed`
+ * soft-fail instead of throwing the underlying ENOENT.
+ */
+function buildPlanOps(repoPath: string): NonNullable<CustomToolSessionContext['plan']> {
+  return {
+    async compose(templatePackageName: string) {
+      try {
+        const composed = await composePlan({repoPath, templatePackage: templatePackageName});
+        return {ok: true, plan: composed};
+      } catch (err) {
+        if (
+          err !== null &&
+          typeof err === 'object' &&
+          'code' in err &&
+          (err as {code: unknown}).code === 'CONFIG_NOT_FOUND'
+        ) {
+          return {
+            ok: false,
+            reason: 'not_installed',
+            message: `Template "${templatePackageName}" is not installed. Call install_package first.`,
+          };
+        }
+        if (
+          err !== null &&
+          typeof err === 'object' &&
+          'code' in err &&
+          ((err as {code: unknown}).code === 'CONFIG_PARSE_FAILED' ||
+            (err as {code: unknown}).code === 'CONFIG_VALIDATION_FAILED')
+        ) {
+          return {
+            ok: false,
+            reason: 'malformed',
+            message: err instanceof Error ? err.message : String(err),
+          };
+        }
+        return {
+          ok: false,
+          reason: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
   };
 }
 

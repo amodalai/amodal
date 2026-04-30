@@ -30,6 +30,7 @@ export type {
   CustomToolInlineEvent,
   CustomToolSetupStateOps,
   CustomToolSetupStateRow,
+  CustomToolPlanOps,
   ToolHandlerDefinition,
   CustomToolExecutor,
   CustomShellExecutor,
@@ -227,6 +228,16 @@ export {
   setupStateSchema,
   setupStatePatchSchema,
 } from './setup-state.js';
+
+// Composed setup plan (Phase C)
+export type {
+  SetupPlan,
+  SetupPlanSlot,
+  SetupPlanSlotOption,
+  SetupPlanConfigQuestion,
+  SetupPlanCompletion,
+  SetupPolish,
+} from './setup-plan.js';
 
 // Snapshot types
 export type {

@@ -137,12 +137,12 @@ export type ProvidedContext = Record<string, string>;
 // ---------------------------------------------------------------------------
 
 /**
- * Plan attached to the setup_state row. The full Plan composer ships
- * in Phase C; for now the type is intentionally loose (`unknown`-like)
- * so this contract doesn't pin Plan shape early. Phase C will replace
- * `Plan` with the typed `SetupPlan` interface from `@amodalai/types/setup-plan.ts`.
+ * Plan attached to the setup_state row. Aliased to `SetupPlan` from
+ * `./setup-plan.ts` (Phase C). The alias is preserved so older
+ * codepaths that imported `SetupPlanSnapshot` keep compiling — Phase B
+ * shipped this name as the loose `Record<string, unknown>` placeholder.
  */
-export type SetupPlanSnapshot = Record<string, unknown>;
+export type SetupPlanSnapshot = import('./setup-plan.js').SetupPlan;
 
 // ---------------------------------------------------------------------------
 // Top-level interface
@@ -253,7 +253,14 @@ const deferredRequestSchema: z.ZodType<DeferredRequest> = z.object({
 
 const providedContextSchema: z.ZodType<ProvidedContext> = z.record(z.string(), z.string());
 
-const setupPlanSnapshotSchema: z.ZodType<SetupPlanSnapshot> = z.record(z.string(), z.unknown());
+// SetupPlan has a deep structured shape (slots/config/completion);
+// validating every nested field via Zod here would duplicate the TS
+// interface and add maintenance cost without a real LLM-input
+// boundary (the Plan is composed server-side, not LLM-supplied).
+// `z.custom` accepts any value at runtime and carries the typed shape.
+const setupPlanSnapshotSchema: z.ZodType<SetupPlanSnapshot> = z.custom<SetupPlanSnapshot>(
+  (value) => typeof value === 'object' && value !== null,
+);
 
 export const setupStateSchema: z.ZodType<SetupState> = z.object({
   phase: setupPhaseSchema,

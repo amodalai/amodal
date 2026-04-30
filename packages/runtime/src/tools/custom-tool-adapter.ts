@@ -20,6 +20,7 @@ import {jsonSchema} from 'ai';
 import type {
   CustomToolContext,
   CustomToolExecutor,
+  CustomToolPlanOps,
   CustomToolSetupStateOps,
   FsBackend,
   LoadedTool,
@@ -67,6 +68,12 @@ export interface CustomToolSessionContext {
    * scope when building each handler ctx.
    */
   setupStateFactory?: (scopeId: string) => CustomToolSetupStateOps;
+  /**
+   * Plan composer ops (Phase C). The session ctx provides this when
+   * a `repoPath` is available; the handler calls `ctx.plan.compose`
+   * with the template package name and gets back a typed SetupPlan.
+   */
+  plan?: CustomToolPlanOps;
 }
 
 function buildCustomToolContext(
@@ -231,6 +238,10 @@ function buildCustomToolContext(
     ...(sessionCtx.setupStateFactory
       ? {setupState: sessionCtx.setupStateFactory(runtimeCtx.scopeId)}
       : {}),
+    // Phase C: plan composer ops. Bound to the agent's repoPath at
+    // session-build time; identity is repo-scoped, not scope-scoped,
+    // so the same ops object works for every handler in the session.
+    ...(sessionCtx.plan ? {plan: sessionCtx.plan} : {}),
     scopeId: runtimeCtx.scopeId,
     sessionId: runtimeCtx.sessionId,
   };

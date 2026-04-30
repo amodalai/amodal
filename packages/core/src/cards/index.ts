@@ -19,3 +19,6 @@ export {
   loadAgentCard,
   loadAgentCardPreview,
 } from './card-loader.js';
+
+export {composePlan} from './setup-plan.js';
+export type {ComposePlanOptions} from './setup-plan.js';

@@ -11,6 +11,7 @@ import type {
 } from './sse-types.js';
 import type {FsBackend} from './fs.js';
 import type {SetupState, SetupStatePatch} from './setup-state.js';
+import type {SetupPlan} from './setup-plan.js';
 
 /**
  * Inline SSE events a custom tool handler may emit through `ctx.emit`.
@@ -126,6 +127,13 @@ export interface CustomToolContext {
    * ctx namespaces backed by query modules in `@amodalai/db/queries`.
    */
   setupState?: CustomToolSetupStateOps;
+  /**
+   * Plan composer operations (Phase C). The runtime closes over the
+   * agent's repo path so the handler doesn't need to know it; the
+   * tool just passes a template package name and gets a typed
+   * SetupPlan back.
+   */
+  plan?: CustomToolPlanOps;
   /** Stable id of the agent the tool is running on behalf of. */
   agentId?: string;
   /** Per-user scope key. Empty string = agent-level (no scope). */
@@ -161,6 +169,25 @@ export interface CustomToolSetupStateOps {
    * Returns the ISO timestamp, or null if no row existed.
    */
   markComplete(): Promise<string | null>;
+}
+
+/**
+ * Plan composer operations exposed via `ctx.plan` (Phase C). The
+ * runtime closes over the agent's repo path; the handler just passes
+ * the template package name.
+ *
+ * `compose` returns either the typed `SetupPlan` or a soft-fail
+ * descriptor (`reason: 'not_installed' | 'malformed' | 'error'`) so
+ * the LLM-facing handler can surface a clear message without parsing
+ * thrown errors.
+ */
+export interface CustomToolPlanOps {
+  compose(
+    templatePackageName: string,
+  ): Promise<
+    | {ok: true; plan: SetupPlan}
+    | {ok: false; reason: 'not_installed' | 'malformed' | 'error'; message: string}
+  >;
 }
 
 /**
