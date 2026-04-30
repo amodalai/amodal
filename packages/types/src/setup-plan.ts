@@ -171,4 +171,17 @@ export interface SetupPlan {
   config: SetupPlanConfigQuestion[];
   /** Data for the completion preview. */
   completion: SetupPlanCompletion;
+  /**
+   * Optional per-slot override of the validation data-point format
+   * string. Keys are slot labels (e.g. "Slack", "Web analytics");
+   * values are templates that can include `{value}` for the raw
+   * extracted value or `{formatted}` for the format-helper output.
+   * Pulled from `template.json#setup.dataPointTemplates` polish.
+   *
+   * Defaults live on the connection package's prompt copy table;
+   * templates use this to say "for ME, render the data point as
+   * 'tracking {value} sessions' instead of the connection's default."
+   * The agent reads this in the prompt's validation step.
+   */
+  dataPointTemplates?: Record<string, string>;
 }

@@ -181,6 +181,31 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
         choices: ['Zendesk', 'Intercom', 'Freshdesk', 'Email'],
       },
     },
+    templateJson: {
+      name: 'support-triage',
+      description:
+        'Automatically classifies, prioritizes, and routes incoming support tickets, drafting responses from your knowledge base.',
+      connections: [
+        {
+          label: 'Helpdesk',
+          description: 'Where incoming tickets and customer responses live.',
+          options: ['@amodalai/connection-zendesk', '@amodalai/connection-intercom'],
+          required: true,
+        },
+        {
+          label: 'Escalation channel',
+          description: 'Where high-priority tickets get a heads-up alert.',
+          options: ['@amodalai/connection-slack'],
+          required: false,
+        },
+        {
+          label: 'Knowledge base',
+          description: 'Source material for drafting reply suggestions.',
+          options: ['@amodalai/connection-notion', '@amodalai/connection-confluence'],
+          required: false,
+        },
+      ],
+    },
   },
 
   {
@@ -240,6 +265,31 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
         choices: ['HubSpot', 'Salesforce', 'Pipedrive', 'Other'],
       },
     },
+    templateJson: {
+      name: 'sales-pipeline',
+      description:
+        'Posts a morning pipeline snapshot to Slack — new deals, closed deals, and stale opportunities flagged for follow-up.',
+      connections: [
+        {
+          label: 'CRM',
+          description: 'Pipeline data — deals, contacts, activity.',
+          options: ['@amodalai/connection-hubspot', '@amodalai/connection-salesforce'],
+          required: true,
+        },
+        {
+          label: 'Pipeline channel',
+          description: 'Where the daily snapshot gets posted.',
+          options: ['@amodalai/connection-slack'],
+          required: true,
+        },
+        {
+          label: 'Outreach',
+          description: 'Send follow-up drafts directly from the agent.',
+          options: ['@amodalai/connection-outreach', '@amodalai/connection-gong'],
+          required: false,
+        },
+      ],
+    },
   },
 
   {
@@ -296,6 +346,31 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
         choices: ['Phone', 'Text', 'Online form', 'Mix of everything'],
       },
     },
+    templateJson: {
+      name: 'job-scheduler',
+      description:
+        'Manages your daily job schedule by chat. Texts customers the day before so they do not no-show.',
+      connections: [
+        {
+          label: 'SMS',
+          description: 'Text reminders to customers the day before their appointment.',
+          options: ['@amodalai/connection-twilio'],
+          required: true,
+        },
+        {
+          label: 'Calendar',
+          description: 'Sync the schedule with your existing calendar.',
+          options: ['@amodalai/connection-google-sheets'],
+          required: false,
+        },
+        {
+          label: 'Bookkeeping',
+          description: 'Log completed jobs and charges.',
+          options: ['@amodalai/connection-quickbooks'],
+          required: false,
+        },
+      ],
+    },
   },
 
   // ---------------- MARKETING (additional) ----------------
@@ -340,6 +415,31 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
       ],
       setup: { q: 'Where do you draft posts?', choices: ['Notion', 'Google Docs', 'Other'] },
     },
+    templateJson: {
+      name: 'content-calendar',
+      description: 'Plans the editorial calendar and queues posts across your channels.',
+      connections: [
+        {
+          label: 'Editorial pipeline',
+          description: 'Where draft posts and the editorial calendar live.',
+          options: ['@amodalai/connection-notion'],
+          required: true,
+        },
+        {
+          label: 'Distribution',
+          description: 'Where posts get scheduled and published.',
+          options: ['@amodalai/connection-postiz', '@amodalai/connection-typefully'],
+          required: false,
+          multi: true,
+        },
+        {
+          label: 'Social',
+          description: 'Direct publishing channels.',
+          options: ['@amodalai/connection-linkedin-ads'],
+          required: false,
+        },
+      ],
+    },
   },
 
   {
@@ -379,6 +479,24 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
         { name: 'Share-of-voice', desc: 'Compares your reach against competitors' },
       ],
       setup: { q: 'How many competitors do you track?', choices: ['1-3', '4-6', '7+'] },
+    },
+    templateJson: {
+      name: 'competitor-monitor',
+      description: 'Watches your competitors public channels and surfaces what they are shipping.',
+      connections: [
+        {
+          label: 'Public posts',
+          description: 'Where competitors publish content the agent can scrape.',
+          options: ['@amodalai/connection-linkedin-ads'],
+          required: true,
+        },
+        {
+          label: 'Digest channel',
+          description: 'Where the weekly competitor digest gets posted.',
+          options: ['@amodalai/connection-slack'],
+          required: false,
+        },
+      ],
     },
   },
 
@@ -421,6 +539,30 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
       ],
       setup: { q: 'Where do leads come in?', choices: ['Website form', 'Calendly', 'Both'] },
     },
+    templateJson: {
+      name: 'lead-qualifier',
+      description: 'Scores inbound leads using fit + intent and routes them to the right rep.',
+      connections: [
+        {
+          label: 'CRM',
+          description: 'Where leads land and the scoring engine writes back fit + intent.',
+          options: ['@amodalai/connection-hubspot', '@amodalai/connection-salesforce'],
+          required: true,
+        },
+        {
+          label: 'Web analytics',
+          description: 'Intent signals — page views, pricing visits, repeat sessions.',
+          options: ['@amodalai/connection-ga4', '@amodalai/connection-mixpanel'],
+          required: false,
+        },
+        {
+          label: 'Notification channel',
+          description: 'Pings reps when a high-scoring lead lands.',
+          options: ['@amodalai/connection-slack'],
+          required: false,
+        },
+      ],
+    },
   },
 
   // ---------------- SUPPORT (additional) ----------------
@@ -462,6 +604,24 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
       ],
       setup: { q: 'Which support tool do you use?', choices: ['Zendesk', 'Intercom', 'Other'] },
     },
+    templateJson: {
+      name: 'csat-digest',
+      description: 'Aggregates CSAT scores by category and posts a weekly trend to Slack.',
+      connections: [
+        {
+          label: 'Helpdesk',
+          description: 'Source of CSAT survey responses + ticket categories.',
+          options: ['@amodalai/connection-zendesk', '@amodalai/connection-intercom'],
+          required: true,
+        },
+        {
+          label: 'Digest channel',
+          description: 'Where the weekly CSAT trend gets posted.',
+          options: ['@amodalai/connection-slack'],
+          required: false,
+        },
+      ],
+    },
   },
 
   // ---------------- OPS (additional) ----------------
@@ -502,6 +662,30 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
         { name: 'Reminder cadence', desc: 'Polite → firm escalation over time' },
       ],
       setup: { q: 'Which accounting tool do you use?', choices: ['QuickBooks', 'Xero', 'Wave', 'Other'] },
+    },
+    templateJson: {
+      name: 'invoice-reminder',
+      description: 'Watches your invoicing tool for overdue invoices and sends polite reminders on a schedule.',
+      connections: [
+        {
+          label: 'Invoicing',
+          description: 'Source of invoices and payment status.',
+          options: ['@amodalai/connection-quickbooks', '@amodalai/connection-stripe'],
+          required: true,
+        },
+        {
+          label: 'Reminder channel',
+          description: 'Where polite reminders get sent to customers.',
+          options: ['@amodalai/connection-resend', '@amodalai/connection-sendgrid'],
+          required: false,
+        },
+        {
+          label: 'Internal alerts',
+          description: 'Notify the finance team about persistent late payers.',
+          options: ['@amodalai/connection-slack'],
+          required: false,
+        },
+      ],
     },
   },
 ];

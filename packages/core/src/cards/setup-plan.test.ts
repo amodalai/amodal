@@ -217,6 +217,10 @@ describe('composePlan', () => {
       setup: {
         scheduleReasoning: 'gives your team the numbers before standup',
         completionSuggestions: ['add competitor tracking', 'change to Friday'],
+        dataPointTemplates: {
+          Slack: "I'll post to {primaryChannel}",
+          'Web analytics': '{value} sessions tracked this week',
+        },
       },
     });
     await writeJson('node_modules/@amodalai/test-template/automations/digest.json', {
@@ -234,6 +238,47 @@ describe('composePlan', () => {
       'add competitor tracking',
       'change to Friday',
     ]);
+    expect(plan.dataPointTemplates).toEqual({
+      Slack: "I'll post to {primaryChannel}",
+      'Web analytics': '{value} sessions tracked this week',
+    });
+  });
+
+  it('omits dataPointTemplates when the polish block has no override', async () => {
+    await writeJson('node_modules/@amodalai/test-template/template.json', {
+      connections: [],
+      setup: {scheduleReasoning: 'standup-friendly'},
+    });
+    const plan = await composePlan({
+      repoPath,
+      templatePackage: '@amodalai/test-template',
+    });
+    expect(plan.dataPointTemplates).toBeUndefined();
+  });
+
+  it('drops non-string dataPointTemplates entries and clamps long ones', async () => {
+    const long = 'A'.repeat(300);
+    await writeJson('node_modules/@amodalai/test-template/template.json', {
+      connections: [],
+      setup: {
+        dataPointTemplates: {
+          Slack: 'short',
+          GA4: long,
+          // Non-string entries (mistake by the template author) get dropped
+          // rather than poisoning the Plan with `[object Object]`.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional invalid input
+          Bad: {oops: 'not a string'} as any,
+        },
+      },
+    });
+    const plan = await composePlan({
+      repoPath,
+      templatePackage: '@amodalai/test-template',
+    });
+    expect(plan.dataPointTemplates).toEqual({
+      Slack: 'short',
+      GA4: 'A'.repeat(240),
+    });
   });
 
   it('throws CONFIG_NOT_FOUND when template.json is missing', async () => {

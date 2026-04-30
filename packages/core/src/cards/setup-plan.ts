@@ -72,12 +72,34 @@ export async function composePlan(opts: ComposePlanOptions): Promise<SetupPlan> 
   const config = composeConfigQuestions(automations, polish);
   const completion = composeCompletion(opts.templatePackage, automations, polish);
 
-  return {
+  const result: SetupPlan = {
     templatePackage: opts.templatePackage,
     slots,
     config,
     completion,
   };
+  if (polish.dataPointTemplates && Object.keys(polish.dataPointTemplates).length > 0) {
+    result.dataPointTemplates = sanitizeDataPointTemplates(polish.dataPointTemplates);
+  }
+  return result;
+}
+
+/**
+ * Strip any non-string values from `dataPointTemplates` and clamp
+ * each template to a defensive max length. Templates flow through
+ * to the LLM as raw strings; an oversized or non-string value would
+ * either blow up tool args or get rendered as `[object Object]`.
+ */
+function sanitizeDataPointTemplates(raw: Record<string, string>): Record<string, string> {
+  const TEMPLATE_MAX_LEN = 240;
+  const sanitized: Record<string, string> = {};
+  for (const [slot, template] of Object.entries(raw)) {
+    if (typeof template !== 'string') continue;
+    sanitized[slot] = template.length > TEMPLATE_MAX_LEN
+      ? template.slice(0, TEMPLATE_MAX_LEN)
+      : template;
+  }
+  return sanitized;
 }
 
 // ---------------------------------------------------------------------------
