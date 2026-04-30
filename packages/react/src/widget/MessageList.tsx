@@ -16,6 +16,7 @@ import { AskUserCard } from './AskUserCard';
 import { AskChoiceCard } from './AskChoiceCard';
 import { AgentCardInlinePreview } from './AgentCardInline';
 import { StartOAuthCard } from './StartOAuthCard';
+import { ProposalCard } from './ProposalCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { ConfirmCard } from '../components/ConfirmCard';
@@ -95,6 +96,7 @@ interface MessageListProps {
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
   onAskChoiceSubmit?: (askId: string, values: string[], message: string) => void;
+  onProposalSubmit?: (proposalId: string, answer: 'confirm' | 'adjust', message: string) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
   emptyStateText?: string;
   sessionId?: string;
@@ -119,6 +121,7 @@ function AssistantBubble({
   onInteraction,
   onAskUserSubmit,
   onAskChoiceSubmit,
+  onProposalSubmit,
   onConfirmationRespond,
 }: {
   message: AssistantTextMessage;
@@ -127,6 +130,7 @@ function AssistantBubble({
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
   onAskChoiceSubmit?: (askId: string, values: string[], message: string) => void;
+  onProposalSubmit?: (proposalId: string, answer: 'confirm' | 'adjust', message: string) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
 }) {
   const hasContentBlocks = message.contentBlocks && message.contentBlocks.length > 0;
@@ -202,6 +206,14 @@ function AssistantBubble({
                   sendMessage={sendMessage}
                 />
               );
+            case 'proposal':
+              return (
+                <ProposalCard
+                  key={`proposal-${block.proposalId}`}
+                  block={block}
+                  onSubmit={onProposalSubmit ?? (() => {})}
+                />
+              );
             case 'confirmation': {
               const conf = block.confirmation;
               return (
@@ -253,7 +265,7 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onAskChoiceSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onAskChoiceSubmit, onProposalSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -319,6 +331,7 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
                   onInteraction={onInteraction}
                   onAskUserSubmit={onAskUserSubmit}
                   onAskChoiceSubmit={onAskChoiceSubmit}
+                  onProposalSubmit={onProposalSubmit}
                   onConfirmationRespond={onConfirmationRespond}
                 />
                 {showFeedback && !isStreaming && (

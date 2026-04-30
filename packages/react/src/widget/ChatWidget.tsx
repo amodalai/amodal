@@ -124,9 +124,20 @@ export function ChatWidget({
     void send(message);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `send` is stable across renders for this hook
   }, []);
+  const noopProposal = useCallback(
+    (_proposalId: string, _answer: 'confirm' | 'adjust', message: string) => {
+      // Same shape as noopAskChoice: customStreamFn embedders post the
+      // chosen text as a regular user turn but can't lock the buttons
+      // because we don't own their reducer.
+      void send(message);
+       
+    },
+    [],
+  );
   const noopLoadSession = useCallback((_sessionId: string) => { /* noop */ }, []);
   const submitAskUserResponse = customStreamFn ? noopAskUser : chatHook.submitAskUserResponse;
   const submitAskChoiceResponse = customStreamFn ? noopAskChoice : chatHook.submitAskChoiceResponse;
+  const submitProposalResponse = customStreamFn ? noopProposal : chatHook.submitProposalResponse;
   const loadSession = customStreamFn ? noopLoadSession : chatHook.loadSession;
   const session = customStreamFn ? { id: directStream.sessionId } : chatHook.session;
 
@@ -228,7 +239,7 @@ export function ChatWidget({
             onUpdateTags={history.updateTags}
           />
         )}
-        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onAskChoiceSubmit={submitAskChoiceResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
+        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onAskChoiceSubmit={submitAskChoiceResponse} onProposalSubmit={submitProposalResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
         {error && <div className="pcw-error">{error}</div>}
         {showInput && (
           <InputBar

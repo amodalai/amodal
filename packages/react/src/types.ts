@@ -185,6 +185,46 @@ export interface SSEStartOAuthEvent {
   timestamp: string;
 }
 
+/**
+ * One slot label + description shown on the Proposal card. Skill /
+ * connection display names only — the proposal tool never quotes
+ * raw npm package names.
+ */
+export interface ProposalEntry {
+  label: string;
+  description: string;
+}
+
+/**
+ * Plan proposal card emitted on Path B (custom description). The user
+ * sees the inferred set of skills + connections with `Looks right →`
+ * and `Adjust` buttons. Mirrored from @amodalai/types.
+ */
+export interface SSEProposalEvent {
+  type: 'proposal';
+  proposal_id: string;
+  summary: string;
+  skills: ProposalEntry[];
+  required_connections: ProposalEntry[];
+  optional_connections: ProposalEntry[];
+  timestamp: string;
+}
+
+/**
+ * Patch event for an in-flight proposal. Matched by `proposal_id`
+ * to mutate the existing card in place. Each field is optional;
+ * unspecified fields preserve the current card's values.
+ */
+export interface SSEUpdatePlanEvent {
+  type: 'update_plan';
+  proposal_id: string;
+  summary?: string;
+  skills?: ProposalEntry[];
+  required_connections?: ProposalEntry[];
+  optional_connections?: ProposalEntry[];
+  timestamp: string;
+}
+
 /** Mirrored from @amodalai/types AgentCard — see card-types.ts. */
 export interface AgentCardInline {
   title: string;
@@ -278,6 +318,8 @@ export type SSEEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
   | SSEStartOAuthEvent
+  | SSEProposalEvent
+  | SSEUpdatePlanEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent
@@ -399,6 +441,27 @@ export interface StartOAuthBlock {
   skippable?: boolean;
 }
 
+/**
+ * Plan proposal card surfaced by the `propose_plan` tool (Phase D —
+ * Path B custom-description flow). Mutated in place by subsequent
+ * `update_plan` events keyed off `proposalId`, never duplicated.
+ *
+ * `status` mirrors AskUserBlock — once the user clicks Looks right
+ * or Adjust, we lock the buttons and show the chosen action as a
+ * summary so the conversation history reads cleanly.
+ */
+export interface ProposalBlock {
+  type: 'proposal';
+  proposalId: string;
+  summary: string;
+  skills: ProposalEntry[];
+  requiredConnections: ProposalEntry[];
+  optionalConnections: ProposalEntry[];
+  status: AskUserStatus;
+  /** 'confirm' or 'adjust', set once the user clicks. */
+  answer?: 'confirm' | 'adjust';
+}
+
 export interface UserMessage {
   type: 'user';
   id: string;
@@ -440,7 +503,8 @@ export type ContentBlock =
   | AskUserBlock
   | AskChoiceBlock
   | ShowPreviewBlock
-  | StartOAuthBlock;
+  | StartOAuthBlock
+  | ProposalBlock;
 
 // ---------------------------------------------------------------------------
 // Widget configuration
@@ -538,6 +602,23 @@ export type ChatAction =
   | { type: 'ASK_CHOICE_SUBMITTED'; askId: string; values: string[] }
   | { type: 'STREAM_SHOW_PREVIEW'; card: AgentCardInline }
   | { type: 'STREAM_START_OAUTH'; packageName: string; displayName?: string; description?: string; skippable?: boolean }
+  | {
+      type: 'STREAM_PROPOSAL';
+      proposalId: string;
+      summary: string;
+      skills: ProposalEntry[];
+      requiredConnections: ProposalEntry[];
+      optionalConnections: ProposalEntry[];
+    }
+  | {
+      type: 'STREAM_UPDATE_PLAN';
+      proposalId: string;
+      summary?: string;
+      skills?: ProposalEntry[];
+      requiredConnections?: ProposalEntry[];
+      optionalConnections?: ProposalEntry[];
+    }
+  | { type: 'PROPOSAL_SUBMITTED'; proposalId: string; answer: 'confirm' | 'adjust' }
   | { type: 'STREAM_CONFIRMATION_REQUIRED'; confirmation: ConfirmationInfo }
   | { type: 'CONFIRMATION_RESPONDED'; correlationId: string; approved: boolean }
   | { type: 'STREAM_ERROR'; message: string }

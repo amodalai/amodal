@@ -84,6 +84,8 @@ export interface UseChatReturn {
   /** Submit answers to a pending ask_user prompt. */
   submitAskUserResponse: (askId: string, answers: Record<string, string>) => void;
   submitAskChoiceResponse: (askId: string, values: string[], message: string) => void;
+  /** Submit a Path-B Proposal card click (Looks right or Adjust). */
+  submitProposalResponse: (proposalId: string, answer: 'confirm' | 'adjust', message: string) => void;
   /** Respond to a confirmation request (approve or deny). */
   respondToConfirmation: (correlationId: string, approved: boolean) => void;
   /** Load a historical session for read-only viewing. */
@@ -292,6 +294,24 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     [],
   );
 
+  // ---------------------------------------------------------------------
+  // submitProposalResponse — for the Path B Proposal card. Same model
+  // as submitAskChoiceResponse: clicking Looks right or Adjust posts
+  // the corresponding text as the next user turn, no server round-trip.
+  // The reducer locks the buttons via PROPOSAL_SUBMITTED so the click
+  // can't double-fire; subsequent update_plan events from the agent
+  // re-open them when the agent revises the card.
+  // ---------------------------------------------------------------------
+
+  const submitProposalResponse = useCallback(
+    (proposalId: string, answer: 'confirm' | 'adjust', message: string): void => {
+      stream.dispatch({ type: 'PROPOSAL_SUBMITTED', proposalId, answer });
+      stream.send(message);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   return {
     messages: stream.messages,
     send: stream.send,
@@ -304,6 +324,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     eventBus: stream.eventBus,
     submitAskUserResponse,
     submitAskChoiceResponse,
+    submitProposalResponse,
     respondToConfirmation: stream.respondToConfirmation,
     loadSession,
     isHistorical: stream.isHistorical,

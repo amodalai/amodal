@@ -2602,6 +2602,86 @@
   font-style: italic;
 }
 
+/* Proposal card emitted by the propose_plan tool (Phase D — Path B custom flow) */
+.pcw-proposal {
+  border: 1px solid var(--pcw-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 6px 0;
+  background: var(--pcw-bg);
+}
+.pcw-proposal--submitted {
+  background: var(--pcw-tool-call-bg);
+}
+.pcw-proposal__summary {
+  font-size: 13px;
+  color: var(--pcw-text);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+.pcw-proposal__section {
+  margin-top: 10px;
+}
+.pcw-proposal__section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pcw-muted);
+  margin-bottom: 4px;
+}
+.pcw-proposal__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pcw-proposal__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+.pcw-proposal__row-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pcw-text);
+}
+.pcw-proposal__row-desc {
+  font-size: 12px;
+  color: var(--pcw-muted);
+  line-height: 1.35;
+}
+.pcw-proposal__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pcw-proposal__btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pcw-proposal__btn--primary {
+  background: var(--pcw-primary);
+  color: white;
+  border: 1px solid var(--pcw-primary);
+}
+.pcw-proposal__btn--secondary {
+  background: var(--pcw-bg);
+  color: var(--pcw-text);
+  border: 1px solid var(--pcw-border);
+}
+.pcw-proposal__btn--secondary:hover {
+  border-color: var(--pcw-primary);
+}
+.pcw-proposal__answer {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--pcw-muted);
+  font-style: italic;
+}
+
 /* Inline agent-card preview emitted by the show_preview tool */
 .pcw-agent-card {
   border: 1px solid var(--pcw-border);

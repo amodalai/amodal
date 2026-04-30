@@ -323,6 +323,66 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
+    case 'STREAM_PROPOSAL': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'proposal',
+          proposalId: action.proposalId,
+          summary: action.summary,
+          skills: action.skills,
+          requiredConnections: action.requiredConnections,
+          optionalConnections: action.optionalConnections,
+          status: 'pending',
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_UPDATE_PLAN': {
+      // Mutate the existing ProposalBlock in place (matched by
+      // proposalId) so the chat doesn't accumulate duplicate
+      // proposals as the user iterates. Walk every assistant turn
+      // looking for the original card — the proposal may have been
+      // emitted multiple turns back during a long Adjust thread.
+      const msgs = state.messages.map((msg) => {
+        if (msg.type !== 'assistant_text') return msg;
+        let touched = false;
+        const blocks = msg.contentBlocks.map((block) => {
+          if (block.type !== 'proposal' || block.proposalId !== action.proposalId) return block;
+          touched = true;
+          return {
+            ...block,
+            ...(action.summary !== undefined ? {summary: action.summary} : {}),
+            ...(action.skills !== undefined ? {skills: action.skills} : {}),
+            ...(action.requiredConnections !== undefined ? {requiredConnections: action.requiredConnections} : {}),
+            ...(action.optionalConnections !== undefined ? {optionalConnections: action.optionalConnections} : {}),
+            // Re-open the buttons after an update so the user can
+            // re-confirm against the patched card.
+            status: 'pending' as const,
+          };
+        });
+        return touched ? {...msg, contentBlocks: blocks} : msg;
+      });
+      return {...state, messages: msgs};
+    }
+    case 'PROPOSAL_SUBMITTED': {
+      const msgs = state.messages.map((msg) => {
+        if (msg.type !== 'assistant_text') return msg;
+        let touched = false;
+        const blocks = msg.contentBlocks.map((block) => {
+          if (block.type !== 'proposal' || block.proposalId !== action.proposalId) return block;
+          touched = true;
+          return {...block, status: 'submitted' as const, answer: action.answer};
+        });
+        return touched ? {...msg, contentBlocks: blocks} : msg;
+      });
+      return {...state, messages: msgs};
+    }
     case 'STREAM_CONFIRMATION_REQUIRED': {
       const msgs = [...state.messages];
       const last = msgs[msgs.length - 1];
@@ -784,6 +844,30 @@ function processEvent(
         ...(event.display_name ? {displayName: event.display_name} : {}),
         ...(event.description ? {description: event.description} : {}),
         ...(event.skippable ? {skippable: true} : {}),
+      });
+      return;
+    case 'proposal':
+      dispatch({
+        type: 'STREAM_PROPOSAL',
+        proposalId: event.proposal_id,
+        summary: event.summary,
+        skills: event.skills,
+        requiredConnections: event.required_connections,
+        optionalConnections: event.optional_connections,
+      });
+      return;
+    case 'update_plan':
+      dispatch({
+        type: 'STREAM_UPDATE_PLAN',
+        proposalId: event.proposal_id,
+        ...(event.summary !== undefined ? {summary: event.summary} : {}),
+        ...(event.skills !== undefined ? {skills: event.skills} : {}),
+        ...(event.required_connections !== undefined
+          ? {requiredConnections: event.required_connections}
+          : {}),
+        ...(event.optional_connections !== undefined
+          ? {optionalConnections: event.optional_connections}
+          : {}),
       });
       return;
     case 'credential_saved':
