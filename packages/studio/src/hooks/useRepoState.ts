@@ -20,14 +20,32 @@ export interface UseRepoStateResult {
   error: string | null;
 }
 
+export interface UseRepoStateOptions {
+  /**
+   * Poll the probe on a 2-second loop instead of once on mount.
+   * Phase E.7 uses this on `CreateFlowPage`'s chat mode so the page
+   * notices when commit_setup writes amodal.json (regardless of who
+   * triggered it — agent or "Finish setup" button) and transitions
+   * the user from chat to OverviewPage in-place.
+   *
+   * Polling stops automatically once `hasAmodalJson` flips to true —
+   * once the file lands the answer doesn't change.
+   */
+  polling?: boolean;
+}
+
 const PROBE_TIMEOUT_MS = 3_000;
+const POLL_INTERVAL_MS = 2_000;
 
 /**
- * Polls Studio's `/api/repo-state` once on mount. Lives on the Studio
- * server (not the runtime) because the runtime can't even start when
+ * Polls Studio's `/api/repo-state`. By default fires once on mount;
+ * passing `{polling: true}` re-probes every 2 seconds until
+ * `hasAmodalJson` flips to true. Lives on the Studio server (not
+ * the runtime) because the runtime can't even start when
  * `amodal.json` is missing.
  */
-export function useRepoState(): UseRepoStateResult {
+export function useRepoState(options?: UseRepoStateOptions): UseRepoStateResult {
+  const polling = options?.polling === true;
   const [state, setState] = useState<UseRepoStateResult>({
     hasAmodalJson: true,
     loading: true,
@@ -36,8 +54,9 @@ export function useRepoState(): UseRepoStateResult {
 
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    void (async () => {
+    async function probe(): Promise<void> {
       try {
         const res = await fetch('/api/repo-state', {
           signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
@@ -47,32 +66,42 @@ export function useRepoState(): UseRepoStateResult {
         }
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
         const data = (await res.json()) as RepoStateResponse;
-        if (!cancelled) {
-          setState({
-            hasAmodalJson: data.hasAmodalJson,
-            loading: false,
-            error: null,
-          });
+        if (cancelled) return;
+        setState({
+          hasAmodalJson: data.hasAmodalJson,
+          loading: false,
+          error: null,
+        });
+        // Re-arm the loop unless the file landed (in which case the
+        // answer is stable forever) or we've been cancelled.
+        if (polling && !data.hasAmodalJson) {
+          timer = setTimeout(() => {
+            if (!cancelled) void probe();
+          }, POLL_INTERVAL_MS);
         }
       } catch (err) {
-        if (!cancelled) {
-          setState({
-            // Default to "configured" on error — better to show the workspace
-            // home and let downstream pages handle offline state than to
-            // strand a configured user in the create flow.
-            hasAmodalJson: true,
-            loading: false,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- error normalization at module boundary
-            error: (err as Error).message ?? 'Failed to probe repo state',
-          });
-        }
+        if (cancelled) return;
+        setState({
+          // Default to "configured" on error — better to show the workspace
+          // home and let downstream pages handle offline state than to
+          // strand a configured user in the create flow.
+          hasAmodalJson: true,
+          loading: false,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- error normalization at module boundary
+          error: (err as Error).message ?? 'Failed to probe repo state',
+        });
+        // Don't keep polling forever on transient errors — bail to
+        // the "configured" default and let the user retry by reloading.
       }
-    })();
+    }
+
+    void probe();
 
     return () => {
       cancelled = true;
+      if (timer !== null) clearTimeout(timer);
     };
-  }, []);
+  }, [polling]);
 
   return state;
 }

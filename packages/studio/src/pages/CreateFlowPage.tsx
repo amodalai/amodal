@@ -214,9 +214,9 @@ function SkipOnboardingButton() {
         const body = (await res.json().catch(() => ({}))) as { message?: string };
         throw new Error(body.message ?? `init-repo returned ${String(res.status)}`);
       }
-      // useRepoState reads /api/repo-state on mount; reload swaps the page
-      // for the workspace home now that amodal.json exists.
-      window.location.reload();
+      // IndexPage's useRepoState({polling: true}) (Phase E.7) detects
+      // the new amodal.json and swaps to OverviewPage in-place within
+      // ~2s — no reload needed.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to skip onboarding');
       setBusy(false);
