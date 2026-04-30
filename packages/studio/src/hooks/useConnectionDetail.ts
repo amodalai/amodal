@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 import type { EnvVarStatus } from './useGettingStarted';
 
 export interface ConnectionOauthDetail {
@@ -41,7 +41,6 @@ export interface ConnectionDetailResult {
  * per-connection configure page.
  */
 export function useConnectionDetail(packageName: string): ConnectionDetailResult {
-  const { runtimeUrl } = useStudioConfig();
   const [data, setData] = useState<ConnectionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -50,7 +49,7 @@ export function useConnectionDetail(packageName: string): ConnectionDetailResult
     setData(null);
     setError(null);
     if (!packageName) return;
-    fetch(`${runtimeUrl}/api/connections/${encodeURIComponent(packageName)}`, {
+    fetch(runtimeApiUrl(`/api/connections/${encodeURIComponent(packageName)}`), {
       signal: AbortSignal.timeout(5_000),
     })
       .then((r) => {
@@ -62,12 +61,12 @@ export function useConnectionDetail(packageName: string): ConnectionDetailResult
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err));
       });
-  }, [runtimeUrl, packageName, tick]);
+  }, [packageName, tick]);
 
   const refetch = useCallback(() => setTick((t) => t + 1), []);
   const saveSecret = useCallback(
     async (name: string, value: string): Promise<void> => {
-      const r = await fetch(`${runtimeUrl}/api/secrets/${encodeURIComponent(name)}`, {
+      const r = await fetch(runtimeApiUrl(`/api/secrets/${encodeURIComponent(name)}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value }),
@@ -79,7 +78,7 @@ export function useConnectionDetail(packageName: string): ConnectionDetailResult
       }
       setTick((t) => t + 1);
     },
-    [runtimeUrl],
+    [],
   );
 
   return {

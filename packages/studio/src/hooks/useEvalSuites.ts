@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 import { parseEvalMarkdown } from '../lib/eval-parser';
 import type { ParsedEval } from '../lib/eval-parser';
 
@@ -38,14 +39,14 @@ export function useEvalSuites(): {
   loading: boolean;
   refresh: () => void;
 } {
-  const { runtimeUrl, agentId } = useStudioConfig();
+  const { agentId } = useStudioConfig();
   const [suites, setSuites] = useState<EvalSuiteFromRuntime[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchSuites = useCallback(() => {
     setLoading(true);
 
-    fetch(`${runtimeUrl}/api/files`, { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl('/api/files'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing runtime JSON
@@ -72,7 +73,7 @@ export function useEvalSuites(): {
         // Fetch each eval file's content in parallel
         return Promise.all(
           mdFiles.map((file) =>
-            fetch(`${runtimeUrl}/api/files/${encodeURIComponent(file.path)}`, {
+            fetch(runtimeApiUrl(`/api/files/${encodeURIComponent(file.path)}`), {
               signal: AbortSignal.timeout(5_000),
             })
               .then((r) => {
@@ -98,7 +99,7 @@ export function useEvalSuites(): {
         setSuites([]);
         setLoading(false);
       });
-  }, [runtimeUrl, agentId]);
+  }, [agentId]);
 
   useEffect(() => {
     fetchSuites();

@@ -7,7 +7,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AgentOffline } from '@/components/AgentOffline';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 import {
   useGettingStarted,
   type GettingStartedPackage,
@@ -156,7 +156,6 @@ function FlatPackageList({ packages }: { packages: GettingStartedPackage[] }) {
 // ---------------------------------------------------------------------------
 
 function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
-  const { runtimeUrl } = useStudioConfig();
   const [connecting, setConnecting] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
 
@@ -165,7 +164,7 @@ function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
     setConnecting(true);
     setOauthError(null);
     try {
-      const r = await fetch(`${runtimeUrl}/api/oauth/start?package=${encodeURIComponent(pkg.name)}`, {signal: AbortSignal.timeout(5_000)});
+      const r = await fetch(runtimeApiUrl(`/api/oauth/start?package=${encodeURIComponent(pkg.name)}`), {signal: AbortSignal.timeout(5_000)});
       if (!r.ok) {
         const text = await r.text().catch(() => '');
         throw new Error(`Runtime returned ${String(r.status)}${text ? ` — ${text}` : ''}`);

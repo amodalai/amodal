@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,11 +50,10 @@ function extractChildNames(tree: FileTreeEntry[], dirName: string): string[] {
 // ---------------------------------------------------------------------------
 
 export function useAgentInventory(): AgentInventory {
-  const { runtimeUrl } = useStudioConfig();
   const [inventory, setInventory] = useState<Omit<AgentInventory, 'loading'> | null>(null);
 
   useEffect(() => {
-    fetch(`${runtimeUrl}/api/files`, { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl('/api/files'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
@@ -83,7 +82,7 @@ export function useAgentInventory(): AgentInventory {
           pages: [],
         });
       });
-  }, [runtimeUrl]);
+  }, []);
 
   if (!inventory) {
     return {
