@@ -54,9 +54,9 @@ export async function handleThinking(
   // 1. Increment turn counter
   ctx.turnCount++;
 
-  // 2. Loop detection — check before spending tokens on an LLM call
+  // 2. Loop detection — check before spending tokens on an LLM call (0 = disabled)
   const loop = detectLoop(state.messages);
-  if (loop && loop.count >= ctx.config.maxLoopIterations) {
+  if (loop && ctx.config.maxLoopIterations > 0 && loop.count >= ctx.config.maxLoopIterations) {
     ctx.logger.warn('agent_loop_detected', {
       session: ctx.sessionId,
       tool: loop.toolName,
@@ -86,7 +86,7 @@ export async function handleThinking(
     if (ctx.turnCount >= untilTurn) ctx.disabledToolsUntilTurn.delete(name);
   }
 
-  if (loop && loop.count >= ctx.config.loopEscalationThreshold) {
+  if (loop && ctx.config.loopEscalationThreshold > 0 && loop.count >= ctx.config.loopEscalationThreshold) {
     // Escalation tier: strongly nudge the model AND disable the looping
     // tool for a cooldown window. Without the cooldown, the agent could
     // immediately re-call the tool next turn, drop the loop count below
@@ -106,7 +106,7 @@ export async function handleThinking(
       content: `[System Notice — Escalation] You have called ${loop.toolName} ${loop.count} times with similar parameters and are not making progress. The ${loop.toolName} tool has been temporarily disabled for the next ${cooldown} turns — use a different tool or ask the user for help.`,
     };
     messages = [...messages, escalationMessage];
-  } else if (loop && loop.count >= ctx.config.loopWarningThreshold) {
+  } else if (loop && ctx.config.loopWarningThreshold > 0 && loop.count >= ctx.config.loopWarningThreshold) {
     ctx.logger.info('agent_loop_warning', {
       session: ctx.sessionId,
       tool: loop.toolName,
