@@ -1,5 +1,12 @@
 # @amodalai/core
 
+## 0.3.46
+
+### Patch Changes
+
+- 4be518d: Silent 404 session resume, imperative sendMessage API, simplified loop detection (maxToolRepeats), onboarding flow, Studio BASE_PATH asset fixes
+  - @amodalai/types@0.3.46
+
 ## 0.3.45
 
 ### Patch Changes
