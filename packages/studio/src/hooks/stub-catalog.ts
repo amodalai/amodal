@@ -80,6 +80,50 @@ export const STUB_CATALOG_AGENTS: readonly CatalogAgent[] = [
         choices: ['Google Analytics', 'Adobe Analytics', 'Plausible', 'Other'],
       },
     },
+    templateJson: {
+      name: 'marketing-operations-hub',
+      description:
+        "Posts a metrics summary to Slack every Monday. Connects to your analytics, social platforms, and ad accounts and highlights what's working, what's not, and what needs attention.",
+      connections: [
+        {
+          label: 'Web analytics',
+          description: 'Page-view, conversion, and acquisition data.',
+          options: ['@amodalai/connection-ga4', '@amodalai/connection-mixpanel'],
+          required: true,
+        },
+        {
+          label: 'Slack',
+          description: 'Where the digest gets posted.',
+          options: ['@amodalai/connection-slack'],
+          required: true,
+        },
+        {
+          label: 'Paid ads',
+          description: 'Ad-platform spend, performance, and campaign management.',
+          options: [
+            '@amodalai/connection-google-ads',
+            '@amodalai/connection-meta-ads',
+            '@amodalai/connection-linkedin-ads',
+          ],
+          required: false,
+          multi: true,
+        },
+        {
+          label: 'CRM',
+          description: 'Pipeline data — leads, deals, opportunities.',
+          options: ['@amodalai/connection-hubspot', '@amodalai/connection-salesforce'],
+          required: false,
+        },
+      ],
+      setup: {
+        scheduleReasoning: 'gives your team the numbers before standup',
+        completionSuggestions: [
+          'add competitor tracking',
+          'change to Friday',
+          'include HubSpot data',
+        ],
+      },
+    },
   },
 
   {

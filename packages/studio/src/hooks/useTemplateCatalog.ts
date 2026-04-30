@@ -60,6 +60,53 @@ export interface CatalogAgentDetail {
   setup: { q: string; choices: string[] };
 }
 
+/**
+ * One slot inside a synthetic `template.json#connections[]` block.
+ * Mirrors what `composePlan` (`@amodalai/core/cards/setup-plan.ts`)
+ * reads from a real template's `template.json` — Phase C.6 stub
+ * catalog parity. Populating this on each stub keeps the picker
+ * preview consistent with what `composePlan` would emit for the
+ * matching real template.
+ */
+export interface StubTemplateConnectionSlot {
+  /** User-visible slot label (e.g. "CRM", "Web analytics"). */
+  label: string;
+  /** Why-copy the agent reads verbatim. */
+  description: string;
+  /** npm packages the user can choose between for this slot. */
+  options: string[];
+  /** True when the slot must be filled before completion. */
+  required: boolean;
+  /** True when the user can connect more than one option. */
+  multi?: boolean;
+}
+
+/**
+ * Optional polish block matching the real `template.json#setup`
+ * shape. Lets stubs ship author voice (schedule reasoning,
+ * completion suggestions) without a registry round-trip.
+ */
+export interface StubTemplateSetupPolish {
+  scheduleReasoning?: string;
+  completionSuggestions?: string[];
+  dataPointTemplates?: Record<string, string>;
+}
+
+/**
+ * Synthetic `template.json` shape attached to a stub agent. Mirrors
+ * the file a real template ships at its repo root (with the same
+ * top-level `name` / `description` / `connections[]` / `setup` keys).
+ * Future picker iterations will consume this instead of (or alongside)
+ * the existing `detail` field; both are present today so the migration
+ * can land incrementally.
+ */
+export interface StubTemplateJson {
+  name: string;
+  description: string;
+  connections: StubTemplateConnectionSlot[];
+  setup?: StubTemplateSetupPolish;
+}
+
 /** A marketplace template enriched with its rendered card. Cardless templates are dropped. */
 export interface CatalogAgent {
   slug: string;
@@ -79,6 +126,13 @@ export interface CatalogAgent {
   card: AgentCard;
   /** Optional rich detail (description, connections, skills, first setup question). */
   detail?: CatalogAgentDetail;
+  /**
+   * Optional synthetic `template.json` shape — Phase C.6. Mirrors what
+   * `composePlan` reads from a real template's repo root. The picker
+   * uses this (when present) to render a preview consistent with the
+   * deterministic Plan the admin agent will compose during onboarding.
+   */
+  templateJson?: StubTemplateJson;
 }
 
 export interface UseTemplateCatalogResult {
