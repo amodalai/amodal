@@ -135,8 +135,8 @@ function FlatPackageList({ packages }: { packages: GettingStartedPackage[] }) {
   if (packages.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        This agent doesn&apos;t have any connection packages installed yet.
-        Add packages to <code className="font-mono">amodal.json</code> to see them here.
+        This agent doesn&apos;t have any connections configured yet.
+        Add a <code className="font-mono">connections/</code> directory or install packages via <code className="font-mono">amodal.json</code>.
       </p>
     );
   }

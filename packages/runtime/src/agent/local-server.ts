@@ -881,7 +881,28 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
       for (const conn of bundleData.connections.values()) {
         const pkgDir = findPackageRoot(conn.location);
-        if (!pkgDir) continue;
+
+        if (!pkgDir) {
+          // Directory-based connection (connections/<name>/ in the repo).
+          // Derive env var info from spec.json auth and baseUrl fields.
+          if (packageMap.has(conn.name)) continue;
+          const envVars: EnvVarStatus[] = [];
+          const addEnvRef = (value: string | undefined, description: string) => {
+            if (value?.startsWith('env:')) {
+              const envName = value.slice(4);
+              envVars.push({ name: envName, description, set: !!process.env[envName] });
+            }
+          };
+          addEnvRef(conn.spec.baseUrl, 'Base URL');
+          addEnvRef(conn.spec.auth?.token, 'Auth token');
+          packageMap.set(conn.name, {
+            name: conn.name,
+            displayName: conn.name,
+            envVars,
+          });
+          continue;
+        }
+
         const pkgJsonPath = path.join(pkgDir, 'package.json');
         if (!existsSync(pkgJsonPath)) continue;
         try {
