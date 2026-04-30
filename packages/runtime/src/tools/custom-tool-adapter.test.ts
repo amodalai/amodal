@@ -302,4 +302,70 @@ describe('createCustomToolDefinition', () => {
       expect(envResult).toBeUndefined();
     });
   });
+
+  describe('SDK fields (Phase A)', () => {
+    interface SdkFields {
+      fs?: { readRepoFile: (p: string) => Promise<string> };
+      agentId?: string;
+      scopeId?: string;
+      sessionId?: string;
+      emit?: (event: { type: string }) => void;
+    }
+
+    it('populates ctx.fs / ctx.agentId / ctx.scopeId / ctx.sessionId from session ctx + runtime ctx', async () => {
+      let captured: SdkFields | undefined;
+      const executor: CustomToolExecutor = {
+        execute: vi.fn().mockImplementation(async (_tool, _params, ctx) => {
+          captured = ctx as unknown as SdkFields;
+          return { ok: true };
+        }),
+      };
+
+      const fakeFs = {
+        readRepoFile: vi.fn().mockResolvedValue('content'),
+        writeRepoFile: vi.fn(),
+        readManyRepoFiles: vi.fn(),
+        listRepoFiles: vi.fn(),
+        deleteRepoFile: vi.fn(),
+      };
+
+      const def = createCustomToolDefinition(
+        makeTool(),
+        executor,
+        makeSessionCtx({ fs: fakeFs, agentId: 'agent_1', repoRoot: '/tmp/repo' }),
+      );
+      await def.execute({}, makeToolContext({ scopeId: 'scope_a', sessionId: 'sess_42' }));
+
+      expect(captured?.fs).toBe(fakeFs);
+      expect(captured?.agentId).toBe('agent_1');
+      expect(captured?.scopeId).toBe('scope_a');
+      expect(captured?.sessionId).toBe('sess_42');
+    });
+
+    it('omits ctx.fs when no fs backend is on the session ctx', async () => {
+      let captured: SdkFields | undefined;
+      const executor: CustomToolExecutor = {
+        execute: vi.fn().mockImplementation(async (_tool, _params, ctx) => {
+          captured = ctx as unknown as SdkFields;
+          return { ok: true };
+        }),
+      };
+      const def = createCustomToolDefinition(makeTool(), executor, makeSessionCtx());
+      await def.execute({}, makeToolContext());
+      expect(captured?.fs).toBeUndefined();
+    });
+
+    it('forwards ctx.emit through to the runtime ctx', async () => {
+      const runtimeEmit = vi.fn();
+      const executor: CustomToolExecutor = {
+        execute: vi.fn().mockImplementation(async (_tool, _params, ctx) => {
+          (ctx as unknown as SdkFields).emit?.({ type: 'show_preview' });
+          return { ok: true };
+        }),
+      };
+      const def = createCustomToolDefinition(makeTool(), executor, makeSessionCtx());
+      await def.execute({}, makeToolContext({ emit: runtimeEmit as unknown as ToolContext['emit'] }));
+      expect(runtimeEmit).toHaveBeenCalledWith(expect.objectContaining({ type: 'show_preview' }));
+    });
+  });
 });

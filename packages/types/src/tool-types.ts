@@ -9,6 +9,7 @@ import type {
   SSEShowPreviewEvent,
   SSEStartOAuthEvent,
 } from './sse-types.js';
+import type {FsBackend} from './fs.js';
 
 /**
  * Inline SSE events a custom tool handler may emit through `ctx.emit`.
@@ -67,6 +68,20 @@ export interface LoadedTool {
 
 /**
  * Context provided to custom tool handlers at execution time.
+ *
+ * The base surface (`request`, `exec`, `store`, `env`, `log`, `signal`)
+ * is the legacy one custom tools have always received. The optional
+ * fields below are populated by the runtime adapter for handlers that
+ * opt into the richer SDK shape — they let a handler emit inline UI
+ * (`emit`), read repo files through the sandboxed backend (`fs`), and
+ * scope work to the active agent / scope / session (`agentId`,
+ * `scopeId`, `sessionId`). Older handlers that don't reach for them
+ * keep working unchanged.
+ *
+ * Phase 0 added `emit?`. Phase A adds `fs?` and the identity fields so
+ * the validate_connection tool can read a connection package's
+ * `validate.ts` through the sandbox. Subsequent phases will extend
+ * with `db?` and `fetch?` when their consumers land.
  */
 export interface CustomToolContext {
   request(connection: string, endpoint: string, params?: {
@@ -89,6 +104,19 @@ export interface CustomToolContext {
    * `show_preview` cards). Optional — most tools never call it.
    */
   emit?(event: CustomToolInlineEvent): void;
+  /**
+   * Repo file access, sandboxed to the agent's repo root. Absolute
+   * paths and `..` traversal are rejected. Used by handlers that read
+   * config or per-package metadata (e.g. `validate_connection` reading
+   * a connection package's probe file).
+   */
+  fs?: FsBackend;
+  /** Stable id of the agent the tool is running on behalf of. */
+  agentId?: string;
+  /** Per-user scope key. Empty string = agent-level (no scope). */
+  scopeId?: string;
+  /** Session id for log correlation and ask-id derivation. */
+  sessionId?: string;
 }
 
 /**

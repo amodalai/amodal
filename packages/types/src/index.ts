@@ -191,6 +191,22 @@ export type {
   UpdatePlanBlock,
 } from './blocks.js';
 
+// Filesystem backend contract (implementations live in @amodalai/runtime)
+export type {
+  FsBackend,
+  RepoFileEntry,
+  RepoDirListing,
+  RepoMode,
+} from './fs.js';
+
+// Connection-validation probes (Phase A)
+export type {
+  ProbeResult,
+  ProbeFailureReason,
+  ValidationResult,
+  ValidationFormat,
+} from './validation.js';
+
 // Snapshot types
 export type {
   SnapshotConnection,

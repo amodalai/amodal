@@ -17,7 +17,7 @@
  */
 
 import {jsonSchema} from 'ai';
-import type {LoadedTool, CustomToolExecutor, CustomToolContext} from '@amodalai/types';
+import type {FsBackend, LoadedTool, CustomToolExecutor, CustomToolContext} from '@amodalai/types';
 
 import {ToolExecutionError} from '../errors.js';
 import {log} from '../logger.js';
@@ -41,6 +41,18 @@ export interface CustomToolSessionContext {
   shellExecutor?: {
     exec(command: string, options?: {cwd?: string; timeout?: number}): Promise<{stdout: string; stderr: string; exitCode: number}>;
   };
+  /**
+   * Sandboxed fs backend the runtime exposes to handlers via `ctx.fs`.
+   * Phase A's `validate_connection` is the first heavy consumer (reads
+   * `node_modules/<pkg>/validate.ts` for connection probes); future
+   * tools follow the same pattern. Undefined when no `repoRoot` is
+   * resolvable for the session.
+   */
+  fs?: FsBackend;
+  /** Repo root the fs backend is sandboxed against, for path computations. */
+  repoRoot?: string;
+  /** Stable id of the agent the tool is running on behalf of. */
+  agentId?: string;
 }
 
 function buildCustomToolContext(
@@ -194,6 +206,14 @@ function buildCustomToolContext(
     },
 
     signal: combinedSignal,
+
+    // Phase A: optional SDK fields populated when the runtime knows them.
+    // Handlers that don't reach for these (i.e. legacy custom tools) keep
+    // working unchanged because every field below is optional.
+    ...(sessionCtx.fs ? {fs: sessionCtx.fs} : {}),
+    ...(sessionCtx.agentId ? {agentId: sessionCtx.agentId} : {}),
+    scopeId: runtimeCtx.scopeId,
+    sessionId: runtimeCtx.sessionId,
   };
 }
 

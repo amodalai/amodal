@@ -35,6 +35,7 @@ import {registerStoreTools} from '../tools/store-tools.js';
 import {createRequestTool, REQUEST_TOOL_NAME} from '../tools/request-tool.js';
 import {createCustomToolDefinition} from '../tools/custom-tool-adapter.js';
 import type {CustomToolSessionContext} from '../tools/custom-tool-adapter.js';
+import {LocalFsBackend} from '../tools/fs/local.js';
 import {registerMcpTools} from '../tools/mcp-tool-adapter.js';
 import {
   AccessJsonPermissionChecker,
@@ -229,6 +230,7 @@ function buildCustomToolSessionContext(
   connectionsMap: import('../tools/request-tool.js').ConnectionsMap,
   storeBackend: StoreBackend | null,
   appId: string,
+  repoRoot: string | null | undefined,
 ): CustomToolSessionContext {
   // Adapt StoreBackend.put (returns StorePutResult) to CustomToolSessionContext.storeBackend.put (returns void)
   const adaptedBackend = storeBackend
@@ -238,6 +240,11 @@ function buildCustomToolSessionContext(
         },
       }
     : undefined;
+
+  // Phase A: expose ctx.fs to handlers when we know the repo root.
+  // Defaults to LocalFsBackend; the cloud backend will plug in here in
+  // Phase 0G via the same factory selection used for the SDK ToolContext.
+  const fs = repoRoot ? new LocalFsBackend({repoRoot}) : undefined;
 
   return {
     config: {
@@ -255,6 +262,9 @@ function buildCustomToolSessionContext(
     },
     storeBackend: adaptedBackend,
     appId,
+    repoRoot: repoRoot ?? undefined,
+    fs,
+    agentId: bundle.config.name,
   };
 }
 
@@ -376,8 +386,19 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // 5. Register custom tools
   // -------------------------------------------------------------------------
 
+  // repoRoot is needed both for custom tools (so handlers can read repo
+  // files via ctx.fs, Phase A) and the file-tools / admin-tools registration
+  // further down. Compute it once here.
+  const repoRoot = process.env['REPO_PATH'] ?? bundle.origin;
+
   if (toolExecutor) {
-    const customToolSessionCtx = buildCustomToolSessionContext(bundle, connectionsMap, scopedBackend, appId);
+    const customToolSessionCtx = buildCustomToolSessionContext(
+      bundle,
+      connectionsMap,
+      scopedBackend,
+      appId,
+      repoRoot,
+    );
     for (const tool of bundle.tools) {
       // Skip tools with confirm: 'never' — they exist but are not callable
       if (tool.confirm === 'never') continue;
@@ -472,7 +493,6 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
 
   const fileToolsConfig = bundle.config.fileTools;
   const fileToolsEnabled = fileToolsConfig === true || (typeof fileToolsConfig === 'object' && fileToolsConfig !== null);
-  const repoRoot = process.env['REPO_PATH'] ?? bundle.origin;
 
   if (fileToolsEnabled && repoRoot) {
     const customConfig = typeof fileToolsConfig === 'object' ? fileToolsConfig : {};
