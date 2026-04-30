@@ -53,7 +53,7 @@ import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-too
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
 import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import {registerFileTools, DEFAULT_ALLOWED_DIRS, DEFAULT_BLOCKED_FILES} from '../tools/file-tools.js';
-import {registerOnboardingTools} from '../tools/onboarding-tools.js';
+import {registerCollectSecretTool} from '../tools/collect-secret-tool.js';
 import type {Logger} from '../logger.js';
 import type {CredentialResolver} from '../credentials.js';
 
@@ -480,17 +480,12 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   }
 
   // -------------------------------------------------------------------------
-  // 10b. Onboarding tools (admin sessions only)
+  // 10b. Admin agent tools
   // -------------------------------------------------------------------------
 
-  // Register onboarding tools when running as the admin agent subprocess.
-  // AMODAL_NO_ADMIN=1 means this IS the admin agent (it doesn't spawn
-  // another admin). REPO_PATH points to the user's project directory.
   const isAdminAgent = process.env['AMODAL_NO_ADMIN'] === '1';
-  const userRepoPath = process.env['REPO_PATH'];
-  if (isAdminAgent && userRepoPath) {
-    registerOnboardingTools(registry, {repoRoot: userRepoPath, logger});
-    logger.debug('onboarding_tools_registered', {repoRoot: userRepoPath});
+  if (isAdminAgent) {
+    registerCollectSecretTool(registry);
   }
 
   // -------------------------------------------------------------------------
