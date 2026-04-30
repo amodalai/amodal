@@ -153,7 +153,37 @@ onboardingRoutes.post('/api/studio/onboarding/clone', async (c) => {
       }
     }
 
-    return c.json({ok: true, repo, credentials});
+    // Collect package display info
+    const packageInfo: Array<{name: string; displayName: string; description?: string}> = [];
+    for (const pkg of pkgList) {
+      try {
+        const pPath = path.join(repoPath, 'node_modules', pkg, 'package.json');
+        if (!existsSync(pPath)) continue;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing package.json
+        const pj = JSON.parse(readFileSync(pPath, 'utf-8')) as Record<string, unknown>;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- amodal block
+        const am = pj['amodal'] as Record<string, unknown> | undefined;
+        packageInfo.push({
+          name: pkg,
+          displayName: typeof am?.['displayName'] === 'string' ? am['displayName'] : typeof am?.['name'] === 'string' ? am['name'] : pkg,
+          description: typeof am?.['description'] === 'string' ? am['description'] : undefined,
+        });
+      } catch { /* skip */ }
+    }
+
+    // List local dirs
+    const listDir = (dir: string): string[] => {
+      const p = path.join(repoPath, dir);
+      return existsSync(p) ? readdirSync(p).filter((f) => !f.startsWith('.')) : [];
+    };
+
+    return c.json({
+      ok: true, repo, credentials,
+      packages: packageInfo,
+      skills: listDir('skills'),
+      knowledge: listDir('knowledge'),
+      automations: listDir('automations'),
+    });
   } catch (err: unknown) {
     if (existsSync(tmpDir)) rmSync(tmpDir, {recursive: true, force: true});
     const message = err instanceof Error ? err.message : String(err);

@@ -27,7 +27,7 @@ interface ConnectionCredential {
   status: 'pending' | 'saving' | 'connected' | 'skipped';
 }
 
-type WizardStep = 'gallery' | 'cloning' | 'credentials' | 'customize' | 'summary';
+type WizardStep = 'gallery' | 'cloning' | 'installed' | 'credentials' | 'customize' | 'summary';
 
 const TEMPLATES = [
   { repo: 'amodalai/template-content-marketing', branch: 'main' },
@@ -48,6 +48,7 @@ export function OnboardingWizard() {
   const [credValues, setCredValues] = useState<Record<string, string>>({});
   const [credErrors, setCredErrors] = useState<Record<string, string>>({});
   const [cloneError, setCloneError] = useState<string | null>(null);
+  const [installedInfo, setInstalledInfo] = useState<{packages: Array<{name: string; displayName: string; description?: string}>; skills: string[]; knowledge: string[]; automations: string[]} | null>(null);
   const [companyUrl, setCompanyUrl] = useState('');
   const [companyDesc, setCompanyDesc] = useState('');
   const [summaryData, setSummaryData] = useState<{name: string; connections: Array<{name: string; status: string}>; customizeContext?: string} | null>(null);
@@ -66,9 +67,10 @@ export function OnboardingWizard() {
     try { localStorage.removeItem('amodal-admin-chat-v2'); } catch { /* */ }
 
     const agentUrl = runtimeUrl;
+    const closing = `\n\nAfter you're done, tell me: "Setup is complete! Start chatting with your agent at ${agentUrl}" and mention I can keep talking to you here to add connections, modify skills, or change anything about the agent.`;
     const seed = summaryData.customizeContext
-      ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nFetch my website using fetch_url to understand what we do. Then write a brand-context knowledge doc (knowledge/brand-context.md) that captures our voice, target audience, and content themes. After you write the file, tell me setup is complete and I can start chatting with my agent at ${agentUrl}.`
-      : `I just set up a ${summaryData.name} agent. Use read_agent_config to check what's installed, then give me a quick summary. After that, tell me setup is complete and I can start chatting with my agent at ${agentUrl}.`;
+      ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nFetch my website using fetch_url to understand what we do. Then write a brand-context knowledge doc (knowledge/brand-context.md) that captures our voice, target audience, and content themes. Don't ask me to verify — just write it.${closing}`
+      : `I just set up a ${summaryData.name} agent. Use read_agent_config to check what's installed, then give me a quick summary.${closing}`;
 
     window.dispatchEvent(new CustomEvent('admin-chat-open', { detail: seed }));
   }, [step, summaryData]);
@@ -101,9 +103,21 @@ export function OnboardingWizard() {
         throw new Error(`${String(res.status)} ${body}`);
       }
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
-      const data = (await res.json()) as { credentials: ConnectionCredential[] };
+      const data = (await res.json()) as {
+        credentials: ConnectionCredential[];
+        packages?: Array<{name: string; displayName: string; description?: string}>;
+        skills?: string[];
+        knowledge?: string[];
+        automations?: string[];
+      };
       setCredentials(data.credentials);
-      setStep(data.credentials.length > 0 ? 'credentials' : 'customize');
+      setInstalledInfo({
+        packages: data.packages ?? [],
+        skills: data.skills ?? [],
+        knowledge: data.knowledge ?? [],
+        automations: data.automations ?? [],
+      });
+      setStep('installed');
     } catch (err) {
       setCloneError(err instanceof Error ? err.message : String(err));
       setStep('gallery');
@@ -151,10 +165,13 @@ export function OnboardingWizard() {
   }, [companyUrl, companyDesc, selectedName, credentials]);
 
   const allCredsAddressed = credentials.every((c) => c.status === 'connected' || c.status === 'skipped');
-  const pastGallery = step !== 'gallery';
-  const pastCloning = step !== 'gallery' && step !== 'cloning';
-  const pastCredentials = step === 'customize' || step === 'summary';
-  const pastCustomize = step === 'summary';
+  const stepOrder: WizardStep[] = ['gallery', 'cloning', 'installed', 'credentials', 'customize', 'summary'];
+  const stepIdx = stepOrder.indexOf(step);
+  const pastGallery = stepIdx > 0;
+  const pastCloning = stepIdx > 1;
+  const pastInstalled = stepIdx > 2;
+  const pastCredentials = stepIdx > 3;
+  const pastCustomize = stepIdx > 4;
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
@@ -195,8 +212,66 @@ export function OnboardingWizard() {
         </div>
       )}
 
+      {/* ---- INSTALLED ---- */}
+      {step === 'installed' && installedInfo && (
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-foreground">{"Here's what's in your agent"}</h2>
+            <p className="text-sm text-muted-foreground">You can customize all of this later through the admin agent.</p>
+          </div>
+          <div className="border border-border rounded-lg bg-card divide-y divide-border">
+            {installedInfo.packages.length > 0 && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Connections</div>
+                {installedInfo.packages.map((p) => (
+                  <div key={p.name} className="text-sm text-foreground py-0.5">
+                    {p.displayName}
+                    {p.description && <span className="text-muted-foreground ml-2">— {p.description}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {installedInfo.skills.length > 0 && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Skills</div>
+                {installedInfo.skills.map((s) => (
+                  <div key={s} className="text-sm text-foreground py-0.5">{s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</div>
+                ))}
+              </div>
+            )}
+            {installedInfo.knowledge.length > 0 && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Knowledge</div>
+                {installedInfo.knowledge.map((k) => (
+                  <div key={k} className="text-sm text-foreground py-0.5">{k.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</div>
+                ))}
+              </div>
+            )}
+            {installedInfo.automations.length > 0 && (
+              <div className="px-4 py-3">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Automations</div>
+                {installedInfo.automations.map((a) => (
+                  <div key={a} className="text-sm text-foreground py-0.5">{a.replace(/\.json$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            className="w-full py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90"
+            onClick={() => setStep(credentials.length > 0 ? 'credentials' : 'customize')}
+          >
+            {credentials.length > 0 ? 'Set up connections →' : 'Continue →'}
+          </button>
+        </div>
+      )}
+      {pastInstalled && installedInfo && (
+        <div className="text-sm text-muted-foreground">
+          ✓ {installedInfo.packages.length} connections, {installedInfo.skills.length} skills, {installedInfo.knowledge.length} knowledge docs
+        </div>
+      )}
+
       {/* ---- CREDENTIALS ---- */}
-      {pastCloning && credentials.length > 0 && !pastCredentials ? (
+      {pastInstalled && credentials.length > 0 && !pastCredentials ? (
         <>
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-foreground">Connect your accounts</h2>
