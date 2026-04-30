@@ -304,9 +304,12 @@ export function OnboardingWizard() {
                 </div>
               ))}
             </div>
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+              Restart <code className="font-mono bg-amber-500/10 px-1 rounded">amodal dev</code> to load your new connections, then open your agent.
+            </div>
             <a href={runtimeUrl} target="_blank" rel="noopener noreferrer"
               className="inline-block px-5 py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90">
-              Start using your agent →
+              Open agent →
             </a>
           </div>
           <div className="flex items-center gap-3 py-2">

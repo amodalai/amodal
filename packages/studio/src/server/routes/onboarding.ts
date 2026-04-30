@@ -192,9 +192,9 @@ onboardingRoutes.post('/api/studio/onboarding/save-secret', async (c) => {
   lines.push(`${name}=${value}`);
   content = lines.filter((l) => l.length > 0).join('\n') + '\n';
   writeFileSync(file, content, {mode: 0o600});
-
-  process.env[name] = value;
-  logger.info('onboarding_secret_saved', {name});
+  // The runtime reads secrets from this file on restart.
+  // No process.env mutation — this is the Studio server process, not the runtime.
+  logger.info('onboarding_secret_saved', {name, file});
 
   return c.json({ok: true, name});
 });
