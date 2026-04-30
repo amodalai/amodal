@@ -15,6 +15,7 @@ import {
   readdirSync,
   cpSync,
   statSync,
+  utimesSync,
 } from 'node:fs';
 import * as path from 'node:path';
 import { logger } from '../../lib/logger.js';
@@ -110,6 +111,10 @@ onboardingRoutes.post('/api/studio/onboarding/clone', async (c) => {
 
     if (pkgList.length > 0) {
       execFileSync('npm', ['install', '--no-audit', '--no-fund', ...pkgList], {cwd: repoPath, timeout: 120_000});
+      // Touch amodal.json to trigger the runtime's config-watcher reload
+      // now that node_modules is populated with the installed packages.
+      const now = new Date();
+      utimesSync(userConfigPath, now, now);
     }
     logger.info('onboarding_clone_complete', {repo, repoPath, packages: pkgList.length});
 

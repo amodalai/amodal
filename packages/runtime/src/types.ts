@@ -125,11 +125,7 @@ export enum SSEEventType {
   AskChoice = 'ask_choice',
   ShowPreview = 'show_preview',
   StartOAuth = 'start_oauth',
-  ShowGallery = 'show_gallery',
   CollectSecret = 'collect_secret',
-  SetupConnections = 'setup_connections',
-  SetupSummary = 'setup_summary',
-  CustomizeAgent = 'customize_agent',
 }
 
 export interface SSEInitEvent {
@@ -327,11 +323,7 @@ export type SSEEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
   | SSEStartOAuthEvent
-  | SSEShowGalleryEvent
-  | SSECollectSecretEvent
-  | SSESetupConnectionsEvent
-  | SSESetupSummaryEvent
-  | SSECustomizeAgentEvent;
+  | SSECollectSecretEvent;
 
 export interface SSEToolLogEvent {
   type: SSEEventType.ToolLog;
@@ -373,21 +365,6 @@ export interface SSEStartOAuthEvent {
   timestamp: string;
 }
 
-export interface SSEShowGalleryEvent {
-  type: SSEEventType.ShowGallery;
-  title: string;
-  templates: Array<{
-    repo: string;
-    title: string;
-    tagline: string;
-    author: string;
-    verified: boolean;
-    preview?: unknown;
-  }>;
-  allow_custom: boolean;
-  timestamp: string;
-}
-
 export interface SSECollectSecretEvent {
   type: SSEEventType.CollectSecret;
   secret_id: string;
@@ -396,41 +373,6 @@ export interface SSECollectSecretEvent {
   description?: string;
   link?: string;
   required: boolean;
-  timestamp: string;
-}
-
-export interface SSESetupConnectionsEvent {
-  type: SSEEventType.SetupConnections;
-  connections: Array<{
-    name: string;
-    label: string;
-    auth_type: 'api_key' | 'oauth' | 'none';
-    env_var?: string;
-    description?: string;
-    link?: string;
-    status: 'pending' | 'connected' | 'skipped';
-  }>;
-  timestamp: string;
-}
-
-export interface SSESetupSummaryEvent {
-  type: SSEEventType.SetupSummary;
-  agent_name: string;
-  connections: Array<{name: string; status: 'connected' | 'pending' | 'skipped'}>;
-  skills: string[];
-  agent_url: string;
-  timestamp: string;
-}
-
-export interface SSECustomizeAgentEvent {
-  type: SSEEventType.CustomizeAgent;
-  prompts: Array<{
-    id: string;
-    label: string;
-    placeholder: string;
-    required: boolean;
-  }>;
-  skip_label: string;
   timestamp: string;
 }
 

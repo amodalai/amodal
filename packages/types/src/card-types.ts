@@ -41,6 +41,12 @@ export interface AgentCard {
   snippet?: string;
   /** Lifetime install count, surfaced as social proof on the picker card. */
   uses?: number;
+  /** URL to a logo or icon image for display on the card. */
+  icon?: string;
+  /** Connection names for display (e.g. ["Typefully", "Dev.to", "GitHub"]). */
+  connections?: string[];
+  /** One-liner summaries per skill (e.g. ["Writes LinkedIn posts from blog drafts"]). */
+  skillSummaries?: string[];
 }
 
 /**

@@ -22,5 +22,5 @@ export function IndexPage() {
     inventory.skills.length === 0 &&
     inventory.knowledge.length === 0;
 
-  return isFresh ? <OnboardingPage /> : <OverviewPage />;
+  return isFresh ? <OnboardingPage onComplete={inventory.refetch} /> : <OverviewPage />;
 }
