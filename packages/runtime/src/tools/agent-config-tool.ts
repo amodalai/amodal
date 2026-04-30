@@ -65,7 +65,7 @@ export function registerAgentConfigTool(registry: ToolRegistry, repoRoot: string
                 : pkg,
               description: typeof amodal?.['description'] === 'string' ? amodal['description'] : undefined,
             });
-          } catch { /* skip */ }
+          } catch { /* non-fatal — package may be missing or malformed */ }
         }
 
         return {

@@ -369,7 +369,7 @@ export function OnboardingWizard() {
             <h2 className="text-lg font-semibold text-foreground">{summaryData.name} is ready!</h2>
             <div className="space-y-1">
               {summaryData.connections.map((c) => (
-                <div key={c.name} className={`text-sm ${c.status === 'connected' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                <div key={c.name} className={`text-sm ${c.status === 'connected' ? 'text-emerald-500' : 'text-muted-foreground'}`}>
                   {c.status === 'connected' ? '✓' : '○'} {c.name}
                 </div>
               ))}

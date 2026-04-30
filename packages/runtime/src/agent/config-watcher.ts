@@ -55,7 +55,7 @@ export class ConfigWatcher {
         });
         this.watchers.push(w);
       } catch {
-        // Directory or file might not exist yet
+        // Expected — directory or file might not exist yet on fresh repos
       }
     }
   }
@@ -110,8 +110,8 @@ export class ConfigWatcher {
         if (k) { process.env[k] = v; count++; }
       }
       if (count > 0) log.debug('secrets_reloaded', {count});
-    } catch {
-      // Non-fatal
+    } catch (err: unknown) {
+      log.debug('secrets_load_error', {file, error: err instanceof Error ? err.message : String(err)});
     }
   }
 }

@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import {
   existsSync,
   readFileSync,
@@ -84,7 +84,7 @@ onboardingRoutes.post('/api/studio/onboarding/clone', async (c) => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing local JSON
         userConfig = JSON.parse(readFileSync(userConfigPath, 'utf-8')) as Record<string, unknown>;
-      } catch { /* fresh init */ }
+      } catch (err: unknown) { logger.debug('onboarding_config_read_error', {path: userConfigPath, error: err instanceof Error ? err.message : String(err)}); }
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- parsing local JSON
       const templateConfig = JSON.parse(readFileSync(templateConfigPath, 'utf-8')) as Record<string, unknown>;
       const merged = {
@@ -106,10 +106,10 @@ onboardingRoutes.post('/api/studio/onboarding/clone', async (c) => {
       if (Array.isArray(mergedCfg['packages'])) {
         pkgList = mergedCfg['packages'].filter((p): p is string => typeof p === 'string');
       }
-    } catch { /* */ }
+    } catch (err: unknown) { logger.debug('onboarding_packages_read_error', {error: err instanceof Error ? err.message : String(err)}); }
 
     if (pkgList.length > 0) {
-      execSync(`npm install --no-audit --no-fund ${pkgList.join(' ')}`, {cwd: repoPath, timeout: 120_000});
+      execFileSync('npm', ['install', '--no-audit', '--no-fund', ...pkgList], {cwd: repoPath, timeout: 120_000});
     }
     logger.info('onboarding_clone_complete', {repo, repoPath, packages: pkgList.length});
 
@@ -122,7 +122,7 @@ onboardingRoutes.post('/api/studio/onboarding/clone', async (c) => {
       if (Array.isArray(cfg['packages'])) {
         packages = cfg['packages'].filter((p): p is string => typeof p === 'string');
       }
-    } catch { /* */ }
+    } catch (err: unknown) { logger.debug('onboarding_config_read_error', {error: err instanceof Error ? err.message : String(err)}); }
 
     for (const pkg of packages) {
       try {
@@ -168,7 +168,7 @@ onboardingRoutes.post('/api/studio/onboarding/clone', async (c) => {
           displayName: typeof am?.['displayName'] === 'string' ? am['displayName'] : typeof am?.['name'] === 'string' ? am['name'] : pkg,
           description: typeof am?.['description'] === 'string' ? am['description'] : undefined,
         });
-      } catch { /* skip */ }
+      } catch (err: unknown) { logger.debug('onboarding_pkg_info_error', {pkg, error: err instanceof Error ? err.message : String(err)}); }
     }
 
     // List local dirs
