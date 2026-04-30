@@ -519,7 +519,11 @@ Or add it to your agent's .env file:
   try {
     let server: Awaited<ReturnType<typeof createLocalServer>> | null = null;
 
-    if (hasManifest) {
+    /**
+     * Boot the runtime server. Factored out so the empty-repo
+     * branch (Phase E.9) can call it lazily when amodal.json lands.
+     */
+    const bootRuntime = async (): Promise<typeof server> => {
       let staticAppDir: string | undefined;
 
       // Use pre-built static assets for the SPA.
@@ -543,7 +547,7 @@ Or add it to your agent's .env file:
         }
       }
 
-      server = await createLocalServer({
+      const created = await createLocalServer({
         repoPath,
         port: runtimePort,
         host,
@@ -554,8 +558,12 @@ Or add it to your agent's .env file:
         studioUrl: studioUrl ?? undefined,
         adminAgentUrl: adminAgentUrl ?? undefined,
       });
+      await created.start();
+      return created;
+    };
 
-      await server.start();
+    if (hasManifest) {
+      server = await bootRuntime();
     }
 
     // Print clean startup summary
@@ -563,7 +571,7 @@ Or add it to your agent's .env file:
     if (server) {
       process.stderr.write(`  Runtime:     http://localhost:${String(runtimePort)}\n`);
     } else {
-      process.stderr.write('  Runtime:     skipped (no amodal.json — open Studio to scaffold)\n');
+      process.stderr.write('  Runtime:     waiting for amodal.json (auto-boots when Studio finishes setup)\n');
     }
     if (studioUrl) {
       process.stderr.write(`  Studio:      ${studioUrl}\n`);
@@ -592,9 +600,60 @@ Or add it to your agent's .env file:
       }
     }
 
+    // -------------------------------------------------------------------
+    // Phase E.9 — runtime auto-spawn on amodal.json appearance.
+    //
+    // When the runtime didn't start (no manifest at boot), poll
+    // amodal.json every 2s. Once it lands — written by
+    // commit_setup, the user-button commit-setup endpoint, or
+    // init-repo's skip-onboarding write — boot the runtime in
+    // place. Studio's runtime URL probe picks it up on the next
+    // tick. No restart required.
+    // -------------------------------------------------------------------
+
+    const RUNTIME_WATCH_INTERVAL_MS = 2_000;
+    let runtimeWatcher: ReturnType<typeof setTimeout> | null = null;
+
+    const stopRuntimeWatch = (): void => {
+      if (runtimeWatcher !== null) {
+        clearTimeout(runtimeWatcher);
+        runtimeWatcher = null;
+      }
+    };
+
+    const watchForRuntime = (): void => {
+      if (server) return; // Already booted.
+      if (existsSync(path.join(repoPath, 'amodal.json'))) {
+        // 500ms debounce — let the writer (commit_setup's atomic
+        // rename or init-repo's full write) settle before loadRepo
+        // tries to read it.
+        runtimeWatcher = setTimeout(() => {
+          (async () => {
+            try {
+              process.stderr.write('\n[dev] amodal.json appeared — booting runtime...\n');
+              server = await bootRuntime();
+              process.stderr.write(`  Runtime:     http://localhost:${String(runtimePort)}\n\n`);
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : String(err);
+              process.stderr.write(`[dev] Runtime auto-boot failed: ${msg}\n`);
+              process.stderr.write('       Try ctrl+C and re-running `amodal dev`.\n');
+            }
+          })().catch(() => undefined);
+        }, 500);
+        return;
+      }
+      runtimeWatcher = setTimeout(watchForRuntime, RUNTIME_WATCH_INTERVAL_MS);
+    };
+
+    if (!hasManifest) {
+      runtimeWatcher = setTimeout(watchForRuntime, RUNTIME_WATCH_INTERVAL_MS);
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string): Promise<void> => {
       process.stderr.write(`\n[dev] Received ${signal}, shutting down...\n`);
+
+      stopRuntimeWatch();
 
       // Kill subprocesses first
       if (managedProcesses.length > 0) {
