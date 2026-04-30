@@ -85,9 +85,12 @@ export function StartOAuthCard({ block, sendMessage }: Props) {
 
   const isConnected = status === 'connected';
   const isSkipped = status === 'skipped';
+  const settled = isConnected || isSkipped;
 
   return (
-    <div className="pcw-oauth-row">
+    <div
+      className={`pcw-oauth-row${settled ? ' pcw-oauth-row--settled' : ''}`}
+    >
       <div className="pcw-oauth-row__head">
         <div className="pcw-oauth-row__title">
           <span className="pcw-oauth-row__name">{name}</span>

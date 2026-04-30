@@ -182,6 +182,28 @@
   align-self: flex-start;
   background: var(--pcw-agent-bubble);
   color: var(--pcw-text);
+  /* Phase F.3 — 200ms fade-in-from-below for new agent bubbles +
+   * any inline cards inside them (ask_choice, proposal, show_preview,
+   * connection panel). User bubbles get no entrance animation —
+   * the spec is explicit: don't animate user-message entry. */
+  animation: pcw-card-enter 200ms ease-out;
+}
+
+@keyframes pcw-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcw-bubble--assistant {
+    animation: none;
+  }
 }
 
 .pcw-bubble__text {
@@ -2792,6 +2814,27 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+  /* Phase F.3 — 150ms collapse from action-row to ✓ Connected /
+   * Skipped summary. The settled-row drops the buttons via CSS
+   * (display: none would skip the transition; opacity + max-height
+   * gives the smooth collapse the spec calls for). */
+  overflow: hidden;
+  max-height: 80px;
+  opacity: 1;
+  transition: max-height 150ms ease-out, opacity 150ms ease-out, margin-top 150ms ease-out;
+}
+
+.pcw-oauth-row--settled .pcw-oauth-row__actions {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcw-oauth-row__actions {
+    transition: none;
+  }
 }
 .pcw-oauth-row__connect {
   padding: 7px 14px;
