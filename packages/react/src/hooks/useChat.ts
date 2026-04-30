@@ -393,6 +393,31 @@ function rehydrateHistory(stored: readonly StoredMessage[]): ChatMessage[] {
               // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
               data: (block['data'] as Record<string, unknown>) ?? {},
             });
+          } else if (blockType === 'proposal') {
+            // Phase D — Path B Proposal card. Restore the card with
+            // its persisted status (pending vs submitted) so a reload
+            // mid-proposal shows the same actionable buttons (or the
+            // already-chosen answer summary) the user saw before.
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+            const status = (block['status'] as 'pending' | 'submitted' | undefined) ?? 'pending';
+            const proposalBlock: ContentBlock = {
+              type: 'proposal',
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              proposalId: (block['proposalId'] as string) ?? '',
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              summary: (block['summary'] as string) ?? '',
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              skills: (block['skills'] as Array<{label: string; description: string}> | undefined) ?? [],
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              requiredConnections: (block['requiredConnections'] as Array<{label: string; description: string}> | undefined) ?? [],
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              optionalConnections: (block['optionalConnections'] as Array<{label: string; description: string}> | undefined) ?? [],
+              status,
+            };
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+            const answer = block['answer'] as 'confirm' | 'adjust' | undefined;
+            if (answer && status === 'submitted') proposalBlock.answer = answer;
+            contentBlocks.push(proposalBlock);
           }
         }
       } else {
