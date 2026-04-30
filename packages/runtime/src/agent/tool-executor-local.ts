@@ -50,7 +50,14 @@ export class LocalToolExecutor implements CustomToolExecutor {
       return cached;
     }
 
-    // Compile .ts handlers to .mjs before importing
+    // Compile .ts handlers to .mjs before importing.
+    //
+    // `bundle: true, packages: 'external'` lets a handler split helpers
+    // into sibling files (e.g. tools/validate_connection/format.ts
+    // imported by handler.ts) — the relative imports get inlined into a
+    // single .mjs while npm packages and node:* stay external for
+    // standard Node resolution. Without this, sibling .ts files would
+    // emit as `./format.js` imports that no longer exist on disk.
     let importPath = tool.handlerPath;
     if (tool.handlerPath.endsWith('.ts')) {
       const {build} = await import('esbuild');
@@ -60,9 +67,11 @@ export class LocalToolExecutor implements CustomToolExecutor {
       await build({
         entryPoints: [tool.handlerPath],
         outfile: outFile,
-        bundle: false,
+        bundle: true,
+        packages: 'external',
         format: 'esm',
         platform: 'node',
+        target: 'node20',
         logLevel: 'warning',
       });
       importPath = outFile;
