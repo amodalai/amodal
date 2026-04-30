@@ -42,3 +42,12 @@ export type {
 } from './fs/index.js';
 
 export {FsSandboxError} from './fs/index.js';
+
+export {LocalFsBackend} from './fs/local.js';
+export type {LocalFsBackendOptions} from './fs/local.js';
+
+export {loadPackagePermissions, LOCAL_REPO_PACKAGE} from './permissions.js';
+export type {PackagePermissions} from './permissions.js';
+
+export {createSdkToolContext} from './sdk-context.js';
+export type {CreateSdkToolContextOptions} from './sdk-context.js';
