@@ -643,7 +643,7 @@ describe('useChat hook', () => {
   });
 
   describe('resumeSessionId', () => {
-    it('shows error when session does not exist (404)', async () => {
+    it('silently starts fresh when session does not exist (404)', async () => {
       server.use(
         http.get('http://localhost:4555/sessions/history/:id', () => new HttpResponse(JSON.stringify({ error: 'not found' }), {
             status: 404,
@@ -651,12 +651,14 @@ describe('useChat hook', () => {
           })),
       );
 
+      const onSessionCreated = vi.fn();
       const { result } = renderHook(() =>
-        useChat({ ...defaultOptions, resumeSessionId: 'deleted-session-123' }),
+        useChat({ ...defaultOptions, resumeSessionId: 'deleted-session-123', onSessionCreated }),
       );
 
       await waitFor(() => {
-        expect(result.current.error).toBe('Previous session no longer exists. Start a new conversation.');
+        // No error shown — silently starts fresh
+        expect(result.current.error).toBeNull();
       });
     });
 

@@ -318,3 +318,26 @@ Setting `requireScope: true` rejects any request that does not include a `scope_
 **Context injection:** Connection specs support a `contextInjection` map to automatically forward scope context values (passed with the request) into API calls — as query params, headers, path variables, or body fields. See [Connections — Context Injection](/guide/connections#context-injection) for full configuration details.
 
 **Per-scope credentials:** Use the `scope:KEY` prefix in connection auth/header values to read credentials from the scope's secrets map. In local dev, define these in `.amodal/scopes.json` keyed by scope ID.
+
+## Agent Loop
+
+The agent loop runs up to `maxTurns` (default 50) turns per user message. Each turn is one LLM call that may produce tool calls or text. This is the primary safety limit.
+
+### Tool repeat limit
+
+By default there is no limit on how many times the agent can call the same tool in a single response. If you want to cap repeated tool calls (e.g., to prevent an agent from making 100 API calls in one go), set `maxToolRepeats` in `amodal.json`:
+
+```json
+{
+  "agent": {
+    "maxToolRepeats": 20
+  }
+}
+```
+
+When the limit is hit, the agent stops and says "I've made N calls, here's what I have so far. Say 'keep going' if you'd like me to continue." The counter resets on the next user message.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `maxTurns` | 50 | Total LLM calls per user message. The overall budget. |
+| `maxToolRepeats` | 0 (no limit) | Max times the same tool can be called with similar parameters in one response. 0 = unlimited. |

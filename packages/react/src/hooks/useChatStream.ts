@@ -491,7 +491,6 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
   const send = useCallback(
     (text: string, images?: Array<{mimeType: string; data: string; preview: string}>): void => {
       if (state.isStreaming) return;
-
       dispatch({ type: 'SEND_MESSAGE', text, images: images?.map((i) => i.preview) });
 
       const controller = new AbortController();
