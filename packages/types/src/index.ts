@@ -31,6 +31,7 @@ export type {
   CustomToolSetupStateOps,
   CustomToolSetupStateRow,
   CustomToolPlanOps,
+  CustomToolCompletionOps,
   ToolHandlerDefinition,
   CustomToolExecutor,
   CustomShellExecutor,

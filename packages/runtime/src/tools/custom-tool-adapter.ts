@@ -18,6 +18,7 @@
 
 import {jsonSchema} from 'ai';
 import type {
+  CustomToolCompletionOps,
   CustomToolContext,
   CustomToolExecutor,
   CustomToolPlanOps,
@@ -74,6 +75,12 @@ export interface CustomToolSessionContext {
    * with the template package name and gets back a typed SetupPlan.
    */
   plan?: CustomToolPlanOps;
+  /**
+   * Setup-completion ops factory (Phase E). The session ctx caller
+   * passes a function rather than the ops directly because `scopeId`
+   * varies per runtime call. Same shape as `setupStateFactory`.
+   */
+  completionFactory?: (scopeId: string) => CustomToolCompletionOps;
 }
 
 function buildCustomToolContext(
@@ -242,6 +249,12 @@ function buildCustomToolContext(
     // session-build time; identity is repo-scoped, not scope-scoped,
     // so the same ops object works for every handler in the session.
     ...(sessionCtx.plan ? {plan: sessionCtx.plan} : {}),
+    // Phase E: completion ops factory. Like setupStateFactory, the
+    // factory closes over (agentId, db, fs) and binds the live
+    // scopeId per call so concurrent scopes don't collide.
+    ...(sessionCtx.completionFactory
+      ? {completion: sessionCtx.completionFactory(runtimeCtx.scopeId)}
+      : {}),
     scopeId: runtimeCtx.scopeId,
     sessionId: runtimeCtx.sessionId,
   };

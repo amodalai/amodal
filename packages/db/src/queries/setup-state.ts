@@ -189,6 +189,29 @@ export async function markComplete(
   return rows[0]?.completedAt ?? null;
 }
 
+/**
+ * Delete the row for `(agentId, scopeId)`. Phase E.10 — `cancel_setup`
+ * uses this when the user says "actually I want a different template."
+ * Returns true when a row existed and was deleted, false otherwise.
+ *
+ * This is the only place the row is destroyed. Post-commit, the row
+ * lives forever (with `completed_at` set) for analytics + "you
+ * mentioned X earlier" follow-up handling — `cancel_setup` is
+ * pre-commit only; the prompt should refuse to call it after
+ * `phase === 'complete'`.
+ */
+export async function deleteSetupState(
+  db: Db,
+  agentId: string,
+  scopeId: string,
+): Promise<boolean> {
+  const rows = await db
+    .delete(setupState)
+    .where(and(eq(setupState.agentId, agentId), eq(setupState.scopeId, scopeId)))
+    .returning({agentId: setupState.agentId});
+  return rows.length > 0;
+}
+
 // Re-export the row types so consumers don't have to chase imports.
 export type {
   CompletedSlot,

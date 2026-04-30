@@ -41,8 +41,11 @@ import {
   getSetupState,
   upsertSetupState,
   markComplete,
+  deleteSetupState,
 } from '@amodalai/db';
 import {composePlan} from '@amodalai/core';
+import {commitSetup} from '../setup/commit-setup.js';
+import type {CustomToolCompletionOps} from '@amodalai/types';
 import {registerMcpTools} from '../tools/mcp-tool-adapter.js';
 import {
   AccessJsonPermissionChecker,
@@ -265,6 +268,11 @@ function buildCustomToolSessionContext(
   // repoPath, so this is undefined when no repoPath is resolvable.
   const plan = repoRoot ? buildPlanOps(repoRoot) : undefined;
 
+  // Phase E: expose ctx.completion. Needs both a db pool (to read
+  // setup_state + write completed_at) and a fs backend (to write
+  // amodal.json). Skipped when either is missing.
+  const completionFactory = fs ? buildCompletionFactory(agentId, fs) : undefined;
+
   return {
     config: {
       getConnections(): Record<string, unknown> {
@@ -286,6 +294,7 @@ function buildCustomToolSessionContext(
     agentId,
     ...(setupStateFactory ? {setupStateFactory} : {}),
     ...(plan ? {plan} : {}),
+    ...(completionFactory ? {completionFactory} : {}),
   };
 }
 
@@ -372,6 +381,69 @@ function buildSetupStateFactory(agentId: string): NonNullable<CustomToolSessionC
     async markComplete() {
       const dt = await markComplete(db, agentId, scopeId);
       return dt ? dt.toISOString() : null;
+    },
+  });
+}
+
+/**
+ * Build the `ctx.completion` ops factory closed over (agentId, db,
+ * fs). The factory takes scopeId at call-time so concurrent
+ * per-scope sessions don't share the same ops object — same
+ * pattern as `buildSetupStateFactory`.
+ */
+function buildCompletionFactory(
+  agentId: string,
+  fs: import('@amodalai/types').FsBackend,
+): NonNullable<CustomToolSessionContext['completionFactory']> | undefined {
+  let db: ReturnType<typeof getDb>;
+  try {
+    db = getDb();
+  } catch {
+    // No DATABASE_URL — completion ops not available.
+    return undefined;
+  }
+
+  return (scopeId): CustomToolCompletionOps => ({
+    async commit(opts) {
+      try {
+        const result = await commitSetup({
+          db,
+          fs,
+          agentId,
+          scopeId,
+          force: opts?.force ?? false,
+          ...(opts?.connectionsStatus ? {connectionsStatus: opts.connectionsStatus} : {}),
+        });
+        if (result.ok) {
+          return {
+            ok: true,
+            alreadyComplete: result.alreadyComplete,
+            completedAt: result.completedAt.toISOString(),
+          };
+        }
+        if (result.reason === 'not_ready') {
+          return {ok: false, reason: 'not_ready', warnings: result.warnings};
+        }
+        return {ok: false, reason: 'no_state', message: result.message};
+      } catch (err) {
+        return {
+          ok: false,
+          reason: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+    async cancel() {
+      try {
+        const deleted = await deleteSetupState(db, agentId, scopeId);
+        return {ok: true, deleted};
+      } catch (err) {
+        return {
+          ok: false,
+          reason: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     },
   });
 }

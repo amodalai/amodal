@@ -12,7 +12,12 @@ import type {
   SSEUpdatePlanEvent,
 } from './sse-types.js';
 import type {FsBackend} from './fs.js';
-import type {SetupState, SetupStatePatch} from './setup-state.js';
+import type {
+  ConnectionsStatusMap,
+  SetupState,
+  SetupStatePatch,
+  SetupWarning,
+} from './setup-state.js';
 import type {SetupPlan} from './setup-plan.js';
 
 /**
@@ -138,6 +143,12 @@ export interface CustomToolContext {
    * SetupPlan back.
    */
   plan?: CustomToolPlanOps;
+  /**
+   * Setup-completion operations (Phase E). The runtime closes over
+   * the agent's id, scope, db, and fs backend; the handler just
+   * decides whether to commit (force or non-force) or cancel.
+   */
+  completion?: CustomToolCompletionOps;
   /** Stable id of the agent the tool is running on behalf of. */
   agentId?: string;
   /** Per-user scope key. Empty string = agent-level (no scope). */
@@ -191,6 +202,34 @@ export interface CustomToolPlanOps {
   ): Promise<
     | {ok: true; plan: SetupPlan}
     | {ok: false; reason: 'not_installed' | 'malformed' | 'error'; message: string}
+  >;
+}
+
+/**
+ * Setup-completion operations exposed via `ctx.completion` (Phase E).
+ * The runtime closes over the agent's id, scope, Drizzle handle, and
+ * fs backend; the handler just decides whether to commit (force or
+ * non-force) or cancel the setup state row.
+ *
+ * `commit` is idempotent — calling twice is safe; the second call
+ * sees `completedAt` already set and returns `alreadyComplete: true`.
+ *
+ * `cancel` deletes the setup_state row and emits a `setup_cancelled`
+ * SSE event so Studio can flip back to the picker. Used for "actually
+ * I want a different template" bail-out (Phase E.10).
+ */
+export interface CustomToolCompletionOps {
+  commit(opts?: {
+    force?: boolean;
+    connectionsStatus?: ConnectionsStatusMap;
+  }): Promise<
+    | {ok: true; alreadyComplete: boolean; completedAt: string}
+    | {ok: false; reason: 'not_ready'; warnings: SetupWarning[]}
+    | {ok: false; reason: 'no_state' | 'no_db' | 'error'; message: string}
+  >;
+  cancel(): Promise<
+    | {ok: true; deleted: boolean}
+    | {ok: false; reason: 'no_state' | 'no_db' | 'error'; message: string}
   >;
 }
 
