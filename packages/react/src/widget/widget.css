@@ -998,6 +998,18 @@
   background: var(--pcw-overlay-hover, rgba(0, 0, 0, 0.8));
 }
 
+/* Shake animation when user tries to send during streaming */
+@keyframes pcw-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+.pcw-input__shake {
+  animation: pcw-shake 0.3s ease-in-out;
+}
+
 /* Images in user message bubbles */
 .pcw-bubble__images {
   display: flex;

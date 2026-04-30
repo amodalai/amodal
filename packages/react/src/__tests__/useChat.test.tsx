@@ -445,7 +445,7 @@ describe('useChat hook', () => {
     expect(result.current.session.id).toBeNull();
   });
 
-  it('queues message sent while streaming and sends after stream ends', async () => {
+  it('does not send while streaming', async () => {
     server.use(
       http.post('http://localhost:4555/chat/stream', async () => {
         await new Promise((resolve) => setTimeout(resolve, 200));
@@ -466,22 +466,16 @@ describe('useChat hook', () => {
 
     expect(result.current.isStreaming).toBe(true);
 
-    // Send while streaming — should be queued
+    // Try to send while streaming
     act(() => {
       result.current.send('second');
     });
 
-    // During streaming: only first message's user + assistant
+    // Should still only have 2 messages (user + assistant from first send)
     expect(result.current.messages).toHaveLength(2);
 
     await waitFor(() => {
       expect(result.current.isStreaming).toBe(false);
-    });
-
-    // After both streams complete: both user messages should exist
-    await waitFor(() => {
-      const userMessages = result.current.messages.filter((m) => m.type === 'user');
-      expect(userMessages).toHaveLength(2);
     });
   });
 

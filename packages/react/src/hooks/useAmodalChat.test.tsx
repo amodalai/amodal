@@ -388,14 +388,14 @@ describe('useAmodalChat', () => {
     expect(result.current.sessionId).toBeNull();
   });
 
-  it('queues message sent while streaming and sends after stream ends', async () => {
+  it('does not send while streaming', async () => {
     const { result } = renderHook(() => useAmodalChat(), { wrapper });
 
     act(() => {
       result.current.send('hello');
     });
 
-    // Send while streaming — should be queued, not dropped
+    // Try to send while streaming
     act(() => {
       result.current.send('second');
     });
@@ -404,11 +404,9 @@ describe('useAmodalChat', () => {
       expect(result.current.isStreaming).toBe(false);
     });
 
-    // Both messages should have been sent (first immediately, second after stream ended)
+    // Only one user message + one assistant message
     const userMessages = result.current.messages.filter((m) => m.type === 'user');
-    expect(userMessages).toHaveLength(2);
-    expect(userMessages[0].type === 'user' && userMessages[0].text).toBe('hello');
-    expect(userMessages[1].type === 'user' && userMessages[1].text).toBe('second');
+    expect(userMessages).toHaveLength(1);
   });
 
   it('calls onToolCall callback', async () => {

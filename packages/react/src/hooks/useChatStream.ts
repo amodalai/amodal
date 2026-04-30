@@ -491,7 +491,6 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
   const send = useCallback(
     (text: string, images?: Array<{mimeType: string; data: string; preview: string}>): void => {
       if (state.isStreaming) return;
-
       dispatch({ type: 'SEND_MESSAGE', text, images: images?.map((i) => i.preview) });
 
       const controller = new AbortController();
@@ -514,9 +513,6 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
           }
         } finally {
           abortControllerRef.current = null;
-          // Safety net: if the stream ended without a `done` event
-          // (network drop, mid-stream error), still fire onStreamEnd and
-          // flip isStreaming off so the UI doesn't get stuck.
           if (!receivedDone && !controller.signal.aborted) {
             dispatch({ type: 'STREAM_DONE' });
             callbacksRef.current.onStreamEnd?.();
@@ -526,9 +522,6 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
 
       void runStream();
     },
-    // streamFn is read via callbacksRef on each call, so it doesn't need
-    // to be a dep here. Keeping send() identity stable across streamFn
-    // changes prevents downstream consumers from re-running effects.
     [state.isStreaming, eventBus],
   );
 
