@@ -448,6 +448,9 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
     eventBus.on('entity_referenced', entityRefHandlerRef.current);
   }
 
+  // Queue for messages sent while streaming — dispatched when stream ends.
+  const queuedMessageRef = useRef<{ text: string; images?: Array<{mimeType: string; data: string; preview: string}> } | null>(null);
+
   // tool_call_start carries the name + params, tool_call_result usually
   // doesn't echo them — keep a map so result events can re-associate.
   const pendingToolCallsRef = useRef<
@@ -456,7 +459,10 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
 
   const send = useCallback(
     (text: string, images?: Array<{mimeType: string; data: string; preview: string}>): void => {
-      if (state.isStreaming) return;
+      if (state.isStreaming) {
+        queuedMessageRef.current = { text, images };
+        return;
+      }
 
       dispatch({ type: 'SEND_MESSAGE', text, images: images?.map((i) => i.preview) });
 
@@ -486,6 +492,13 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
           if (!receivedDone && !controller.signal.aborted) {
             dispatch({ type: 'STREAM_DONE' });
             callbacksRef.current.onStreamEnd?.();
+          }
+          // Send any queued message that was typed during streaming
+          const queued = queuedMessageRef.current;
+          if (queued) {
+            queuedMessageRef.current = null;
+            // Defer so isStreaming flips to false first
+            setTimeout(() => send(queued.text, queued.images), 0);
           }
         }
       };
