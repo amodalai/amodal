@@ -11,6 +11,7 @@
  */
 
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { stream } from 'hono/streaming';
 import { logger } from '../../lib/logger.js';
 import { getRuntimeUrl } from '../../lib/config.js';
@@ -27,7 +28,8 @@ export const runtimeProxyRoutes = new Hono();
 
 type StatusCode = import('hono/utils/http-status').ContentfulStatusCode;
 
-async function proxyGet(c: Parameters<Parameters<typeof runtimeProxyRoutes.get>[1]>[0], runtimePath: string, timeout = PROXY_TIMEOUT_MS) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Hono Context generic is complex; any is the simplest bound
+async function proxyGet(c: Context<any>, runtimePath: string, timeout = PROXY_TIMEOUT_MS) {
   const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) return c.json({error: {code: 'RUNTIME_NOT_CONFIGURED', message: 'RUNTIME_URL not configured'}}, 503);
   try {
@@ -42,7 +44,8 @@ async function proxyGet(c: Parameters<Parameters<typeof runtimeProxyRoutes.get>[
   }
 }
 
-async function proxyPost(c: Parameters<Parameters<typeof runtimeProxyRoutes.post>[1]>[0], runtimePath: string, timeout = PROXY_TIMEOUT_MS) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Hono Context generic
+async function proxyPost(c: Context<any>, runtimePath: string, timeout = PROXY_TIMEOUT_MS) {
   const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) return c.json({error: {code: 'RUNTIME_NOT_CONFIGURED', message: 'RUNTIME_URL not configured'}}, 503);
   try {
@@ -63,7 +66,8 @@ async function proxyPost(c: Parameters<Parameters<typeof runtimeProxyRoutes.post
   }
 }
 
-async function proxyPostStream(c: Parameters<Parameters<typeof runtimeProxyRoutes.post>[1]>[0], runtimePath: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Hono Context generic
+async function proxyPostStream(c: Context<any>, runtimePath: string) {
   const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) return c.json({error: {code: 'RUNTIME_NOT_CONFIGURED', message: 'RUNTIME_URL not configured'}}, 503);
   try {
@@ -100,7 +104,8 @@ async function proxyPostStream(c: Parameters<Parameters<typeof runtimeProxyRoute
   }
 }
 
-async function proxyPut(c: Parameters<Parameters<typeof runtimeProxyRoutes.put>[1]>[0], runtimePath: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Hono Context generic
+async function proxyPut(c: Context<any>, runtimePath: string) {
   const runtimeUrl = getRuntimeUrl();
   if (!runtimeUrl) return c.json({error: {code: 'RUNTIME_NOT_CONFIGURED', message: 'RUNTIME_URL not configured'}}, 503);
   try {

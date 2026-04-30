@@ -188,7 +188,7 @@ export function OnboardingWizard() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {templates.map((t) => t.card ? (
-              <PickerCard key={t.repo} card={t.card} author={t.card.author ?? ''} verified={true}
+              <PickerCard key={t.repo} card={t.card} author={t.repo.split('/')[0] ?? ''} verified={true}
                 onClick={() => void handleClone(t.repo, t.branch, t.card?.title ?? t.repo)} />
             ) : (
               <div key={t.repo} className="border border-border rounded-lg p-4 animate-pulse bg-card h-32" />
