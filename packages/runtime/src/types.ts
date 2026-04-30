@@ -114,6 +114,8 @@ export enum SSEEventType {
   AskChoice = 'ask_choice',
   ShowPreview = 'show_preview',
   StartOAuth = 'start_oauth',
+  Proposal = 'proposal',
+  UpdatePlan = 'update_plan',
   ExploreStart = 'explore_start',
   ExploreEnd = 'explore_end',
   PlanMode = 'plan_mode',
@@ -317,6 +319,28 @@ export interface SSEStartOAuthEvent {
   timestamp: string;
 }
 
+/** Proposal card emitted by the admin agent's `propose_plan` tool (Phase D). */
+export interface SSEProposalEvent {
+  type: SSEEventType.Proposal;
+  proposal_id: string;
+  summary: string;
+  skills: Array<{label: string; description: string}>;
+  required_connections: Array<{label: string; description: string}>;
+  optional_connections: Array<{label: string; description: string}>;
+  timestamp: string;
+}
+
+/** Patch event for an in-flight proposal (Phase D). Matched by `proposal_id`. */
+export interface SSEUpdatePlanEvent {
+  type: SSEEventType.UpdatePlan;
+  proposal_id: string;
+  summary?: string;
+  skills?: Array<{label: string; description: string}>;
+  required_connections?: Array<{label: string; description: string}>;
+  optional_connections?: Array<{label: string; description: string}>;
+  timestamp: string;
+}
+
 export interface SSECompactionStartEvent {
   type: SSEEventType.CompactionStart;
   estimated_tokens: number;
@@ -351,6 +375,8 @@ export type SSEEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
   | SSEStartOAuthEvent
+  | SSEProposalEvent
+  | SSEUpdatePlanEvent
   | SSECompactionStartEvent
   | SSECompactionEndEvent
   | SSEToolLogEvent

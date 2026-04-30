@@ -313,6 +313,34 @@ export function translateEvent(
       break;
     }
 
+    case SSEEventType.Proposal: {
+      out.push({
+        type: 'data-proposal',
+        data: {
+          proposal_id: event.proposal_id,
+          summary: event.summary,
+          skills: event.skills,
+          required_connections: event.required_connections,
+          optional_connections: event.optional_connections,
+        },
+      });
+      break;
+    }
+
+    case SSEEventType.UpdatePlan: {
+      out.push({
+        type: 'data-update-plan',
+        data: {
+          proposal_id: event.proposal_id,
+          summary: event.summary,
+          skills: event.skills,
+          required_connections: event.required_connections,
+          optional_connections: event.optional_connections,
+        },
+      });
+      break;
+    }
+
     case SSEEventType.KBProposal: {
       out.push({
         type: 'data-kb-proposal',

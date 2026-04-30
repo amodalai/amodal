@@ -15,14 +15,25 @@
 import type {z} from 'zod';
 import type {FlexibleSchema} from 'ai';
 import type {SearchProvider} from '../providers/search-provider.js';
-import type {SSEAskChoiceEvent, SSEShowPreviewEvent, SSEStartOAuthEvent} from '../types.js';
+import type {
+  SSEAskChoiceEvent,
+  SSEShowPreviewEvent,
+  SSEStartOAuthEvent,
+  SSEProposalEvent,
+  SSEUpdatePlanEvent,
+} from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Inline tool events (emitted via ctx.emit)
 // ---------------------------------------------------------------------------
 
 /** Discriminated set of SSE events tools can emit inline. */
-export type ToolInlineEvent = SSEAskChoiceEvent | SSEShowPreviewEvent | SSEStartOAuthEvent;
+export type ToolInlineEvent =
+  | SSEAskChoiceEvent
+  | SSEShowPreviewEvent
+  | SSEStartOAuthEvent
+  | SSEProposalEvent
+  | SSEUpdatePlanEvent;
 
 // ---------------------------------------------------------------------------
 // Tool context (provided to execute functions)

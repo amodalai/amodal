@@ -8,6 +8,8 @@ import type {
   SSEAskChoiceEvent,
   SSEShowPreviewEvent,
   SSEStartOAuthEvent,
+  SSEProposalEvent,
+  SSEUpdatePlanEvent,
 } from './sse-types.js';
 import type {FsBackend} from './fs.js';
 import type {SetupState, SetupStatePatch} from './setup-state.js';
@@ -23,7 +25,9 @@ import type {SetupPlan} from './setup-plan.js';
 export type CustomToolInlineEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
-  | SSEStartOAuthEvent;
+  | SSEStartOAuthEvent
+  | SSEProposalEvent
+  | SSEUpdatePlanEvent;
 
 /**
  * Tool definition shape used by amodal tools.

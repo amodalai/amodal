@@ -21,6 +21,8 @@ export enum SSEEventType {
   AskChoice = 'ask_choice',
   ShowPreview = 'show_preview',
   StartOAuth = 'start_oauth',
+  Proposal = 'proposal',
+  UpdatePlan = 'update_plan',
   ExploreStart = 'explore_start',
   ExploreEnd = 'explore_end',
   PlanMode = 'plan_mode',
@@ -200,6 +202,60 @@ export interface SSEStartOAuthEvent {
   timestamp: string;
 }
 
+/**
+ * Plan proposal card emitted on Path B (custom description). The user
+ * sees the inferred set of skills + connections + optional connections
+ * in plain English with `Looks right →` and `Adjust` buttons. Phase D
+ * of the admin-setup build plan.
+ *
+ * Skill / connection display names are author-readable strings — the
+ * tool never emits raw npm package names ("@amodalai/connection-slack").
+ * Empty `optional_connections` is fine and renders the section as
+ * skipped.
+ *
+ * `proposal_id` round-trips so subsequent `SSEUpdatePlanEvent` can
+ * mutate the same card in place rather than appending a duplicate.
+ */
+export interface SSEProposalEvent {
+  type: SSEEventType.Proposal;
+  /** Stable id for matching subsequent update_plan events back to this card. */
+  proposal_id: string;
+  /** What the agent does, one short paragraph. */
+  summary: string;
+  /** Skill display names — never raw package names. */
+  skills: Array<{label: string; description: string}>;
+  /** Required connection slots, by display label ("CRM", "Slack"). */
+  required_connections: Array<{label: string; description: string}>;
+  /** Optional connection slots, by display label. */
+  optional_connections: Array<{label: string; description: string}>;
+  timestamp: string;
+}
+
+/**
+ * Patch event for an in-flight proposal — emitted by `update_plan`
+ * during the Adjust conversation. The widget reducer matches on
+ * `proposal_id` and mutates the existing `SSEProposalEvent`-derived
+ * card in place (so the chat doesn't accumulate duplicate proposals
+ * as the user iterates).
+ *
+ * Each field on the patch is optional; unspecified fields preserve
+ * whatever the current proposal carries.
+ */
+export interface SSEUpdatePlanEvent {
+  type: SSEEventType.UpdatePlan;
+  /** Must match the `proposal_id` of an existing proposal block. */
+  proposal_id: string;
+  /** Replace the summary text. */
+  summary?: string;
+  /** Replace the skill list. */
+  skills?: Array<{label: string; description: string}>;
+  /** Replace the required connections list. */
+  required_connections?: Array<{label: string; description: string}>;
+  /** Replace the optional connections list. */
+  optional_connections?: Array<{label: string; description: string}>;
+  timestamp: string;
+}
+
 export interface SSEDoneEvent {
   type: SSEEventType.Done;
   timestamp: string;
@@ -271,6 +327,8 @@ export type SSEEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
   | SSEStartOAuthEvent
+  | SSEProposalEvent
+  | SSEUpdatePlanEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent

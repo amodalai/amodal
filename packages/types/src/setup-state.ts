@@ -35,8 +35,12 @@ import {z} from 'zod';
  * agent's per-turn behavior.
  *
  * - `planning` — Path B (custom description) only. The agent is
- *   drafting a Plan from the user's free-form prompt; the user
- *   hasn't confirmed yet (`Looks right` button not clicked).
+ *   drafting a Plan from the user's free-form prompt; no proposal
+ *   card has been emitted yet.
+ * - `planning_pending_confirm` — Path B only. The agent has emitted
+ *   a Proposal card (`propose_plan`) and is waiting for the user to
+ *   click `Looks right` (→ `installing`) or `Adjust` (collect changes
+ *   via `update_plan`, re-emit).
  * - `installing` — Template package + connection deps are being
  *   installed via npm.
  * - `connecting_required` — Walking required connections one at a
@@ -49,6 +53,7 @@ import {z} from 'zod';
  */
 export const SETUP_PHASES = [
   'planning',
+  'planning_pending_confirm',
   'installing',
   'connecting_required',
   'connecting_optional',
