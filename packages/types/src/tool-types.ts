@@ -7,7 +7,7 @@
 import type {
   SSEAskChoiceEvent,
   SSEShowPreviewEvent,
-  SSEStartOAuthEvent,
+  SSEConnectionPanelEvent,
   SSEProposalEvent,
   SSEUpdatePlanEvent,
   SSESetupCancelledEvent,
@@ -31,7 +31,7 @@ import type {SetupPlan} from './setup-plan.js';
 export type CustomToolInlineEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
-  | SSEStartOAuthEvent
+  | SSEConnectionPanelEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
   | SSESetupCancelledEvent;

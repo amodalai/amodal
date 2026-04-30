@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { WidgetConfig, SSEEvent } from '../types';
+import type { WidgetConfig, SSEEvent, InlineBlockRendererRegistry } from '../types';
 import type { InteractionEvent } from '../events/types';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { useChat } from '../hooks/useChat';
@@ -50,6 +50,14 @@ export type ChatWidgetProps = WidgetConfig & {
   streamFn?: (text: string, signal: AbortSignal, images?: Array<{mimeType: string; data: string}>) => AsyncIterable<SSEEvent>;
   /** Called when session state changes (for external persistence). */
   onStateChange?: (state: { sessionId: string | null; messages: Array<import('../types').ChatMessage> }) => void;
+  /**
+   * Optional Studio-supplied renderers for non-native block types
+   * (Phase H.2). The widget falls back to this registry only for
+   * block types it doesn't render itself (today: `connection_panel`).
+   * Native types (text, ask_choice, proposal, etc.) cannot be
+   * overridden — that's the contract that keeps the widget honest.
+   */
+  inlineBlockRenderers?: InlineBlockRendererRegistry;
 };
 
 export function ChatWidget({
@@ -78,6 +86,7 @@ export function ChatWidget({
   onSessionCreated,
   streamFn: customStreamFn,
   onStateChange,
+  inlineBlockRenderers,
 }: ChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [showHistory, setShowHistory] = useState(false);
@@ -116,7 +125,7 @@ export function ChatWidget({
 
   // Pick the appropriate hook output based on whether a custom streamFn was provided.
   const active = customStreamFn ? directStream : chatHook;
-  const { messages, send, stop, isStreaming, error, reset, eventBus, respondToConfirmation, isHistorical } = active;
+  const { messages, send, stop, isStreaming, error, reset, eventBus, respondToConfirmation, isHistorical, dispatch } = active;
   const noopAskUser = useCallback((_askId: string, _answers: Record<string, string>) => { /* noop */ }, []);
   const noopAskChoice = useCallback((_askId: string, _values: string[], message: string) => {
     // Custom streamFn flows can still send the value as a normal user turn —
@@ -239,7 +248,7 @@ export function ChatWidget({
             onUpdateTags={history.updateTags}
           />
         )}
-        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onAskChoiceSubmit={submitAskChoiceResponse} onProposalSubmit={submitProposalResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
+        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onAskChoiceSubmit={submitAskChoiceResponse} onProposalSubmit={submitProposalResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} inlineBlockRenderers={inlineBlockRenderers} dispatch={dispatch} />
         {error && <div className="pcw-error">{error}</div>}
         {showInput && (
           <InputBar
@@ -295,7 +304,7 @@ export function ChatWidget({
           onUpdateTags={history.updateTags}
         />
       )}
-      <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} />
+      <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} inlineBlockRenderers={inlineBlockRenderers} dispatch={dispatch} />
       {error && <div className="pcw-error">{error}</div>}
       {showInput && (
         <InputBar

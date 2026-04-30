@@ -6,7 +6,14 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Markdown from 'react-markdown';
-import type { ChatMessage, AssistantTextMessage, ConfirmationInfo } from '../types';
+import type {
+  ChatMessage,
+  AssistantTextMessage,
+  ConfirmationInfo,
+  InlineBlockRendererRegistry,
+  ChatAction,
+  ContentBlock,
+} from '../types';
 import type { InteractionEvent } from '../events/types';
 import { ToolCallCard } from './ToolCallCard';
 import { KBProposalCard } from './KBProposalCard';
@@ -15,7 +22,6 @@ import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
 import { AskChoiceCard } from './AskChoiceCard';
 import { AgentCardInlinePreview } from './AgentCardInline';
-import { StartOAuthCard } from './StartOAuthCard';
 import { ProposalCard } from './ProposalCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
@@ -101,6 +107,57 @@ interface MessageListProps {
   emptyStateText?: string;
   sessionId?: string;
   showFeedback?: boolean;
+  /** H.2 — Studio-supplied renderers for non-native block types. */
+  inlineBlockRenderers?: InlineBlockRendererRegistry;
+  /** Reducer dispatch handle, threaded down so registered renderers can dispatch (e.g. PANEL_UPDATE). */
+  dispatch?: React.Dispatch<ChatAction>;
+}
+
+/**
+ * H.2 fallback path. When MessageList's switch hits a block type it
+ * doesn't render natively, look it up in the consumer-supplied
+ * registry. Renderers receive the typed block plus a `dispatch`
+ * (for `PANEL_UPDATE` and similar) and `postUserMessage` (to inject
+ * "Skip Slack for now" / "Configured Slack" replies). Returns a
+ * dev-only placeholder when no renderer is registered so missed
+ * registrations are visible rather than silent.
+ */
+function renderInlineBlock(
+  block: ContentBlock,
+  index: number,
+  registry: InlineBlockRendererRegistry | undefined,
+  dispatch: React.Dispatch<ChatAction> | undefined,
+  postUserMessage: ((text: string) => void) | undefined,
+): React.ReactNode {
+  if (!registry || !dispatch) {
+    return <InlineBlockPlaceholder type={block.type} index={index} />;
+  }
+  const Renderer = registry[block.type];
+  if (!Renderer) {
+    return <InlineBlockPlaceholder type={block.type} index={index} />;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- registry maps each block type to a renderer for that exact type via Extract<>
+  const Typed = Renderer as React.ComponentType<{block: ContentBlock; dispatch: React.Dispatch<ChatAction>; postUserMessage: (text: string) => void}>;
+  return (
+    <Typed
+      key={`${block.type}-${String(index)}`}
+      block={block}
+      dispatch={dispatch}
+      postUserMessage={postUserMessage ?? (() => undefined)}
+    />
+  );
+}
+
+function InlineBlockPlaceholder({ type, index }: { type: string; index: number }) {
+  return (
+    <div
+      key={`placeholder-${type}-${String(index)}`}
+      className="pcw-bubble__placeholder"
+      role="status"
+    >
+      [{type} — no renderer registered]
+    </div>
+  );
 }
 
 function ConfirmationCard({ confirmation, onApprove, onDeny }: {
@@ -123,6 +180,8 @@ function AssistantBubble({
   onAskChoiceSubmit,
   onProposalSubmit,
   onConfirmationRespond,
+  inlineBlockRenderers,
+  dispatch,
 }: {
   message: AssistantTextMessage;
   sendMessage?: (text: string) => void;
@@ -132,6 +191,8 @@ function AssistantBubble({
   onAskChoiceSubmit?: (askId: string, values: string[], message: string) => void;
   onProposalSubmit?: (proposalId: string, answer: 'confirm' | 'adjust', message: string) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
+  inlineBlockRenderers?: InlineBlockRendererRegistry;
+  dispatch?: React.Dispatch<ChatAction>;
 }) {
   const hasContentBlocks = message.contentBlocks && message.contentBlocks.length > 0;
   const hasExtras =
@@ -198,14 +259,6 @@ function AssistantBubble({
                   card={block.card}
                 />
               );
-            case 'start_oauth':
-              return (
-                <StartOAuthCard
-                  key={`oauth-${String(i)}`}
-                  block={block}
-                  sendMessage={sendMessage}
-                />
-              );
             case 'proposal':
               return (
                 <ProposalCard
@@ -225,8 +278,13 @@ function AssistantBubble({
                 />
               );
             }
+            case 'connection_panel':
+              // H.2 — connection_panel is the first non-native block;
+              // Studio supplies the renderer via inlineBlockRenderers.
+              // Falls through to the registry / placeholder below.
+              return renderInlineBlock(block, i, inlineBlockRenderers, dispatch, sendMessage);
             default:
-              return null;
+              return renderInlineBlock(block, i, inlineBlockRenderers, dispatch, sendMessage);
           }
         })}
         {hasKBProposals && (
@@ -265,7 +323,7 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onAskChoiceSubmit, onProposalSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onAskChoiceSubmit, onProposalSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false, inlineBlockRenderers, dispatch }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -333,6 +391,8 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
                   onAskChoiceSubmit={onAskChoiceSubmit}
                   onProposalSubmit={onProposalSubmit}
                   onConfirmationRespond={onConfirmationRespond}
+                  inlineBlockRenderers={inlineBlockRenderers}
+                  dispatch={dispatch}
                 />
                 {showFeedback && !isStreaming && (
                   <FeedbackButtons messageId={msg.id} sessionId={sessionId} query={qText} response={rText} />

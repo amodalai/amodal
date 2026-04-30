@@ -113,7 +113,7 @@ export enum SSEEventType {
   Approved = 'approved',
   AskChoice = 'ask_choice',
   ShowPreview = 'show_preview',
-  StartOAuth = 'start_oauth',
+  ConnectionPanel = 'connection_panel',
   Proposal = 'proposal',
   UpdatePlan = 'update_plan',
   SetupCancelled = 'setup_cancelled',
@@ -310,13 +310,17 @@ export interface SSEShowPreviewEvent {
   timestamp: string;
 }
 
-/** Inline OAuth Connect button. */
-export interface SSEStartOAuthEvent {
-  type: SSEEventType.StartOAuth;
+/**
+ * Inline connection panel — Phase H.1. Auth-agnostic; the modal
+ * behind the panel handles dispatch.
+ */
+export interface SSEConnectionPanelEvent {
+  type: SSEEventType.ConnectionPanel;
+  panel_id: string;
   package_name: string;
-  display_name?: string;
-  description?: string;
-  skippable?: boolean;
+  display_name: string;
+  description: string;
+  skippable: boolean;
   timestamp: string;
 }
 
@@ -382,7 +386,7 @@ export type SSEEvent =
   | SSEConfirmationRequiredEvent
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
-  | SSEStartOAuthEvent
+  | SSEConnectionPanelEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
   | SSESetupCancelledEvent

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type * as React from 'react';
+
 // ---------------------------------------------------------------------------
 // SSE event types — mirrored from runtime/src/types.ts for browser use
 // (no @amodalai/core dependency)
@@ -23,7 +25,7 @@ export type SSEEventType =
   | 'ask_user'
   | 'ask_choice'
   | 'show_preview'
-  | 'start_oauth'
+  | 'connection_panel'
   | 'explore_start'
   | 'explore_end'
   | 'plan_mode'
@@ -179,15 +181,17 @@ export interface SSEShowPreviewEvent {
 }
 
 /**
- * Inline OAuth Connect card emitted by `start_oauth_connection`.
- * Mirrored from @amodalai/types — see SSEStartOAuthEvent for full docs.
+ * Inline connection panel emitted by `present_connection` (Phase
+ * H.1). Auth-agnostic — the modal behind the panel handles dispatch.
+ * Mirrored from @amodalai/types — see SSEConnectionPanelEvent.
  */
-export interface SSEStartOAuthEvent {
-  type: 'start_oauth';
+export interface SSEConnectionPanelEvent {
+  type: 'connection_panel';
+  panel_id: string;
   package_name: string;
-  display_name?: string;
-  description?: string;
-  skippable?: boolean;
+  display_name: string;
+  description: string;
+  skippable: boolean;
   timestamp: string;
 }
 
@@ -334,7 +338,7 @@ export type SSEEvent =
   | SSEAskUserEvent
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
-  | SSEStartOAuthEvent
+  | SSEConnectionPanelEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
   | SSESetupCancelledEvent
@@ -450,13 +454,32 @@ export interface ShowPreviewBlock {
   card: AgentCardInline;
 }
 
-/** Inline OAuth Connect card surfaced by the `start_oauth_connection` tool. */
-export interface StartOAuthBlock {
-  type: 'start_oauth';
+/**
+ * Inline connection panel surfaced by the `present_connection` tool
+ * (Phase H.1). Auth-agnostic — Studio supplies the renderer via
+ * `inlineBlockRenderers` (Phase H.2). The widget itself doesn't
+ * render this block natively; it falls through to the registry or a
+ * placeholder.
+ *
+ * `state` is a cache the renderer last drew. Studio overwrites it
+ * via reconciliation against real env-var status on every chat
+ * mount (Phase H.10), so it is never trusted blind. Only
+ * `userSkipped` survives reload.
+ */
+export interface ConnectionPanelBlock {
+  type: 'connection_panel';
+  panelId: string;
   packageName: string;
-  displayName?: string;
-  description?: string;
-  skippable?: boolean;
+  displayName: string;
+  description: string;
+  skippable: boolean;
+  state: 'idle' | 'success' | 'skipped' | 'error';
+  /** Persisted hint that the user clicked Later. Only field that survives reload. */
+  userSkipped?: boolean;
+  /** Optional inline data point shown beside the success state. */
+  successDetail?: string;
+  /** Optional error message shown beneath the panel in the error state. */
+  errorMessage?: string;
 }
 
 /**
@@ -513,6 +536,41 @@ export interface ErrorMessage {
 
 export type ChatMessage = UserMessage | AssistantTextMessage | ErrorMessage;
 
+/**
+ * Props passed to a renderer registered via `inlineBlockRenderers`
+ * on `<ChatWidget>` (Phase H.2). Studio supplies its own renderer
+ * for `connection_panel` so the widget itself stays auth-agnostic
+ * (and stays free of `/api/connections-status`, modal-stack, and
+ * env-var-inspection plumbing).
+ *
+ * - `block` — the typed ContentBlock entry to render.
+ * - `dispatch` — reducer dispatch handle, scoped to actions the
+ *   renderer should ever fire (today: `PANEL_UPDATE`).
+ * - `postUserMessage` — post a user turn into the conversation,
+ *   same as if the user had typed it. Used by Skip / Configure-success
+ *   to inject `Skip {displayName} for now` / `Configured {displayName}`.
+ */
+export interface BlockRendererProps<TBlock extends ContentBlock = ContentBlock> {
+  block: TBlock;
+  dispatch: React.Dispatch<ChatAction>;
+  postUserMessage: (text: string) => void;
+}
+
+/**
+ * Optional prop on `<ChatWidget>` (Phase H.2). Each entry maps a
+ * block type to a Studio-supplied renderer. The widget falls back to
+ * the registry only for block types it doesn't render natively
+ * (`connection_panel` is the first opt-in; future Studio-only blocks
+ * can register similarly). Native block types (text, ask_choice,
+ * proposal, etc.) cannot be overridden — that's a non-goal of the
+ * extension point.
+ */
+export type InlineBlockRendererRegistry = Partial<{
+  [K in ContentBlock['type']]: React.ComponentType<
+    BlockRendererProps<Extract<ContentBlock, {type: K}>>
+  >;
+}>;
+
 export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'widget'; widgetType: string; data: Record<string, unknown> }
@@ -521,7 +579,7 @@ export type ContentBlock =
   | AskUserBlock
   | AskChoiceBlock
   | ShowPreviewBlock
-  | StartOAuthBlock
+  | ConnectionPanelBlock
   | ProposalBlock;
 
 // ---------------------------------------------------------------------------
@@ -619,7 +677,19 @@ export type ChatAction =
   | { type: 'STREAM_ASK_CHOICE'; askId: string; question: string; options: AskChoiceOption[]; multi: boolean }
   | { type: 'ASK_CHOICE_SUBMITTED'; askId: string; values: string[] }
   | { type: 'STREAM_SHOW_PREVIEW'; card: AgentCardInline }
-  | { type: 'STREAM_START_OAUTH'; packageName: string; displayName?: string; description?: string; skippable?: boolean }
+  | {
+      type: 'STREAM_CONNECTION_PANEL';
+      panelId: string;
+      packageName: string;
+      displayName: string;
+      description: string;
+      skippable: boolean;
+    }
+  | {
+      type: 'PANEL_UPDATE';
+      panelId: string;
+      patch: Partial<Pick<ConnectionPanelBlock, 'state' | 'userSkipped' | 'successDetail' | 'errorMessage'>>;
+    }
   | {
       type: 'STREAM_PROPOSAL';
       proposalId: string;

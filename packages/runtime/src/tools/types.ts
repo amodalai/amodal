@@ -18,7 +18,7 @@ import type {SearchProvider} from '../providers/search-provider.js';
 import type {
   SSEAskChoiceEvent,
   SSEShowPreviewEvent,
-  SSEStartOAuthEvent,
+  SSEConnectionPanelEvent,
   SSEProposalEvent,
   SSEUpdatePlanEvent,
   SSESetupCancelledEvent,
@@ -32,7 +32,7 @@ import type {
 export type ToolInlineEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
-  | SSEStartOAuthEvent
+  | SSEConnectionPanelEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
   | SSESetupCancelledEvent;

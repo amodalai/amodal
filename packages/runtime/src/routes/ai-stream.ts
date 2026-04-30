@@ -300,10 +300,11 @@ export function translateEvent(
       break;
     }
 
-    case SSEEventType.StartOAuth: {
+    case SSEEventType.ConnectionPanel: {
       out.push({
-        type: 'data-start-oauth',
+        type: 'data-connection-panel',
         data: {
+          panel_id: event.panel_id,
           package_name: event.package_name,
           display_name: event.display_name,
           description: event.description,

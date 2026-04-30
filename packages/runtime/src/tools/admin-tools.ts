@@ -11,10 +11,11 @@
  *   (e.g. `keywords:amodal-connection`) and returns top-N hits.
  * - `install_package` — adds an npm package to `amodal.json#packages` and
  *   runs `npm install` in the agent repo.
- * - `start_oauth_connection` — renders an inline OAuth Connect card; on
- *   the deprecation path (Phase H.1 deletes it once `present_connection`
- *   ships as a custom tool inside agent-admin).
  * - `write_skill` — scaffolds a `skills/<name>/SKILL.md` with frontmatter.
+ *
+ * `start_oauth_connection` was removed in Phase H.1; replaced by the
+ * `present_connection` custom tool in agent-admin, which emits a
+ * `connection_panel` block via `ctx.emit` (auth-agnostic).
  *
  * These are gated by `sessionType === 'admin'` in the session builder.
  *
@@ -33,7 +34,6 @@ import {promisify} from 'node:util';
 import {z} from 'zod';
 import type {ToolRegistry, ToolContext} from './types.js';
 import type {Logger} from '../logger.js';
-import {SSEEventType} from '../types.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -113,37 +113,6 @@ export function registerAdminTools(registry: ToolRegistry, opts: AdminToolsOptio
         logger.warn('admin_tool_install_package_failed', {name: params.name, error: message});
         return {error: `Failed to install ${params.name}: ${message}`};
       }
-    },
-  });
-
-  // -------------------------------------------------------------------------
-  // start_oauth_connection — render an inline Connect button in chat
-  // -------------------------------------------------------------------------
-  registry.register('start_oauth_connection', {
-    description:
-      'Render an inline OAuth Connect card in the chat for an installed connection package. Use during template setup after the user agrees to connect a service (e.g. Slack, Google Analytics). The card shows the connection name + description and a Connect button (opens the provider\'s authorize flow in a popup); set `skippable` for non-required connections so the user can defer with a "Later" button.',
-    parameters: z.object({
-      packageName: z.string().describe('npm package providing the connection (e.g. "@amodalai/connection-slack")'),
-      displayName: z.string().optional().describe('Human-readable name shown on the card ("Slack"). Defaults to package name.'),
-      description: z.string().optional().describe('Short one-line description ("Digest delivery", "Website traffic + conversions").'),
-      skippable: z.boolean().optional().describe('When true, the card includes a Later button so the user can skip. Required connections should leave this false.'),
-    }),
-    readOnly: true,
-    metadata: {category: 'admin'},
-
-    async execute(
-      params: {packageName: string; displayName?: string; description?: string; skippable?: boolean},
-      ctx: ToolContext,
-    ) {
-      ctx.emit?.({
-        type: SSEEventType.StartOAuth,
-        package_name: params.packageName,
-        ...(params.displayName ? {display_name: params.displayName} : {}),
-        ...(params.description ? {description: params.description} : {}),
-        ...(params.skippable ? {skippable: true} : {}),
-        timestamp: new Date().toISOString(),
-      });
-      return {ok: true, package: params.packageName};
     },
   });
 

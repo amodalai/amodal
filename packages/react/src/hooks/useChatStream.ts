@@ -305,22 +305,42 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
-    case 'STREAM_START_OAUTH': {
+    case 'STREAM_CONNECTION_PANEL': {
       const msgs = [...state.messages];
       const last = msgs[msgs.length - 1];
       if (last && last.type === 'assistant_text') {
         const block: ContentBlock = {
-          type: 'start_oauth',
+          type: 'connection_panel',
+          panelId: action.panelId,
           packageName: action.packageName,
-          ...(action.displayName ? {displayName: action.displayName} : {}),
-          ...(action.description ? {description: action.description} : {}),
-          ...(action.skippable ? {skippable: true} : {}),
+          displayName: action.displayName,
+          description: action.description,
+          skippable: action.skippable,
+          state: 'idle',
         };
         msgs[msgs.length - 1] = {
           ...last,
           contentBlocks: [...last.contentBlocks, block],
         };
       }
+      return { ...state, messages: msgs };
+    }
+    case 'PANEL_UPDATE': {
+      // Mutate the matching connection_panel block by panelId.
+      // Studio dispatches this from inside its renderer (Skip /
+      // Configure-success) AND from the H.10 reconciliation effect on
+      // mount. Last-write-wins by design.
+      const msgs = state.messages.map((msg) => {
+        if (msg.type !== 'assistant_text') return msg;
+        let touched = false;
+        const blocks = msg.contentBlocks.map((block) => {
+          if (block.type !== 'connection_panel' || block.panelId !== action.panelId) return block;
+          touched = true;
+          return { ...block, ...action.patch };
+        });
+        if (!touched) return msg;
+        return { ...msg, contentBlocks: blocks };
+      });
       return { ...state, messages: msgs };
     }
     case 'STREAM_PROPOSAL': {
@@ -837,13 +857,14 @@ function processEvent(
     case 'show_preview':
       dispatch({ type: 'STREAM_SHOW_PREVIEW', card: event.card });
       return;
-    case 'start_oauth':
+    case 'connection_panel':
       dispatch({
-        type: 'STREAM_START_OAUTH',
+        type: 'STREAM_CONNECTION_PANEL',
+        panelId: event.panel_id,
         packageName: event.package_name,
-        ...(event.display_name ? {displayName: event.display_name} : {}),
-        ...(event.description ? {description: event.description} : {}),
-        ...(event.skippable ? {skippable: true} : {}),
+        displayName: event.display_name,
+        description: event.description,
+        skippable: event.skippable,
       });
       return;
     case 'proposal':

@@ -92,6 +92,12 @@ export interface UseChatReturn {
   loadSession: (sessionId: string) => void;
   /** True when viewing a loaded historical session. */
   isHistorical: boolean;
+  /**
+   * Reducer dispatch handle. Exposed for Studio (and other embedders)
+   * so renderers registered via `<ChatWidget inlineBlockRenderers>`
+   * can dispatch typed reducer actions like `PANEL_UPDATE` (Phase H.2).
+   */
+  dispatch: import('./useChatStream').UseChatStreamReturn['dispatch'];
 }
 
 // ---------------------------------------------------------------------------
@@ -328,6 +334,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     respondToConfirmation: stream.respondToConfirmation,
     loadSession,
     isHistorical: stream.isHistorical,
+    /**
+     * Reducer dispatch handle — exposed for Studio (and other
+     * embedders) so renderers registered via
+     * `<ChatWidget inlineBlockRenderers={...}>` can dispatch
+     * `PANEL_UPDATE` and similar (Phase H.2).
+     */
+    dispatch: stream.dispatch,
   };
 }
 

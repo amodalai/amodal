@@ -20,7 +20,7 @@ export enum SSEEventType {
   AskUser = 'ask_user',
   AskChoice = 'ask_choice',
   ShowPreview = 'show_preview',
-  StartOAuth = 'start_oauth',
+  ConnectionPanel = 'connection_panel',
   Proposal = 'proposal',
   UpdatePlan = 'update_plan',
   SetupCancelled = 'setup_cancelled',
@@ -182,24 +182,29 @@ export interface SSEShowPreviewEvent {
 }
 
 /**
- * Inline OAuth Connect button. Emitted by the admin agent's
- * `start_oauth_connection` tool. Studio renders a card with a Connect
- * button (which opens the provider's authorize URL — fetched at
- * click-time from the runtime's `/api/oauth/start?package=<package_name>`
- * endpoint; cloud-studio-app proxies that to platform-api's
- * `/connections/start/<provider>`) plus a "Later" skip option for
- * non-blocking flows.
+ * Inline connection panel. Emitted by the admin agent's
+ * `present_connection` custom tool — Phase H.1. Studio renders a
+ * single Configure button regardless of the package's auth type;
+ * the modal that opens behind Configure handles dispatch
+ * (OAuth-capable / bearer / api-key / basic). The agent never
+ * reasons about auth shape.
+ *
+ * Replaces the legacy `start_oauth` event, which assumed every
+ * connection was OAuth-capable and forced the agent to know the
+ * difference.
  */
-export interface SSEStartOAuthEvent {
-  type: SSEEventType.StartOAuth;
-  /** npm package name with the connection (e.g. "@amodalai/connection-slack"). */
+export interface SSEConnectionPanelEvent {
+  type: SSEEventType.ConnectionPanel;
+  /** Stable id matching subsequent panel updates back to this block. */
+  panel_id: string;
+  /** npm package providing the connection (e.g. "@amodalai/connection-slack"). */
   package_name: string;
-  /** Optional human-readable label for the button ("Connect Slack"). */
-  display_name?: string;
-  /** Optional one-line description shown next to the name (e.g. "Website traffic + conversions"). */
-  description?: string;
-  /** When true, the card shows a Later button so the user can skip. */
-  skippable?: boolean;
+  /** Human-readable name shown on the panel ("Slack"). */
+  display_name: string;
+  /** Short one-line description ("Where the digest gets posted"). */
+  description: string;
+  /** When true, the panel renders a Later button so the user can defer. */
+  skippable: boolean;
   timestamp: string;
 }
 
@@ -344,7 +349,7 @@ export type SSEEvent =
   | SSEAskUserEvent
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
-  | SSEStartOAuthEvent
+  | SSEConnectionPanelEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
   | SSESetupCancelledEvent
