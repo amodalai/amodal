@@ -7,12 +7,13 @@
 // Chat UI lives in @amodalai/react/widget — feature changes go there, not here.
 // This file is intentionally thin.
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ChatWidget } from '@amodalai/react/widget';
 import { streamSSE } from '@amodalai/react';
-import type { SSEEvent, ChatMessage } from '@amodalai/react';
+import type { SSEEvent, ChatMessage, InlineBlockRendererRegistry } from '@amodalai/react';
 import type { SetupWarning } from '@amodalai/types';
 import { useTheme } from '../ThemeProvider';
+import { StudioConnectionPanel } from '../StudioConnectionPanel';
 import {
   ConfirmCompletionModal,
   CompletionWarningsModal,
@@ -170,6 +171,16 @@ export function AdminChat({
     [],
   );
 
+  // Phase H.2 / H.3 — Studio supplies the renderer for
+  // `connection_panel` blocks. The widget is auth-agnostic; the
+  // panel + modal are Studio-owned because they fetch
+  // `/api/connections-status`, summon Studio's modal stack, and
+  // inspect env vars.
+  const inlineBlockRenderers = useMemo<InlineBlockRendererRegistry>(
+    () => ({ connection_panel: StudioConnectionPanel }),
+    [],
+  );
+
   // Phase F.8: the full-screen chat-mode AdminChat (compact=false) is
   // the create-flow setup chat — the input belongs to a continuing
   // back-and-forth, so the placeholder reads "Reply or ask a
@@ -196,6 +207,7 @@ export function AdminChat({
           showInput
           streamFn={streamFn}
           onStateChange={handleStateChange}
+          inlineBlockRenderers={inlineBlockRenderers}
           {...(initialMessage ? { initialMessage } : {})}
           theme={{
             mode: dark ? 'dark' : 'light',
