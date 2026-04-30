@@ -24,6 +24,7 @@ import type {PersistedSession, SessionMetadata, ImageDataMap} from './types.js';
 import type {TokenUsage} from '../providers/types.js';
 import type {ModelMessage} from 'ai';
 import {SessionStoreError} from '../errors.js';
+import {scrubMessagesForPersistence} from './credential-scrubber.js';
 
 const IMAGE_REF_PREFIX = '__amodal_imgref:';
 const IMAGE_REF_PATTERN = /^__amodal_imgref:([a-f0-9-]+)__$/;
@@ -285,10 +286,17 @@ export function sessionToRow(session: PersistedSession): {
   // newly extracted images from this turn.
   const mergedImageData = {...(session.imageData ?? {}), ...imageData};
 
+  // Phase F.5 — sanitize credential-shaped substrings from user-role
+  // messages at the persistence boundary. The agent's reasoning
+  // context still sees the raw text in the active SSE stream (so it
+  // can recognize a pasted token and redirect per the F.4 rule);
+  // only what hits the database is sanitized.
+  const scrubbedMessages = scrubMessagesForPersistence(messages);
+
   return {
     id: session.id,
     scopeId: session.scopeId,
-    messages: messages as unknown[],
+    messages: scrubbedMessages,
     tokenUsage: session.tokenUsage as {
       inputTokens: number;
       outputTokens: number;
