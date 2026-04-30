@@ -1,5 +1,7 @@
 # @amodalai/snapshot-probe
 
+## 0.3.45
+
 ## 0.3.44
 
 ## 0.3.43

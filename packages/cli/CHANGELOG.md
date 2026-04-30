@@ -1,5 +1,21 @@
 # @amodalai/amodal
 
+## 0.3.45
+
+### Patch Changes
+
+- 2589dab: Onboarding polish: template card previews, scrolling wizard, bare URL auto-linking, dead SSE cleanup, admin agent file write fix
+- 87f5214: Onboarding wizard, Studio proxy refactor, hot-reload improvements, admin agent tools
+- Updated dependencies [2589dab]
+- Updated dependencies [87f5214]
+- Updated dependencies [054a9ce]
+  - @amodalai/runtime@0.3.45
+  - @amodalai/types@0.3.45
+  - @amodalai/studio@0.3.45
+  - @amodalai/runtime-app@0.3.45
+  - @amodalai/core@0.3.45
+  - @amodalai/db@0.3.45
+
 ## 0.3.44
 
 ### Patch Changes
