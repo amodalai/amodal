@@ -11,8 +11,16 @@ import type { InteractionEvent } from '../events/types';
 import { ToolCallCard } from './ToolCallCard';
 import { KBProposalCard } from './KBProposalCard';
 
+/** Convert bare URLs to markdown links so react-markdown renders them as clickable. */
+function autolinkUrls(text: string): string {
+  return text.replace(
+    /(?<!\[.*?\]\()(?<!\()(https?:\/\/[^\s<)]+)/g,
+    '[$1]($1)',
+  );
+}
+
 /** Tools that render their own UI via inline SSE events. Hide the ToolCallCard chrome for these. */
-const UI_TOOLS = new Set(['show_gallery', 'collect_secret', 'start_oauth', 'ask_choice', 'show_preview', 'clone_template', 'setup_connections', 'customize_agent', 'show_setup_summary', 'onboarding_step']);
+const UI_TOOLS = new Set(['collect_secret', 'start_oauth', 'ask_choice', 'show_preview', 'clone_template', 'onboarding_step']);
 import { SkillPill } from './SkillPill';
 import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
@@ -153,7 +161,7 @@ function AssistantBubble({
             case 'text':
               return block.text.length > 0 ? (
                 <div key={`text-${String(i)}`} className="pcw-bubble__text pcw-markdown">
-                  <Markdown>{block.text}</Markdown>
+                  <Markdown>{autolinkUrls(block.text)}</Markdown>
                 </div>
               ) : null;
             case 'widget':
@@ -206,11 +214,6 @@ function AssistantBubble({
                   onSaved={onCollectSecretSaved}
                 />
               );
-            case 'show_gallery':
-            case 'setup_connections':
-            case 'setup_summary':
-            case 'customize_agent':
-              return null;
             default:
               return null;
           }
@@ -234,7 +237,7 @@ function AssistantBubble({
       ))}
       {message.text.length > 0 && (
         <div className="pcw-bubble__text pcw-markdown">
-          <Markdown>{message.text}</Markdown>
+          <Markdown>{autolinkUrls(message.text)}</Markdown>
         </div>
       )}
       {hasExtras && (

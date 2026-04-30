@@ -67,6 +67,11 @@ export function parseCard(raw: unknown): AgentCard | null {
       ? Math.floor(obj.uses)
       : undefined;
 
+  const icon =
+    typeof obj.icon === 'string' && obj.icon !== '' ? obj.icon : undefined;
+  const connections = readStringArray(obj.connections);
+  const skillSummaries = readStringArray(obj.skillSummaries);
+
   return {
     title: obj.title,
     tagline: obj.tagline,
@@ -74,6 +79,9 @@ export function parseCard(raw: unknown): AgentCard | null {
     thumbnailConversation: turns,
     ...(snippet !== undefined ? { snippet } : {}),
     ...(uses !== undefined ? { uses } : {}),
+    ...(icon !== undefined ? { icon } : {}),
+    ...(connections.length > 0 ? { connections } : {}),
+    ...(skillSummaries.length > 0 ? { skillSummaries } : {}),
   };
 }
 
@@ -110,8 +118,11 @@ function readTurns(value: unknown): AgentCardTurn[] | null {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON from GitHub raw
     const turn = t as Record<string, unknown>;
     if (turn.role !== 'user' && turn.role !== 'agent') return null;
-    if (typeof turn.content !== 'string' || turn.content === '') return null;
-    turns.push({ role: turn.role, content: turn.content });
+    const content = typeof turn.content === 'string' ? turn.content
+      : typeof turn.text === 'string' ? turn.text
+      : '';
+    if (content === '') return null;
+    turns.push({ role: turn.role, content });
   }
   return turns;
 }

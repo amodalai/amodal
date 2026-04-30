@@ -16,6 +16,8 @@ interface PickerCardProps {
   author?: string;
   /** True for trusted creators — adds a blue checkmark next to the author name. */
   verified?: boolean;
+  /** Whether this card is currently selected in the picker. */
+  selected?: boolean;
   onClick?: () => void;
   className?: string;
 }
@@ -30,7 +32,7 @@ interface PickerCardProps {
  * when the card doesn't ship an explicit `snippet` field. Category tint
  * defaults to the muted card surface when the category is unknown.
  */
-export function PickerCard({ card, category, author, verified, onClick, className }: PickerCardProps) {
+export function PickerCard({ card, category, author, verified, selected, onClick, className }: PickerCardProps) {
   const snippet = card.snippet ?? deriveSnippet(card.thumbnailConversation);
   const usesLabel = formatUses(card.uses);
   const tintClass = categoryTint(category);
@@ -41,22 +43,30 @@ export function PickerCard({ card, category, author, verified, onClick, classNam
     <Container
       onClick={onClick}
       className={cn(
-        'group flex flex-col text-left bg-card border border-border rounded-lg overflow-hidden transition-all',
+        'group flex flex-col text-left bg-card border rounded-lg overflow-hidden transition-all',
+        selected ? 'border-primary ring-1 ring-primary shadow-md' : 'border-border',
         onClick && 'cursor-pointer hover:border-foreground/20 hover:shadow-md hover:-translate-y-0.5',
         className,
       )}
     >
-      <div className={cn('px-3 py-2.5 min-h-[80px]', tintClass)}>
-        <div
-          className="font-mono text-[10px] leading-5 text-foreground/80 whitespace-pre-line line-clamp-4"
-          style={{ overflowWrap: 'anywhere' }}
-        >
-          {snippet}
+      {snippet && (
+        <div className={cn('px-3 py-2.5 min-h-[80px]', tintClass)}>
+          <div
+            className="font-mono text-[10px] leading-5 text-foreground/80 whitespace-pre-line line-clamp-4"
+            style={{ overflowWrap: 'anywhere' }}
+          >
+            {snippet}
+          </div>
         </div>
-      </div>
+      )}
       <div className="px-3 pt-2 pb-2.5 flex flex-col gap-0.5">
-        <div className="text-[12px] font-semibold text-foreground leading-tight">
-          {card.title}
+        <div className="flex items-center gap-1.5">
+          {card.icon && (
+            <img src={card.icon} alt="" className="h-4 w-4 rounded shrink-0" />
+          )}
+          <div className="text-[12px] font-semibold text-foreground leading-tight">
+            {card.title}
+          </div>
         </div>
         <div className="flex justify-between items-baseline gap-2">
           <span className="text-[10px] text-muted-foreground leading-snug truncate">

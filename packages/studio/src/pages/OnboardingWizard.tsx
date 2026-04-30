@@ -5,10 +5,10 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { AgentCard } from '@amodalai/types';
+import type { AgentCard, AgentCardPreview } from '@amodalai/types';
 import { PickerCard } from '@/components/PickerCard';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
-import { fetchAgentCard } from '../hooks/template-card-fetcher';
+import { fetchAgentCard, fetchAgentCardPreview } from '../hooks/template-card-fetcher';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,11 +39,14 @@ const TEMPLATES = [
 // Wizard — vertical chat-like flow
 // ---------------------------------------------------------------------------
 
-export function OnboardingWizard() {
+export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
   const { runtimeUrl } = useStudioConfig();
   const [step, setStep] = useState<WizardStep>('gallery');
   const [templates, setTemplates] = useState<TemplateInfo[]>([]);
   const [selectedName, setSelectedName] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateInfo | null>(null);
+  const [previewData, setPreviewData] = useState<AgentCardPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [credentials, setCredentials] = useState<ConnectionCredential[]>([]);
   const [credValues, setCredValues] = useState<Record<string, string>>({});
   const [credErrors, setCredErrors] = useState<Record<string, string>>({});
@@ -86,6 +89,21 @@ export function OnboardingWizard() {
       setTemplates(results);
     })();
   }, []);
+
+  const handleSelectTemplate = useCallback((template: TemplateInfo) => {
+    if (selectedTemplate?.repo === template.repo) {
+      setSelectedTemplate(null);
+      setPreviewData(null);
+      return;
+    }
+    setSelectedTemplate(template);
+    setSelectedName(template.card?.title ?? template.repo);
+    setPreviewLoading(true);
+    void fetchAgentCardPreview(template.repo, template.branch).then((preview) => {
+      setPreviewData(preview);
+      setPreviewLoading(false);
+    });
+  }, [selectedTemplate]);
 
   const handleClone = useCallback(async (repo: string, branch: string, name: string) => {
     setSelectedName(name);
@@ -167,7 +185,6 @@ export function OnboardingWizard() {
   const allCredsAddressed = credentials.every((c) => c.status === 'connected' || c.status === 'skipped');
   const stepOrder: WizardStep[] = ['gallery', 'cloning', 'installed', 'credentials', 'customize', 'summary'];
   const stepIdx = stepOrder.indexOf(step);
-  const pastGallery = stepIdx > 0;
   const pastCloning = stepIdx > 1;
   const pastInstalled = stepIdx > 2;
   const pastCredentials = stepIdx > 3;
@@ -177,7 +194,7 @@ export function OnboardingWizard() {
     <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
 
       {/* ---- GALLERY ---- */}
-      {!pastGallery ? (
+      {!pastCloning ? (
         <>
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-foreground">Start with an agent</h2>
@@ -189,12 +206,86 @@ export function OnboardingWizard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {templates.map((t) => t.card ? (
               <PickerCard key={t.repo} card={t.card} author={t.repo.split('/')[0] ?? ''} verified={true}
-                onClick={() => void handleClone(t.repo, t.branch, t.card?.title ?? t.repo)} />
+                selected={selectedTemplate?.repo === t.repo}
+                onClick={step === 'cloning' ? undefined : () => handleSelectTemplate(t)} />
             ) : (
               <div key={t.repo} className="border border-border rounded-lg p-4 animate-pulse bg-card h-32" />
             ))}
           </div>
-          <button className="text-sm text-primary hover:underline" onClick={() => { /* TODO: open admin chat */ }}>
+
+          {/* ---- PREVIEW (inline below cards) ---- */}
+          {selectedTemplate && step !== 'cloning' && (
+            <div className="space-y-4 border border-border rounded-lg bg-card p-5">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold text-foreground">{selectedName}</h2>
+                {selectedTemplate.card?.tagline && (
+                  <p className="text-sm text-muted-foreground">{selectedTemplate.card.tagline}</p>
+                )}
+              </div>
+              {selectedTemplate.card?.connections && selectedTemplate.card.connections.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedTemplate.card.connections.map((c) => (
+                    <span key={c} className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-muted text-muted-foreground">{c}</span>
+                  ))}
+                </div>
+              )}
+              {selectedTemplate.card?.skillSummaries && selectedTemplate.card.skillSummaries.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Skills</div>
+                  {selectedTemplate.card.skillSummaries.map((s) => (
+                    <div key={s} className="text-sm text-foreground">- {s}</div>
+                  ))}
+                </div>
+              )}
+              {previewLoading ? (
+                <div className="flex items-center gap-3 py-4">
+                  <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+                  <span className="text-sm text-muted-foreground">Loading preview...</span>
+                </div>
+              ) : previewData ? (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <div className="px-4 py-2 border-b border-border">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Example output</span>
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    {previewData.conversation.map((turn, i) => (
+                      <div key={i} className={turn.role === 'user'
+                        ? 'text-sm text-muted-foreground italic'
+                        : 'text-sm text-foreground whitespace-pre-line'
+                      }>
+                        {turn.role === 'user' ? `> ${turn.content}` : turn.content}
+                      </div>
+                    ))}
+                  </div>
+                  {previewData.description && (
+                    <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
+                      {previewData.description}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              <button
+                className="w-full py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90"
+                onClick={() => void handleClone(selectedTemplate.repo, selectedTemplate.branch, selectedName)}
+              >
+                Set this up →
+              </button>
+            </div>
+          )}
+
+          {/* ---- CLONING (inline below gallery) ---- */}
+          {step === 'cloning' && (
+            <div className="flex items-center gap-3 py-4">
+              <div className="animate-spin h-5 w-5 border-2 border-primary border-t-transparent rounded-full" />
+              <span className="text-sm text-muted-foreground">Setting up {selectedName}...</span>
+            </div>
+          )}
+
+          <button className="text-sm text-primary hover:underline" onClick={step === 'cloning' ? undefined : () => {
+            window.dispatchEvent(new CustomEvent('admin-chat-open', {
+              detail: 'I want to build a custom agent from scratch. Ask me what I need — what connections, skills, and automations would be useful for my use case.',
+            }));
+          }}>
             Build custom →
           </button>
         </>
@@ -204,57 +295,20 @@ export function OnboardingWizard() {
         </div>
       )}
 
-      {/* ---- CLONING ---- */}
-      {step === 'cloning' && (
-        <div className="flex items-center gap-3 py-4">
-          <div className="animate-spin h-5 w-5 border-2 border-primary border-t-transparent rounded-full" />
-          <span className="text-sm text-muted-foreground">Setting up {selectedName}...</span>
-        </div>
-      )}
-
       {/* ---- INSTALLED ---- */}
       {step === 'installed' && installedInfo && (
         <div className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-foreground">{"Here's what's in your agent"}</h2>
-            <p className="text-sm text-muted-foreground">You can customize all of this later through the admin agent.</p>
-          </div>
-          <div className="border border-border rounded-lg bg-card divide-y divide-border">
-            {installedInfo.packages.length > 0 && (
-              <div className="px-4 py-3">
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Connections</div>
-                {installedInfo.packages.map((p) => (
-                  <div key={p.name} className="text-sm text-foreground py-0.5">
-                    {p.displayName}
-                    {p.description && <span className="text-muted-foreground ml-2">— {p.description}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-            {installedInfo.skills.length > 0 && (
-              <div className="px-4 py-3">
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Skills</div>
-                {installedInfo.skills.map((s) => (
-                  <div key={s} className="text-sm text-foreground py-0.5">{s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</div>
-                ))}
-              </div>
-            )}
-            {installedInfo.knowledge.length > 0 && (
-              <div className="px-4 py-3">
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Knowledge</div>
-                {installedInfo.knowledge.map((k) => (
-                  <div key={k} className="text-sm text-foreground py-0.5">{k.replace(/\.md$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</div>
-                ))}
-              </div>
-            )}
-            {installedInfo.automations.length > 0 && (
-              <div className="px-4 py-3">
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Automations</div>
-                {installedInfo.automations.map((a) => (
-                  <div key={a} className="text-sm text-foreground py-0.5">{a.replace(/\.json$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</div>
-                ))}
-              </div>
-            )}
+          <div className="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-3">
+            <span className="text-emerald-500">✓</span>
+            <span className="text-sm text-foreground">
+              {selectedName} installed
+              {' — '}
+              {[
+                installedInfo.packages.length > 0 && `${String(installedInfo.packages.length)} connections`,
+                installedInfo.skills.length > 0 && `${String(installedInfo.skills.length)} skills`,
+                installedInfo.knowledge.length > 0 && `${String(installedInfo.knowledge.length)} knowledge docs`,
+              ].filter(Boolean).join(', ')}
+            </span>
           </div>
           <button
             className="w-full py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90"
@@ -374,10 +428,18 @@ export function OnboardingWizard() {
                 </div>
               ))}
             </div>
-            <a href={runtimeUrl} target="_blank" rel="noopener noreferrer"
-              className="inline-block px-5 py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90">
-              Open agent →
-            </a>
+            <div className="flex gap-3">
+              <button
+                className="px-5 py-2 text-sm font-medium text-white bg-primary-solid rounded-lg hover:opacity-90"
+                onClick={onComplete}
+              >
+                Go to dashboard
+              </button>
+              <a href={runtimeUrl} target="_blank" rel="noopener noreferrer"
+                className="px-5 py-2 text-sm font-medium text-muted-foreground border border-border rounded-lg hover:text-foreground">
+                Open agent →
+              </a>
+            </div>
           </div>
           <div className="flex items-center gap-3 py-2">
             <span className="text-primary">→</span>

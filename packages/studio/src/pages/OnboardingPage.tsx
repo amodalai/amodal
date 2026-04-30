@@ -10,10 +10,10 @@ import { OnboardingWizard } from './OnboardingWizard';
  * Onboarding page for fresh repos. Fixed height container — the wizard
  * scrolls internally without pushing the page layout.
  */
-export function OnboardingPage() {
+export function OnboardingPage({ onComplete }: { onComplete?: () => void }) {
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <OnboardingWizard />
+      <OnboardingWizard onComplete={onComplete} />
     </div>
   );
 }

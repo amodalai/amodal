@@ -387,11 +387,7 @@ export function translateEvent(
     case SSEEventType.AskChoice:
     case SSEEventType.ShowPreview:
     case SSEEventType.StartOAuth:
-    case SSEEventType.ShowGallery:
     case SSEEventType.CollectSecret:
-    case SSEEventType.SetupConnections:
-    case SSEEventType.SetupSummary:
-    case SSEEventType.CustomizeAgent:
       break;
 
     default: {
