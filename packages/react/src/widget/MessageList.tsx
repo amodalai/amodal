@@ -150,6 +150,10 @@ function AssistantBubble({
     message.skillActivations.length > 0 ||
     message.kbProposals.length > 0;
 
+  // Don't render an empty bubble while waiting for content
+  const hasAnyContent = hasContentBlocks || message.text.length > 0 || hasExtras;
+  if (!hasAnyContent) return null;
+
   // If we have content blocks, render them in order for proper interleaving
   if (hasContentBlocks) {
     // Tool calls are already in contentBlocks — only render KB proposals separately
@@ -260,6 +264,18 @@ function AssistantBubble({
 export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, onCollectSecretSaved, serverUrl, emptyStateText, sessionId, showFeedback = false, verboseTools = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+  const [lastElapsed, setLastElapsed] = useState<number | null>(null);
+  const wasStreamingRef = useRef(false);
+
+  useEffect(() => {
+    if (isStreaming) {
+      wasStreamingRef.current = true;
+      setLastElapsed(null);
+    } else if (wasStreamingRef.current && streamStartTime) {
+      setLastElapsed(Math.floor((Date.now() - streamStartTime) / 1000));
+      wasStreamingRef.current = false;
+    }
+  }, [isStreaming, streamStartTime]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -344,6 +360,9 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
         }
       })}
       {isStreaming && <StreamingIndicator startTime={streamStartTime} />}
+      {!isStreaming && lastElapsed !== null && lastElapsed >= 1 && (
+        <div className="pcw-elapsed">{String(lastElapsed)}s</div>
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { listSessions, updateSession } from '../client/chat-api';
+import { listSessions, updateSession, deleteSession } from '../client/chat-api';
 import type { SessionHistoryItem } from '../client/chat-api';
 
 export interface UseSessionHistoryOptions {
@@ -21,6 +21,7 @@ export interface UseSessionHistoryReturn {
   refresh: () => void;
   updateTags: (sessionId: string, tags: string[]) => void;
   updateTitle: (sessionId: string, title: string) => void;
+  removeSession: (sessionId: string) => void;
   allTags: string[];
 }
 
@@ -90,6 +91,23 @@ export function useSessionHistory(options: UseSessionHistoryOptions): UseSession
     [serverUrl],
   );
 
+  const removeSession = useCallback(
+    (sessionId: string) => {
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      const doDelete = async () => {
+        try {
+          const rawToken = getTokenRef.current?.();
+          const token = (rawToken instanceof Promise ? await rawToken : rawToken) ?? undefined;
+          await deleteSession(serverUrl, sessionId, token);
+        } catch {
+          refresh();
+        }
+      };
+      void doDelete();
+    },
+    [serverUrl, refresh],
+  );
+
   // Collect all unique tags across sessions
   const allTags = [...new Set(sessions.flatMap((s) => s.tags))].sort();
 
@@ -100,5 +118,5 @@ export function useSessionHistory(options: UseSessionHistoryOptions): UseSession
     }
   }, [enabled, refresh]);
 
-  return { sessions, isLoading, error, refresh, updateTags, updateTitle, allTags };
+  return { sessions, isLoading, error, refresh, updateTags, updateTitle, removeSession, allTags };
 }

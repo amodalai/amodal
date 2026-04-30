@@ -204,6 +204,26 @@ export async function updateSession(
 }
 
 /**
+ * Delete a session.
+ */
+export async function deleteSession(
+  serverUrl: string,
+  sessionId: string,
+  token?: string | null,
+): Promise<void> {
+  const url = `${serverUrl}/sessions/history/${sessionId}`;
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new ChatApiError('Delete session failed', response.status, response.statusText, url);
+  }
+}
+
+/**
  * Creates a configured chat client instance.
  */
 export function createChatClient(serverUrl: string, token?: string) {

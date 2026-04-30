@@ -61,7 +61,7 @@ import {StandaloneSessionManager} from '../session/manager.js';
 import {selectSessionStore} from '../session/session-store-selector.js';
 import {resolveEnvRef} from '../env-ref.js';
 import {buildSessionComponents} from '../session/session-builder.js';
-import type {SharedResources} from '../routes/session-resolver.js';
+import type {SharedResources, BundleResolver} from '../routes/session-resolver.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
 import {buildMcpConfigs} from './mcp-config.js';
 import {ConfigWatcher} from './config-watcher.js';
@@ -353,6 +353,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Helper: get current bundle (updated by config watcher)
   const getBundle = (): AgentBundle => bundle;
+
+  // Bundle resolver uses a getter so routes always see the latest bundle
+  // after config-watcher hot reloads.
+  const bundleResolver: BundleResolver = {
+    get staticBundle() { return bundle; },
+  };
 
   // Helper: create task session components
   const createTaskSessionComponents = () => {
@@ -1032,13 +1038,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // route-helpers, so no explicit hooks are needed here.
   app.use(createChatStreamRouter({
     sessionManager,
-    bundleResolver: {staticBundle: bundle},
+    bundleResolver,
     shared,
     summarizeToolResult: config.summarizeToolResult,
   }));
   app.use(createChatRouter({
     sessionManager,
-    bundleResolver: {staticBundle: bundle},
+    bundleResolver,
     shared,
     summarizeToolResult: config.summarizeToolResult,
   }));
@@ -1064,7 +1070,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.use(createEvalRouter({
     getBundle,
     sessionManager,
-    bundleResolver: {staticBundle: bundle},
+    bundleResolver,
     shared,
   }));
 
