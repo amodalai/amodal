@@ -28,6 +28,8 @@ export type {
   LoadedTool,
   CustomToolContext,
   CustomToolInlineEvent,
+  CustomToolSetupStateOps,
+  CustomToolSetupStateRow,
   ToolHandlerDefinition,
   CustomToolExecutor,
   CustomShellExecutor,
@@ -206,6 +208,25 @@ export type {
   ValidationResult,
   ValidationFormat,
 } from './validation.js';
+
+// Durable setup state (Phase B)
+export type {
+  SetupPhase,
+  CompletedSlot,
+  SkippedSlot,
+  ConfigAnswers,
+  DeferredRequest,
+  ProvidedContext,
+  SetupPlanSnapshot,
+  SetupState,
+  SetupStatePatch,
+} from './setup-state.js';
+export {
+  SETUP_PHASES,
+  emptySetupState,
+  setupStateSchema,
+  setupStatePatchSchema,
+} from './setup-state.js';
 
 // Snapshot types
 export type {

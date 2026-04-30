@@ -10,6 +10,7 @@ import type {
   SSEStartOAuthEvent,
 } from './sse-types.js';
 import type {FsBackend} from './fs.js';
+import type {SetupState, SetupStatePatch} from './setup-state.js';
 
 /**
  * Inline SSE events a custom tool handler may emit through `ctx.emit`.
@@ -111,12 +112,55 @@ export interface CustomToolContext {
    * a connection package's probe file).
    */
   fs?: FsBackend;
+  /**
+   * Setup-state operations scoped to the active agent + scope. The
+   * runtime closes over a Drizzle handle and exposes high-level
+   * read / upsert / mark-complete methods so the agent-admin handler
+   * doesn't need to import `@amodalai/db` (it ships outside the
+   * runtime's node_modules and module resolution from the cached
+   * tools dir wouldn't reach the workspace).
+   *
+   * Phase B's `read_setup_state` / `update_setup_state` tools are the
+   * first consumers. Later phases (Plan composer, completion gate,
+   * per-domain query modules) follow the same pattern: domain-specific
+   * ctx namespaces backed by query modules in `@amodalai/db/queries`.
+   */
+  setupState?: CustomToolSetupStateOps;
   /** Stable id of the agent the tool is running on behalf of. */
   agentId?: string;
   /** Per-user scope key. Empty string = agent-level (no scope). */
   scopeId?: string;
   /** Session id for log correlation and ask-id derivation. */
   sessionId?: string;
+}
+
+/**
+ * Live row data plus its `completedAt` lifecycle timestamp. Mirrors
+ * the row shape returned by `@amodalai/db/queries/setup-state.ts`,
+ * except `completedAt` is serialized as an ISO-8601 string for clean
+ * JSON traversal in tool args.
+ */
+export interface CustomToolSetupStateRow {
+  state: SetupState;
+  /** ISO-8601 timestamp; null until `commit_setup` (Phase E) sets it. */
+  completedAt: string | null;
+}
+
+/**
+ * Domain-specific setup-state operations exposed via `ctx.setupState`.
+ * The runtime injects the agent + scope identity automatically — the
+ * handler never passes them explicitly.
+ */
+export interface CustomToolSetupStateOps {
+  /** Read the row, or null when no row exists for this (agent, scope). */
+  read(): Promise<CustomToolSetupStateRow | null>;
+  /** Apply a patch (JSONB merge in SQL) and return the post-patch row. */
+  upsert(patch: SetupStatePatch): Promise<CustomToolSetupStateRow>;
+  /**
+   * Stamp `completed_at` and flip phase to 'complete'. Idempotent.
+   * Returns the ISO timestamp, or null if no row existed.
+   */
+  markComplete(): Promise<string | null>;
 }
 
 /**

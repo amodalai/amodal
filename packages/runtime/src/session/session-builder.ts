@@ -36,6 +36,12 @@ import {createRequestTool, REQUEST_TOOL_NAME} from '../tools/request-tool.js';
 import {createCustomToolDefinition} from '../tools/custom-tool-adapter.js';
 import type {CustomToolSessionContext} from '../tools/custom-tool-adapter.js';
 import {LocalFsBackend} from '../tools/fs/local.js';
+import {
+  getDb,
+  getSetupState,
+  upsertSetupState,
+  markComplete,
+} from '@amodalai/db';
 import {registerMcpTools} from '../tools/mcp-tool-adapter.js';
 import {
   AccessJsonPermissionChecker,
@@ -246,6 +252,14 @@ function buildCustomToolSessionContext(
   // Phase 0G via the same factory selection used for the SDK ToolContext.
   const fs = repoRoot ? new LocalFsBackend({repoRoot}) : undefined;
 
+  // Phase B: expose ctx.setupState. The factory closes over the agent
+  // id + a Drizzle handle pulled lazily from the runtime's pool so
+  // session-builder doesn't need to wire the db connection through
+  // its existing flow. Skipped when the pool isn't initialized
+  // (e.g. unit tests with no DATABASE_URL).
+  const agentId = bundle.config.name;
+  const setupStateFactory = buildSetupStateFactory(agentId);
+
   return {
     config: {
       getConnections(): Record<string, unknown> {
@@ -264,8 +278,48 @@ function buildCustomToolSessionContext(
     appId,
     repoRoot: repoRoot ?? undefined,
     fs,
-    agentId: bundle.config.name,
+    agentId,
+    ...(setupStateFactory ? {setupStateFactory} : {}),
   };
+}
+
+/**
+ * Build a `setupState` ops factory closed over the runtime's Drizzle
+ * pool. Returns undefined when no pool is initialized — `amodal dev`
+ * always has one (it requires DATABASE_URL), but unit tests that
+ * exercise the session-builder without a db pool see this as a soft
+ * skip and the handler falls back to its own no-db error path.
+ */
+function buildSetupStateFactory(agentId: string): NonNullable<CustomToolSessionContext['setupStateFactory']> | undefined {
+  let db: ReturnType<typeof getDb>;
+  try {
+    db = getDb();
+  } catch {
+    // No DATABASE_URL configured — setupState ops not available for this session.
+    return undefined;
+  }
+
+  return (scopeId) => ({
+    async read() {
+      const row = await getSetupState(db, agentId, scopeId);
+      if (!row) return null;
+      return {
+        state: row.state,
+        completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+      };
+    },
+    async upsert(patch) {
+      const row = await upsertSetupState(db, agentId, scopeId, patch);
+      return {
+        state: row.state,
+        completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+      };
+    },
+    async markComplete() {
+      const dt = await markComplete(db, agentId, scopeId);
+      return dt ? dt.toISOString() : null;
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------

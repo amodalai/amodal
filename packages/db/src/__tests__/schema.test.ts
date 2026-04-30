@@ -17,6 +17,7 @@ import {
   automationRuns,
   evalSuites,
   evalRuns,
+  setupState,
 } from '../schema/index.js';
 
 describe('schema table definitions', () => {
@@ -58,6 +59,30 @@ describe('schema table definitions', () => {
 
   it('exports eval_runs with correct SQL name', () => {
     expect(getTableName(evalRuns)).toBe('eval_runs');
+  });
+
+  it('exports setup_state with correct SQL name', () => {
+    expect(getTableName(setupState)).toBe('setup_state');
+  });
+
+  it('setupState has all SetupState columns + identity + timestamps', () => {
+    const cols = Object.keys(setupState);
+    // Identity (composite primary key)
+    expect(cols).toContain('agentId');
+    expect(cols).toContain('scopeId');
+    // SetupState fields (mirror @amodalai/types/setup-state.ts)
+    expect(cols).toContain('phase');
+    expect(cols).toContain('currentStep');
+    expect(cols).toContain('completed');
+    expect(cols).toContain('skipped');
+    expect(cols).toContain('configAnswers');
+    expect(cols).toContain('deferredRequests');
+    expect(cols).toContain('providedContext');
+    expect(cols).toContain('plan');
+    // Lifecycle timestamps
+    expect(cols).toContain('createdAt');
+    expect(cols).toContain('updatedAt');
+    expect(cols).toContain('completedAt');
   });
 
   it('storeDocuments has expected columns', () => {

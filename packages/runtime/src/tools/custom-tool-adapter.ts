@@ -17,7 +17,13 @@
  */
 
 import {jsonSchema} from 'ai';
-import type {FsBackend, LoadedTool, CustomToolExecutor, CustomToolContext} from '@amodalai/types';
+import type {
+  CustomToolContext,
+  CustomToolExecutor,
+  CustomToolSetupStateOps,
+  FsBackend,
+  LoadedTool,
+} from '@amodalai/types';
 
 import {ToolExecutionError} from '../errors.js';
 import {log} from '../logger.js';
@@ -53,6 +59,14 @@ export interface CustomToolSessionContext {
   repoRoot?: string;
   /** Stable id of the agent the tool is running on behalf of. */
   agentId?: string;
+  /**
+   * Factory that produces a `CustomToolSetupStateOps` bound to the
+   * active scope (Phase B). The session ctx caller passes a function
+   * rather than the ops directly because `scopeId` is per-runtime-call,
+   * not per-session — the adapter calls this with the live runtime
+   * scope when building each handler ctx.
+   */
+  setupStateFactory?: (scopeId: string) => CustomToolSetupStateOps;
 }
 
 function buildCustomToolContext(
@@ -212,6 +226,11 @@ function buildCustomToolContext(
     // working unchanged because every field below is optional.
     ...(sessionCtx.fs ? {fs: sessionCtx.fs} : {}),
     ...(sessionCtx.agentId ? {agentId: sessionCtx.agentId} : {}),
+    // Phase B: setupState ops factory closes over the live scopeId so
+    // the handler doesn't need to plumb identity through every call.
+    ...(sessionCtx.setupStateFactory
+      ? {setupState: sessionCtx.setupStateFactory(runtimeCtx.scopeId)}
+      : {}),
     scopeId: runtimeCtx.scopeId,
     sessionId: runtimeCtx.sessionId,
   };
