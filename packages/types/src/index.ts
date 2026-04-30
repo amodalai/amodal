@@ -178,6 +178,18 @@ export type {
   AgentCardTurn,
 } from './card-types.js';
 
+// Inline content blocks emitted by custom tools
+export type {
+  Block,
+  BlockOfType,
+  TextBlock,
+  AskChoiceBlock,
+  AgentCardPreviewBlock,
+  ConnectionPanelBlock,
+  ProposalBlock,
+  UpdatePlanBlock,
+} from './blocks.js';
+
 // Snapshot types
 export type {
   SnapshotConnection,
