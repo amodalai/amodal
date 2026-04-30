@@ -52,7 +52,7 @@ describe('ConfigWatcher', () => {
     vi.useRealTimers();
   });
 
-  it('should watch agent config dirs, not .amodal/', async () => {
+  it('should watch agent config dirs, package.json, and .amodal/', async () => {
     const {ConfigWatcher} = await import('./config-watcher.js');
     const watcher = new ConfigWatcher('/repo', onChange);
     watcher.start();
@@ -60,14 +60,13 @@ describe('ConfigWatcher', () => {
     // Should have called watch multiple times (one per target that doesn't throw)
     expect(vi.mocked(fs.watch).mock.calls.length).toBeGreaterThan(1);
 
-    // Verify paths include amodal.json, skills, connections
+    // Verify paths include amodal.json, skills, connections, .amodal, package.json
     const paths = vi.mocked(fs.watch).mock.calls.map((c) => c[0]);
     expect(paths).toContainEqual('/repo/amodal.json');
     expect(paths).toContainEqual('/repo/skills');
     expect(paths).toContainEqual('/repo/connections');
-
-    // Should NOT watch .amodal
-    expect(paths).not.toContainEqual('/repo/.amodal');
+    expect(paths).toContainEqual('/repo/.amodal');
+    expect(paths).toContainEqual('/repo/package.json');
 
     watcher.stop();
   });
