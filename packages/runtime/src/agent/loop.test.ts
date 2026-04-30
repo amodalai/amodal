@@ -389,9 +389,7 @@ describe('handleThinking (via transition)', () => {
     expect(summarizer).not.toHaveBeenCalled();
   });
 
-  it('escalates at loopEscalationThreshold: stronger warn + removes looping tool', async () => {
-    // Build messages with 5 tool calls so count hits escalation (default=5)
-    // but not hard-stop (default=8).
+  it('stops loop when maxToolRepeats is hit', async () => {
     const messages: ModelMessage[] = [];
     for (let i = 0; i < 5; i++) {
       messages.push({
@@ -404,110 +402,39 @@ describe('handleThinking (via transition)', () => {
       } as ModelMessage);
     }
 
-    // Registry has both the looping tool and another tool
-    const stuckTool = makeMockToolDef({description: 'Stuck tool'});
-    const otherTool = makeMockToolDef({description: 'Other tool'});
-    const registry = makeMockRegistry({stuck_api: stuckTool, other_tool: otherTool});
-
-    const ctx = makeMockContext({toolRegistry: registry});
+    const ctx = makeMockContext();
+    ctx.config.maxToolRepeats = 5;
     const result = await transition({type: 'thinking', messages}, ctx);
 
-    // Should still stream (not hard-stop)
-    expect(result.next.type).toBe('streaming');
-
-    // The escalation-level warn should have been logged
-    expect(ctx.logger.warn).toHaveBeenCalledWith(
-      'agent_loop_escalation',
-      expect.objectContaining({tool: 'stuck_api', count: 5}),
-    );
-
-    // The looping tool should be EXCLUDED from this turn's tool set
-    const streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[0][0];
-    const passedTools = streamTextCall.tools as Record<string, unknown>;
-    expect(passedTools['stuck_api']).toBeUndefined();
-    expect(passedTools['other_tool']).toBeDefined();
-
-    // Escalation message should be appended
-    const lastMsg = streamTextCall.messages[streamTextCall.messages.length - 1];
-    expect(lastMsg.role).toBe('user');
-    if (typeof lastMsg.content === 'string') {
-      expect(lastMsg.content).toContain('temporarily disabled');
-      expect(lastMsg.content).toContain('stuck_api');
+    expect(result.next.type).toBe('done');
+    if (result.next.type === 'done') {
+      expect(result.next.reason).toBe('loop_detected');
     }
-
-    // The looping tool should be registered in the cooldown map, not just
-    // filtered once-off — so subsequent turns also skip it.
-    expect(ctx.disabledToolsUntilTurn.has('stuck_api')).toBe(true);
+    expect(ctx.logger.info).toHaveBeenCalledWith(
+      'agent_tool_repeat_limit',
+      expect.objectContaining({tool: 'stuck_api', count: 5, limit: 5}),
+    );
   });
 
-  it('escalation cooldown keeps tool disabled across subsequent turns', async () => {
-    // Simulate a session where escalation fires at turn 5 with default
-    // cooldown of 3, then the agent moves on. The looping tool should be
-    // excluded from turns 5-7 and return at turn 8.
-    const stuckTool = makeMockToolDef({description: 'Stuck tool'});
-    const otherTool = makeMockToolDef({description: 'Other tool'});
-    const registry = makeMockRegistry({stuck_api: stuckTool, other_tool: otherTool});
-    const ctx = makeMockContext({toolRegistry: registry});
-
-    // Pre-populate the cooldown as if escalation fired at turn 5
-    ctx.turnCount = 4; // next turn will be 5
-    ctx.disabledToolsUntilTurn.set('stuck_api', 8); // disable until turn 8
-
-    // Turn 5: tool still disabled
-    await transition({type: 'thinking', messages: []}, ctx);
-    let streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[0][0];
-    let passedTools = streamTextCall.tools as Record<string, unknown>;
-    expect(passedTools['stuck_api']).toBeUndefined();
-    expect(passedTools['other_tool']).toBeDefined();
-
-    // Turn 6: still disabled
-    await transition({type: 'thinking', messages: []}, ctx);
-    streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[1][0];
-    passedTools = streamTextCall.tools as Record<string, unknown>;
-    expect(passedTools['stuck_api']).toBeUndefined();
-
-    // Turn 7: still disabled (turnCount=7, untilTurn=8)
-    await transition({type: 'thinking', messages: []}, ctx);
-    streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[2][0];
-    passedTools = streamTextCall.tools as Record<string, unknown>;
-    expect(passedTools['stuck_api']).toBeUndefined();
-
-    // Turn 8: cooldown expired — tool back in the set
-    await transition({type: 'thinking', messages: []}, ctx);
-    streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[3][0];
-    passedTools = streamTextCall.tools as Record<string, unknown>;
-    expect(passedTools['stuck_api']).toBeDefined();
-
-    // Map should be cleaned up after expiry
-    expect(ctx.disabledToolsUntilTurn.has('stuck_api')).toBe(false);
-  });
-
-  it('injects warning when tool called 3+ times', async () => {
+  it('does not limit when maxToolRepeats is 0', async () => {
     const messages: ModelMessage[] = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 10; i++) {
       messages.push({
         role: 'assistant',
-        content: [{type: 'tool-call', toolCallId: `c${i}`, toolName: 'flaky_api', input: {}}],
+        content: [{type: 'tool-call', toolCallId: `c${i}`, toolName: 'busy_api', input: {q: 'same'}}],
       } as ModelMessage);
       messages.push({
         role: 'tool',
-        content: [{type: 'tool-result' as const, toolCallId: `c${i}`, toolName: 'flaky_api', output: {type: 'text' as const, value: 'fail'}}],
+        content: [{type: 'tool-result' as const, toolCallId: `c${i}`, toolName: 'busy_api', output: {type: 'text' as const, value: 'ok'}}],
       } as ModelMessage);
     }
 
     const ctx = makeMockContext();
+    ctx.config.maxToolRepeats = 0; // disabled
     const result = await transition({type: 'thinking', messages}, ctx);
 
-    // Should still stream (not stop), but the messages passed to streamText
-    // should include a warning
+    // Should proceed to streaming, not stop
     expect(result.next.type).toBe('streaming');
-    const streamTextCall = vi.mocked(ctx.provider.streamText).mock.calls[0][0];
-    const lastMsg = streamTextCall.messages[streamTextCall.messages.length - 1];
-    expect(lastMsg.role).toBe('user');
-    if (typeof lastMsg.content === 'string') {
-      expect(lastMsg.content).toContain('flaky_api');
-      expect(lastMsg.content).toContain('3 times');
-    }
   });
 });
 
