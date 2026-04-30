@@ -1,5 +1,11 @@
 # @amodalai/react
 
+## 0.3.47
+
+### Patch Changes
+
+- ed112ba: Compact tool call UI: slim single-line rows replace heavy bordered boxes, with verboseTools theme option to restore full detail view
+
 ## 0.3.46
 
 ### Patch Changes
