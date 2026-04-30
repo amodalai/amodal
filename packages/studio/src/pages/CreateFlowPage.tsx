@@ -160,6 +160,8 @@ export function CreateFlowPage() {
         <ChatView
           title={mode.title}
           seed={mode.seed}
+          source={chatSource(mode)}
+          {...(mode.agent ? { templateSlug: mode.agent.slug } : {})}
           onSetupCancelled={() => setMode({ kind: 'pick' })}
         />
       )}
@@ -960,18 +962,93 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
 // Chat view — full-screen AdminChat seeded with the user's intent
 // ---------------------------------------------------------------------------
 
+function chatSource(mode: Mode): 'template' | 'custom' | 'questionnaire' {
+  if (mode.kind !== 'chat') return 'custom';
+  if (mode.from === 'detail') return 'template';
+  if (mode.from === 'questionnaire') return 'questionnaire';
+  return 'custom';
+}
+
+interface AdminChatStartResponse {
+  ok?: boolean;
+  seeded?: boolean;
+}
+
 function ChatView({
   seed,
+  source,
+  templateSlug,
   onSetupCancelled,
 }: {
   title: string;
   seed: string;
+  /** Entry-path source the /admin-chat/start endpoint uses to pick a phase + seed providedContext. */
+  source: 'template' | 'custom' | 'questionnaire';
+  /** Stub-catalog slug when the user clicked a template card (Phase E.13). */
+  templateSlug?: string;
   /**
    * Phase E.11 — fired when the agent's `cancel_setup` tool emits a
    * `setup_cancelled` SSE event. The parent flips back to picker mode.
    */
   onSetupCancelled: () => void;
 }) {
+  // Phase E.13 — seed setup_state via /api/admin-chat/start before
+  // mounting AdminChat. This way the agent's first turn already has a
+  // non-null state row to read; resume mid-flow returns the live row.
+  // The fetch is fire-and-forget for happy-path UX (we don't gate the
+  // chat mount on it because errors here shouldn't trap the user) but
+  // we still surface a brief loading state for the round-trip.
+  const [starting, setStarting] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const body: Record<string, unknown> = { source };
+    if (templateSlug) body['templateSlug'] = templateSlug;
+    if (source !== 'template' && seed) body['userMessage'] = seed;
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/studio/admin-chat/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok && res.status !== 503) {
+          // 503 = no DATABASE_URL — degrade gracefully to chat-only
+          // mode. Anything else is a real error; log and proceed
+          // anyway since chat-without-state-seeding still kind of
+          // works (the agent will create state on its first turn).
+          // eslint-disable-next-line no-console -- browser SPA, no structured logger
+          console.warn('[ChatView] admin-chat/start non-ok', { status: res.status });
+        }
+        // Note: response shape parsed only for logging; the chat
+        // doesn't need it to mount.
+         
+        await res.json().catch(() => ({} as AdminChatStartResponse));
+      } catch (err: unknown) {
+        // eslint-disable-next-line no-console -- browser SPA, no structured logger
+        console.warn('[ChatView] admin-chat/start failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        if (!cancelled) setStarting(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [source, templateSlug, seed]);
+
+  if (starting) {
+    return (
+      <div className="flex-1 min-h-0 flex items-center justify-center">
+        <div className="text-[12px] text-muted-foreground">Starting setup…</div>
+      </div>
+    );
+  }
+
   // The seed flows into AdminChat → ChatWidget's `initialMessage` config,
   // which auto-sends it once the widget mounts. Replaces the older
   // window-event dispatch hack that raced AdminChat's listener wiring.
