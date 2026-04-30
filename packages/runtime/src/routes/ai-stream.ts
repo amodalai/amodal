@@ -341,6 +341,14 @@ export function translateEvent(
       break;
     }
 
+    case SSEEventType.SetupCancelled: {
+      out.push({
+        type: 'data-setup-cancelled',
+        data: {reason: event.reason},
+      });
+      break;
+    }
+
     case SSEEventType.KBProposal: {
       out.push({
         type: 'data-kb-proposal',

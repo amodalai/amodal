@@ -10,6 +10,7 @@ import type {
   SSEStartOAuthEvent,
   SSEProposalEvent,
   SSEUpdatePlanEvent,
+  SSESetupCancelledEvent,
 } from './sse-types.js';
 import type {FsBackend} from './fs.js';
 import type {
@@ -32,7 +33,8 @@ export type CustomToolInlineEvent =
   | SSEShowPreviewEvent
   | SSEStartOAuthEvent
   | SSEProposalEvent
-  | SSEUpdatePlanEvent;
+  | SSEUpdatePlanEvent
+  | SSESetupCancelledEvent;
 
 /**
  * Tool definition shape used by amodal tools.

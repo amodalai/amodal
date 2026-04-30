@@ -116,6 +116,7 @@ export enum SSEEventType {
   StartOAuth = 'start_oauth',
   Proposal = 'proposal',
   UpdatePlan = 'update_plan',
+  SetupCancelled = 'setup_cancelled',
   ExploreStart = 'explore_start',
   ExploreEnd = 'explore_end',
   PlanMode = 'plan_mode',
@@ -341,6 +342,13 @@ export interface SSEUpdatePlanEvent {
   timestamp: string;
 }
 
+/** Setup cancelled — Phase E.10. The setup_state row has been deleted; Studio flips back to picker. */
+export interface SSESetupCancelledEvent {
+  type: SSEEventType.SetupCancelled;
+  reason?: string;
+  timestamp: string;
+}
+
 export interface SSECompactionStartEvent {
   type: SSEEventType.CompactionStart;
   estimated_tokens: number;
@@ -377,6 +385,7 @@ export type SSEEvent =
   | SSEStartOAuthEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
+  | SSESetupCancelledEvent
   | SSECompactionStartEvent
   | SSECompactionEndEvent
   | SSEToolLogEvent

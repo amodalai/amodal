@@ -21,6 +21,7 @@ import type {
   SSEStartOAuthEvent,
   SSEProposalEvent,
   SSEUpdatePlanEvent,
+  SSESetupCancelledEvent,
 } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -33,7 +34,8 @@ export type ToolInlineEvent =
   | SSEShowPreviewEvent
   | SSEStartOAuthEvent
   | SSEProposalEvent
-  | SSEUpdatePlanEvent;
+  | SSEUpdatePlanEvent
+  | SSESetupCancelledEvent;
 
 // ---------------------------------------------------------------------------
 // Tool context (provided to execute functions)

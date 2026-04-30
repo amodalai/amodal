@@ -88,6 +88,7 @@ export type {
   SSEStartOAuthEvent,
   SSEProposalEvent,
   SSEUpdatePlanEvent,
+  SSESetupCancelledEvent,
   SSEDoneEvent,
   SSEExploreStartEvent,
   SSEExploreEndEvent,

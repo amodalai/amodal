@@ -23,6 +23,7 @@ export enum SSEEventType {
   StartOAuth = 'start_oauth',
   Proposal = 'proposal',
   UpdatePlan = 'update_plan',
+  SetupCancelled = 'setup_cancelled',
   ExploreStart = 'explore_start',
   ExploreEnd = 'explore_end',
   PlanMode = 'plan_mode',
@@ -256,6 +257,23 @@ export interface SSEUpdatePlanEvent {
   timestamp: string;
 }
 
+/**
+ * Setup cancelled — Phase E.10. Emitted by the admin agent's
+ * `cancel_setup` tool when the user says "actually I want a
+ * different template." The setup_state row has been deleted
+ * server-side; Studio's CreateFlowPage flips back to picker mode
+ * (Phase E.11).
+ *
+ * `reason` is opaque human-readable text the chat surface can
+ * surface as a brief acknowledgement ("No problem — let me take you
+ * back to the templates.").
+ */
+export interface SSESetupCancelledEvent {
+  type: SSEEventType.SetupCancelled;
+  reason?: string;
+  timestamp: string;
+}
+
 export interface SSEDoneEvent {
   type: SSEEventType.Done;
   timestamp: string;
@@ -329,6 +347,7 @@ export type SSEEvent =
   | SSEStartOAuthEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
+  | SSESetupCancelledEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent
