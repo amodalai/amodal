@@ -190,6 +190,105 @@ export async function markComplete(
 }
 
 /**
+ * Phase H.11 — server-side reconciliation. Given the live env-var
+ * `connectionsStatus` map (from `/api/connections-status`), update the
+ * row so:
+ *   - any package with `configured: true` whose slot label isn't in
+ *     `state.completed[]` gets a synthetic CompletedSlot appended
+ *     (using `nowIso` as both connectedAt and validatedAt — the user
+ *     configured this out-of-band, we don't have a real validate
+ *     timestamp), and
+ *   - any package with `configured: true` that appears in
+ *     `state.skipped[]` is filtered out of `skipped[]`.
+ *
+ * This makes "the agent's read of where am I" match reality on
+ * session bootstrap when the user configured a connection out-of-band
+ * (per-connection page, manual `.env` edit). The Plan must be
+ * attached for this to work — without slot labels we can't synthesize
+ * a CompletedSlot. Returns the post-reconcile state, or the input
+ * state unchanged when there's nothing to reconcile.
+ *
+ * Idempotent — calling twice with the same status map is a no-op.
+ */
+export async function reconcileSetupState(
+  db: Db,
+  agentId: string,
+  scopeId: string,
+  connectionsStatus: Record<string, {configured: boolean}>,
+  nowIso: string = new Date().toISOString(),
+): Promise<{state: SetupState; completedAt: Date | null} | null> {
+  const current = await getSetupState(db, agentId, scopeId);
+  if (!current) return null;
+  const {state} = current;
+
+  const plan = state.plan;
+  if (!plan) {
+    // No plan attached → no slot labels to synthesize CompletedSlot
+    // entries against. Reconciliation is a no-op until the plan lands.
+    return current;
+  }
+
+  const configuredPackages = new Set(
+    Object.entries(connectionsStatus)
+      .filter(([, v]) => v.configured)
+      .map(([k]) => k),
+  );
+  if (configuredPackages.size === 0) return current;
+
+  // Build the slot-label lookup from the plan.
+  const labelByPackage = new Map<string, string>();
+  for (const slot of plan.slots) {
+    for (const option of slot.options) {
+      if (configuredPackages.has(option.packageName) && !labelByPackage.has(option.packageName)) {
+        labelByPackage.set(option.packageName, slot.label);
+      }
+    }
+  }
+
+  // Decide which packages need to be appended to completed[].
+  const completedPackageKeys = new Set(
+    state.completed.map((c) => `${c.packageName}::${c.slotLabel}`),
+  );
+  const toAppend: CompletedSlot[] = [];
+  for (const [packageName, label] of labelByPackage) {
+    const key = `${packageName}::${label}`;
+    if (completedPackageKeys.has(key)) continue;
+    toAppend.push({
+      slotLabel: label,
+      packageName,
+      connectedAt: nowIso,
+      validatedAt: nowIso,
+      validationFormatted: null,
+    });
+  }
+
+  // Decide which entries to drop from skipped[].
+  const filteredSkipped = state.skipped.filter(
+    (s) => !configuredPackages.has(s.packageName),
+  );
+  const skippedChanged = filteredSkipped.length !== state.skipped.length;
+
+  if (toAppend.length === 0 && !skippedChanged) {
+    return current;
+  }
+
+  const updateSet: Record<string, unknown> = {updatedAt: sql`NOW()`};
+  if (toAppend.length > 0) {
+    updateSet['completed'] = sql`${setupState.completed} || ${JSON.stringify(toAppend)}::jsonb`;
+  }
+  if (skippedChanged) {
+    updateSet['skipped'] = filteredSkipped;
+  }
+
+  await db
+    .update(setupState)
+    .set(updateSet)
+    .where(and(eq(setupState.agentId, agentId), eq(setupState.scopeId, scopeId)));
+
+  return getSetupState(db, agentId, scopeId);
+}
+
+/**
  * Delete the row for `(agentId, scopeId)`. Phase E.10 — `cancel_setup`
  * uses this when the user says "actually I want a different template."
  * Returns true when a row existed and was deleted, false otherwise.

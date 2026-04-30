@@ -10,8 +10,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ChatWidget } from '@amodalai/react/widget';
 import { streamSSE } from '@amodalai/react';
-import type { SSEEvent, ChatMessage, InlineBlockRendererRegistry } from '@amodalai/react';
-import type { SetupWarning } from '@amodalai/types';
+import type { SSEEvent, ChatMessage, ChatAction, InlineBlockRendererRegistry } from '@amodalai/react';
+import type { ConnectionsStatusMap, SetupWarning } from '@amodalai/types';
 import { useTheme } from '../ThemeProvider';
 import { StudioConnectionPanel } from '../StudioConnectionPanel';
 import {
@@ -60,6 +60,91 @@ function persistChat(chat: PersistedChat): void {
     // eslint-disable-next-line no-console -- browser SPA, no structured logger; quota exceeded or private browsing
     console.warn('[AdminChat] persist_chat_failed', { error: err instanceof Error ? err.message : String(err) });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Reconciliation — Phase H.10
+// ---------------------------------------------------------------------------
+
+/**
+ * Walk every `connection_panel` block in the loaded message list,
+ * fetch real env-var status from `/api/connections-status`, and
+ * dispatch one `PANEL_UPDATE` per panel. Real-state `configured`
+ * wins over a stale chat-history `state` field — that's the whole
+ * reason for this pass: the user could have configured a connection
+ * out-of-band via the per-connection page or by editing `.env`
+ * directly between sessions.
+ *
+ * Rule (per the H.10 spec):
+ *   - real-state `configured: true` → `state: 'success'` (overrides Skip)
+ *   - else `userSkipped: true` → `state: 'skipped'`
+ *   - else → `state: 'idle'`
+ *
+ * Errors fetching the status map are swallowed — better to keep the
+ * stale cached state than to crash the chat. The next mount retries.
+ */
+async function runReconciliation(
+  messages: ChatMessage[],
+  dispatch: (action: ChatAction) => void,
+): Promise<void> {
+  const panels = collectConnectionPanels(messages);
+  if (panels.length === 0) return;
+
+  let map: ConnectionsStatusMap;
+  try {
+    const res = await fetch('/api/connections-status', {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
+    map = (await res.json()) as ConnectionsStatusMap;
+  } catch (err: unknown) {
+    // eslint-disable-next-line no-console -- browser SPA, no structured logger
+    console.warn('[AdminChat] connections_status_fetch_failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+
+  for (const panel of panels) {
+    const status = map[panel.packageName];
+    let nextState: 'idle' | 'success' | 'skipped' | 'error' = 'idle';
+    if (status?.configured) {
+      nextState = 'success';
+    } else if (panel.userSkipped) {
+      nextState = 'skipped';
+    }
+    if (nextState === panel.state) continue;
+    dispatch({
+      type: 'PANEL_UPDATE',
+      panelId: panel.panelId,
+      patch: { state: nextState },
+    });
+  }
+}
+
+interface ConnectionPanelRef {
+  panelId: string;
+  packageName: string;
+  state: 'idle' | 'success' | 'skipped' | 'error';
+  userSkipped: boolean;
+}
+
+function collectConnectionPanels(messages: ChatMessage[]): ConnectionPanelRef[] {
+  const out: ConnectionPanelRef[] = [];
+  for (const msg of messages) {
+    if (msg.type !== 'assistant_text') continue;
+    for (const block of msg.contentBlocks) {
+      if (block.type !== 'connection_panel') continue;
+      out.push({
+        panelId: block.panelId,
+        packageName: block.packageName,
+        state: block.state,
+        userSkipped: block.userSkipped === true,
+      });
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,10 +248,52 @@ export function AdminChat({
     [],
   );
 
+  // Phase H.10 — capture the latest message list + a one-shot
+  // reconciliation gate. When the first non-empty message list lands
+  // (history rehydrated), kick off the connections-status fetch and
+  // dispatch PANEL_UPDATE per connection_panel block. Subsequent
+  // message changes don't re-fire the reconciliation — the build
+  // plan calls this out explicitly to avoid clobbering live SSE
+  // updates mid-session.
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const dispatchRef = useRef<((action: ChatAction) => void) | null>(null);
+  const reconciledRef = useRef(false);
+
   const handleStateChange = useCallback(
     (state: { sessionId: string | null; messages: ChatMessage[] }) => {
       sessionIdRef.current = state.sessionId ?? sessionIdRef.current;
+      messagesRef.current = state.messages;
       persistChat({ sessionId: sessionIdRef.current, messages: state.messages });
+
+      // Once messages and dispatch are both available, trigger the
+      // reconciliation pass exactly once. Subsequent state changes
+      // (live SSE deltas, user turns) are no-ops.
+      if (
+        !reconciledRef.current &&
+        dispatchRef.current &&
+        state.messages.length > 0
+      ) {
+        reconciledRef.current = true;
+        const dispatch = dispatchRef.current;
+        const messages = state.messages;
+        void runReconciliation(messages, dispatch);
+      }
+    },
+    [],
+  );
+
+  const handleWidgetReady = useCallback(
+    (handle: { dispatch: (action: ChatAction) => void }) => {
+      dispatchRef.current = handle.dispatch;
+      // If the message list landed before the widget exposed dispatch
+      // (race against the rehydrate path), trigger reconciliation now.
+      if (
+        !reconciledRef.current &&
+        messagesRef.current.length > 0
+      ) {
+        reconciledRef.current = true;
+        void runReconciliation(messagesRef.current, handle.dispatch);
+      }
     },
     [],
   );
@@ -207,6 +334,7 @@ export function AdminChat({
           showInput
           streamFn={streamFn}
           onStateChange={handleStateChange}
+          onReady={handleWidgetReady}
           inlineBlockRenderers={inlineBlockRenderers}
           {...(initialMessage ? { initialMessage } : {})}
           theme={{

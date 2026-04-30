@@ -15,6 +15,7 @@ import {
   getSetupState,
   upsertSetupState,
   markComplete,
+  reconcileSetupState,
 } from '@amodalai/db';
 import { commitSetup } from '@amodalai/runtime';
 import { LocalFsBackend } from '@amodalai/runtime/tools';
@@ -155,15 +156,32 @@ adminChatRoutes.post('/api/studio/admin-chat/start', async (c) => {
     }
   }
 
-  // If a row already exists (resume), don't clobber state — just
-  // return the live row.
+  // If a row already exists (resume), don't clobber state — but DO
+  // run the H.11 server-side reconciliation pass so the agent's
+  // first-turn read of `where am I?` reflects connections the user
+  // configured out-of-band (per-connection page, manual `.env`
+  // edits) since the last session. No-op when no plan is attached
+  // or when nothing changed.
   const existing = await getSetupState(db, agentId, scopeId);
   if (existing) {
+    let live = existing;
+    try {
+      const status = await computeConnectionsStatus();
+      const reconciled = await reconcileSetupState(db, agentId, scopeId, status);
+      if (reconciled) live = reconciled;
+    } catch (err: unknown) {
+      // Reconciliation failure shouldn't block the chat from starting —
+      // worst case the agent sees a slightly stale state and the
+      // client-side H.10 pass cleans up the visual cache.
+      logger.warn('admin_chat_start_reconcile_failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
     return c.json({
       ok: true,
       seeded: false,
-      state: existing.state,
-      completedAt: existing.completedAt ? existing.completedAt.toISOString() : null,
+      state: live.state,
+      completedAt: live.completedAt ? live.completedAt.toISOString() : null,
     });
   }
 

@@ -29,7 +29,9 @@ import {
   getSetupState,
   upsertSetupState,
   markComplete,
+  reconcileSetupState,
 } from '../queries/setup-state.js';
+import type {SetupPlanSnapshot} from '@amodalai/types';
 import {setupState} from '../schema/setup-state.js';
 
 const HAS_DB = Boolean(process.env['DATABASE_URL']);
@@ -189,5 +191,113 @@ describeWhenDb('setup-state queries (integration)', () => {
 
     const result = await markComplete(db, agentId, scopeId);
     expect(result).toBeNull();
+  });
+
+  // ---------------------------------------------------------------
+  // Phase H.11 — reconcileSetupState
+  // ---------------------------------------------------------------
+
+  function plan(overrides?: Partial<SetupPlanSnapshot>): SetupPlanSnapshot {
+    return {
+      templatePackage: '@amodalai/test-template',
+      slots: [
+        {
+          label: 'Slack',
+          description: 'Where the digest gets posted.',
+          required: true,
+          multi: false,
+          options: [
+            {
+              packageName: '@amodalai/connection-slack',
+              displayName: 'Slack',
+              authType: 'bearer',
+              oauthScopes: [],
+            },
+          ],
+        },
+      ],
+      config: [],
+      completion: {title: 'Test', suggestions: [], automationTitle: null},
+      ...overrides,
+    };
+  }
+
+  it('reconcile is a no-op when no row exists', async () => {
+    const result = await reconcileSetupState(db, agentId, scopeId, {
+      '@amodalai/connection-slack': {configured: true},
+    });
+    expect(result).toBeNull();
+  });
+
+  it('reconcile is a no-op when no plan is attached', async () => {
+    await upsertSetupState(db, agentId, scopeId, {phase: 'planning'});
+    const result = await reconcileSetupState(db, agentId, scopeId, {
+      '@amodalai/connection-slack': {configured: true},
+    });
+    expect(result?.state.completed).toEqual([]);
+  });
+
+  it('reconcile appends a synthetic CompletedSlot when env vars are set out-of-band', async () => {
+    await upsertSetupState(db, agentId, scopeId, {
+      phase: 'connecting_required',
+      plan: plan(),
+    });
+    const result = await reconcileSetupState(
+      db,
+      agentId,
+      scopeId,
+      {'@amodalai/connection-slack': {configured: true}},
+      '2026-05-01T10:00:00Z',
+    );
+    expect(result?.state.completed).toHaveLength(1);
+    expect(result?.state.completed[0]).toEqual({
+      slotLabel: 'Slack',
+      packageName: '@amodalai/connection-slack',
+      connectedAt: '2026-05-01T10:00:00Z',
+      validatedAt: '2026-05-01T10:00:00Z',
+      validationFormatted: null,
+    });
+  });
+
+  it('reconcile drops a package from skipped[] once env vars are set', async () => {
+    await upsertSetupState(db, agentId, scopeId, {
+      phase: 'connecting_required',
+      plan: plan(),
+      appendSkipped: [
+        {
+          slotLabel: 'Slack',
+          packageName: '@amodalai/connection-slack',
+          skippedAt: '2026-04-30T10:00:00Z',
+        },
+      ],
+    });
+    const result = await reconcileSetupState(db, agentId, scopeId, {
+      '@amodalai/connection-slack': {configured: true},
+    });
+    expect(result?.state.skipped).toEqual([]);
+    expect(result?.state.completed).toHaveLength(1);
+  });
+
+  it('reconcile is idempotent — second call leaves state unchanged', async () => {
+    await upsertSetupState(db, agentId, scopeId, {
+      phase: 'connecting_required',
+      plan: plan(),
+    });
+    const status = {'@amodalai/connection-slack': {configured: true}};
+    const first = await reconcileSetupState(db, agentId, scopeId, status, '2026-05-01T10:00:00Z');
+    const second = await reconcileSetupState(db, agentId, scopeId, status, '2026-05-02T10:00:00Z');
+    expect(first?.state.completed).toEqual(second?.state.completed);
+  });
+
+  it('reconcile leaves state unchanged when nothing is configured', async () => {
+    await upsertSetupState(db, agentId, scopeId, {
+      phase: 'connecting_required',
+      plan: plan(),
+    });
+    const result = await reconcileSetupState(db, agentId, scopeId, {
+      '@amodalai/connection-slack': {configured: false},
+    });
+    expect(result?.state.completed).toEqual([]);
+    expect(result?.state.skipped).toEqual([]);
   });
 });

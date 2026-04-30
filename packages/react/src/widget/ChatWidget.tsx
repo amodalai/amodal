@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { WidgetConfig, SSEEvent, InlineBlockRendererRegistry } from '../types';
+import type { WidgetConfig, SSEEvent, InlineBlockRendererRegistry, ChatAction } from '../types';
 import type { InteractionEvent } from '../events/types';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { useChat } from '../hooks/useChat';
@@ -58,6 +58,14 @@ export type ChatWidgetProps = WidgetConfig & {
    * overridden — that's the contract that keeps the widget honest.
    */
   inlineBlockRenderers?: InlineBlockRendererRegistry;
+  /**
+   * Optional handle exposed once on first render so embedders can
+   * drive the reducer from outside (Phase H.10 — Studio's
+   * connection-panel reconciliation runs from `<AdminChat>` rather
+   * than from inside the panel renderer). Callback shape rather
+   * than a ref so consumers don't have to deal with a ref dance.
+   */
+  onReady?: (handle: { dispatch: (action: ChatAction) => void }) => void;
 };
 
 export function ChatWidget({
@@ -87,6 +95,7 @@ export function ChatWidget({
   streamFn: customStreamFn,
   onStateChange,
   inlineBlockRenderers,
+  onReady,
 }: ChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [showHistory, setShowHistory] = useState(false);
@@ -185,6 +194,21 @@ export function ChatWidget({
   useEffect(() => {
     onStateChangeRef.current?.({ sessionId: session.id ?? null, messages });
   }, [session.id, messages]);
+
+  // Phase H.10 — expose the dispatch handle to embedders once on
+  // first mount so they can run external reductions (Studio's
+  // connection-panel reconciliation pass against
+  // /api/connections-status). Fired exactly once per widget instance;
+  // re-firing on every render would invalidate the embedder's
+  // useCallback / ref captures and force re-mount loops.
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  const readyFiredRef = useRef(false);
+  useEffect(() => {
+    if (readyFiredRef.current) return;
+    readyFiredRef.current = true;
+    onReadyRef.current?.({ dispatch });
+  }, [dispatch]);
 
   const history = useSessionHistory({
     serverUrl,
