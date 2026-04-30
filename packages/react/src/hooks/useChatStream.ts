@@ -919,6 +919,12 @@ function processEvent(
     case 'field_scrub':
       // Observability-only events — not reflected in message state today.
       return;
+    case 'setup_cancelled':
+      // Phase E.10/E.11 — the agent's cancel_setup tool emits this so
+      // the parent surface (e.g. CreateFlowPage) can flip back to the
+      // picker. The reducer doesn't render anything; embedders
+      // intercept the SSE event in their custom streamFn.
+      return;
     default: {
       // Exhaustiveness check — any new SSE event must be routed here.
       const _exhaustive: never = event;

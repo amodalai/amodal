@@ -225,6 +225,17 @@ export interface SSEUpdatePlanEvent {
   timestamp: string;
 }
 
+/**
+ * Setup cancelled — Phase E.10. The setup_state row has been deleted;
+ * the chat surface flips back to the picker. `reason` is opaque
+ * human-readable text for an optional acknowledgement message.
+ */
+export interface SSESetupCancelledEvent {
+  type: 'setup_cancelled';
+  reason?: string;
+  timestamp: string;
+}
+
 /** Mirrored from @amodalai/types AgentCard — see card-types.ts. */
 export interface AgentCardInline {
   title: string;
@@ -320,6 +331,7 @@ export type SSEEvent =
   | SSEStartOAuthEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
+  | SSESetupCancelledEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent

@@ -156,7 +156,13 @@ export function CreateFlowPage() {
         />
       )}
 
-      {mode.kind === 'chat' && <ChatView title={mode.title} seed={mode.seed} />}
+      {mode.kind === 'chat' && (
+        <ChatView
+          title={mode.title}
+          seed={mode.seed}
+          onSetupCancelled={() => setMode({ kind: 'pick' })}
+        />
+      )}
     </div>
   );
 }
@@ -954,13 +960,28 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
 // Chat view — full-screen AdminChat seeded with the user's intent
 // ---------------------------------------------------------------------------
 
-function ChatView({ seed }: { title: string; seed: string }) {
+function ChatView({
+  seed,
+  onSetupCancelled,
+}: {
+  title: string;
+  seed: string;
+  /**
+   * Phase E.11 — fired when the agent's `cancel_setup` tool emits a
+   * `setup_cancelled` SSE event. The parent flips back to picker mode.
+   */
+  onSetupCancelled: () => void;
+}) {
   // The seed flows into AdminChat → ChatWidget's `initialMessage` config,
   // which auto-sends it once the widget mounts. Replaces the older
   // window-event dispatch hack that raced AdminChat's listener wiring.
   return (
     <div className="flex-1 min-h-0">
-      <AdminChat compact={false} initialMessage={seed} />
+      <AdminChat
+        compact={false}
+        initialMessage={seed}
+        onSetupCancelled={onSetupCancelled}
+      />
     </div>
   );
 }
