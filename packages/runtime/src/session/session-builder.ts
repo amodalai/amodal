@@ -53,6 +53,8 @@ import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-too
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
 import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import {registerFileTools, DEFAULT_ALLOWED_DIRS, DEFAULT_BLOCKED_FILES} from '../tools/file-tools.js';
+import {registerCollectSecretTool} from '../tools/collect-secret-tool.js';
+import {registerAgentConfigTool} from '../tools/agent-config-tool.js';
 import type {Logger} from '../logger.js';
 import type {CredentialResolver} from '../credentials.js';
 
@@ -476,6 +478,19 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     logger.debug('file_tools_registered', {repoRoot});
   } else if (fileToolsConfig) {
     logger.debug('file_tools_not_registered', {reason: 'no_repo_root'});
+  }
+
+  // -------------------------------------------------------------------------
+  // 10b. Admin agent tools
+  // -------------------------------------------------------------------------
+
+  const isAdminAgent = process.env['AMODAL_NO_ADMIN'] === '1';
+  const userRepoPath = process.env['REPO_PATH'];
+  if (isAdminAgent) {
+    registerCollectSecretTool(registry);
+    if (userRepoPath) {
+      registerAgentConfigTool(registry, userRepoPath);
+    }
   }
 
   // -------------------------------------------------------------------------

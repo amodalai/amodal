@@ -16,7 +16,7 @@ import {
   recordAutomationRun,
   completeAutomationRun,
 } from './automation-queries';
-import { getRuntimeUrl } from './runtime-client';
+import { runtimeApiUrl } from './api';
 import {
   notifyAutomationStarted,
   notifyAutomationCompleted,
@@ -145,8 +145,7 @@ class AutomationScheduler {
     const start = Date.now();
 
     try {
-      const runtimeUrl = getRuntimeUrl();
-      const res = await fetch(`${runtimeUrl}${RUNTIME_CHAT_PATH}`, {
+      const res = await fetch(runtimeApiUrl(RUNTIME_CHAT_PATH), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, metadata: { automation: name } }),

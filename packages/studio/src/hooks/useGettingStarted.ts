@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 
 export interface EnvVarStatus {
   name: string;
@@ -67,7 +67,6 @@ export interface GettingStartedResult {
  * optional template.json from the agent repo.
  */
 export function useGettingStarted(): GettingStartedResult {
-  const { runtimeUrl } = useStudioConfig();
   const [data, setData] = useState<GettingStartedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -75,7 +74,7 @@ export function useGettingStarted(): GettingStartedResult {
   useEffect(() => {
     setData(null);
     setError(null);
-    fetch(`${runtimeUrl}/api/getting-started`, { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl('/api/getting-started'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
@@ -85,7 +84,7 @@ export function useGettingStarted(): GettingStartedResult {
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err));
       });
-  }, [runtimeUrl, tick]);
+  }, [tick]);
 
   return {
     data,

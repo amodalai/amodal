@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {watch, type FSWatcher} from 'node:fs';
+import {watch, existsSync, readFileSync, type FSWatcher} from 'node:fs';
 import {join} from 'node:path';
 import {loadRepo} from '@amodalai/core';
 import type {AgentBundle} from '@amodalai/core';
@@ -14,6 +14,8 @@ const DEBOUNCE_MS = 300;
 
 /**
  * Watches agent config directories for changes and reloads the repo.
+ * Also re-reads secrets from .amodal/secrets.env on each reload so
+ * credentials saved during onboarding are picked up without restart.
  */
 export class ConfigWatcher {
   private readonly repoPath: string;
@@ -33,6 +35,7 @@ export class ConfigWatcher {
 
     const targets = [
       'amodal.json',
+      'package.json',
       'skills',
       'knowledge',
       'connections',
@@ -41,6 +44,7 @@ export class ConfigWatcher {
       'stores',
       'pages',
       'automations',
+      '.amodal',
     ];
 
     for (const target of targets) {
@@ -51,7 +55,7 @@ export class ConfigWatcher {
         });
         this.watchers.push(w);
       } catch {
-        // Directory or file might not exist yet
+        // Expected — directory or file might not exist yet on fresh repos
       }
     }
   }
@@ -80,12 +84,34 @@ export class ConfigWatcher {
 
   private async reload(): Promise<void> {
     try {
+      // Re-read secrets so credentials saved during onboarding are available
+      this.loadSecrets();
+
       const repo = await loadRepo({localPath: this.repoPath});
       this.onChange(repo);
       log.debug('Config reloaded', 'config-watcher');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error(`Reload failed: ${msg}`, 'config-watcher');
+    }
+  }
+
+  private loadSecrets(): void {
+    const file = join(this.repoPath, '.amodal', 'secrets.env');
+    if (!existsSync(file)) return;
+    try {
+      const content = readFileSync(file, 'utf-8');
+      let count = 0;
+      for (const line of content.split('\n')) {
+        const eq = line.indexOf('=');
+        if (eq <= 0) continue;
+        const k = line.slice(0, eq).trim();
+        const v = line.slice(eq + 1);
+        if (k) { process.env[k] = v; count++; }
+      }
+      if (count > 0) log.debug('secrets_reloaded', {count});
+    } catch (err: unknown) {
+      log.debug('secrets_load_error', {file, error: err instanceof Error ? err.message : String(err)});
     }
   }
 }

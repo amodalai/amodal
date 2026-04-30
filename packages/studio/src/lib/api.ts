@@ -11,8 +11,7 @@
  * by the server into the HTML) so that all Studio API calls work correctly
  * when Studio is mounted at a subpath like `/studio`.
  *
- * Runtime API calls (to the separate runtime server) are unaffected — they
- * use the full `runtimeUrl` from StudioConfigContext.
+ * Runtime API calls go through the Studio server proxy via `runtimeApiUrl()`.
  */
 
 // ---------------------------------------------------------------------------
@@ -57,4 +56,22 @@ export function getBasePath(): string {
  */
 export function studioApiUrl(path: string): string {
   return `${getBasePath()}${path}`;
+}
+
+/**
+ * Build a URL for a runtime API call, routed through the Studio server proxy.
+ * The browser never talks to the runtime directly — all calls go through
+ * `/api/runtime/*` on Studio's own server.
+ *
+ * @example
+ * ```ts
+ * runtimeApiUrl('/api/config')   // => '/api/runtime/config'
+ * runtimeApiUrl('/api/files')    // => '/api/runtime/files'
+ * runtimeApiUrl('/inspect/context') // => '/api/runtime/inspect/context'
+ * ```
+ */
+export function runtimeApiUrl(path: string): string {
+  // Strip leading /api/ — the proxy routes use /api/runtime/{rest}
+  const stripped = path.replace(/^\/api\//, '/').replace(/^\//, '');
+  return `${getBasePath()}/api/runtime/${stripped}`;
 }

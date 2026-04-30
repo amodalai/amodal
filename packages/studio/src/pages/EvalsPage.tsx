@@ -5,7 +5,6 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { studioApiUrl } from '@/lib/api';
 import { useEvalSuites } from '@/hooks/useEvalSuites';
 import {
@@ -16,7 +15,6 @@ import {
 } from '@/components/views/EvalCard';
 
 export function EvalsPage() {
-  const { runtimeUrl } = useStudioConfig();
   const { suites: rawSuites, loading } = useEvalSuites();
   const [models, setModels] = useState<AvailableModel[]>([]);
   const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
@@ -46,7 +44,7 @@ export function EvalsPage() {
       .catch(() => {
         // Models endpoint may not exist yet
       });
-  }, [runtimeUrl]);
+  }, []);
 
   // Fetch per-eval history
   useEffect(() => {
@@ -67,7 +65,7 @@ export function EvalsPage() {
         });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- suites derived from rawSuites, using rawSuites as dep
-  }, [rawSuites, runtimeUrl]);
+  }, [rawSuites]);
 
   if (loading) return null;
 
@@ -95,7 +93,6 @@ export function EvalsPage() {
               models={models}
               history={historyMap[suite.name] ?? []}
               hideModelSelector={true}
-              runtimeUrl={runtimeUrl}
             />
           ))}
         </div>

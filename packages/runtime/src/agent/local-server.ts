@@ -769,6 +769,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       res.status(400).json({ error: 'value is required' });
       return;
     }
+    // Set immediately so the current process sees it. The file is the
+    // source of truth — ConfigWatcher re-reads on reload for persistence.
     process.env[name] = value;
     persistSecret(name, value);
     log.info('secret_saved', {name});

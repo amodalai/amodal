@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText } from 'lucide-react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 import { AgentOffline } from '@/components/AgentOffline';
 
 interface Contribution {
@@ -44,14 +44,13 @@ function categoryLabel(cat: string): string {
 }
 
 export function PromptPage() {
-  const { runtimeUrl } = useStudioConfig();
   const [data, setData] = useState<PromptData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(`${runtimeUrl}/inspect/context`, { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl('/inspect/context'), { signal: AbortSignal.timeout(5_000) })
       .then((res) => {
         if (!res.ok) throw new Error(`Request failed: ${String(res.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
@@ -59,7 +58,7 @@ export function PromptPage() {
       })
       .then(setData)
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-  }, [runtimeUrl]);
+  }, []);
 
   if (error) return <AgentOffline page="prompt" detail={error} />;
   if (!data) return null;

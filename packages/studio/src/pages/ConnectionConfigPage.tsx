@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AgentOffline } from '@/components/AgentOffline';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 import { useConnectionDetail, type ConnectionDetail } from '../hooks/useConnectionDetail';
 
 /**
@@ -30,7 +30,6 @@ import { useConnectionDetail, type ConnectionDetail } from '../hooks/useConnecti
 export function ConnectionConfigPage() {
   const { packageName: encoded } = useParams<{ packageName: string }>();
   const packageName = decodeURIComponent(encoded ?? '');
-  const { runtimeUrl } = useStudioConfig();
   const { data, error, loading, saveSecret } = useConnectionDetail(packageName);
   const [savingName, setSavingName] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -67,7 +66,7 @@ export function ConnectionConfigPage() {
     setConnectError(null);
     try {
       const r = await fetch(
-        `${runtimeUrl}/api/oauth/start?package=${encodeURIComponent(packageName)}`,
+        runtimeApiUrl(`/api/oauth/start?package=${encodeURIComponent(packageName)}`),
         {signal: AbortSignal.timeout(5_000)},
       );
       if (!r.ok) {

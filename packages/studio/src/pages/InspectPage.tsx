@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { FormattedMarkdown } from '@amodalai/react';
 import { Plug, Sparkles, BookOpen, Cable } from 'lucide-react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 import { AgentOffline } from '@/components/AgentOffline';
 
 type InspectKind = 'connections' | 'mcp' | 'skills' | 'knowledge';
@@ -274,7 +274,6 @@ function KnowledgeView({ data }: { data: KnowledgeDetail }) {
 
 export function InspectPage() {
   const { kind, name } = useParams<{ kind: string; name: string }>();
-  const { runtimeUrl } = useStudioConfig();
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -288,7 +287,7 @@ export function InspectPage() {
     setLoading(true);
     setError(null);
 
-    fetch(`${runtimeUrl}/inspect/${inspectKind}/${encodeURIComponent(name)}`, {
+    fetch(runtimeApiUrl(`/inspect/${inspectKind}/${encodeURIComponent(name)}`), {
       signal: AbortSignal.timeout(5_000),
     })
       .then((res) => {
@@ -303,7 +302,7 @@ export function InspectPage() {
         setError(err instanceof Error ? err.message : 'Failed to load');
       })
       .finally(() => { setLoading(false); });
-  }, [runtimeUrl, inspectKind, name]);
+  }, [inspectKind, name]);
 
   if (!kind || !name || !config) {
     return <Navigate to=".." replace />;

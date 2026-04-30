@@ -7,7 +7,7 @@
 /**
  * FileEditor — interactive file tree + code editor for agent configuration files.
  *
- * - File content fetched from the runtime via the `runtimeUrl` prop
+ * - File content fetched from the runtime via the Studio server proxy
  * - Drafts saved via useDraftWorkspace (same-origin to the Studio API)
  * - Tree refetch via polling on `store_updated` events (Studio SSE)
  */
@@ -18,6 +18,7 @@ import { CodeEditor } from '@/components/CodeEditor';
 import { DraftWorkspaceBar } from '@/components/studio/DraftWorkspaceBar';
 import { useDraftWorkspace } from '@/hooks/useDraftWorkspace';
 import { useStudioEvents } from '@/contexts/StudioEventsContext';
+import { runtimeApiUrl } from '@/lib/api';
 import { createBrowserLogger } from '@/lib/browser-logger';
 import { cn } from '@/lib/utils';
 
@@ -147,7 +148,7 @@ function TreeNode({ entry, depth, selectedPath, onSelect }: {
 // FileEditor
 // ---------------------------------------------------------------------------
 
-export function FileEditor({ initialTree, runtimeUrl }: { initialTree: FileTreeEntry[]; runtimeUrl: string }) {
+export function FileEditor({ initialTree }: { initialTree: FileTreeEntry[] }) {
   const [tree, setTree] = useState<FileTreeEntry[]>(initialTree);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [fileData, setFileData] = useState<FileData | null>(null);
@@ -163,7 +164,7 @@ export function FileEditor({ initialTree, runtimeUrl }: { initialTree: FileTreeE
   // -----------------------------------------------------------------------
 
   const fetchTree = useCallback(() => {
-    fetch(`${runtimeUrl}/api/files`, { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl('/api/files'), { signal: AbortSignal.timeout(5_000) })
       .then((res) => {
         if (!res.ok) throw new Error(`Tree fetch returned ${String(res.status)}`);
         return res.json();
@@ -198,7 +199,7 @@ export function FileEditor({ initialTree, runtimeUrl }: { initialTree: FileTreeE
     setSaveStatus('idle');
     setLoading(true);
 
-    fetch(`${runtimeUrl}/api/files/${encodeURIComponent(filePath)}`, {
+    fetch(runtimeApiUrl(`/api/files/${encodeURIComponent(filePath)}`), {
       signal: AbortSignal.timeout(5_000),
     })
       .then((res) => {
@@ -224,7 +225,7 @@ export function FileEditor({ initialTree, runtimeUrl }: { initialTree: FileTreeE
 
   const reloadFile = useCallback(() => {
     if (!selectedPath) return;
-    fetch(`${runtimeUrl}/api/files/${encodeURIComponent(selectedPath)}`, {
+    fetch(runtimeApiUrl(`/api/files/${encodeURIComponent(selectedPath)}`), {
       signal: AbortSignal.timeout(5_000),
     })
       .then((res) => {

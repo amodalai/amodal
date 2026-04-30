@@ -10,9 +10,13 @@ import type { ChatMessage, AssistantTextMessage, ConfirmationInfo } from '../typ
 import type { InteractionEvent } from '../events/types';
 import { ToolCallCard } from './ToolCallCard';
 import { KBProposalCard } from './KBProposalCard';
+
+/** Tools that render their own UI via inline SSE events. Hide the ToolCallCard chrome for these. */
+const UI_TOOLS = new Set(['show_gallery', 'collect_secret', 'start_oauth', 'ask_choice', 'show_preview', 'clone_template', 'setup_connections', 'customize_agent', 'show_setup_summary', 'onboarding_step']);
 import { SkillPill } from './SkillPill';
 import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
+import { CollectSecretCard } from './CollectSecretCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { ConfirmCard } from '../components/ConfirmCard';
@@ -92,6 +96,8 @@ interface MessageListProps {
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
+  onCollectSecretSaved?: (secretId: string) => void;
+  serverUrl?: string;
   emptyStateText?: string;
   sessionId?: string;
   showFeedback?: boolean;
@@ -115,6 +121,8 @@ function AssistantBubble({
   onInteraction,
   onAskUserSubmit,
   onConfirmationRespond,
+  onCollectSecretSaved,
+  serverUrl,
 }: {
   message: AssistantTextMessage;
   sendMessage?: (text: string) => void;
@@ -122,6 +130,8 @@ function AssistantBubble({
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
+  onCollectSecretSaved?: (secretId: string) => void;
+  serverUrl?: string;
 }) {
   const hasContentBlocks = message.contentBlocks && message.contentBlocks.length > 0;
   const hasExtras =
@@ -157,14 +167,17 @@ function AssistantBubble({
                   onInteraction={onInteraction}
                 />
               );
-            case 'tool_calls':
+            case 'tool_calls': {
+              const visibleCalls = block.calls.filter((tc) => !UI_TOOLS.has(tc.toolName));
+              if (visibleCalls.length === 0) return null;
               return (
                 <div key={`tools-${String(i)}`} className="pcw-bubble__extras">
-                  {block.calls.map((tc) => (
+                  {visibleCalls.map((tc) => (
                     <ToolCallCard key={tc.toolId} toolCall={tc} />
                   ))}
                 </div>
               );
+            }
             case 'ask_user':
               return (
                 <AskUserCard
@@ -184,6 +197,20 @@ function AssistantBubble({
                 />
               );
             }
+            case 'collect_secret':
+              return (
+                <CollectSecretCard
+                  key={`secret-${block.secretId}`}
+                  block={block}
+                  serverUrl={serverUrl ?? window.location.origin}
+                  onSaved={onCollectSecretSaved}
+                />
+              );
+            case 'show_gallery':
+            case 'setup_connections':
+            case 'setup_summary':
+            case 'customize_agent':
+              return null;
             default:
               return null;
           }
@@ -224,7 +251,7 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, onCollectSecretSaved, serverUrl, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -290,6 +317,8 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
                   onInteraction={onInteraction}
                   onAskUserSubmit={onAskUserSubmit}
                   onConfirmationRespond={onConfirmationRespond}
+                  onCollectSecretSaved={onCollectSecretSaved}
+                  serverUrl={serverUrl}
                 />
                 {showFeedback && !isStreaming && (
                   <FeedbackButtons messageId={msg.id} sessionId={sessionId} query={qText} response={rText} />

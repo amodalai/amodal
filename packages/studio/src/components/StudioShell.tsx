@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useParams, Link } from 'react-router-dom';
 import { useTheme } from './ThemeProvider';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
@@ -109,6 +109,24 @@ export function StudioShell({ children }: Props) {
   const { dark, toggle } = useTheme();
   const inventory = useAgentInventory();
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatSeed, setChatSeed] = useState<string | undefined>(undefined);
+
+  // Listen for programmatic open from the onboarding wizard
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setChatOpen(true);
+      // Extract seed message if provided via CustomEvent detail
+      if ('detail' in e) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- extracting detail from CustomEvent
+        const obj = e as unknown as Record<string, unknown>;
+        if (typeof obj['detail'] === 'string') {
+          setChatSeed(obj['detail']);
+        }
+      }
+    };
+    window.addEventListener('admin-chat-open', handler);
+    return () => window.removeEventListener('admin-chat-open', handler);
+  }, []);
 
   const basePath = `/agents/${agentId ?? 'local'}`;
 
@@ -250,7 +268,7 @@ export function StudioShell({ children }: Props) {
             </button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <AdminChat />
+            <AdminChat initialMessage={chatSeed} />
           </div>
         </div>
       )}

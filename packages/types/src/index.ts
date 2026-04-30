@@ -182,3 +182,10 @@ export type {
   DeploySnapshot,
   BuildSnapshotOptions,
 } from './snapshot-types.js';
+
+// Agent card types (template gallery)
+export type {
+  AgentCardTurn,
+  AgentCard,
+  AgentCardPreview,
+} from './card-types.js';

@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { AgentOffline } from '@/components/AgentOffline';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 import { PROVIDER_COLORS, modelToProvider, estimateCost } from '../lib/model-pricing';
 
 interface SessionRow {
@@ -33,12 +33,11 @@ function formatDate(iso: string): string {
 }
 
 export function SessionsPage() {
-  const { runtimeUrl } = useStudioConfig();
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${runtimeUrl}/sessions/history`, { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl('/sessions/history'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
@@ -48,7 +47,7 @@ export function SessionsPage() {
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err));
       });
-  }, [runtimeUrl]);
+  }, []);
 
   if (error) return <AgentOffline page="sessions" detail={error} />;
   if (!sessions) return null;

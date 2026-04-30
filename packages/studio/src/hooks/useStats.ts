@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 
 export interface ModelStats {
   model: string;
@@ -29,12 +29,11 @@ export interface StatsResult {
 }
 
 export function useStats(): StatsResult {
-  const { runtimeUrl } = useStudioConfig();
   const [data, setData] = useState<AgentStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${runtimeUrl}/api/stats`, { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl('/api/stats'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
@@ -44,7 +43,7 @@ export function useStats(): StatsResult {
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err));
       });
-  }, [runtimeUrl]);
+  }, []);
 
   return { data, error, loading: !data && !error };
 }

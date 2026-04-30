@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { runtimeApiUrl } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Types — matches the runtime's GET /api/config response
@@ -39,12 +39,11 @@ export interface RuntimeConfigResult {
 }
 
 export function useRuntimeConfig(): RuntimeConfigResult {
-  const { runtimeUrl } = useStudioConfig();
   const [config, setConfig] = useState<RuntimeConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${runtimeUrl}/api/config`, { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl('/api/config'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
@@ -55,7 +54,7 @@ export function useRuntimeConfig(): RuntimeConfigResult {
         const msg = err instanceof Error ? err.message : String(err);
         setError(msg);
       });
-  }, [runtimeUrl]);
+  }, []);
 
   return { config, error, loading: !config && !error };
 }
