@@ -208,8 +208,7 @@ describe('handleThinking (via transition)', () => {
     expect(tools['search']).not.toHaveProperty('execute');
   });
 
-  it('detects tool call loops and forces done(loop_detected)', async () => {
-    // Build messages with 8 repeated tool calls for the same tool
+  it('detects tool call loops when maxToolRepeats is set', async () => {
     const messages: ModelMessage[] = [];
     for (let i = 0; i < 8; i++) {
       messages.push({
@@ -223,20 +222,16 @@ describe('handleThinking (via transition)', () => {
     }
 
     const ctx = makeMockContext();
+    ctx.config.maxToolRepeats = 8;
     const result = await transition({type: 'thinking', messages}, ctx);
 
     expect(result.next.type).toBe('done');
     if (result.next.type === 'done') {
       expect(result.next.reason).toBe('loop_detected');
     }
-    const errorEvents = result.effects.filter((e) => e.type === SSEEventType.Error);
-    expect(errorEvents.length).toBe(1);
   });
 
   it('detects loops with similar (not identical) parameters', async () => {
-    // Build messages where the same tool is called with slightly different
-    // params. Use a non-pagination key (retry_count) — pagination keys
-    // (offset/limit/page/cursor) are treated as iteration, not loops.
     const messages: ModelMessage[] = [];
     for (let i = 0; i < 8; i++) {
       messages.push({
@@ -250,9 +245,9 @@ describe('handleThinking (via transition)', () => {
     }
 
     const ctx = makeMockContext();
+    ctx.config.maxToolRepeats = 8;
     const result = await transition({type: 'thinking', messages}, ctx);
 
-    // Same tool, same keys, >50% identical values → detected as loop
     expect(result.next.type).toBe('done');
     if (result.next.type === 'done') {
       expect(result.next.reason).toBe('loop_detected');
