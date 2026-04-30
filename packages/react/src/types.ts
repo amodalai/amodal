@@ -394,6 +394,8 @@ export interface ChatTheme {
   headerText?: string;
   placeholder?: string;
   emptyStateText?: string;
+  /** Show full tool call details (params, results, timing). Default: false. */
+  verboseTools?: boolean;
 }
 
 export type WidgetPosition = 'right' | 'bottom' | 'floating' | 'inline';

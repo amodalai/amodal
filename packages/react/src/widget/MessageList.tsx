@@ -109,6 +109,7 @@ interface MessageListProps {
   emptyStateText?: string;
   sessionId?: string;
   showFeedback?: boolean;
+  verboseTools?: boolean;
 }
 
 function ConfirmationCard({ confirmation, onApprove, onDeny }: {
@@ -131,6 +132,7 @@ function AssistantBubble({
   onConfirmationRespond,
   onCollectSecretSaved,
   serverUrl,
+  verboseTools,
 }: {
   message: AssistantTextMessage;
   sendMessage?: (text: string) => void;
@@ -140,6 +142,7 @@ function AssistantBubble({
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
   onCollectSecretSaved?: (secretId: string) => void;
   serverUrl?: string;
+  verboseTools?: boolean;
 }) {
   const hasContentBlocks = message.contentBlocks && message.contentBlocks.length > 0;
   const hasExtras =
@@ -181,7 +184,7 @@ function AssistantBubble({
               return (
                 <div key={`tools-${String(i)}`} className="pcw-bubble__extras">
                   {visibleCalls.map((tc) => (
-                    <ToolCallCard key={tc.toolId} toolCall={tc} />
+                    <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
                   ))}
                 </div>
               );
@@ -243,7 +246,7 @@ function AssistantBubble({
       {hasExtras && (
         <div className="pcw-bubble__extras">
           {message.toolCalls.map((tc) => (
-            <ToolCallCard key={tc.toolId} toolCall={tc} />
+            <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
           ))}
           {message.kbProposals.map((proposal, idx) => (
             <KBProposalCard key={`${proposal.title}-${String(idx)}`} proposal={proposal} />
@@ -254,7 +257,7 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, onCollectSecretSaved, serverUrl, emptyStateText, sessionId, showFeedback = false }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, onCollectSecretSaved, serverUrl, emptyStateText, sessionId, showFeedback = false, verboseTools = false }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
@@ -322,6 +325,7 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
                   onConfirmationRespond={onConfirmationRespond}
                   onCollectSecretSaved={onCollectSecretSaved}
                   serverUrl={serverUrl}
+                  verboseTools={verboseTools}
                 />
                 {showFeedback && !isStreaming && (
                   <FeedbackButtons messageId={msg.id} sessionId={sessionId} query={qText} response={rText} />
