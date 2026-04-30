@@ -29,6 +29,7 @@ import { feedbackRoutes } from './routes/feedback.js';
 import { memoryRoutes } from './routes/memory.js';
 import { eventsRoutes } from './routes/events.js';
 import { adminChatRoutes } from './routes/admin-chat.js';
+import { connectionsStatusRoutes } from './routes/connections-status.js';
 import { repoStateRoutes } from './routes/repo-state.js';
 import { initRepoRoutes } from './routes/init-repo.js';
 import { runtimeProxyRoutes } from './routes/runtime-proxy.js';
@@ -109,6 +110,7 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
   app.route('', memoryRoutes);
   app.route('', eventsRoutes);
   app.route('', adminChatRoutes);
+  app.route('', connectionsStatusRoutes);
   app.route('', runtimeProxyRoutes);
 
   // ---------------------------------------------------------------------------

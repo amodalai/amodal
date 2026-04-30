@@ -22,6 +22,7 @@ import type { SetupPhase, SetupReadinessResult } from '@amodalai/types';
 
 import { logger } from '../../lib/logger.js';
 import { getAdminAgentUrl, getAgentId } from '../../lib/config.js';
+import { computeConnectionsStatus } from './connections-status.js';
 
 const ADMIN_CHAT_TIMEOUT_MS = 300_000;
 const REPO_PATH_ENV_KEY = 'REPO_PATH';
@@ -244,10 +245,14 @@ adminChatRoutes.post('/api/studio/admin-chat/check-completion', async (c) => {
     });
   }
 
+  // Live env-var status from H.9 — lets validation rescue connections
+  // the user configured out-of-band via the per-connection page that
+  // never ended up in setup_state.completed[].
+  const connectionsStatus = await computeConnectionsStatus();
   const result: SetupReadinessResult = validateSetupReadiness({
     state: row.state,
     plan: row.state.plan,
-    // Phase H.9's /api/connections-status feeds in here once it ships.
+    connectionsStatus,
   });
   return c.json({
     ok: true,
@@ -290,6 +295,7 @@ adminChatRoutes.post('/api/studio/admin-chat/commit-setup', async (c) => {
   const agentId = getAgentId();
   const scopeId = DEFAULT_SCOPE_ID;
   const fs = new LocalFsBackend({ repoRoot: repoPath });
+  const connectionsStatus = await computeConnectionsStatus();
 
   try {
     // commitSetup's `db` param is typed against the runtime's loose
@@ -304,6 +310,7 @@ adminChatRoutes.post('/api/studio/admin-chat/commit-setup', async (c) => {
       agentId,
       scopeId,
       force: body.force === true,
+      connectionsStatus,
     });
     if (result.ok) {
       return c.json({

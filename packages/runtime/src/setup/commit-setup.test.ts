@@ -205,6 +205,67 @@ describeWhenDb('commitSetup (Phase E.2 integration)', () => {
     // written when readiness blocked the commit.
     await expect(readFile(path.join(repoRoot, 'amodal.json'), 'utf-8')).rejects.toThrow();
   });
+
+  it('survives a concurrent double-commit: first wins, second sees alreadyComplete', async () => {
+    // Phase E.2 risk from the build plan: "Agent fires
+    // request_complete_setup at the same instant the user clicks
+    // Finish setup. Both reach commit_setup; first acquires the
+    // row lock and writes; second sees completed_at IS NOT NULL
+    // and returns alreadyComplete: true. Test this explicitly
+    // with two parallel HTTP calls."
+    await upsertSetupState(db, agentId, scopeId, {
+      phase: 'configuring',
+      plan: makePlan(),
+    });
+
+    const [r1, r2] = await Promise.all([
+      commitSetup({db, fs, agentId, scopeId}),
+      commitSetup({db, fs, agentId, scopeId}),
+    ]);
+
+    // Both succeed.
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(true);
+    if (!r1.ok || !r2.ok) throw new Error('unreachable');
+
+    // Exactly one was the canonical write; the other reports
+    // alreadyComplete: true. Both report the same timestamp
+    // (the second is reading the row the first wrote).
+    const canonical = r1.alreadyComplete ? r2 : r1;
+    const followUp = r1.alreadyComplete ? r1 : r2;
+    expect(canonical.alreadyComplete).toBe(false);
+    expect(followUp.alreadyComplete).toBe(true);
+    expect(canonical.completedAt.getTime()).toBe(followUp.completedAt.getTime());
+
+    // The amodal.json that landed is well-formed (only one writer
+    // — the second branch early-returned before writing).
+    const written = await readFile(path.join(repoRoot, 'amodal.json'), 'utf-8');
+    const parsed = JSON.parse(written) as {name: string; version: string};
+    expect(parsed.name).toBeTruthy();
+    expect(parsed.version).toBeTruthy();
+  });
+
+  it('concurrent commits with one force=true still resolve idempotently', async () => {
+    // Edge case: the agent calls request_complete_setup (force:
+    // false) at the same time the user clicks Finish anyway
+    // (force: true). Whichever lands first wins; the other
+    // returns alreadyComplete: true. Force flag is irrelevant
+    // post-completion since completedAt is already set.
+    await upsertSetupState(db, agentId, scopeId, {
+      phase: 'configuring',
+      plan: makePlan(),
+    });
+
+    const [r1, r2] = await Promise.all([
+      commitSetup({db, fs, agentId, scopeId, force: false}),
+      commitSetup({db, fs, agentId, scopeId, force: true}),
+    ]);
+
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(true);
+    if (!r1.ok || !r2.ok) throw new Error('unreachable');
+    expect(r1.completedAt.getTime()).toBe(r2.completedAt.getTime());
+  });
 });
 
 describe('composeAmodalJson (unit)', () => {
