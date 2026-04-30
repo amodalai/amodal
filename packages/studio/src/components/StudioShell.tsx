@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useParams, Link } from 'react-router-dom';
 import { useTheme } from './ThemeProvider';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
@@ -109,6 +109,13 @@ export function StudioShell({ children }: Props) {
   const { dark, toggle } = useTheme();
   const inventory = useAgentInventory();
   const [chatOpen, setChatOpen] = useState(false);
+
+  // Listen for programmatic open from the onboarding wizard
+  useEffect(() => {
+    const handler = () => setChatOpen(true);
+    window.addEventListener('admin-chat-open', handler);
+    return () => window.removeEventListener('admin-chat-open', handler);
+  }, []);
 
   const basePath = `/agents/${agentId ?? 'local'}`;
 

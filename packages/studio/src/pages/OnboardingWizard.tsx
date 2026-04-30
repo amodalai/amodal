@@ -7,7 +7,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AgentCard } from '@amodalai/types';
 import { PickerCard } from '@/components/PickerCard';
-import { AdminChat } from '@/components/views/AdminChat';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { fetchAgentCard } from '../hooks/template-card-fetcher';
 
@@ -58,6 +57,26 @@ export function OnboardingWizard() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [step]);
+
+  // Open admin chat panel and send seed message when reaching summary
+  useEffect(() => {
+    if (step !== 'summary' || !summaryData) return;
+
+    // Open the admin chat panel
+    window.dispatchEvent(new CustomEvent('admin-chat-open'));
+
+    // Build the seed message
+    const seed = summaryData.customizeContext
+      ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nPlease fetch my website using the fetch_url tool to understand what we do. Then write a brand-context knowledge doc for my agent that captures our voice, audience, and content themes.`
+      : `I just set up a ${summaryData.name} agent. Review the installed skills and knowledge and help me customize it.`;
+
+    // Small delay to let the panel open before sending
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('admin-chat-send', { detail: seed }));
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [step, summaryData]);
 
   // Fetch template cards on mount
   useEffect(() => {
@@ -290,21 +309,11 @@ export function OnboardingWizard() {
               Start using your agent →
             </a>
           </div>
-          <div className="space-y-2">
-            <h2 className="text-lg font-semibold text-foreground">Customize your agent</h2>
+          <div className="flex items-center gap-3 py-2">
+            <span className="text-primary">→</span>
             <p className="text-sm text-muted-foreground">
-              The admin agent can write skills, knowledge docs, and fine-tune your setup.
+              The admin agent is personalizing your setup in the chat panel.
             </p>
-          </div>
-          <div className="h-[400px] border border-border rounded-lg overflow-hidden">
-            <AdminChat
-              compact={false}
-              initialMessage={
-                summaryData.customizeContext
-                  ? `I just set up a ${summaryData.name} agent. Here's my company info:\n\n${summaryData.customizeContext}\n\nPlease write a brand-context knowledge doc for my agent based on this information. Also review the installed skills and knowledge and suggest any improvements.`
-                  : `I just set up a ${summaryData.name} agent. Review the installed skills and knowledge and help me customize it.`
-              }
-            />
           </div>
         </>
       )}
