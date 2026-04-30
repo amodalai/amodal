@@ -116,6 +116,16 @@ export interface AdminChatProps {
    * meaningless.
    */
   showFinishButton?: boolean;
+  /**
+   * Phase F.9 — the user is resuming a setup that already has
+   * progress (the start response returned `seeded: false` and the
+   * row had at least one completed/skipped slot, currentStep > 0,
+   * or a plan attached). Renders a muted banner above the chat and
+   * shifts the input placeholder to "Reply or ask a question…" so
+   * the field nudges the user back into the conversation rather
+   * than feeling like a blank prompt.
+   */
+  resuming?: boolean;
 }
 
 export function AdminChat({
@@ -123,6 +133,7 @@ export function AdminChat({
   initialMessage,
   onSetupCancelled,
   showFinishButton = true,
+  resuming = false,
 }: AdminChatProps) {
   const { dark } = useTheme();
   const sessionIdRef = useRef<string | null>(loadPersistedChat().sessionId);
@@ -159,25 +170,41 @@ export function AdminChat({
     [],
   );
 
+  // Phase F.8: the full-screen chat-mode AdminChat (compact=false) is
+  // the create-flow setup chat — the input belongs to a continuing
+  // back-and-forth, so the placeholder reads "Reply or ask a
+  // question…". The compact post-setup admin panel keeps its terse
+  // generic prompt.
+  const placeholder = compact
+    ? 'Message admin agent...'
+    : 'Reply or ask a question...';
+
   return (
-    <div className="h-full relative">
-      <ChatWidget
-        serverUrl=""
-        user={{ id: 'admin' }}
-        position="inline"
-        defaultOpen
-        showInput
-        streamFn={streamFn}
-        onStateChange={handleStateChange}
-        {...(initialMessage ? { initialMessage } : {})}
-        theme={{
-          mode: dark ? 'dark' : 'light',
-          headerText: 'Admin Agent',
-          emptyStateText: 'Ask me to add connections, write skills, create automations, or validate your setup.',
-          placeholder: compact ? 'Message admin agent...' : 'Ask me to add a connection, write a skill, or validate your config...',
-        }}
-      />
-      {showFinishButton && <FinishSetupButton />}
+    <div className="h-full relative flex flex-col">
+      {resuming && (
+        <div className="px-4 py-2 text-[11.5px] text-muted-foreground italic border-b border-border bg-muted/30">
+          Resuming where you left off.
+        </div>
+      )}
+      <div className="flex-1 min-h-0 relative">
+        <ChatWidget
+          serverUrl=""
+          user={{ id: 'admin' }}
+          position="inline"
+          defaultOpen
+          showInput
+          streamFn={streamFn}
+          onStateChange={handleStateChange}
+          {...(initialMessage ? { initialMessage } : {})}
+          theme={{
+            mode: dark ? 'dark' : 'light',
+            headerText: 'Admin Agent',
+            emptyStateText: 'Ask me to add connections, write skills, create automations, or validate your setup.',
+            placeholder,
+          }}
+        />
+        {showFinishButton && <FinishSetupButton />}
+      </div>
     </div>
   );
 }

@@ -972,6 +972,29 @@ function chatSource(mode: Mode): 'template' | 'custom' | 'questionnaire' {
 interface AdminChatStartResponse {
   ok?: boolean;
   seeded?: boolean;
+  state?: {
+    currentStep?: number | null;
+    completed?: unknown[];
+    skipped?: unknown[];
+    plan?: unknown;
+  };
+}
+
+/**
+ * "Made progress" check (Phase F.9): the row was not freshly seeded
+ * and there's at least one signal that the user has already done
+ * something — completed or skipped a slot, advanced past step 0, or
+ * had a plan attached. We don't want the resume banner to fire when
+ * the user just refreshed the page on an empty seeded row.
+ */
+function startResponseIndicatesResume(data: AdminChatStartResponse): boolean {
+  if (data.seeded !== false) return false;
+  const s = data.state;
+  if (!s) return false;
+  const step = typeof s.currentStep === 'number' ? s.currentStep : 0;
+  const completedCount = Array.isArray(s.completed) ? s.completed.length : 0;
+  const skippedCount = Array.isArray(s.skipped) ? s.skipped.length : 0;
+  return step > 0 || completedCount > 0 || skippedCount > 0 || s.plan != null;
 }
 
 function ChatView({
@@ -999,6 +1022,7 @@ function ChatView({
   // chat mount on it because errors here shouldn't trap the user) but
   // we still surface a brief loading state for the round-trip.
   const [starting, setStarting] = useState(true);
+  const [resuming, setResuming] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1022,10 +1046,11 @@ function ChatView({
           // eslint-disable-next-line no-console -- browser SPA, no structured logger
           console.warn('[ChatView] admin-chat/start non-ok', { status: res.status });
         }
-        // Note: response shape parsed only for logging; the chat
-        // doesn't need it to mount.
-         
-        await res.json().catch(() => ({} as AdminChatStartResponse));
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
+        const data = (await res.json().catch(() => ({}))) as AdminChatStartResponse;
+        if (!cancelled && startResponseIndicatesResume(data)) {
+          setResuming(true);
+        }
       } catch (err: unknown) {
         // eslint-disable-next-line no-console -- browser SPA, no structured logger
         console.warn('[ChatView] admin-chat/start failed', {
@@ -1052,12 +1077,17 @@ function ChatView({
   // The seed flows into AdminChat → ChatWidget's `initialMessage` config,
   // which auto-sends it once the widget mounts. Replaces the older
   // window-event dispatch hack that raced AdminChat's listener wiring.
+  // When the start response indicated the user is resuming, drop the
+  // initial-seed auto-send (the agent already has state) and surface
+  // a banner so the user understands the chat picks up where they
+  // left off (Phase F.9).
   return (
     <div className="flex-1 min-h-0">
       <AdminChat
         compact={false}
-        initialMessage={seed}
+        {...(resuming ? {} : { initialMessage: seed })}
         onSetupCancelled={onSetupCancelled}
+        resuming={resuming}
       />
     </div>
   );
