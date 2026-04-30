@@ -260,3 +260,11 @@ import {
 
 Treat the block-type union and the `ToolContext` interface as
 **additive-only**. New phases extend; they do not rename or remove.
+
+## Related
+
+- **Connection validation probes** (Phase A) — the contract a connection
+  package's `validate.js` follows so the admin agent's
+  `validate_connection` tool can surface a real-data sanity check after
+  Connect. Documented in
+  [`@amodalai/core/cards/README.md`](../../../core/src/cards/README.md#connection-validation-probes).

@@ -91,3 +91,118 @@ const preview = await loadAgentCardPreview(templateRoot); // → AgentCardPrevie
 ```
 
 Both throw `RepoError` (codes `CONFIG_PARSE_FAILED`, `CONFIG_VALIDATION_FAILED`, `READ_FAILED`) on malformed input.
+
+---
+
+# Connection validation probes
+
+A connection package can ship a `validate.js` module exporting one or more named async probe functions. The admin agent calls each probe immediately after a successful Connect to surface a real data point inline ("Found 12 channels", "8.2k sessions this week") — turning "Connected" from a label into proof of value.
+
+Probes are loaded by `@amodalai/agent-admin`'s `validate_connection` custom tool, which dynamic-imports `node_modules/<packageName>/validate.js` through a `data:text/javascript;base64` URL.
+
+## File layout
+
+```
+my-connection/
+├── connections/
+│   └── <name>/
+│       ├── spec.json
+│       ├── access.json
+│       └── …
+├── validate.js          ← probes live here
+├── package.json         ← must include "validate.js" in `files`
+└── README.md
+```
+
+`package.json#files` must list `validate.js` so the probe ships in the published tarball.
+
+## Probe shape
+
+```js
+// validate.js
+export async function list_channels() {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) {
+    return {
+      ok: false,
+      reason: "auth_failed",
+      message: "SLACK_BOT_TOKEN is not set",
+    };
+  }
+  const res = await fetch(
+    "https://slack.com/api/conversations.list?limit=200",
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: "error",
+      message: `Slack returned HTTP ${res.status}`,
+    };
+  }
+  const data = await res.json();
+  if (!data.ok) {
+    return { ok: false, reason: "auth_failed", message: data.error };
+  }
+  return { ok: true, channelCount: data.channels?.length ?? 0 };
+}
+```
+
+Authoring rules:
+
+- **Plain ES module.** No imports — only globals (`fetch`, `process.env`, `AbortSignal`, `Intl`). The runtime dynamic-imports via data URL, so `import` statements have no resolution context.
+- **Async functions.** The probe runs server-side and is awaited.
+- **Return primitives + arrays of primitives.** Strings, numbers, booleans, null, or arrays of those. Nested objects are scrubbed by `validate_connection` before reaching the LLM.
+- **Soft-fail with a typed reason.** `{ok: false, reason: 'auth_failed' | 'no_data' | 'error', message?: string}`. Let unexpected throws bubble — the tool catches and reports them as `error`.
+- **Read credentials from `process.env`.** The OAuth callback (or Configure modal) writes the env vars during Connect; the probe reads them. The credential never enters tool args, chat history, or the LLM's reasoning.
+- **Use `AbortSignal.timeout(10_000)` on each fetch.** A hung API call shouldn't eat the validate_connection tool's full 15s timeout.
+
+## ProbeResult contract
+
+```ts
+type ProbeFailureReason = "auth_failed" | "no_data" | "error";
+
+type ProbeResult =
+  | ({ ok: true } & Record<
+      string,
+      string | number | boolean | Array<string | number | boolean> | null
+    >)
+  | { ok: false; reason: ProbeFailureReason; message?: string };
+```
+
+Defined as `ProbeResult` in `@amodalai/types/validation.ts`. Probes don't need to import the type — the structural shape is what the tool checks at runtime.
+
+## What `validate_connection` does with the result
+
+The admin agent calls:
+
+```ts
+validate_connection({
+  packageName: "@amodalai/connection-slack",
+  probeName: "list_channels",
+  extractPath: "channelCount", // optional — defaults to first primitive field
+  format: "count", // 'count' | 'currency' | 'name' | 'raw'
+});
+```
+
+On `{ok: true}`: the tool extracts the value at `extractPath`, applies `format`, and returns `{ok: true, value, formatted}`. The agent's prompt copies `formatted` verbatim into chat ("Found 12 channels", "8.2k sessions this week").
+
+On `{ok: false}`: the tool returns the same shape; the agent's prompt branches on `reason` (per agent-admin/agents/main.md):
+
+- `auth_failed` → re-emit the Connect card so the user can retry.
+- `no_data` → "I connected {Name} but I'm seeing no data — want to try a different account?" with a retry button.
+- `error` → skip silently and proceed.
+
+## Examples
+
+The first-party probes ship in `@amodalai/connection-slack` and `@amodalai/connection-ga4`. Read those files for working references; they cover OAuth-bearer auth, multi-step probes (GA4 lists properties, then runs a sessions report), and all three soft-fail reasons.
+
+## Security
+
+- The probe runs with full Node access (same trust as any installed npm package — installing the connection is the trust boundary).
+- The credential is never reachable from the LLM: tools have no `ctx.saveSecret`, the probe reads `process.env` directly, and only the extracted primitive value reaches chat history.
+- Probes return primitives only. If a probe accidentally returns a nested object, `validate_connection` rejects it with `error`, never echoes it.
+- See `packages/runtime/src/tools/README.md` for the broader custom-tool SDK contract.
