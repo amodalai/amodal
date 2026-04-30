@@ -183,22 +183,19 @@ export interface AgentLoopConfig {
   keepRecentResults: number;
   /** Number of tool results before clearing old ones. Default 15. */
   clearThreshold: number;
-  /** Max repeated tool calls before forcing loop_detected. Default 8. */
+  /** Max repeated tool calls before forcing loop_detected. Default 12. */
   maxLoopIterations: number;
-  /** Repeated tool call count that triggers a warning injection. Default 3. */
+  /** Repeated tool call count that triggers a warning injection. Default 5. */
   loopWarningThreshold: number;
   /**
    * Repeated tool call count that escalates: stronger warning + the looping
    * tool is temporarily removed from the tool set passed to the model, so
-   * it is forced to try a different approach. Default 5 (between
-   * loopWarningThreshold=3 and maxLoopIterations=8).
+   * it is forced to try a different approach. Default 8.
    */
   loopEscalationThreshold: number;
   /**
    * Number of turns the looping tool stays disabled after an escalation
-   * fires. Without this cooldown the agent could re-call the tool next
-   * turn, drop the loop count, and re-trigger escalation forever. Default
-   * 3 (covers the turns between escalation and hard-stop).
+   * fires. Default 1.
    */
   loopEscalationCooldownTurns: number;
   /** Max output tokens per LLM call. */
