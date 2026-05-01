@@ -44,8 +44,8 @@ export function createAskChoiceTool(): ToolDefinition {
     }),
     readOnly: true,
     metadata: {category: 'system'},
-    runningLabel: 'Asking: {{question}}',
-    completedLabel: 'Asked: {{question}}',
+    runningLabel: 'Asking',
+    completedLabel: 'Asked',
 
     async execute(
       params: {question: string; options: Array<{label: string; value: string}>; multi: boolean},

@@ -154,8 +154,8 @@ export function createRequestTool(options: CreateRequestToolOptions): ToolDefini
     parameters: RequestParamsSchema,
     readOnly: false,
     metadata: {category: 'connection'},
-    runningLabel: '{{method}} {{connection}} {{endpoint}}',
-    completedLabel: '{{method}} {{connection}} {{endpoint}}',
+    runningLabel: 'Calling {{connection}}',
+    completedLabel: 'Called {{connection}}',
 
     async execute(params: RequestParams, ctx: ToolContext): Promise<unknown> {
       const {connection, method, endpoint, data, headers: extraHeaders, intent} = params;

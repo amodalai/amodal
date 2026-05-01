@@ -72,8 +72,8 @@ export function registerAdminTools(registry: ToolRegistry, opts: AdminToolsOptio
     }),
     readOnly: true,
     metadata: {category: 'admin'},
-    runningLabel: 'Searching the package registry for "{{query}}"',
-    completedLabel: 'Searched the package registry for "{{query}}"',
+    runningLabel: 'Searching for "{{query}}"',
+    completedLabel: 'Searched for "{{query}}"',
 
     async execute(params: {query: string; limit: number}, _ctx: ToolContext) {
       const url = `${registryUrl}/-/v1/search?text=${encodeURIComponent(params.query)}&size=${String(params.limit)}`;
@@ -103,8 +103,8 @@ export function registerAdminTools(registry: ToolRegistry, opts: AdminToolsOptio
     }),
     readOnly: false,
     metadata: {category: 'admin'},
-    runningLabel: 'Installing {{name}}',
-    completedLabel: 'Installed {{name}}',
+    runningLabel: 'Adding a package',
+    completedLabel: 'Added the package',
 
     async execute(params: {name: string; version?: string}, ctx: ToolContext) {
       // Hard guardrail: templates are installed via `install_template`,
@@ -143,6 +143,8 @@ export function registerAdminTools(registry: ToolRegistry, opts: AdminToolsOptio
           ? await resolveGithubInstalledName(repoRoot, params.name) ?? params.name
           : params.name;
         await addToAmodalPackages(repoRoot, resolvedName);
+        const friendly = await readPackageDisplayName(repoRoot, resolvedName);
+        ctx.setLabel?.({completed: friendly ? `Added ${friendly}` : 'Added the package'});
         ctx.log(`Installed ${installSpec}${resolvedName !== params.name ? ` → ${resolvedName}` : ''}`);
         return {ok: true, package: resolvedName};
       } catch (err) {
@@ -586,6 +588,30 @@ function isGithubShorthand(name: string): boolean {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+/**
+ * Best-effort read of an installed package's friendly display name.
+ * Looks at `amodal.displayName` then top-level `displayName` in the
+ * package's package.json. Returns null when neither is set or the
+ * package isn't on disk yet.
+ */
+async function readPackageDisplayName(repoPath: string, packageName: string): Promise<string | null> {
+  const pkgJsonPath = path.join(repoPath, 'node_modules', ...packageName.split('/'), 'package.json');
+  if (!existsSync(pkgJsonPath)) return null;
+  try {
+    const raw: unknown = JSON.parse(await readFile(pkgJsonPath, 'utf-8'));
+    if (!isObject(raw)) return null;
+    const amodal = raw['amodal'];
+    if (isObject(amodal) && typeof amodal['displayName'] === 'string' && amodal['displayName'].length > 0) {
+      return amodal['displayName'];
+    }
+    const top = raw['displayName'];
+    if (typeof top === 'string' && top.length > 0) return top;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**

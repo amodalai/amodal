@@ -455,10 +455,14 @@ async function runToolCall(
  * template ''" instead of leaving the placeholder in place.
  */
 function resolveLabelTemplate(template: string, params: Record<string, unknown>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+  const filled = template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
     const v = params[key];
     return typeof v === 'string' ? v : typeof v === 'number' || typeof v === 'boolean' ? String(v) : '';
   });
+  // Collapse the double spaces / trailing space that show up when an
+  // optional placeholder drops out — "Listing {{dir}}" with no dir
+  // should read "Listing", not "Listing " (trailing whitespace).
+  return filled.replace(/\s+/g, ' ').trim();
 }
 
 function buildToolCallStartEvent(

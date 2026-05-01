@@ -170,8 +170,8 @@ export function createStoreBatchTool(
     }),
     readOnly: false,
     metadata: {category: 'store'},
-    runningLabel: `Saving batch to ${store.name}`,
-    completedLabel: `Saved batch to ${store.name}`,
+    runningLabel: `Saving to ${store.name}`,
+    completedLabel: `Saved to ${store.name}`,
 
     async execute(params: {items: Array<Record<string, unknown>>}, ctx: ToolContext): Promise<unknown> {
       let stored = 0;
@@ -230,8 +230,8 @@ export function createStoreQueryTool(
     }),
     readOnly: true,
     metadata: {category: 'store'},
-    runningLabel: 'Querying {{store}}',
-    completedLabel: 'Queried {{store}}',
+    runningLabel: 'Looking up {{store}}',
+    completedLabel: 'Looked up {{store}}',
 
     async execute(params: {store: string; key?: string; filter?: Record<string, unknown>; sort?: string; limit?: number}, ctx: ToolContext): Promise<unknown> {
       if (params.key) {

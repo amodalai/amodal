@@ -521,8 +521,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
     }),
     readOnly: true,
     metadata: {category: 'system'},
-    runningLabel: 'Listing {{dir}}',
-    completedLabel: 'Listed {{dir}}',
+    runningLabel: 'Listing files',
+    completedLabel: 'Listed files',
 
     async execute(params: {dir?: string}, _ctx: ToolContext): Promise<unknown> {
       const startMs = Date.now();

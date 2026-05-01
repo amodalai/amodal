@@ -152,13 +152,33 @@ export function createMemoryTool(opts: CreateMemoryToolOptions): ToolDefinition 
     }),
     readOnly: false,
     metadata: {category: 'system'},
-    runningLabel: 'Memory: {{action}}',
-    completedLabel: 'Memory: {{action}}',
+    // Static fallback. The handler resolves per-action labels via
+    // ctx.setLabel below ("Saving a memory" / "Forgetting a memory" /
+    // "Listing memories" / "Searching memories").
+    runningLabel: 'Updating memory',
+    completedLabel: 'Updated memory',
 
     async execute(
       params: {action: string; content?: string; entry_id?: string; query?: string},
-      _ctx: ToolContext,
+      ctx: ToolContext,
     ): Promise<unknown> {
+      switch (params.action) {
+        case 'add':
+          ctx.setLabel?.({running: 'Saving a memory', completed: 'Saved a memory'});
+          break;
+        case 'remove':
+          ctx.setLabel?.({running: 'Forgetting a memory', completed: 'Forgot a memory'});
+          break;
+        case 'list':
+          ctx.setLabel?.({running: 'Listing memories', completed: 'Listed memories'});
+          break;
+        case 'search':
+          ctx.setLabel?.({running: 'Searching memories', completed: 'Searched memories'});
+          break;
+        default:
+          // Unknown action — keep the static fallback labels.
+          break;
+      }
       const startMs = Date.now();
 
       try {
