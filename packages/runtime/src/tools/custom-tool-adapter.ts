@@ -41,6 +41,7 @@ export interface CustomToolSessionContext {
   shellExecutor?: {
     exec(command: string, options?: {cwd?: string; timeout?: number}): Promise<{stdout: string; stderr: string; exitCode: number}>;
   };
+  fs?: import('@amodalai/types').FsBackend;
 }
 
 function buildCustomToolContext(
@@ -183,6 +184,7 @@ function buildCustomToolContext(
     },
 
     signal: combinedSignal,
+    fs: sessionCtx.fs,
   };
 }
 
