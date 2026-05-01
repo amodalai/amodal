@@ -189,3 +189,11 @@ export type {
   AgentCard,
   AgentCardPreview,
 } from './card-types.js';
+
+// Filesystem backend
+export type {
+  FsBackend,
+  RepoFileEntry,
+  RepoDirListing,
+  RepoMode,
+} from './fs.js';

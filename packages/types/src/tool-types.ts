@@ -65,6 +65,14 @@ export interface CustomToolContext {
   env(name: string): string | undefined;
   log(message: string): void;
   signal: AbortSignal;
+  /** Filesystem backend for reading/writing agent repo files. */
+  fs?: import('./fs.js').FsBackend;
+  /** Set dynamic labels on the tool call in the UI. */
+  setLabel?(opts: {running?: string; completed?: string}): void;
+  /** Session ID for correlation. */
+  sessionId?: string;
+  /** Emit an inline SSE event. */
+  emit?(event: unknown): void;
 }
 
 /**

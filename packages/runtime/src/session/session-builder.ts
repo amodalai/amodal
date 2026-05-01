@@ -35,6 +35,10 @@ import {registerStoreTools} from '../tools/store-tools.js';
 import {createRequestTool, REQUEST_TOOL_NAME} from '../tools/request-tool.js';
 import {createCustomToolDefinition} from '../tools/custom-tool-adapter.js';
 import type {CustomToolSessionContext} from '../tools/custom-tool-adapter.js';
+import type {FsBackend} from '@amodalai/types';
+import {LocalFsBackend} from '../tools/fs/local.js';
+import {HttpFsBackend} from '../tools/fs/http.js';
+import {registerHttpFileTools} from '../tools/http-file-tools.js';
 import {registerMcpTools} from '../tools/mcp-tool-adapter.js';
 import {
   AccessJsonPermissionChecker,
@@ -229,6 +233,7 @@ function buildCustomToolSessionContext(
   connectionsMap: import('../tools/request-tool.js').ConnectionsMap,
   storeBackend: StoreBackend | null,
   appId: string,
+  fs?: import('@amodalai/types').FsBackend,
 ): CustomToolSessionContext {
   // Adapt StoreBackend.put (returns StorePutResult) to CustomToolSessionContext.storeBackend.put (returns void)
   const adaptedBackend = storeBackend
@@ -255,6 +260,7 @@ function buildCustomToolSessionContext(
     },
     storeBackend: adaptedBackend,
     appId,
+    ...(fs ? {fs} : {}),
   };
 }
 
@@ -373,11 +379,28 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   }
 
   // -------------------------------------------------------------------------
+  // 4b. Create fs backend (shared by custom tools + file tools)
+  // -------------------------------------------------------------------------
+
+  // TODO: refactor file-tools.ts to use FsBackend directly instead of
+  // duplicating tool implementations in http-file-tools.ts
+  let fsBackend: FsBackend | undefined;
+  const workspaceApiUrl = process.env['WORKSPACE_API_URL'];
+  const fsRepoRoot = process.env['REPO_PATH'] ?? bundle.origin;
+  if (workspaceApiUrl) {
+    fsBackend = new HttpFsBackend({runtimeUrl: workspaceApiUrl, authToken: process.env['WORKSPACE_AUTH_TOKEN']});
+    logger.debug('fs_backend_http', {url: workspaceApiUrl});
+  } else if (fsRepoRoot) {
+    fsBackend = new LocalFsBackend({repoRoot: fsRepoRoot});
+    logger.debug('fs_backend_local', {repoRoot: fsRepoRoot});
+  }
+
+  // -------------------------------------------------------------------------
   // 5. Register custom tools
   // -------------------------------------------------------------------------
 
   if (toolExecutor) {
-    const customToolSessionCtx = buildCustomToolSessionContext(bundle, connectionsMap, scopedBackend, appId);
+    const customToolSessionCtx = buildCustomToolSessionContext(bundle, connectionsMap, scopedBackend, appId, fsBackend);
     for (const tool of bundle.tools) {
       // Skip tools with confirm: 'never' — they exist but are not callable
       if (tool.confirm === 'never') continue;
@@ -466,7 +489,11 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   const fileToolsEnabled = fileToolsConfig === true || (typeof fileToolsConfig === 'object' && fileToolsConfig !== null);
   const repoRoot = process.env['REPO_PATH'] ?? bundle.origin;
 
-  if (fileToolsEnabled && repoRoot) {
+  if (fileToolsEnabled && workspaceApiUrl && fsBackend) {
+    // Cloud mode: file tools call the remote runtime's workspace API
+    registerHttpFileTools(registry, {fs: fsBackend, logger});
+    logger.debug('file_tools_registered', {mode: 'http', url: workspaceApiUrl});
+  } else if (fileToolsEnabled && repoRoot) {
     const customConfig = typeof fileToolsConfig === 'object' ? fileToolsConfig : {};
     registerFileTools(registry, {
       repoRoot,
@@ -475,7 +502,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
       studioUrl: process.env['STUDIO_URL'],
       logger,
     });
-    logger.debug('file_tools_registered', {repoRoot});
+    logger.debug('file_tools_registered', {mode: 'local', repoRoot});
   } else if (fileToolsConfig) {
     logger.debug('file_tools_not_registered', {reason: 'no_repo_root'});
   }
