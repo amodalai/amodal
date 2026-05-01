@@ -297,6 +297,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     [serverUrl],
   );
 
+  const reset = useCallback(() => {
+    stream.reset();
+    // Clear refs so initialMessage can re-fire and resume won't re-load the old session
+    initialMessageSentRef.current = false;
+    initialMessageDeliveredRef.current = false;
+    resumeLoadedRef.current = false;
+    // Notify parent to clear persisted session ID (e.g. localStorage)
+    onSessionCreated?.('');
+  }, [stream.reset, onSessionCreated]);
+
   return {
     messages: stream.messages,
     send: stream.send,
@@ -305,7 +315,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     activeToolCalls: stream.activeToolCalls,
     session: { id: stream.sessionId },
     error: stream.error,
-    reset: stream.reset,
+    reset,
     eventBus: stream.eventBus,
     submitAskUserResponse,
     respondToConfirmation: stream.respondToConfirmation,
