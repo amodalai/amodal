@@ -24,10 +24,10 @@ function SubagentEventRow({ event }: { event: SubagentEventInfo }) {
         onClick={() => { if (hasDetail) setExpanded(!expanded); }}
       >
         {hasDetail && (
-          <span className="pcw-subagent-row__chevron">{expanded ? '\u25BC' : '\u25B6'}</span>
+          <span className="pcw-subagent-row__chevron">{expanded ? '▼' : '▶'}</span>
         )}
         <span className={`pcw-subagent-row__icon${event.error ? ' pcw-subagent-row__icon--error' : ''}`}>
-          {event.error ? '\u2717' : '\u2713'}
+          {event.error ? '✗' : '✓'}
         </span>
         <span className="pcw-subagent-row__name">{event.toolName ?? 'unknown'}</span>
       </button>
@@ -134,7 +134,7 @@ function buildInlineSegments(events: SubagentEventInfo[] | undefined): InlineSeg
 /** Render an inline tool call row (for running subagent events). */
 function InlineToolRow({ event }: { event: SubagentEventInfo }) {
   const isEnd = event.eventType === 'tool_call_end';
-  const icon = event.error ? '\u2717' : isEnd ? '\u2713' : '\u29BF';
+  const icon = event.error ? '✗' : isEnd ? '✓' : '⦿';
   const iconClass = event.error
     ? 'pcw-subagent-row__icon--error'
     : isEnd
@@ -190,7 +190,7 @@ function DispatchToolCallCard({ toolCall }: ToolCallCardProps) {
             className="pcw-dispatch-details__toggle"
             onClick={() => setDetailsOpen(!detailsOpen)}
           >
-            <span className="pcw-tool-call__chevron">{detailsOpen ? '\u25BC' : '\u25B6'}</span>
+            <span className="pcw-tool-call__chevron">{detailsOpen ? '▼' : '▶'}</span>
             <span>details</span>
             {toolCallCount > 0 && (
               <span className="pcw-dispatch-details__count">
@@ -244,6 +244,25 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
     ? `${friendlyLabel} (${String(toolCall.duration_ms)}ms)`
     : friendlyLabel;
 
+  // Build timeline entries: arguments → (log) → result/error. Each
+  // entry renders as a small bullet on a vertical rail when expanded;
+  // no background panel, just indented text.
+  const hasArgs = toolCall.parameters && Object.keys(toolCall.parameters).length > 0;
+  const timelineEntries: Array<{label: string; data?: string; tone?: 'error'}> = [];
+  if (hasArgs) {
+    timelineEntries.push({label: 'Called', data: formatJson(toolCall.parameters)});
+  } else {
+    timelineEntries.push({label: 'Called'});
+  }
+  if (toolCall.logMessage) {
+    timelineEntries.push({label: 'Logged', data: toolCall.logMessage});
+  }
+  if (toolCall.error) {
+    timelineEntries.push({label: 'Errored', data: toolCall.error, tone: 'error'});
+  } else if (toolCall.status === 'success' && toolCall.result !== undefined) {
+    timelineEntries.push({label: 'Returned', data: formatResult(toolCall.result)});
+  }
+
   return (
     <div className="pcw-tool-call">
       <button
@@ -251,16 +270,102 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
         className="pcw-tool-call__header"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="pcw-tool-call__chevron">{expanded ? '\u25BC' : '\u25B6'}</span>
+        <span className={statusClass} aria-label={toolCall.status}>
+          <StatusIcon status={toolCall.status} />
+        </span>
         <span className="pcw-tool-call__name">{summary}</span>
-        <span className={statusClass}>{toolCall.status}</span>
+        <span className="pcw-tool-call__chevron" aria-hidden="true">
+          {expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+        </span>
       </button>
-      {expanded && toolCall.parameters && (
-        <pre className="pcw-tool-call__details">
-          {JSON.stringify(toolCall.parameters, null, 2)}
-        </pre>
+      {expanded && (
+        <ol className="pcw-tool-call__timeline">
+          {timelineEntries.map((entry, i) => (
+            <li
+              key={i}
+              className={`pcw-tool-call__timeline-event${entry.tone === 'error' ? ' pcw-tool-call__timeline-event--error' : ''}`}
+            >
+              <span className="pcw-tool-call__timeline-label">{entry.label}</span>
+              {entry.data && (
+                <pre className="pcw-tool-call__timeline-data">{entry.data}</pre>
+              )}
+            </li>
+          ))}
+        </ol>
       )}
-      {toolCall.error && <p className="pcw-tool-call__error">{toolCall.error}</p>}
     </div>
   );
+}
+
+function formatJson(value: Record<string, unknown>): string {
+  return JSON.stringify(value, null, 2);
+}
+
+function formatResult(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Icons (inline SVG — Lucide paths, MIT-licensed)
+//
+// Inline so @amodalai/react stays dependency-light. All sized via the
+// containing `<span>` font-size + currentColor so the icons inherit
+// alignment and color from CSS instead of hardcoded pixel values.
+// ---------------------------------------------------------------------------
+
+function ChevronRightIcon() {
+  // Filled right-pointing triangle (matches the ▸ glyph). Closed
+  // path with currentColor fill so it inherits the wrapper opacity.
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M9 6 l6 6 -6 6 z" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  // Filled down-pointing triangle — same family as the right one.
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M6 9 l6 6 6 -6 z" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+function RunningDotIcon() {
+  // Pulsing filled circle for in-flight calls. The pulse animation
+  // lives in widget.css so it can be toggled by prefers-reduced-motion.
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="12" r="5" />
+    </svg>
+  );
+}
+
+function StatusIcon({ status }: { status: 'running' | 'success' | 'error' }) {
+  if (status === 'success') return <CheckIcon />;
+  if (status === 'error') return <XIcon />;
+  return <RunningDotIcon />;
 }

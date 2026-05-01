@@ -13,6 +13,12 @@
   --pcw-user-bubble: #0d9e87;
   --pcw-agent-bubble: #f3f4f6;
   --pcw-tool-call-bg: #f9fafb;
+  /* Background tint for inline panels (ask_choice, plan_summary,
+   * proposal, ask_user, show_preview, confirm/review). Sits between
+   * --pcw-bg and --pcw-tool-call-bg — subtle enough to not feel
+   * boxy, contrasted enough to read as a distinct UI affordance now
+   * that agent prose and tool calls no longer have bubbles. */
+  --pcw-panel-tint: #f5f7fa;
   --pcw-text: #111827;
   --pcw-text-muted: #6b7280;
   --pcw-border: #e5e7eb;
@@ -34,6 +40,7 @@
   --pcw-user-bubble: #0d9e87;
   --pcw-agent-bubble: #1e293b;
   --pcw-tool-call-bg: #1e293b;
+  --pcw-panel-tint: #161b2a;
   --pcw-text: #e2e8f0;
   --pcw-text-muted: #94a3b8;
   --pcw-border: #334155;
@@ -47,6 +54,7 @@
     --pcw-user-bubble: #0d9e87;
     --pcw-agent-bubble: #1e293b;
     --pcw-tool-call-bg: #1e293b;
+    --pcw-panel-tint: #161b2a;
     --pcw-text: #e2e8f0;
     --pcw-text-muted: #94a3b8;
     --pcw-border: #334155;
@@ -179,13 +187,19 @@
 }
 
 .pcw-bubble--assistant {
-  align-self: flex-start;
-  background: var(--pcw-agent-bubble);
+  align-self: stretch;
+  /* Bubble-less agent prose: the text flows like document copy. The
+   * inline cards (ask_choice, proposal, show_preview, connection panel,
+   * plan_summary) keep their own visual treatment so they still read as
+   * distinct artifacts. Override the shared .pcw-bubble box rules so
+   * only user messages render with a chat-bubble look. */
+  max-width: 100%;
+  padding: 0;
+  background: transparent;
   color: var(--pcw-text);
-  /* Phase F.3 — 200ms fade-in-from-below for new agent bubbles +
-   * any inline cards inside them (ask_choice, proposal, show_preview,
-   * connection panel). User bubbles get no entrance animation —
-   * the spec is explicit: don't animate user-message entry. */
+  /* Phase F.3 — 200ms fade-in-from-below for new agent messages and
+   * any inline cards they contain. User messages get no entrance
+   * animation — the spec is explicit: don't animate user-message entry. */
   animation: pcw-card-enter 200ms ease-out;
 }
 
@@ -219,74 +233,178 @@
   margin-top: 8px;
 }
 
-/* Tool call card */
+/* Tool call row — bubble-less, reads like a list item */
 .pcw-tool-call {
-  background: var(--pcw-tool-call-bg);
-  border: 1px solid var(--pcw-border);
-  border-radius: 6px;
-  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
   font-size: 12px;
+  color: var(--pcw-text-muted);
 }
 
 .pcw-tool-call__header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
   background: none;
   border: none;
   width: 100%;
   text-align: left;
-  padding: 0;
+  padding: 2px 0;
   font-family: inherit;
   font-size: inherit;
-  color: var(--pcw-text);
+  color: inherit;
 }
 
+/* Caret — disclosure indicator immediately after the label. Sits
+ * flush against the text using the parent row's gap, no auto-margin
+ * so it doesn't drift to the far right. */
 .pcw-tool-call__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  font-size: 10px;
+  width: 16px;
+  height: 16px;
   color: var(--pcw-text-muted);
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+
+.pcw-tool-call__chevron svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pcw-tool-call__header:hover .pcw-tool-call__chevron {
+  opacity: 1;
 }
 
 .pcw-tool-call__name {
-  font-family: monospace;
-  font-weight: 500;
+  /* Prose labels read like a sentence — drop the monospace + bold. */
+  font-family: inherit;
+  font-weight: 400;
 }
 
+/* Status indicator: SVG icon (check / x / dot) at a fixed footprint
+ * so all three line up regardless of glyph metrics. */
 .pcw-tool-call__status {
-  margin-left: auto;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.pcw-tool-call__status svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .pcw-tool-call__status--running {
-  background: #ccfbf1;
-  color: #0d9e87;
+  color: var(--pcw-text-muted);
+}
+
+.pcw-tool-call__status--running svg {
+  animation: pcw-tool-pulse 1.4s ease-in-out infinite;
+  /* The dot is a 5px-radius circle inside a 24px viewBox; rendered
+   * at 14px the fill reads as a ~6px dot, similar weight to the
+   * status check/cross strokes. */
+  transform-origin: center;
+}
+
+@keyframes pcw-tool-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcw-tool-call__status--running svg {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 .pcw-tool-call__status--success {
-  background: #dcfce7;
-  color: #166534;
+  color: #16a34a;
 }
 
 .pcw-tool-call__status--error {
-  background: #fee2e2;
-  color: #991b1b;
+  color: #dc2626;
 }
 
+/* Legacy details container — kept for tools that still emit one. */
 .pcw-tool-call__details {
   margin-top: 8px;
-  background: var(--pcw-agent-bubble);
   border-radius: 4px;
-  padding: 8px;
+  padding: 8px 0;
   overflow-x: auto;
   font-family: monospace;
   font-size: 11px;
   white-space: pre-wrap;
+}
+
+/* Timeline shown when a tool call is expanded. Each entry sits on a
+ * vertical rail with a small dot — no background panel, just indented
+ * text so it reads as part of the surrounding chat prose. */
+.pcw-tool-call__timeline {
+  list-style: none;
+  margin: 4px 0 4px 14px;
+  padding: 0 0 0 12px;
+  border-left: 1px solid var(--pcw-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pcw-tool-call__timeline-event {
+  position: relative;
+  font-size: 12px;
+  color: var(--pcw-text-muted);
+}
+
+/* Dot on the rail, vertically aligned with the label baseline. */
+.pcw-tool-call__timeline-event::before {
+  content: '';
+  position: absolute;
+  left: -17px;
+  top: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pcw-border);
+}
+
+.pcw-tool-call__timeline-event--error::before {
+  background: #dc2626;
+}
+
+.pcw-tool-call__timeline-label {
+  display: block;
+  font-weight: 500;
+  color: var(--pcw-text);
+  font-size: 12px;
+}
+
+.pcw-tool-call__timeline-data {
+  margin: 4px 0 0;
+  padding: 0;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--pcw-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pcw-tool-call__timeline-event--error .pcw-tool-call__timeline-data {
+  color: #b91c1c;
 }
 
 .pcw-tool-call__subagent {
@@ -596,7 +714,7 @@
   padding: 10px 12px;
   border-radius: 6px;
   border: 1px solid var(--pcw-border, #e5e7eb);
-  background: var(--pcw-tool-call-bg, #f9fafb);
+  background: var(--pcw-panel-tint, #f5f7fa);
   font-size: 12px;
 }
 .amodal-confirm-card__header,
@@ -1907,7 +2025,7 @@
   padding: 10px;
   margin: 4px 0;
   font-size: 12px;
-  background: var(--pcw-bg);
+  background: var(--pcw-panel-tint);
 }
 
 .pcw-ask-user--submitted {
@@ -2571,7 +2689,7 @@
   border-radius: 6px;
   padding: 10px;
   margin: 4px 0;
-  background: var(--pcw-bg);
+  background: var(--pcw-panel-tint);
 }
 .pcw-ask-choice--submitted {
   background: var(--pcw-tool-call-bg);
@@ -2678,7 +2796,7 @@
   border-radius: 8px;
   padding: 12px 14px;
   margin: 6px 0;
-  background: var(--pcw-bg);
+  background: var(--pcw-panel-tint);
 }
 .pcw-plan-summary__title {
   font-size: 13.5px;
@@ -2744,7 +2862,7 @@
   border-radius: 8px;
   padding: 12px;
   margin: 6px 0;
-  background: var(--pcw-bg);
+  background: var(--pcw-panel-tint);
 }
 .pcw-proposal--submitted {
   background: var(--pcw-tool-call-bg);
@@ -2824,7 +2942,7 @@
   border-radius: 8px;
   padding: 12px;
   margin: 6px 0;
-  background: var(--pcw-bg);
+  background: var(--pcw-panel-tint);
 }
 .pcw-agent-card__title {
   font-weight: 600;
