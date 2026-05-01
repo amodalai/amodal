@@ -1,5 +1,14 @@
 # @amodalai/runtime
 
+## 0.3.49
+
+### Patch Changes
+
+- fadad93: Fix crash on Cloud: guard LocalFsBackend against non-path bundle origins
+  - @amodalai/types@0.3.49
+  - @amodalai/core@0.3.49
+  - @amodalai/db@0.3.49
+
 ## 0.3.48
 
 ### Patch Changes

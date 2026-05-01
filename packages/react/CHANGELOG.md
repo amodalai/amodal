@@ -1,5 +1,7 @@
 # @amodalai/react
 
+## 0.3.49
+
 ## 0.3.48
 
 ### Patch Changes
