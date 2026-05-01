@@ -27,6 +27,24 @@ export const ToolJsonSchema = z.object({
   name: z.string().regex(TOOL_NAME_REGEX, 'Tool name must be snake_case (lowercase letters, digits, underscores)').optional(),
   description: z.string().min(1),
   parameters: z.record(z.unknown()).default({}),
+  /**
+   * Short user-facing phrase rendered by the chat ToolCallCard while
+   * the tool is running. Present-participle tense reads naturally:
+   * "Looking up template 'marketing-digest'", "Saving progress",
+   * "Reading skills/marketing.md". Supports `{{paramName}}`
+   * substitution against the call's parameters; missing/non-string
+   * params drop out cleanly. Optional — tools without a label fall
+   * back to their `name` in the UI.
+   */
+  runningLabel: z.string().optional(),
+  /**
+   * Past-tense version shown after the tool completes successfully:
+   * "Looked up template", "Saved progress", "Read skills/marketing.md".
+   * Same `{{paramName}}` substitution. Optional — when omitted the
+   * UI keeps showing `runningLabel` after completion (the status icon
+   * differentiates done vs in-flight either way).
+   */
+  completedLabel: z.string().optional(),
   confirm: z.union([z.literal(false), z.literal(true), z.literal('review'), z.literal('never')]).default(false),
   timeout: z.number().int().positive().default(30000),
   env: z.array(z.string()).default([]),

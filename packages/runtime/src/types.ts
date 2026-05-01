@@ -114,9 +114,11 @@ export enum SSEEventType {
   AskChoice = 'ask_choice',
   ShowPreview = 'show_preview',
   ConnectionPanel = 'connection_panel',
+  PlanSummary = 'plan_summary',
   Proposal = 'proposal',
   UpdatePlan = 'update_plan',
   SetupCancelled = 'setup_cancelled',
+  SetupCompleted = 'setup_completed',
   ExploreStart = 'explore_start',
   ExploreEnd = 'explore_end',
   PlanMode = 'plan_mode',
@@ -125,6 +127,7 @@ export enum SSEEventType {
   CompactionStart = 'compaction_start',
   CompactionEnd = 'compaction_end',
   ToolLog = 'tool_log',
+  ToolLabelUpdate = 'tool_label_update',
   Warning = 'warning',
   Error = 'error',
   Done = 'done',
@@ -147,6 +150,19 @@ export interface SSEToolCallStartEvent {
   tool_name: string;
   tool_id: string;
   parameters: Record<string, unknown>;
+  /**
+   * Resolved present-participle label rendered while the tool runs
+   * (e.g. "Looking up template 'marketing-digest'"). Comes from the
+   * tool definition's `runningLabel` with `{{paramName}}` placeholders
+   * substituted against `parameters`.
+   */
+  running_label?: string;
+  /**
+   * Resolved past-tense label the widget swaps to once the call
+   * completes. Sent on the start event so the UI has both labels in
+   * hand and can switch purely on status.
+   */
+  completed_label?: string;
   timestamp: string;
 }
 
@@ -324,6 +340,25 @@ export interface SSEConnectionPanelEvent {
   timestamp: string;
 }
 
+/** Plan summary card emitted after load_template_plan composes the Plan. Read-only. */
+export interface SSEPlanSummaryEvent {
+  type: SSEEventType.PlanSummary;
+  template_title: string;
+  required_slots: Array<{
+    label: string;
+    description: string;
+    options: Array<{display_name: string; package_name: string}>;
+  }>;
+  optional_slots: Array<{
+    label: string;
+    description: string;
+    options: Array<{display_name: string; package_name: string}>;
+  }>;
+  config_questions: Array<{key: string; question: string}>;
+  completion_suggestions: string[];
+  timestamp: string;
+}
+
 /** Proposal card emitted by the admin agent's `propose_plan` tool (Phase D). */
 export interface SSEProposalEvent {
   type: SSEEventType.Proposal;
@@ -350,6 +385,13 @@ export interface SSEUpdatePlanEvent {
 export interface SSESetupCancelledEvent {
   type: SSEEventType.SetupCancelled;
   reason?: string;
+  timestamp: string;
+}
+
+/** Setup committed — emitted by commit_setup (via request/force_complete_setup) so AdminChat can transition deterministically. */
+export interface SSESetupCompletedEvent {
+  type: SSEEventType.SetupCompleted;
+  completed_at: string;
   timestamp: string;
 }
 
@@ -387,12 +429,15 @@ export type SSEEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
   | SSEConnectionPanelEvent
+  | SSEPlanSummaryEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
   | SSESetupCancelledEvent
+  | SSESetupCompletedEvent
   | SSECompactionStartEvent
   | SSECompactionEndEvent
   | SSEToolLogEvent
+  | SSEToolLabelUpdateEvent
   | SSEWarningEvent
   | SSEErrorEvent
   | SSEDoneEvent;
@@ -401,6 +446,21 @@ export interface SSEToolLogEvent {
   type: SSEEventType.ToolLog;
   tool_name: string;
   message: string;
+  timestamp: string;
+}
+
+/**
+ * Live label update emitted by a tool handler via `ctx.setLabel(...)`.
+ * Lets a tool dynamically replace its running / completed phrase as it
+ * works ("Cloning…" → "Installing 12 packages" → "Composed plan"). The
+ * widget patches the active tool-call card in place. Either or both
+ * fields may be present.
+ */
+export interface SSEToolLabelUpdateEvent {
+  type: SSEEventType.ToolLabelUpdate;
+  tool_id: string;
+  running_label?: string;
+  completed_label?: string;
   timestamp: string;
 }
 

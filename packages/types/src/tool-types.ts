@@ -8,9 +8,12 @@ import type {
   SSEAskChoiceEvent,
   SSEShowPreviewEvent,
   SSEConnectionPanelEvent,
+  SSEPlanSummaryEvent,
   SSEProposalEvent,
   SSEUpdatePlanEvent,
   SSESetupCancelledEvent,
+  SSESetupCompletedEvent,
+  SSEToolLabelUpdateEvent,
 } from './sse-types.js';
 import type {FsBackend} from './fs.js';
 import type {
@@ -32,9 +35,12 @@ export type CustomToolInlineEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
   | SSEConnectionPanelEvent
+  | SSEPlanSummaryEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
-  | SSESetupCancelledEvent;
+  | SSESetupCancelledEvent
+  | SSESetupCompletedEvent
+  | SSEToolLabelUpdateEvent;
 
 /**
  * Tool definition shape used by amodal tools.
@@ -77,6 +83,16 @@ export interface LoadedTool {
   hasDockerfile: boolean;
   sandboxLanguage: string;
   responseShaping?: ResponseShaping;
+  /**
+   * Present-participle phrase rendered while the tool is running.
+   * Supports `{{paramName}}` substitution against call params. Optional.
+   */
+  runningLabel?: string;
+  /**
+   * Past-tense phrase rendered after the tool completes successfully.
+   * Same `{{paramName}}` substitution. Optional.
+   */
+  completedLabel?: string;
 }
 
 /**
@@ -117,6 +133,16 @@ export interface CustomToolContext {
    * `show_preview` cards). Optional — most tools never call it.
    */
   emit?(event: CustomToolInlineEvent): void;
+  /**
+   * Replace the friendly running / completed phrase the chat widget
+   * shows for this call. Either or both may be set; subsequent calls
+   * overwrite the previous values. Useful for tools that move through
+   * stages and want the in-flight card to reflect the current step
+   * ("Cloning template" → "Installing 12 connection packages" →
+   * "Composed plan"). Static defaults from `tool.json#runningLabel` /
+   * `completedLabel` apply when this isn't called.
+   */
+  setLabel?(opts: {running?: string; completed?: string}): void;
   /**
    * Repo file access, sandboxed to the agent's repo root. Absolute
    * paths and `..` traversal are rejected. Used by handlers that read

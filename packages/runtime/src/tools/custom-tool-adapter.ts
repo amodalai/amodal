@@ -233,6 +233,10 @@ function buildCustomToolContext(
       runtimeCtx.emit?.(event as unknown as Parameters<NonNullable<typeof runtimeCtx.emit>>[0]);
     },
 
+    setLabel(labelOpts) {
+      runtimeCtx.setLabel?.(labelOpts);
+    },
+
     signal: combinedSignal,
 
     // Phase A: optional SDK fields populated when the runtime knows them.
@@ -287,6 +291,8 @@ export function createCustomToolDefinition(
     metadata: {
       category: 'custom',
     },
+    ...(tool.runningLabel ? {runningLabel: tool.runningLabel} : {}),
+    ...(tool.completedLabel ? {completedLabel: tool.completedLabel} : {}),
 
     async execute(params: unknown, ctx: ToolContext): Promise<unknown> {
       const customCtx = buildCustomToolContext(tool, sessionCtx, ctx);

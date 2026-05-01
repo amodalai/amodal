@@ -8,6 +8,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import type { EnvVarStatus } from './useGettingStarted';
 
+// Studio backend endpoint that reads node_modules/<pkg>/package.json
+// directly. Works during setup before the runtime has booted (i.e.
+// before amodal.json appears). Same response shape as the runtime's
+// /api/connections/:packageName so the form code is unchanged.
+const STUDIO_CONNECTION_PATH = '/api/studio/connection';
+
 export interface ConnectionOauthDetail {
   appKey: string;
   available: boolean;
@@ -50,18 +56,31 @@ export function useConnectionDetail(packageName: string): ConnectionDetailResult
     setData(null);
     setError(null);
     if (!packageName) return;
-    fetch(`${runtimeUrl}/api/connections/${encodeURIComponent(packageName)}`, {
-      signal: AbortSignal.timeout(5_000),
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
+    // Try Studio's backend first (reads node_modules directly, works
+    // pre-runtime). Fall back to the runtime endpoint when Studio
+    // returns 404 — that path is the source of truth post-setup,
+    // and it can serve packages the bundle has loaded but Studio
+    // can't see (e.g. cloud-mounted packages in the future).
+    void (async () => {
+      try {
+        let res = await fetch(
+          `${STUDIO_CONNECTION_PATH}/${encodeURIComponent(packageName)}`,
+          { signal: AbortSignal.timeout(5_000) },
+        );
+        if (res.status === 404) {
+          res = await fetch(
+            `${runtimeUrl}/api/connections/${encodeURIComponent(packageName)}`,
+            { signal: AbortSignal.timeout(5_000) },
+          );
+        }
+        if (!res.ok) throw new Error(`Connection lookup failed: ${String(res.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
-        return r.json() as Promise<ConnectionDetail>;
-      })
-      .then(setData)
-      .catch((err: unknown) => {
+        const json = (await res.json()) as ConnectionDetail;
+        setData(json);
+      } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
-      });
+      }
+    })();
   }, [runtimeUrl, packageName, tick]);
 
   const refetch = useCallback(() => setTick((t) => t + 1), []);

@@ -152,6 +152,8 @@ export function createMemoryTool(opts: CreateMemoryToolOptions): ToolDefinition 
     }),
     readOnly: false,
     metadata: {category: 'system'},
+    runningLabel: 'Memory: {{action}}',
+    completedLabel: 'Memory: {{action}}',
 
     async execute(
       params: {action: string; content?: string; entry_id?: string; query?: string},

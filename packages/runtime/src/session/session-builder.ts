@@ -171,6 +171,8 @@ Widget selection:
     }),
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Showing {{widget}}',
+    completedLabel: 'Showed {{widget}}',
 
     async execute(params: {widget: string; data: Record<string, unknown>}): Promise<unknown> {
       // The present tool's result is consumed by the SSE layer to emit a
@@ -194,6 +196,8 @@ function createStopExecutionTool(): ToolDefinition {
     }),
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Stopping',
+    completedLabel: 'Stopped',
 
     async execute(params: {reason: string}): Promise<unknown> {
       // The __stop sentinel is checked by the EXECUTING state handler.

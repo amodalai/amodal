@@ -311,6 +311,25 @@ export async function deleteSetupState(
   return rows.length > 0;
 }
 
+/**
+ * Wipe every `setup_state` row matching `scopeId`, regardless of
+ * `agentId`. Used by the onboarding chat's "Restart setup" flow —
+ * the agent-id can shift mid-flow when `install_template` writes
+ * `amodal.json` (which the CLI reads at startup to populate
+ * `AGENT_ID`), so a strict `(agentId, scopeId)` match would miss
+ * rows seeded before the rename. Returns the number of rows deleted.
+ */
+export async function deleteSetupStateByScope(
+  db: Db,
+  scopeId: string,
+): Promise<number> {
+  const rows = await db
+    .delete(setupState)
+    .where(eq(setupState.scopeId, scopeId))
+    .returning({agentId: setupState.agentId});
+  return rows.length;
+}
+
 // Re-export the row types so consumers don't have to chase imports.
 export type {
   CompletedSlot,

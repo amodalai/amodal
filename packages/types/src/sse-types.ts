@@ -21,15 +21,18 @@ export enum SSEEventType {
   AskChoice = 'ask_choice',
   ShowPreview = 'show_preview',
   ConnectionPanel = 'connection_panel',
+  PlanSummary = 'plan_summary',
   Proposal = 'proposal',
   UpdatePlan = 'update_plan',
   SetupCancelled = 'setup_cancelled',
+  SetupCompleted = 'setup_completed',
   ExploreStart = 'explore_start',
   ExploreEnd = 'explore_end',
   PlanMode = 'plan_mode',
   FieldScrub = 'field_scrub',
   ConfirmationRequired = 'confirmation_required',
   ToolLog = 'tool_log',
+  ToolLabelUpdate = 'tool_label_update',
   Error = 'error',
   Done = 'done',
 }
@@ -51,6 +54,21 @@ export interface SSEToolCallStartEvent {
   tool_name: string;
   tool_id: string;
   parameters: Record<string, unknown>;
+  /**
+   * Resolved present-participle label rendered while the tool is
+   * running, e.g. "Looking up template 'marketing-digest'". Comes from
+   * the tool definition's `runningLabel` with `{{paramName}}`
+   * placeholders substituted against `parameters`. Optional — undefined
+   * tools fall back to `tool_name` in the UI.
+   */
+  running_label?: string;
+  /**
+   * Resolved past-tense label the UI swaps to once the tool completes.
+   * Sent on the start event so the widget has both labels in hand and
+   * can switch on status without waiting for a separate result message.
+   * Optional — undefined keeps `running_label` after completion.
+   */
+  completed_label?: string;
   timestamp: string;
 }
 
@@ -182,6 +200,36 @@ export interface SSEShowPreviewEvent {
 }
 
 /**
+ * Plan summary card emitted by the `load_template_plan` custom tool
+ * after the SetupPlan is composed from the installed template's
+ * `template.json`. Lets the user see a structured view of what got
+ * pulled — required + optional connections, config questions —
+ * before the agent walks through them. Read-only; no buttons.
+ */
+export interface SSEPlanSummaryEvent {
+  type: SSEEventType.PlanSummary;
+  /** Display title — `state.plan.completion.title` or the template package name. */
+  template_title: string;
+  /** Required connection slots, in author order. */
+  required_slots: Array<{
+    label: string;
+    description: string;
+    options: Array<{display_name: string; package_name: string}>;
+  }>;
+  /** Optional connection slots, in author order. */
+  optional_slots: Array<{
+    label: string;
+    description: string;
+    options: Array<{display_name: string; package_name: string}>;
+  }>;
+  /** Configuration questions the agent will ask during the `configuring` phase. */
+  config_questions: Array<{key: string; question: string}>;
+  /** Optional "what comes next" suggestions from the Plan's completion block. */
+  completion_suggestions: string[];
+  timestamp: string;
+}
+
+/**
  * Inline connection panel. Emitted by the admin agent's
  * `present_connection` custom tool — Phase H.1. Studio renders a
  * single Configure button regardless of the package's auth type;
@@ -279,6 +327,22 @@ export interface SSESetupCancelledEvent {
   timestamp: string;
 }
 
+/**
+ * Setup committed — emitted by `commit_setup` (via the
+ * request_complete_setup / force_complete_setup tools) once
+ * `amodal.json` is on disk and `setup_state.completedAt` is set.
+ * Studio's AdminChat catches this and reloads `/` so IndexPage's
+ * route guard transitions from CreateFlowPage to OverviewPage
+ * deterministically — the polling-based transition (every 2s)
+ * works too but this avoids the up-to-2s gap between commit and
+ * the first poll that sees both signals settled.
+ */
+export interface SSESetupCompletedEvent {
+  type: SSEEventType.SetupCompleted;
+  completed_at: string;
+  timestamp: string;
+}
+
 export interface SSEDoneEvent {
   type: SSEEventType.Done;
   timestamp: string;
@@ -335,6 +399,23 @@ export interface SSEToolLogEvent {
   timestamp: string;
 }
 
+/**
+ * Live label update emitted by a tool handler via `ctx.setLabel(...)`.
+ * Lets a tool dynamically replace its running / completed phrase as it
+ * works ("Cloning…" → "Installing 12 packages" → "Composed plan"). The
+ * widget patches the active tool-call card in place. Either field may
+ * be present — passing only `running_label` updates the in-flight
+ * phrase, only `completed_label` swaps the post-success phrase, both
+ * sets both at once.
+ */
+export interface SSEToolLabelUpdateEvent {
+  type: SSEEventType.ToolLabelUpdate;
+  tool_id: string;
+  running_label?: string;
+  completed_label?: string;
+  timestamp: string;
+}
+
 export type SSEEvent =
   | SSEInitEvent
   | SSETextDeltaEvent
@@ -350,14 +431,17 @@ export type SSEEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
   | SSEConnectionPanelEvent
+  | SSEPlanSummaryEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
   | SSESetupCancelledEvent
+  | SSESetupCompletedEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent
   | SSEFieldScrubEvent
   | SSEConfirmationRequiredEvent
   | SSEToolLogEvent
+  | SSEToolLabelUpdateEvent
   | SSEErrorEvent
   | SSEDoneEvent;

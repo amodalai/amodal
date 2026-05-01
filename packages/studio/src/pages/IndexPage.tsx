@@ -9,20 +9,26 @@ import { CreateFlowPage } from './CreateFlowPage';
 import { OverviewPage } from './OverviewPage';
 
 /**
- * Index route guard: an empty repo (no `amodal.json`) gets the create flow,
- * a configured repo gets the agent overview (model pricing dashboard). The
- * probe is a single fetch to Studio's `/api/repo-state` endpoint — see
- * `useRepoState` for the fail-open behavior.
+ * Index route guard: an empty repo (no `amodal.json`) gets the create
+ * flow, a configured repo gets the agent overview. The probe (see
+ * `useRepoState`) reads two signals from Studio's `/api/repo-state`:
  *
- * `polling: true` (Phase E.7) keeps re-probing every 2s while
- * `hasAmodalJson` is false, so the page transitions from create-flow to
- * workspace-home automatically when commit_setup writes amodal.json
- * (regardless of who triggered it — agent's `request_complete_setup`,
- * the "Finish setup" button, or `init-repo`'s skip-onboarding write).
- * Polling stops once the file lands.
+ *   - `hasAmodalJson` — file exists on disk
+ *   - `setupInProgress` — a `setup_state` row is mid-flow (completedAt null)
+ *
+ * Routing rule: only flip to OverviewPage when `amodal.json` is on disk
+ * AND no setup_state row is mid-flow. Otherwise stay on CreateFlowPage.
+ *
+ * Why both: `install_template` may vendor an `amodal.json` from the
+ * cloned template before the user has finished walking the setup flow.
+ * Without the `setupInProgress` gate, the page would transition to
+ * the workspace mid-chat and trap the user out of their setup. The
+ * `setup_state` row stays put until `commit_setup` runs, which gives
+ * us a clean "setup is fully done" signal.
  */
 export function IndexPage() {
-  const { hasAmodalJson, loading } = useRepoState({ polling: true });
+  const { hasAmodalJson, setupInProgress, loading } = useRepoState({ polling: true });
   if (loading) return null;
-  return hasAmodalJson ? <OverviewPage /> : <CreateFlowPage />;
+  const setupDone = hasAmodalJson && !setupInProgress;
+  return setupDone ? <OverviewPage /> : <CreateFlowPage />;
 }

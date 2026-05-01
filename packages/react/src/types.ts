@@ -26,12 +26,14 @@ export type SSEEventType =
   | 'ask_choice'
   | 'show_preview'
   | 'connection_panel'
+  | 'plan_summary'
   | 'explore_start'
   | 'explore_end'
   | 'plan_mode'
   | 'field_scrub'
   | 'confirmation_required'
   | 'tool_log'
+  | 'tool_label_update'
   | 'warning'
   | 'error'
   | 'done';
@@ -53,6 +55,10 @@ export interface SSEToolCallStartEvent {
   tool_name: string;
   tool_id: string;
   parameters: Record<string, unknown>;
+  /** Resolved present-participle label rendered while running. */
+  running_label?: string;
+  /** Resolved past-tense label rendered after success. */
+  completed_label?: string;
   timestamp: string;
 }
 
@@ -196,6 +202,30 @@ export interface SSEConnectionPanelEvent {
 }
 
 /**
+ * Plan summary card emitted by `load_template_plan` after the
+ * SetupPlan composes from the installed template. Read-only —
+ * surfaces required + optional connections + config questions so
+ * the user sees what got loaded inline. Mirrored from @amodalai/types.
+ */
+export interface SSEPlanSummaryEvent {
+  type: 'plan_summary';
+  template_title: string;
+  required_slots: Array<{
+    label: string;
+    description: string;
+    options: Array<{display_name: string; package_name: string}>;
+  }>;
+  optional_slots: Array<{
+    label: string;
+    description: string;
+    options: Array<{display_name: string; package_name: string}>;
+  }>;
+  config_questions: Array<{key: string; question: string}>;
+  completion_suggestions: string[];
+  timestamp: string;
+}
+
+/**
  * One slot label + description shown on the Proposal card. Skill /
  * connection display names only — the proposal tool never quotes
  * raw npm package names.
@@ -243,6 +273,18 @@ export interface SSEUpdatePlanEvent {
 export interface SSESetupCancelledEvent {
   type: 'setup_cancelled';
   reason?: string;
+  timestamp: string;
+}
+
+/**
+ * Setup committed — emitted by request_complete_setup /
+ * force_complete_setup once amodal.json is on disk and
+ * setup_state.completedAt is set. Studio's AdminChat catches this
+ * and reloads `/` to flip from CreateFlowPage to OverviewPage.
+ */
+export interface SSESetupCompletedEvent {
+  type: 'setup_completed';
+  completed_at: string;
   timestamp: string;
 }
 
@@ -306,6 +348,15 @@ export interface SSEToolLogEvent {
   timestamp: string;
 }
 
+/** Live label update emitted by a tool via `ctx.setLabel(...)`. */
+export interface SSEToolLabelUpdateEvent {
+  type: 'tool_label_update';
+  tool_id: string;
+  running_label?: string;
+  completed_label?: string;
+  timestamp: string;
+}
+
 export interface SSEErrorEvent {
   type: 'error';
   message: string;
@@ -339,15 +390,18 @@ export type SSEEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
   | SSEConnectionPanelEvent
+  | SSEPlanSummaryEvent
   | SSEProposalEvent
   | SSEUpdatePlanEvent
   | SSESetupCancelledEvent
+  | SSESetupCompletedEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent
   | SSEFieldScrubEvent
   | SSEConfirmationRequiredEvent
   | SSEToolLogEvent
+  | SSEToolLabelUpdateEvent
   | SSEWarningEvent
   | SSEErrorEvent
   | SSEDoneEvent;
@@ -398,6 +452,18 @@ export interface ToolCallInfo {
   subagentEvents?: SubagentEventInfo[];
   /** Ephemeral progress message from the tool executor (via ctx.log). */
   logMessage?: string;
+  /**
+   * Resolved present-participle label rendered while the tool is
+   * running. Comes from the runtime's tool definition, with
+   * `{{paramName}}` placeholders pre-substituted server-side.
+   */
+  runningLabel?: string;
+  /**
+   * Resolved past-tense label rendered after a successful run. Same
+   * substitution as `runningLabel`. The widget swaps to this purely
+   * based on `status`.
+   */
+  completedLabel?: string;
 }
 
 export interface ConfirmationInfo {
@@ -452,6 +518,29 @@ export interface AskChoiceBlock {
 export interface ShowPreviewBlock {
   type: 'show_preview';
   card: AgentCardInline;
+}
+
+/**
+ * Plan summary surfaced by the `load_template_plan` tool. Read-only.
+ * Renders required + optional connection slots and config questions
+ * so the user can verify the right template loaded. No interaction
+ * affordances — just structured content.
+ */
+export interface PlanSummaryBlock {
+  type: 'plan_summary';
+  templateTitle: string;
+  requiredSlots: Array<{
+    label: string;
+    description: string;
+    options: Array<{displayName: string; packageName: string}>;
+  }>;
+  optionalSlots: Array<{
+    label: string;
+    description: string;
+    options: Array<{displayName: string; packageName: string}>;
+  }>;
+  configQuestions: Array<{key: string; question: string}>;
+  completionSuggestions: string[];
 }
 
 /**
@@ -580,6 +669,7 @@ export type ContentBlock =
   | AskChoiceBlock
   | ShowPreviewBlock
   | ConnectionPanelBlock
+  | PlanSummaryBlock
   | ProposalBlock;
 
 // ---------------------------------------------------------------------------
@@ -664,7 +754,7 @@ export type ChatAction =
   | { type: 'SEND_MESSAGE'; text: string; images?: string[] }
   | { type: 'STREAM_INIT'; sessionId: string }
   | { type: 'STREAM_TEXT_DELTA'; content: string }
-  | { type: 'STREAM_TOOL_CALL_START'; toolId: string; toolName: string; parameters: Record<string, unknown> }
+  | { type: 'STREAM_TOOL_CALL_START'; toolId: string; toolName: string; parameters: Record<string, unknown>; runningLabel?: string; completedLabel?: string }
   | { type: 'STREAM_TOOL_CALL_RESULT'; toolId: string; status: 'success' | 'error'; result?: unknown; parameters?: Record<string, unknown>; duration_ms?: number; error?: string }
   | { type: 'STREAM_SUBAGENT_EVENT'; parentToolId: string; event: SubagentEventInfo }
   | { type: 'STREAM_SKILL_ACTIVATED'; skill: string }
@@ -691,6 +781,14 @@ export type ChatAction =
       patch: Partial<Pick<ConnectionPanelBlock, 'state' | 'userSkipped' | 'successDetail' | 'errorMessage'>>;
     }
   | {
+      type: 'STREAM_PLAN_SUMMARY';
+      templateTitle: string;
+      requiredSlots: PlanSummaryBlock['requiredSlots'];
+      optionalSlots: PlanSummaryBlock['optionalSlots'];
+      configQuestions: PlanSummaryBlock['configQuestions'];
+      completionSuggestions: string[];
+    }
+  | {
       type: 'STREAM_PROPOSAL';
       proposalId: string;
       summary: string;
@@ -711,6 +809,7 @@ export type ChatAction =
   | { type: 'CONFIRMATION_RESPONDED'; correlationId: string; approved: boolean }
   | { type: 'STREAM_ERROR'; message: string }
   | { type: 'STREAM_TOOL_LOG'; toolName: string; message: string }
+  | { type: 'STREAM_TOOL_LABEL_UPDATE'; toolId: string; runningLabel?: string; completedLabel?: string }
   | { type: 'STREAM_DONE'; usage?: {inputTokens: number; outputTokens: number} }
   | { type: 'LOAD_HISTORY'; sessionId: string; messages: ChatMessage[] }
   | { type: 'RESET' };

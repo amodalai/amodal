@@ -118,6 +118,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         toolName: action.toolName,
         parameters: action.parameters,
         status: 'running',
+        ...(action.runningLabel ? { runningLabel: action.runningLabel } : {}),
+        ...(action.completedLabel ? { completedLabel: action.completedLabel } : {}),
       };
       if (last && last.type === 'assistant_text') {
         const updatedToolCalls = [...last.toolCalls, toolCall];
@@ -325,6 +327,25 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
+    case 'STREAM_PLAN_SUMMARY': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'plan_summary',
+          templateTitle: action.templateTitle,
+          requiredSlots: action.requiredSlots,
+          optionalSlots: action.optionalSlots,
+          configQuestions: action.configQuestions,
+          completionSuggestions: action.completionSuggestions,
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
     case 'PANEL_UPDATE': {
       // Mutate the matching connection_panel block by panelId.
       // Studio dispatches this from inside its renderer (Skip /
@@ -457,6 +478,41 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         msgs[msgs.length - 1] = { ...last, toolCalls: updatedCalls, contentBlocks: blocks };
       }
       return { ...state, messages: msgs };
+    }
+    case 'STREAM_TOOL_LABEL_UPDATE': {
+      // The handler called ctx.setLabel(...) — patch the matching tool
+      // call's labels in place. The widget swaps between running and
+      // completed labels purely on status, so updating the values here
+      // is enough.
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const patch = (tc: ToolCallInfo): ToolCallInfo =>
+          tc.toolId === action.toolId
+            ? {
+                ...tc,
+                ...(action.runningLabel !== undefined ? { runningLabel: action.runningLabel } : {}),
+                ...(action.completedLabel !== undefined ? { completedLabel: action.completedLabel } : {}),
+              }
+            : tc;
+        const updatedCalls = last.toolCalls.map(patch);
+        const blocks = last.contentBlocks.map((block) =>
+          block.type === 'tool_calls'
+            ? { ...block, calls: block.calls.map(patch) }
+            : block,
+        );
+        msgs[msgs.length - 1] = { ...last, toolCalls: updatedCalls, contentBlocks: blocks };
+      }
+      const updatedActive = state.activeToolCalls.map((tc) =>
+        tc.toolId === action.toolId
+          ? {
+              ...tc,
+              ...(action.runningLabel !== undefined ? { runningLabel: action.runningLabel } : {}),
+              ...(action.completedLabel !== undefined ? { completedLabel: action.completedLabel } : {}),
+            }
+          : tc,
+      );
+      return { ...state, messages: msgs, activeToolCalls: updatedActive };
     }
     case 'STREAM_CREDENTIAL_SAVED':
     case 'STREAM_APPROVED':
@@ -735,6 +791,8 @@ function processEvent(
         toolId: event.tool_id,
         toolName: event.tool_name,
         parameters: event.parameters,
+        ...(event.running_label ? { runningLabel: event.running_label } : {}),
+        ...(event.completed_label ? { completedLabel: event.completed_label } : {}),
       });
       pending.set(event.tool_id, {
         toolName: event.tool_name,
@@ -867,6 +925,24 @@ function processEvent(
         skippable: event.skippable,
       });
       return;
+    case 'plan_summary':
+      dispatch({
+        type: 'STREAM_PLAN_SUMMARY',
+        templateTitle: event.template_title,
+        requiredSlots: event.required_slots.map((s) => ({
+          label: s.label,
+          description: s.description,
+          options: s.options.map((o) => ({displayName: o.display_name, packageName: o.package_name})),
+        })),
+        optionalSlots: event.optional_slots.map((s) => ({
+          label: s.label,
+          description: s.description,
+          options: s.options.map((o) => ({displayName: o.display_name, packageName: o.package_name})),
+        })),
+        configQuestions: event.config_questions,
+        completionSuggestions: event.completion_suggestions,
+      });
+      return;
     case 'proposal':
       dispatch({
         type: 'STREAM_PROPOSAL',
@@ -919,6 +995,14 @@ function processEvent(
     case 'tool_log':
       dispatch({ type: 'STREAM_TOOL_LOG', toolName: event.tool_name, message: event.message });
       return;
+    case 'tool_label_update':
+      dispatch({
+        type: 'STREAM_TOOL_LABEL_UPDATE',
+        toolId: event.tool_id,
+        ...(event.running_label !== undefined ? { runningLabel: event.running_label } : {}),
+        ...(event.completed_label !== undefined ? { completedLabel: event.completed_label } : {}),
+      });
+      return;
     case 'warning':
       dispatch({ type: 'STREAM_ERROR', message: event.message });
       return;
@@ -945,6 +1029,12 @@ function processEvent(
       // the parent surface (e.g. CreateFlowPage) can flip back to the
       // picker. The reducer doesn't render anything; embedders
       // intercept the SSE event in their custom streamFn.
+      return;
+    case 'setup_completed':
+      // Emitted by request_complete_setup / force_complete_setup so
+      // AdminChat can deterministically transition to OverviewPage.
+      // Like setup_cancelled, the reducer doesn't render anything;
+      // embedders intercept in their streamFn.
       return;
     default: {
       // Exhaustiveness check — any new SSE event must be routed here.

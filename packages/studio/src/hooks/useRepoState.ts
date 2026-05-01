@@ -8,12 +8,18 @@ import { useEffect, useState } from 'react';
 
 interface RepoStateResponse {
   hasAmodalJson: boolean;
+  /** True when a `setup_state` row exists with `completedAt === null` —
+   *  i.e. setup is mid-flow even if `amodal.json` happens to be on disk
+   *  (e.g. vendored by `install_template` before `commit_setup` ran). */
+  setupInProgress?: boolean;
   repoPath: string | null;
 }
 
 export interface UseRepoStateResult {
-  /** True when `<repoPath>/amodal.json` exists. Drives index routing. */
+  /** True when `<repoPath>/amodal.json` exists. */
   hasAmodalJson: boolean;
+  /** True when a setup_state row is mid-flow (completedAt null). */
+  setupInProgress: boolean;
   loading: boolean;
   /** Set when the probe fails. We treat errors as "configured" to avoid
    *  trapping users in the create flow when the runtime is just slow. */
@@ -48,6 +54,7 @@ export function useRepoState(options?: UseRepoStateOptions): UseRepoStateResult 
   const polling = options?.polling === true;
   const [state, setState] = useState<UseRepoStateResult>({
     hasAmodalJson: true,
+    setupInProgress: false,
     loading: true,
     error: null,
   });
@@ -67,14 +74,18 @@ export function useRepoState(options?: UseRepoStateOptions): UseRepoStateResult 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
         const data = (await res.json()) as RepoStateResponse;
         if (cancelled) return;
+        const setupInProgress = data.setupInProgress === true;
         setState({
           hasAmodalJson: data.hasAmodalJson,
+          setupInProgress,
           loading: false,
           error: null,
         });
-        // Re-arm the loop unless the file landed (in which case the
-        // answer is stable forever) or we've been cancelled.
-        if (polling && !data.hasAmodalJson) {
+        // Re-arm the loop while the setup isn't fully closed: either
+        // amodal.json hasn't landed OR a setup_state row is still
+        // mid-flow. Once both signals show "done" we can stop polling.
+        const needsAnotherProbe = !data.hasAmodalJson || setupInProgress;
+        if (polling && needsAnotherProbe) {
           timer = setTimeout(() => {
             if (!cancelled) void probe();
           }, POLL_INTERVAL_MS);
@@ -86,6 +97,7 @@ export function useRepoState(options?: UseRepoStateOptions): UseRepoStateResult 
           // home and let downstream pages handle offline state than to
           // strand a configured user in the create flow.
           hasAmodalJson: true,
+          setupInProgress: false,
           loading: false,
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- error normalization at module boundary
           error: (err as Error).message ?? 'Failed to probe repo state',

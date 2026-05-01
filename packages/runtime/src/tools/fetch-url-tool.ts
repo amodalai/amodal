@@ -289,6 +289,8 @@ When NOT to use:
     parameters: FetchUrlParamsSchema,
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Fetching {{url}}',
+    completedLabel: 'Fetched {{url}}',
 
     async execute(params, ctx: ToolContext): Promise<FetchUrlToolResult> {
       const started = Date.now();

@@ -22,6 +22,7 @@ import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
 import { AskChoiceCard } from './AskChoiceCard';
 import { AgentCardInlinePreview } from './AgentCardInline';
+import { PlanSummaryCard } from './PlanSummaryCard';
 import { ProposalCard } from './ProposalCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
@@ -254,6 +255,13 @@ function AssistantBubble({
                 <AgentCardInlinePreview
                   key={`preview-${String(i)}`}
                   card={block.card}
+                />
+              );
+            case 'plan_summary':
+              return (
+                <PlanSummaryCard
+                  key={`plan-${String(i)}`}
+                  block={block}
                 />
               );
             case 'proposal':

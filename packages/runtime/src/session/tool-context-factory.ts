@@ -19,6 +19,7 @@ import type {FieldScrubber} from '@amodalai/core';
 import type {ConnectionsMap} from '../tools/request-tool.js';
 import type {SearchProvider} from '../providers/search-provider.js';
 import type {ToolContext, ToolInlineEvent} from '../tools/types.js';
+import {SSEEventType} from '../types.js';
 import type {Logger} from '../logger.js';
 import type {CredentialResolver} from '../credentials.js';
 import {ConnectionError, StoreError} from '../errors.js';
@@ -374,6 +375,16 @@ export function createToolContextFactory(
       inlineEvents: [] as ToolInlineEvent[],
       emit(event) {
         ctx.inlineEvents?.push(event);
+      },
+      setLabel(labelOpts) {
+        if (labelOpts.running === undefined && labelOpts.completed === undefined) return;
+        ctx.inlineEvents?.push({
+          type: SSEEventType.ToolLabelUpdate,
+          tool_id: callId,
+          ...(labelOpts.running !== undefined ? {running_label: labelOpts.running} : {}),
+          ...(labelOpts.completed !== undefined ? {completed_label: labelOpts.completed} : {}),
+          timestamp: new Date().toISOString(),
+        });
       },
 
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

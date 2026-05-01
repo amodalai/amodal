@@ -232,9 +232,17 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
   }
   const statusClass = `pcw-tool-call__status pcw-tool-call__status--${toolCall.status}`;
 
+  // Prefer the friendly running/completed labels when the tool definition
+  // provides them. Fall back to the raw tool name so tools that haven't
+  // declared labels keep working unchanged.
+  const friendlyLabel =
+    toolCall.status === 'running'
+      ? toolCall.runningLabel ?? toolCall.toolName
+      : (toolCall.completedLabel ?? toolCall.runningLabel ?? toolCall.toolName);
+
   const summary = toolCall.duration_ms
-    ? `${toolCall.toolName} (${String(toolCall.duration_ms)}ms)`
-    : toolCall.toolName;
+    ? `${friendlyLabel} (${String(toolCall.duration_ms)}ms)`
+    : friendlyLabel;
 
   return (
     <div className="pcw-tool-call">

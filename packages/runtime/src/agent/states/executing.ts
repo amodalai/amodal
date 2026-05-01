@@ -175,13 +175,7 @@ export async function handleExecuting(
       .filter((t): t is string => typeof t === 'string')
       .filter((t) => t !== DISPATCH_TOOL_NAME);
 
-    effects.push({
-      type: SSEEventType.ToolCallStart,
-      tool_name: current.toolName,
-      tool_id: current.toolCallId,
-      parameters: sanitizeParams(current.args),
-      timestamp,
-    });
+    effects.push(buildToolCallStartEvent(current, timestamp, toolDef));
 
     return {
       next: {
@@ -210,8 +204,24 @@ export async function handleExecuting(
     return executeBatch(state, batch, effects, ctx);
   }
 
+  // Before running a write tool, invalidate any pre-execution cache
+  // entries for tools queued after it. Pre-exec runs during STREAMING
+  // (before EXECUTING starts), so a read-only tool emitted in the
+  // same model turn as a preceding write tool can return stale
+  // results — e.g. `install_package` then `load_template_plan` reads
+  // node_modules before npm install actually finishes. Invalidating
+  // here forces the read tool to re-run fresh against the post-write
+  // state of the world.
+  if (!toolDef.readOnly) {
+    for (const queued of queue) {
+      if (ctx.preExecutionCache.has(queued.toolCallId)) {
+        ctx.preExecutionCache.delete(queued.toolCallId);
+      }
+    }
+  }
+
   // Single-call path: execute the current tool, emit events, advance state.
-  effects.push(buildToolCallStartEvent(current, timestamp));
+  effects.push(buildToolCallStartEvent(current, timestamp, toolDef));
   const {result, duration, inlineEvents} = await runToolCall(current, toolDef, ctx);
   // Inline events (show_preview / ask_choice) appear before the result so
   // chat UIs can render the card / button row above the result block.
@@ -302,8 +312,8 @@ async function executeBatch(
   const startTimestamp = new Date().toISOString();
 
   // Fire all start events before kicking off the work
-  for (const {call} of batch.calls) {
-    effects.push(buildToolCallStartEvent(call, startTimestamp));
+  for (const {call, toolDef} of batch.calls) {
+    effects.push(buildToolCallStartEvent(call, startTimestamp, toolDef));
   }
 
   // Run all calls concurrently (pre-exec cache is used per-call inside runToolCall)
@@ -364,12 +374,17 @@ async function runToolCall(
 ): Promise<{result: ToolResult; duration: number; inlineEvents: SSEEvent[]}> {
   const startedAt = Date.now();
   try {
-    // Check pre-execution cache first (read-only tools started during streaming)
+    // Check pre-execution cache first (read-only tools started during streaming).
+    // The cache stores BOTH `output` and `inlineEvents` so emissions from
+    // tools like `present_connection` / `show_preview` survive the cache
+    // hand-off and reach the SSE wire.
     const cached = ctx.preExecutionCache.get(call.toolCallId);
     let output: unknown;
     let inlineEvents: SSEEvent[] = [];
     if (cached) {
-      output = await cached;
+      const cachedResult = await cached;
+      output = cachedResult.output;
+      inlineEvents = cachedResult.inlineEvents;
     } else {
       const executed = await executeToolWithEvents(call, toolDef, ctx);
       output = executed.output;
@@ -433,12 +448,36 @@ async function runToolCall(
   }
 }
 
-function buildToolCallStartEvent(call: ToolCall, timestamp: string): SSEEvent {
+/**
+ * Resolve `{{paramName}}` placeholders in a label template against a
+ * params object. Missing or non-string params drop out cleanly so a
+ * template like "Looking up template '{{slug}}'" renders as "Looking up
+ * template ''" instead of leaving the placeholder in place.
+ */
+function resolveLabelTemplate(template: string, params: Record<string, unknown>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+    const v = params[key];
+    return typeof v === 'string' ? v : typeof v === 'number' || typeof v === 'boolean' ? String(v) : '';
+  });
+}
+
+function buildToolCallStartEvent(
+  call: ToolCall,
+  timestamp: string,
+  toolDef?: ToolDefinition,
+): SSEEvent {
+  const params = sanitizeParams(call.args);
   return {
     type: SSEEventType.ToolCallStart,
     tool_name: call.toolName,
     tool_id: call.toolCallId,
-    parameters: sanitizeParams(call.args),
+    parameters: params,
+    ...(toolDef?.runningLabel
+      ? {running_label: resolveLabelTemplate(toolDef.runningLabel, params)}
+      : {}),
+    ...(toolDef?.completedLabel
+      ? {completed_label: resolveLabelTemplate(toolDef.completedLabel, params)}
+      : {}),
     timestamp,
   };
 }

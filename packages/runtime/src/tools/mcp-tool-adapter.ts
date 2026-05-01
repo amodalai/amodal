@@ -55,6 +55,8 @@ export function createMcpToolDefinition(
       connection: tool.serverName,
       originalName: tool.originalName,
     },
+    runningLabel: `Running ${tool.originalName} (${tool.serverName})`,
+    completedLabel: `Ran ${tool.originalName} (${tool.serverName})`,
 
     async execute(params: unknown, ctx: ToolContext): Promise<unknown> {
       logger.debug('mcp_tool_call_start', {

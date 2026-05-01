@@ -5,12 +5,18 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { PickerCard } from '@/components/PickerCard';
 import { AdminChat } from '@/components/views/AdminChat';
 import { useTemplateCatalog, type CatalogAgent, type CatalogAgentDetail } from '../hooks/useTemplateCatalog';
 import { cn } from '@/lib/utils';
+
+const CHAT_PARAM = 'chat';
+const CHAT_PARAM_CUSTOM = 'custom';
+const CHAT_PARAM_QUESTIONNAIRE = 'questionnaire';
+const CHAT_SEED_LS_KEY = 'amodal-create-flow-chat-seed-v1';
 
 const POPULAR_TAB = 'Popular';
 const TAB_ORDER: readonly string[] = [POPULAR_TAB, 'Marketing', 'Sales', 'Support', 'Ops'];
@@ -72,7 +78,104 @@ type Mode =
  * chat → detail → originating list mode.
  */
 export function CreateFlowPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { agents: catalogAgents, loading: catalogLoading } = useTemplateCatalog();
+
+  // The URL `?chat=<slug>` (or `?chat=custom` / `?chat=questionnaire`)
+  // is the durable signal that says "you're in chat mode" — it survives
+  // page refresh whereas component state doesn't. Modes other than
+  // chat (pick, browse, detail, questionnaire) live only in component
+  // state because they're cheap to navigate back to and don't lose
+  // anything important on refresh.
+  const chatParam = searchParams.get(CHAT_PARAM);
+
   const [mode, setMode] = useState<Mode>({ kind: 'pick' });
+
+  // On mount (and when the catalog loads), if the URL says we're in
+  // chat mode, rehydrate the chat mode from the slug (or stored seed
+  // for custom/questionnaire flows).
+  const rehydratedRef = useRef(false);
+  useEffect(() => {
+    if (rehydratedRef.current) return;
+    if (!chatParam) return;
+    // Template chat — wait for catalog to find the agent
+    if (chatParam !== CHAT_PARAM_CUSTOM && chatParam !== CHAT_PARAM_QUESTIONNAIRE) {
+      if (catalogLoading) return;
+      const agent = catalogAgents.find((a) => a.slug === chatParam);
+      if (!agent) {
+        // Slug isn't in the catalog — clear the param, fall back to picker.
+        rehydratedRef.current = true;
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete(CHAT_PARAM);
+          return next;
+        }, {replace: true});
+        return;
+      }
+      rehydratedRef.current = true;
+      setMode({
+        kind: 'chat',
+        title: agent.card.title,
+        seed: `Set up template '${agent.slug}'.`,
+        from: 'detail',
+        agent,
+        detailFrom: 'pick',
+      });
+      return;
+    }
+    // Custom / questionnaire — seed lives in localStorage.
+    let seed: string;
+    try {
+      seed = localStorage.getItem(CHAT_SEED_LS_KEY) ?? '';
+    } catch {
+      seed = '';
+    }
+    rehydratedRef.current = true;
+    setMode({
+      kind: 'chat',
+      title: chatParam === CHAT_PARAM_QUESTIONNAIRE ? 'Custom agent' : 'Custom agent',
+      seed,
+      from: chatParam === CHAT_PARAM_QUESTIONNAIRE ? 'questionnaire' : 'pick',
+    });
+  }, [chatParam, catalogAgents, catalogLoading, setSearchParams]);
+
+  // Sync mode → URL whenever mode changes. Only chat is reflected in
+  // the URL; other modes clear the param.
+  useEffect(() => {
+    if (!rehydratedRef.current && chatParam) return; // wait for rehydration to finish first
+    if (mode.kind === 'chat') {
+      const target =
+        mode.from === 'questionnaire'
+          ? CHAT_PARAM_QUESTIONNAIRE
+          : mode.agent
+            ? mode.agent.slug
+            : CHAT_PARAM_CUSTOM;
+      if (searchParams.get(CHAT_PARAM) === target) return;
+      // Stash the seed for custom/questionnaire so refresh can recover it.
+      if (target === CHAT_PARAM_CUSTOM || target === CHAT_PARAM_QUESTIONNAIRE) {
+        try {
+          localStorage.setItem(CHAT_SEED_LS_KEY, mode.seed);
+        } catch {
+          // localStorage quota or private mode — non-fatal.
+        }
+      }
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set(CHAT_PARAM, target);
+        return next;
+      }, {replace: true});
+    } else if (chatParam) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(CHAT_PARAM);
+        return next;
+      }, {replace: true});
+    }
+    // searchParams is intentionally not in the dep array — we read it
+    // for comparison but only mutate via setSearchParams. Including it
+    // creates a write/read loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, setSearchParams]);
 
   const goBack = (): void => {
     if (mode.kind === 'chat') {
@@ -134,7 +237,11 @@ export function CreateFlowPage() {
             setMode({
               kind: 'chat',
               title: mode.agent.card.title,
-              seed: `Set up the "${mode.agent.card.title}" template.`,
+              // Seed uses the slug — that's the platform-api id the agent
+              // looks up to fetch template metadata + the npm package name
+              // for install_package. Human title is a UI label only and
+              // doesn't survive into the agent's tool calls.
+              seed: `Set up template '${mode.agent.slug}'.`,
               from: 'detail',
               agent: mode.agent,
               detailFrom: mode.from,
@@ -161,7 +268,14 @@ export function CreateFlowPage() {
           title={mode.title}
           seed={mode.seed}
           source={chatSource(mode)}
-          {...(mode.agent ? { templateSlug: mode.agent.slug } : {})}
+          {...(mode.agent
+            ? {
+                templateSlug: mode.agent.slug,
+                templateCard: mode.agent.card,
+                templateGithubRepo: mode.agent.githubRepo,
+                templateDefaultBranch: mode.agent.defaultBranch,
+              }
+            : {})}
           onSetupCancelled={() => setMode({ kind: 'pick' })}
         />
       )}
@@ -1001,6 +1115,7 @@ function ChatView({
   seed,
   source,
   templateSlug,
+  templateCard,
   onSetupCancelled,
 }: {
   title: string;
@@ -1009,6 +1124,8 @@ function ChatView({
   source: 'template' | 'custom' | 'questionnaire';
   /** Stub-catalog slug when the user clicked a template card (Phase E.13). */
   templateSlug?: string;
+  /** Card data from the picker — passed through so the agent can render show_preview on the first turn. */
+  templateCard?: import('@amodalai/types').AgentCard;
   /**
    * Phase E.11 — fired when the agent's `cancel_setup` tool emits a
    * `setup_cancelled` SSE event. The parent flips back to picker mode.
@@ -1028,6 +1145,7 @@ function ChatView({
     let cancelled = false;
     const body: Record<string, unknown> = { source };
     if (templateSlug) body['templateSlug'] = templateSlug;
+    if (templateCard) body['templateCard'] = templateCard;
     if (source !== 'template' && seed) body['userMessage'] = seed;
 
     void (async () => {
@@ -1064,7 +1182,7 @@ function ChatView({
     return () => {
       cancelled = true;
     };
-  }, [source, templateSlug, seed]);
+  }, [source, templateSlug, templateCard, seed]);
 
   if (starting) {
     return (

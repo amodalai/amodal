@@ -27,11 +27,13 @@ function makeBlock(overrides: Partial<AskChoiceBlock> = {}): AskChoiceBlock {
 }
 
 describe('AskChoiceCard — single-select button row', () => {
-  it('submits immediately on click', async () => {
+  it('submits immediately on click — message uses option label, not value', async () => {
     const onSubmit = vi.fn();
     render(<AskChoiceCard block={makeBlock()} onSubmit={onSubmit} />);
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }));
-    expect(onSubmit).toHaveBeenCalledWith('ask-1', ['yes'], 'yes');
+    // Visible chat message is the option label ("Yes"), even though
+    // the value is "yes" — keeps internal ids out of chat history.
+    expect(onSubmit).toHaveBeenCalledWith('ask-1', ['yes'], 'Yes');
   });
 });
 
@@ -81,12 +83,13 @@ describe('AskChoiceCard — checkbox list (multi + descriptions)', () => {
     await userEvent.click(checks[0]);
     await userEvent.click(checks[2]);
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(onSubmit).toHaveBeenCalledWith('ask-1', ['ga4', 'mailchimp'], 'ga4, mailchimp');
+    // Values stay raw for the agent; message uses the human labels.
+    expect(onSubmit).toHaveBeenCalledWith('ask-1', ['ga4', 'mailchimp'], 'GA4, Mailchimp');
   });
 });
 
 describe('AskChoiceCard — submitted state', () => {
-  it('renders the answer summary, not the inputs', () => {
+  it('renders the answer summary using labels, not raw values', () => {
     render(
       <AskChoiceCard
         block={makeBlock({ status: 'submitted', answer: ['yes'] })}
@@ -94,6 +97,6 @@ describe('AskChoiceCard — submitted state', () => {
       />,
     );
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.getByText('yes')).toBeInTheDocument();
+    expect(screen.getByText('Yes')).toBeInTheDocument();
   });
 });

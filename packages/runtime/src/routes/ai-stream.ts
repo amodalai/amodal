@@ -314,6 +314,20 @@ export function translateEvent(
       break;
     }
 
+    case SSEEventType.PlanSummary: {
+      out.push({
+        type: 'data-plan-summary',
+        data: {
+          template_title: event.template_title,
+          required_slots: event.required_slots,
+          optional_slots: event.optional_slots,
+          config_questions: event.config_questions,
+          completion_suggestions: event.completion_suggestions,
+        },
+      });
+      break;
+    }
+
     case SSEEventType.Proposal: {
       out.push({
         type: 'data-proposal',
@@ -346,6 +360,14 @@ export function translateEvent(
       out.push({
         type: 'data-setup-cancelled',
         data: {reason: event.reason},
+      });
+      break;
+    }
+
+    case SSEEventType.SetupCompleted: {
+      out.push({
+        type: 'data-setup-completed',
+        data: {completed_at: event.completed_at},
       });
       break;
     }
@@ -436,6 +458,18 @@ export function translateEvent(
       out.push({
         type: 'data-tool-log',
         data: {tool_name: event.tool_name, message: event.message},
+      });
+      break;
+    }
+
+    case SSEEventType.ToolLabelUpdate: {
+      out.push({
+        type: 'data-tool-label-update',
+        data: {
+          tool_id: event.tool_id,
+          ...(event.running_label !== undefined ? {running_label: event.running_label} : {}),
+          ...(event.completed_label !== undefined ? {completed_label: event.completed_label} : {}),
+        },
       });
       break;
     }

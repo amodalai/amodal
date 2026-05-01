@@ -222,7 +222,13 @@ export function AdminChat({
   resuming = false,
 }: AdminChatProps) {
   const { dark } = useTheme();
-  const sessionIdRef = useRef<string | null>(loadPersistedChat().sessionId);
+  // Snapshot the persisted chat once on first render. Used to seed
+  // the widget on mount (LOAD_HISTORY) so a page reload restores both
+  // the session id (so subsequent turns hit the same agent_sessions
+  // row) AND the in-memory message list (so the user sees their
+  // existing chat instead of a blank pane).
+  const persistedRef = useRef(loadPersistedChat());
+  const sessionIdRef = useRef<string | null>(persistedRef.current.sessionId);
   const onSetupCancelledRef = useRef(onSetupCancelled);
   onSetupCancelledRef.current = onSetupCancelled;
 
@@ -231,15 +237,41 @@ export function AdminChat({
   // signal is for the parent CreateFlowPage to flip back to picker).
   const streamFn = useCallback(
     (text: string, signal: AbortSignal): AsyncIterable<SSEEvent> => {
-      const body: Record<string, unknown> = { message: text, app_id: 'admin' };
+      const body: Record<string, unknown> = {
+        message: text,
+        app_id: 'admin',
+        // session_type: 'admin' is what the runtime keys off to register
+        // the admin onboarding tool surface (install_package,
+        // search_packages, write_skill). Without this the agent sees
+        // tool_not_found on install_package even though it's defined.
+        session_type: 'admin',
+      };
       if (sessionIdRef.current) body['session_id'] = sessionIdRef.current;
       const upstream = streamSSE('/api/studio/admin-chat/stream', body, { signal });
       return (async function* () {
         for await (const event of upstream) {
           if (event.type === 'setup_cancelled') {
-             
+
             const reason = (event as { reason?: string }).reason;
             onSetupCancelledRef.current?.(reason);
+          }
+          if (event.type === 'setup_completed') {
+            // Setup was committed (amodal.json on disk + completedAt
+            // set). Clear local chat state and reload to '/' — IndexPage
+            // will probe repo-state, see both signals settled, and
+            // route to OverviewPage. Polling-based transition would
+            // catch up within ~2s anyway, but the SSE signal closes
+            // the gap so the user doesn't sit on the chat after
+            // "Your <Agent> is ready" wondering if anything happened.
+            try {
+              localStorage.removeItem(STORAGE_KEY);
+            } catch {
+              // private mode / quota — non-fatal
+            }
+            // Defer the reload one tick so the chat reducer can finish
+            // ingesting any in-flight events and the user sees the
+            // agent's final reply land before the page flips.
+            setTimeout(() => { window.location.href = '/'; }, 600);
           }
           yield event;
         }
@@ -285,8 +317,27 @@ export function AdminChat({
   const handleWidgetReady = useCallback(
     (handle: { dispatch: (action: ChatAction) => void }) => {
       dispatchRef.current = handle.dispatch;
-      // If the message list landed before the widget exposed dispatch
-      // (race against the rehydrate path), trigger reconciliation now.
+
+      // Rehydrate the chat from localStorage. Fires once on widget
+      // ready — the widget starts with empty state, and we seed both
+      // the messages and the sessionId here so a page reload restores
+      // exactly what the user saw before the refresh. The widget's
+      // own onStateChange will keep persisting after this.
+      const persisted = persistedRef.current;
+      if (persisted.sessionId && persisted.messages.length > 0) {
+        handle.dispatch({
+          type: 'LOAD_HISTORY',
+          sessionId: persisted.sessionId,
+          messages: persisted.messages,
+        });
+        // Seed messagesRef so the H.10 reconciliation pass below has
+        // the rehydrated list to walk for connection panels.
+        messagesRef.current = persisted.messages;
+      }
+
+      // If the message list is non-empty (just rehydrated, or arrived
+      // via stream before the widget exposed dispatch), kick off
+      // reconciliation against /api/connections-status.
       if (
         !reconciledRef.current &&
         messagesRef.current.length > 0
@@ -336,15 +387,23 @@ export function AdminChat({
           onStateChange={handleStateChange}
           onReady={handleWidgetReady}
           inlineBlockRenderers={inlineBlockRenderers}
-          {...(initialMessage ? { initialMessage } : {})}
+          {...(initialMessage && persistedRef.current.messages.length === 0
+            ? { initialMessage }
+            : {})}
           theme={{
             mode: dark ? 'dark' : 'light',
-            headerText: 'Admin Agent',
+            // Onboarding chat (full-screen, compact=false) gets a
+            // user-friendly "Onboarding Agent" label. The post-setup
+            // floating admin panel (compact=true) keeps its existing
+            // "Admin Agent" label since by then the user is past
+            // setup and the admin terminology fits better.
+            headerText: compact ? 'Admin Agent' : 'Onboarding Agent',
             emptyStateText: 'Ask me to add connections, write skills, create automations, or validate your setup.',
             placeholder,
           }}
         />
         {showFinishButton && <FinishSetupButton />}
+        {showFinishButton && <RestartSetupButton />}
       </div>
     </div>
   );
@@ -462,6 +521,129 @@ function FinishSetupButton() {
         onBackToChat={close}
         onFinishAnyway={() => void commit(true)}
       />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RestartSetupButton
+// ---------------------------------------------------------------------------
+
+const STORAGE_KEY_FOR_RESTART = STORAGE_KEY;
+
+/**
+ * Wipe everything install_template put in motion + reset the chat.
+ * Two-step modal so the user can't trip on it: button opens a confirm
+ * dialog with a checkbox to also wipe vendored files; default keeps
+ * files (DB-only reset). On confirm, POSTs /restart with the wipe
+ * flag, clears chat localStorage, drops the `?chat=` URL param via
+ * a full reload to /, and Studio's IndexPage routes back to the
+ * picker.
+ */
+function RestartSetupButton() {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [wipeFiles, setWipeFiles] = useState(true);
+
+  const handleConfirm = useCallback(async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/studio/admin-chat/restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wipeFiles }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
+        const data = (await res.json().catch(() => ({}))) as {error?: {message?: string}};
+        throw new Error(data.error?.message ?? `Restart failed: ${String(res.status)}`);
+      }
+      // Clear local chat state.
+      try {
+        localStorage.removeItem(STORAGE_KEY_FOR_RESTART);
+      } catch {
+        // private mode / quota — non-fatal
+      }
+      // Full reload back to root. IndexPage's repo-state probe will
+      // see no amodal.json + no setup_state row → CreateFlowPage in
+      // pick mode. Using window.location instead of react-router so
+      // we re-mount everything fresh (admin agent's session id, the
+      // ChatWidget reducer state, etc.).
+      window.location.href = '/';
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to restart setup');
+      setBusy(false);
+    }
+  }, [wipeFiles]);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={busy}
+        className="absolute top-3 right-32 z-10 px-3 py-1.5 rounded-md text-[11.5px] font-medium border border-border bg-card text-muted-foreground shadow-sm hover:bg-muted/40 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Restart setup
+      </button>
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Restart setup"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !busy) setOpen(false);
+          }}
+        >
+          <div className="w-full max-w-md rounded-lg border border-border bg-card shadow-xl p-5">
+            <h2 className="text-[14px] font-semibold text-foreground tracking-tight mb-2">
+              Restart setup?
+            </h2>
+            <p className="text-[13px] text-foreground leading-relaxed mb-3">
+              This deletes the current setup state and the chat history. You&apos;ll go back to the template picker.
+            </p>
+            <label className="flex items-start gap-2 text-[12.5px] text-foreground mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={wipeFiles}
+                onChange={(e) => setWipeFiles(e.target.checked)}
+                className="mt-0.5"
+                disabled={busy}
+              />
+              <span>
+                Also wipe template files from the repo (<code className="font-mono text-[11.5px]">amodal.json</code>, <code className="font-mono text-[11.5px]">node_modules</code>, vendored skills/knowledge/automations/etc.)
+              </span>
+            </label>
+            {error && (
+              <p className="mb-2 text-[12px] text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-md px-3 py-2">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-md text-[12px] border border-border text-foreground hover:bg-muted/40 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirm()}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-md text-[12px] bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {busy ? 'Restarting…' : 'Restart'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

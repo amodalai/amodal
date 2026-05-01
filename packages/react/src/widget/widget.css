@@ -2671,6 +2671,74 @@
 }
 
 /* Proposal card emitted by the propose_plan tool (Phase D — Path B custom flow) */
+/* Plan summary card — emitted by load_template_plan to surface what
+ * got loaded (required + optional connections + config) inline. */
+.pcw-plan-summary {
+  border: 1px solid var(--pcw-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 6px 0;
+  background: var(--pcw-bg);
+}
+.pcw-plan-summary__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--pcw-text);
+  margin-bottom: 10px;
+}
+.pcw-plan-summary__section {
+  margin-top: 10px;
+}
+.pcw-plan-summary__section:first-of-type {
+  margin-top: 0;
+}
+.pcw-plan-summary__heading {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pcw-muted);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pcw-plan-summary__badge {
+  font-size: 9.5px;
+  font-weight: 500;
+  text-transform: lowercase;
+  letter-spacing: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--pcw-tool-call-bg);
+  color: var(--pcw-muted);
+}
+.pcw-plan-summary__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pcw-plan-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pcw-plan-summary__item-label {
+  font-size: 12.5px;
+  color: var(--pcw-text);
+}
+.pcw-plan-summary__item-options {
+  color: var(--pcw-muted);
+  font-weight: 400;
+}
+.pcw-plan-summary__item-desc {
+  font-size: 11.5px;
+  color: var(--pcw-muted);
+}
+
 .pcw-proposal {
   border: 1px solid var(--pcw-border);
   border-radius: 8px;

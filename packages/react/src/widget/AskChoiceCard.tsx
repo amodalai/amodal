@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import type { AskChoiceBlock } from '../types';
+import type { AskChoiceBlock, AskChoiceOption } from '../types';
 
 interface AskChoiceCardProps {
   block: AskChoiceBlock;
@@ -30,11 +30,13 @@ export function AskChoiceCard({ block, onSubmit }: AskChoiceCardProps) {
   const submitted = block.status === 'submitted';
 
   if (submitted) {
-    const summary = (block.answer ?? []).join(', ');
+    const summary = (block.answer ?? [])
+      .map((v) => block.options.find((o) => o.value === v)?.label ?? v)
+      .join(', ');
     return (
       <div className="pcw-ask-choice pcw-ask-choice--submitted">
         <div className="pcw-ask-choice__question">{block.question}</div>
-        <div className="pcw-ask-choice__summary">{summary}</div>
+        <div className="pcw-ask-choice__summary">{summary || 'None of these'}</div>
       </div>
     );
   }
@@ -53,11 +55,11 @@ export function AskChoiceCard({ block, onSubmit }: AskChoiceCardProps) {
       toggle(value);
       return;
     }
-    onSubmit(block.askId, [value], formatMessage([value]));
+    onSubmit(block.askId, [value], formatMessage([value], block.options));
   };
 
   const handleSubmit = (): void => {
-    onSubmit(block.askId, selected, formatMessage(selected));
+    onSubmit(block.askId, selected, formatMessage(selected, block.options));
   };
 
   return (
@@ -120,7 +122,18 @@ export function AskChoiceCard({ block, onSubmit }: AskChoiceCardProps) {
   );
 }
 
-function formatMessage(values: string[]): string {
+/**
+ * Convert the picked option values into a human-readable user-message
+ * string. The chat reducer pushes this into the message list as if the
+ * user typed it, so it should read like the option's visible label
+ * (e.g. "HubSpot"), not its internal id (e.g.
+ * "@this-npm-test-org/connection-hubspot"). The structured `values`
+ * array still carries the raw values back to the agent — this is the
+ * display half only.
+ */
+function formatMessage(values: string[], options: readonly AskChoiceOption[]): string {
   if (values.length === 0) return 'None of these';
-  return values.join(', ');
+  return values
+    .map((v) => options.find((o) => o.value === v)?.label ?? v)
+    .join(', ');
 }

@@ -311,6 +311,43 @@ export function sessionToRow(session: PersistedSession): {
 }
 
 /**
+ * Defensive recovery for sessions that already contain duplicate
+ * tool-result messages from before the streaming.ts fix that filters
+ * SDK placeholder tool entries. Walks the message list and drops any
+ * tool-result block whose `toolCallId` was already seen earlier in
+ * the same array. Keeps the first occurrence, preserves message
+ * shape otherwise. A tool message that becomes empty after dedup is
+ * dropped wholesale — Anthropic rejects empty tool messages.
+ *
+ * Cheap (single pass, Set lookup) so always-on at load time is fine.
+ * Idempotent — re-running on a clean session is a no-op.
+ */
+function dedupeToolResults(messages: ModelMessage[]): ModelMessage[] {
+  const seenToolCallIds = new Set<string>();
+  const out: ModelMessage[] = [];
+  for (const msg of messages) {
+    if (msg.role !== 'tool' || !Array.isArray(msg.content)) {
+      out.push(msg);
+      continue;
+    }
+    const keptBlocks = msg.content.filter((block) => {
+      if (typeof block !== 'object' || !('type' in block) || block.type !== 'tool-result') {
+        return true;
+      }
+       
+      const id = (block as {toolCallId?: string}).toolCallId;
+      if (typeof id !== 'string') return true;
+      if (seenToolCallIds.has(id)) return false;
+      seenToolCallIds.add(id);
+      return true;
+    });
+    if (keptBlocks.length === 0) continue;
+    out.push({...msg, content: keptBlocks});
+  }
+  return out;
+}
+
+/**
  * Inverse of `sessionToRow`.
  *
  * Validates at the JSONB boundary: rejects rows with an unknown
@@ -346,12 +383,13 @@ export function rowToPersistedSession(
   const imageData = (row.imageData ?? {}) as ImageDataMap;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: array-shape checked above; element shape is not validated
   const rawMessages = row.messages as ModelMessage[];
+  const dedupedMessages = dedupeToolResults(rawMessages);
 
   return {
     version: 1,
     id: row.id,
     scopeId: row.scopeId ?? '',
-    messages: rehydrateImages(rawMessages, imageData),
+    messages: rehydrateImages(dedupedMessages, imageData),
      
     tokenUsage: row.tokenUsage as TokenUsage,
      

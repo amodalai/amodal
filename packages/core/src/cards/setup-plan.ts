@@ -33,6 +33,7 @@
  * metadata fetches in a future iteration.
  */
 
+import {existsSync} from 'node:fs';
 import {readFile} from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -59,21 +60,37 @@ export interface ComposePlanOptions {
 }
 
 export async function composePlan(opts: ComposePlanOptions): Promise<SetupPlan> {
-  const templateDir = resolvePackageDir(opts.repoPath, opts.templatePackage);
-  const templateJson = await readTemplateJson(templateDir, opts.templatePackage);
+  // Templates are now vendored into the user's repo by `install_template`
+  // (clone-and-copy), so `template.json` lives at `<repoPath>/template.json`
+  // rather than buried under `node_modules/<pkg>/`. Try the vendored path
+  // first; fall back to the legacy `node_modules/<pkg>/` lookup so old
+  // tests / callers that still pass a real npm package name keep working.
+  const vendoredJsonPath = path.join(opts.repoPath, 'template.json');
+  let templateDir: string;
+  let templateJson: Record<string, unknown>;
+  let resolvedName: string;
+  if (existsSync(vendoredJsonPath)) {
+    templateDir = opts.repoPath;
+    templateJson = await readTemplateJson(templateDir, opts.templatePackage || 'vendored');
+    resolvedName = opts.templatePackage || 'vendored-template';
+  } else {
+    resolvedName = await resolveInstalledName(opts.repoPath, opts.templatePackage);
+    templateDir = resolvePackageDir(opts.repoPath, resolvedName);
+    templateJson = await readTemplateJson(templateDir, resolvedName);
+  }
   const polish = isObject(templateJson['setup']) ? (templateJson['setup'] as SetupPolish) : {};
 
   const rawSlots = isArray(templateJson['connections']) ? templateJson['connections'] : [];
   const slots = await Promise.all(
-    rawSlots.map((raw) => composeSlot(opts.repoPath, raw, opts.templatePackage)),
+    rawSlots.map((raw) => composeSlot(opts.repoPath, raw, resolvedName)),
   );
 
-  const automations = await readAutomations(templateDir, opts.templatePackage);
+  const automations = await readAutomations(templateDir, resolvedName);
   const config = composeConfigQuestions(automations, polish);
-  const completion = composeCompletion(opts.templatePackage, automations, polish);
+  const completion = composeCompletion(resolvedName, automations, polish);
 
   const result: SetupPlan = {
-    templatePackage: opts.templatePackage,
+    templatePackage: resolvedName,
     slots,
     config,
     completion,
@@ -398,6 +415,144 @@ function resolvePackageDir(repoPath: string, packageName: string): string {
   // packages live at `node_modules/@scope/name/`, unscoped at
   // `node_modules/name/`.
   return path.join(repoPath, 'node_modules', ...packageName.split('/'));
+}
+
+/**
+ * Resolve the literal name we got handed (which may be either the
+ * canonical npm name OR an `<owner>/<repo>` GitHub spec the agent
+ * grabbed off `install_template`'s output) to whatever's actually
+ * installed in `node_modules/`.
+ *
+ * Strategy: try the literal path first. If absent AND the name
+ * looks like a GitHub spec (contains `/`, doesn't start with `@`),
+ * consult the root `package.json#dependencies` — npm rewrites the
+ * dep value to `github:<owner>/<repo>` (or similar) on install, so
+ * the entry whose value contains the spec gives us the canonical
+ * name. If we can't disambiguate, fall back to the literal name —
+ * the downstream readTemplateJson will surface a clean
+ * "not_installed" error.
+ */
+async function resolveInstalledName(repoPath: string, name: string): Promise<string> {
+  if (existsSync(resolvePackageDir(repoPath, name))) return name;
+
+  if (!isGithubSpec(name)) return name;
+
+  // Strategy 1 — root package.json#dependencies, find dep value
+  // referencing the GitHub spec.
+  const fromRootDeps = await tryRootDeps(repoPath, name);
+  if (fromRootDeps) return fromRootDeps;
+
+  // Strategy 2 — walk node_modules/, read each package.json, return
+  // the first whose `_resolved` / `_from` / `repository.url` mentions
+  // the GitHub spec. Catches the case where npm rewrote the dep
+  // entry to a form that doesn't contain the literal spec.
+  const fromWalk = await tryWalkNodeModules(repoPath, name);
+  if (fromWalk) return fromWalk;
+
+  return name;
+}
+
+async function tryRootDeps(repoPath: string, githubSpec: string): Promise<string | null> {
+  const pkgJsonPath = path.join(repoPath, 'package.json');
+  if (!existsSync(pkgJsonPath)) return null;
+  let raw: string;
+  try {
+    raw = await readFile(pkgJsonPath, 'utf-8');
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isObject(parsed)) return null;
+  const deps = parsed['dependencies'];
+  if (!isObject(deps)) return null;
+  for (const [depName, depValue] of Object.entries(deps)) {
+    if (typeof depValue !== 'string') continue;
+    if (depValue.includes(githubSpec) && existsSync(resolvePackageDir(repoPath, depName))) {
+      return depName;
+    }
+  }
+  return null;
+}
+
+async function tryWalkNodeModules(repoPath: string, githubSpec: string): Promise<string | null> {
+  const {readdir} = await import('node:fs/promises');
+  const nmDir = path.join(repoPath, 'node_modules');
+  if (!existsSync(nmDir)) return null;
+  let topLevel: string[];
+  try {
+    topLevel = await readdir(nmDir);
+  } catch {
+    return null;
+  }
+  for (const entry of topLevel) {
+    if (entry.startsWith('.')) continue;
+    if (entry.startsWith('@')) {
+      const scopeDir = path.join(nmDir, entry);
+      let scopedEntries: string[];
+      try {
+        scopedEntries = await readdir(scopeDir);
+      } catch {
+        continue;
+      }
+      for (const sub of scopedEntries) {
+        const match = await matchPackageDir(path.join(scopeDir, sub), githubSpec);
+        if (match) return match;
+      }
+    } else {
+      const match = await matchPackageDir(path.join(nmDir, entry), githubSpec);
+      if (match) return match;
+    }
+  }
+  return null;
+}
+
+async function matchPackageDir(pkgDir: string, githubSpec: string): Promise<string | null> {
+  const pkgJsonPath = path.join(pkgDir, 'package.json');
+  if (!existsSync(pkgJsonPath)) return null;
+  let raw: string;
+  try {
+    raw = await readFile(pkgJsonPath, 'utf-8');
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isObject(parsed)) return null;
+  const pkg = parsed;
+  const name = pkg['name'];
+  if (typeof name !== 'string' || name.length === 0) return null;
+
+  const candidates = [
+    pkg['_resolved'],
+    pkg['_from'],
+    isObject(pkg['repository']) ? pkg['repository']['url'] : undefined,
+    pkg['homepage'],
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.includes(githubSpec)) return name;
+  }
+  // Last-resort heuristic: directory basename matches the GitHub repo
+  // basename (e.g. node_modules/template-marketing-operations-hub for
+  // GitHub repo whodatdev/template-marketing-operations-hub).
+  const repoBasename = githubSpec.split('/').pop() ?? '';
+  if (repoBasename.length > 0 && path.basename(pkgDir) === repoBasename) {
+    return name;
+  }
+  return null;
+}
+
+function isGithubSpec(name: string): boolean {
+  if (name.startsWith('@')) return false;
+  return name.includes('/');
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
