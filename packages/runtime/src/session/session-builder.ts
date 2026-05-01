@@ -387,10 +387,11 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   let fsBackend: FsBackend | undefined;
   const workspaceApiUrl = process.env['WORKSPACE_API_URL'];
   const fsRepoRoot = process.env['REPO_PATH'] ?? bundle.origin;
+  const isRealPath = fsRepoRoot && fsRepoRoot.startsWith('/');
   if (workspaceApiUrl) {
     fsBackend = new HttpFsBackend({runtimeUrl: workspaceApiUrl, authToken: process.env['WORKSPACE_AUTH_TOKEN']});
     logger.debug('fs_backend_http', {url: workspaceApiUrl});
-  } else if (fsRepoRoot) {
+  } else if (isRealPath) {
     fsBackend = new LocalFsBackend({repoRoot: fsRepoRoot});
     logger.debug('fs_backend_local', {repoRoot: fsRepoRoot});
   }
