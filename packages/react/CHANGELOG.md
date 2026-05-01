@@ -1,5 +1,11 @@
 # @amodalai/react
 
+## 0.3.48
+
+### Patch Changes
+
+- de7d384: Fix "New Chat" button not starting a fresh session
+
 ## 0.3.47
 
 ### Patch Changes
