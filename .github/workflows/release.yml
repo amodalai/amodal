@@ -47,7 +47,7 @@ jobs:
       # changesets' published output, which can be unreliable with --no-git-tag.
       - name: Create GitHub Release
         if: steps.changesets.outputs.hasChangesets == 'false'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
