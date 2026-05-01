@@ -70,13 +70,19 @@ const FETCH_TIMEOUT_MS = 5_000;
  * @param agentId — the agent ID to scope the run to
  * @returns the new run ID
  */
-export async function runEvalSuite(evalName: string, _runtimeUrl: string, agentId: string): Promise<string> {
+export async function runEvalSuite(evalName: string, runtimeUrl: string, agentId: string): Promise<string> {
 
-  // Fetch the eval file from the runtime
+  // Fetch the eval file from the runtime.
+  // Use the absolute runtimeUrl for server-side fetch (runtimeApiUrl returns
+  // relative paths that only work in the browser).
   const filePath = `evals/${evalName}.md`;
+  const baseUrl = runtimeUrl || '';
   let fileContent: string;
   try {
-    const res = await fetch(runtimeApiUrl(`/api/files/${encodeURIComponent(filePath)}`), {
+    const fileUrl = baseUrl
+      ? `${baseUrl}/api/files/${encodeURIComponent(filePath)}`
+      : runtimeApiUrl(`/api/files/${encodeURIComponent(filePath)}`);
+    const res = await fetch(fileUrl, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) {
@@ -106,10 +112,21 @@ export async function runEvalSuite(evalName: string, _runtimeUrl: string, agentI
   for (const testCase of cases) {
     const caseStart = Date.now();
     try {
-      const res = await fetch(runtimeApiUrl('/chat'), {
+      const chatUrl = baseUrl ? `${baseUrl}/chat` : runtimeApiUrl('/chat');
+      const res = await fetch(chatUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: testCase.input }),
+        body: JSON.stringify({
+          message: testCase.input,
+          ...(parsed.setup['scope_id'] ? { scope_id: parsed.setup['scope_id'] } : {}),
+          ...(Object.keys(parsed.setup).some((k) => k.startsWith('context.')) ? {
+            context: Object.fromEntries(
+              Object.entries(parsed.setup)
+                .filter(([k]) => k.startsWith('context.'))
+                .map(([k, v]) => [k.slice(8), v]),
+            ),
+          } : {}),
+        }),
         signal: AbortSignal.timeout(CASE_TIMEOUT_MS),
       });
 

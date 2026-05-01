@@ -19,6 +19,7 @@ export interface ParsedEval {
   description: string;
   query: string;
   assertions: Array<{ text: string; negated: boolean }>;
+  setup: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,5 +103,15 @@ export function parseEvalMarkdown(content: string, fileName: string): ParsedEval
 
   const assertions = parseAssertions(sections['Assertions'] ?? '');
 
-  return { name, title, description, query, assertions };
+  // Parse Setup section — key: value pairs
+  const setup: Record<string, string> = {};
+  const setupText = sections['Setup'] ?? '';
+  for (const line of setupText.split('\n')) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      setup[line.slice(0, colonIdx).trim()] = line.slice(colonIdx + 1).trim();
+    }
+  }
+
+  return { name, title, description, query, assertions, setup };
 }
