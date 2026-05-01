@@ -1,5 +1,11 @@
 # @amodalai/types
 
+## 0.3.48
+
+### Patch Changes
+
+- 1249171: Add FsBackend abstraction with local and HTTP implementations for ctx.fs in custom tools
+
 ## 0.3.47
 
 ## 0.3.46

@@ -1,5 +1,17 @@
 # @amodalai/amodal
 
+## 0.3.48
+
+### Patch Changes
+
+- Updated dependencies [1249171]
+  - @amodalai/types@0.3.48
+  - @amodalai/runtime@0.3.48
+  - @amodalai/runtime-app@0.3.48
+  - @amodalai/studio@0.3.48
+  - @amodalai/core@0.3.48
+  - @amodalai/db@0.3.48
+
 ## 0.3.47
 
 ### Patch Changes
