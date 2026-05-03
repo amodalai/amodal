@@ -9,6 +9,7 @@ import { getBasePath } from './lib/api';
 import { StudioShell } from './components/StudioShell';
 import { IndexPage } from './pages/IndexPage';
 import { SessionsPage } from './pages/SessionsPage';
+import { SessionDetailPage } from './pages/SessionDetailPage';
 import { GettingStartedPage } from './pages/GettingStartedPage';
 import { ConnectionConfigPage } from './pages/ConnectionConfigPage';
 import { AgentPage } from './pages/AgentPage';
@@ -44,6 +45,7 @@ const agentRoutes = [
   { path: 'getting-started', element: <Navigate to="../connections" replace /> },
   { path: 'connections/:packageName', element: <ConnectionConfigPage /> },
   { path: 'sessions', element: <SessionsPage /> },
+  { path: 'sessions/:sessionId', element: <SessionDetailPage /> },
   { path: 'agent', element: <AgentPage /> },
   { path: 'files', element: <FilesPage /> },
   { path: 'stores', element: <StoresPage /> },
