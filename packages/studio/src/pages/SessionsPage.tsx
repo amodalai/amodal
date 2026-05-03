@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { AgentOffline } from '@/components/AgentOffline';
 import { runtimeApiUrl } from '@/lib/api';
 import { PROVIDER_COLORS, modelToProvider, estimateCost } from '../lib/model-pricing';
@@ -78,8 +79,10 @@ export function SessionsPage() {
                   : null;
                 const colors = s.model ? PROVIDER_COLORS[modelToProvider(s.model)] : null;
                 return (
-                  <tr key={s.id} className="hover:bg-muted/50">
-                    <td className="px-4 py-2.5 text-foreground max-w-xs truncate">{s.title}</td>
+                  <tr key={s.id} className="hover:bg-muted/50 cursor-pointer">
+                    <td className="px-4 py-2.5 text-foreground max-w-xs truncate">
+                      <Link to={s.id} className="hover:underline">{s.title}</Link>
+                    </td>
                     <td className="px-4 py-2.5">
                       {s.model ? (
                         <div className="flex items-center gap-1.5">
