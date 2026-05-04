@@ -482,6 +482,7 @@ function buildToolCallStartEvent(
     ...(toolDef?.completedLabel
       ? {completed_label: resolveLabelTemplate(toolDef.completedLabel, params)}
       : {}),
+    ...(toolDef?.internal ? {internal: true} : {}),
     timestamp,
   };
 }

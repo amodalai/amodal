@@ -69,6 +69,12 @@ export interface SSEToolCallStartEvent {
    * Optional — undefined keeps `running_label` after completion.
    */
   completed_label?: string;
+  /**
+   * Marks the tool call as internal plumbing the user shouldn't see by
+   * default. Mirrors the tool definition's `internal` flag — the chat
+   * widget hides these calls unless `verboseTools` is enabled.
+   */
+  internal?: boolean;
   timestamp: string;
 }
 

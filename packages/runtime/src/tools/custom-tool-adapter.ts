@@ -293,6 +293,7 @@ export function createCustomToolDefinition(
     },
     ...(tool.runningLabel ? {runningLabel: tool.runningLabel} : {}),
     ...(tool.completedLabel ? {completedLabel: tool.completedLabel} : {}),
+    ...(tool.internal ? {internal: true} : {}),
 
     async execute(params: unknown, ctx: ToolContext): Promise<unknown> {
       const customCtx = buildCustomToolContext(tool, sessionCtx, ctx);

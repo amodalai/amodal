@@ -245,7 +245,9 @@ function AssistantBubble({
                 />
               );
             case 'tool_calls': {
-              const visibleCalls = block.calls.filter((tc) => !UI_TOOLS.has(tc.toolName));
+              const visibleCalls = block.calls.filter(
+                (tc) => !UI_TOOLS.has(tc.toolName) && (verboseTools || !tc.internal),
+              );
               if (visibleCalls.length === 0) return null;
               return (
                 <div key={`tools-${String(i)}`} className="pcw-bubble__extras">
@@ -337,9 +339,11 @@ function AssistantBubble({
       )}
       {hasExtras && (
         <div className="pcw-bubble__extras">
-          {message.toolCalls.map((tc) => (
-            <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
-          ))}
+          {message.toolCalls
+            .filter((tc) => verboseTools || !tc.internal)
+            .map((tc) => (
+              <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
+            ))}
           {message.kbProposals.map((proposal, idx) => (
             <KBProposalCard key={`${proposal.title}-${String(idx)}`} proposal={proposal} />
           ))}

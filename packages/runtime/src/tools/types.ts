@@ -200,6 +200,14 @@ export interface ToolDefinition<TParams = unknown> {
    * label after completion (the status icon differentiates them).
    */
   completedLabel?: string;
+
+  /**
+   * Marks the tool as internal plumbing the user shouldn't see by
+   * default (state I/O, version checks, coordination calls). Stamped
+   * onto `tool_call_start` / `tool_call_result` SSE events; the chat
+   * widget hides these calls unless `verboseTools` is enabled.
+   */
+  internal?: boolean;
 }
 
 // ---------------------------------------------------------------------------

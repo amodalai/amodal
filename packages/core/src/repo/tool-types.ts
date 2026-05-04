@@ -45,6 +45,16 @@ export const ToolJsonSchema = z.object({
    * differentiates done vs in-flight either way).
    */
   completedLabel: z.string().optional(),
+  /**
+   * Mark the tool as internal plumbing the user shouldn't see by default
+   * (e.g. setup-state I/O, version checks, internal coordination). The
+   * runtime stamps the flag onto `tool_call_start` / `tool_call_result`
+   * SSE events; the chat widget hides these calls unless `verboseTools`
+   * is enabled. Defaults to false — anything that does *work* (installs,
+   * external API calls, OAuth, file modifications) should leave this
+   * unset so users can see it.
+   */
+  internal: z.boolean().optional(),
   confirm: z.union([z.literal(false), z.literal(true), z.literal('review'), z.literal('never')]).default(false),
   timeout: z.number().int().positive().default(30000),
   env: z.array(z.string()).default([]),

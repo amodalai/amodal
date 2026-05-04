@@ -164,6 +164,11 @@ export interface SSEToolCallStartEvent {
    * hand and can switch purely on status.
    */
   completed_label?: string;
+  /**
+   * Marks the call as internal plumbing the user shouldn't see by
+   * default. Mirrors the tool definition's `internal` flag.
+   */
+  internal?: boolean;
   timestamp: string;
 }
 

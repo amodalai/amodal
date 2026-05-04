@@ -59,6 +59,11 @@ export interface SSEToolCallStartEvent {
   running_label?: string;
   /** Resolved past-tense label rendered after success. */
   completed_label?: string;
+  /**
+   * Marks the call as internal plumbing the user shouldn't see by
+   * default. Hidden unless `verboseTools` is enabled.
+   */
+  internal?: boolean;
   timestamp: string;
 }
 
@@ -464,6 +469,11 @@ export interface ToolCallInfo {
    * based on `status`.
    */
   completedLabel?: string;
+  /**
+   * Marks the call as internal plumbing. MessageList filters these
+   * out unless the embedder enables `verboseTools`.
+   */
+  internal?: boolean;
 }
 
 export interface ConfirmationInfo {
@@ -756,7 +766,7 @@ export type ChatAction =
   | { type: 'SEND_MESSAGE'; text: string; images?: string[] }
   | { type: 'STREAM_INIT'; sessionId: string }
   | { type: 'STREAM_TEXT_DELTA'; content: string }
-  | { type: 'STREAM_TOOL_CALL_START'; toolId: string; toolName: string; parameters: Record<string, unknown>; runningLabel?: string; completedLabel?: string }
+  | { type: 'STREAM_TOOL_CALL_START'; toolId: string; toolName: string; parameters: Record<string, unknown>; runningLabel?: string; completedLabel?: string; internal?: boolean }
   | { type: 'STREAM_TOOL_CALL_RESULT'; toolId: string; status: 'success' | 'error'; result?: unknown; parameters?: Record<string, unknown>; duration_ms?: number; error?: string }
   | { type: 'STREAM_SUBAGENT_EVENT'; parentToolId: string; event: SubagentEventInfo }
   | { type: 'STREAM_SKILL_ACTIVATED'; skill: string }

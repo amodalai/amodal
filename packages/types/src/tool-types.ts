@@ -93,6 +93,12 @@ export interface LoadedTool {
    * Same `{{paramName}}` substitution. Optional.
    */
   completedLabel?: string;
+  /**
+   * Marks the tool as internal plumbing the user shouldn't see by
+   * default. Stamped onto SSE events; the chat widget hides these
+   * calls unless `verboseTools` is enabled.
+   */
+  internal?: boolean;
 }
 
 /**

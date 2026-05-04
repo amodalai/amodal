@@ -120,6 +120,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         status: 'running',
         ...(action.runningLabel ? { runningLabel: action.runningLabel } : {}),
         ...(action.completedLabel ? { completedLabel: action.completedLabel } : {}),
+        ...(action.internal ? { internal: true } : {}),
       };
       if (last && last.type === 'assistant_text') {
         const updatedToolCalls = [...last.toolCalls, toolCall];
@@ -793,6 +794,7 @@ function processEvent(
         parameters: event.parameters,
         ...(event.running_label ? { runningLabel: event.running_label } : {}),
         ...(event.completed_label ? { completedLabel: event.completed_label } : {}),
+        ...(event.internal ? { internal: true } : {}),
       });
       pending.set(event.tool_id, {
         toolName: event.tool_name,
