@@ -27,13 +27,14 @@ function makeBlock(overrides: Partial<AskChoiceBlock> = {}): AskChoiceBlock {
 }
 
 describe('AskChoiceCard — single-select button row', () => {
-  it('submits immediately on click — message uses option label, not value', async () => {
+  it('submits immediately on click — posted message is the option value verbatim', async () => {
     const onSubmit = vi.fn();
     render(<AskChoiceCard block={makeBlock()} onSubmit={onSubmit} />);
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }));
-    // Visible chat message is the option label ("Yes"), even though
-    // the value is "yes" — keeps internal ids out of chat history.
-    expect(onSubmit).toHaveBeenCalledWith('ask-1', ['yes'], 'Yes');
+    // Posted message is the value verbatim so intent matchers can
+    // catch it. The visible label on the button stays "Yes"; the
+    // value ("yes" here) is what the user effectively says.
+    expect(onSubmit).toHaveBeenCalledWith('ask-1', ['yes'], 'yes');
   });
 });
 
@@ -83,8 +84,9 @@ describe('AskChoiceCard — checkbox list (multi + descriptions)', () => {
     await userEvent.click(checks[0]);
     await userEvent.click(checks[2]);
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    // Values stay raw for the agent; message uses the human labels.
-    expect(onSubmit).toHaveBeenCalledWith('ask-1', ['ga4', 'mailchimp'], 'GA4, Mailchimp');
+    // Posted message is the joined values verbatim — intent matchers
+    // operate on the literal phrase, not on the visible labels.
+    expect(onSubmit).toHaveBeenCalledWith('ask-1', ['ga4', 'mailchimp'], 'ga4, mailchimp');
   });
 });
 

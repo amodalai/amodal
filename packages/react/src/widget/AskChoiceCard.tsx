@@ -123,17 +123,22 @@ export function AskChoiceCard({ block, onSubmit }: AskChoiceCardProps) {
 }
 
 /**
- * Convert the picked option values into a human-readable user-message
- * string. The chat reducer pushes this into the message list as if the
- * user typed it, so it should read like the option's visible label
- * (e.g. "HubSpot"), not its internal id (e.g.
- * "@this-npm-test-org/connection-hubspot"). The structured `values`
- * array still carries the raw values back to the agent — this is the
- * display half only.
+ * Convert the picked option values into the user-message string that
+ * gets posted to the chat. The `value` IS the user's effective
+ * utterance — agent authors should write it as a readable phrase
+ * ("Use HubSpot as the CRM") so it reads naturally in chat AND can
+ * be regex-matched by the intent layer.
+ *
+ * Multi-select joins values with commas. Empty selection (the user
+ * declined every checkbox in a multi-select) reads as "None of these".
+ *
+ * `options` is unused but kept for API stability — earlier versions
+ * looked up labels here. That mapping is gone: the intent flow needs
+ * the literal value to match, and label-vs-value divergence was
+ * exactly the bug that prevented `Use X as the Y` from ever reaching
+ * the server.
  */
-function formatMessage(values: string[], options: readonly AskChoiceOption[]): string {
+function formatMessage(values: string[], _options: readonly AskChoiceOption[]): string {
   if (values.length === 0) return 'None of these';
-  return values
-    .map((v) => options.find((o) => o.value === v)?.label ?? v)
-    .join(', ');
+  return values.join(', ');
 }
