@@ -196,10 +196,16 @@ export function registerAdminTools(registry: ToolRegistry, opts: AdminToolsOptio
       try {
         const cloneUrl = `https://github.com/${githubRepo}.git`;
         try {
+          // Pass an explicit cwd to git so it doesn't depend on the
+          // admin-agent process's cwd, which can become stale when
+          // the admin-agent cache (`~/.amodal/admin-agent/latest`) is
+          // wiped + resynced while the agent is running. The temp dir
+          // already lives inside os.tmpdir(), so using its parent is
+          // a safe and stable working directory for the clone.
           await execFileAsync(
             'git',
             ['clone', '--depth', '1', '--branch', defaultBranch, cloneUrl, tempDir],
-            {timeout: NPM_INSTALL_TIMEOUT_MS},
+            {timeout: NPM_INSTALL_TIMEOUT_MS, cwd: os.tmpdir()},
           );
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);

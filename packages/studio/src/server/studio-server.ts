@@ -35,6 +35,7 @@ import { connectionDetailRoutes } from './routes/connection-detail.js';
 import { repoStateRoutes } from './routes/repo-state.js';
 import { initRepoRoutes } from './routes/init-repo.js';
 import { runtimeProxyRoutes } from './routes/runtime-proxy.js';
+import { oauthRoutes } from './routes/oauth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -115,6 +116,7 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
   app.route('', connectionsStatusRoutes);
   app.route('', templateResolveRoutes);
   app.route('', connectionDetailRoutes);
+  app.route('', oauthRoutes);
   app.route('', runtimeProxyRoutes);
 
   // ---------------------------------------------------------------------------

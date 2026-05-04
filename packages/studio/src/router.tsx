@@ -7,6 +7,7 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { StudioShell } from './components/StudioShell';
 import { IndexPage } from './pages/IndexPage';
+import { CreateFlowPage } from './pages/CreateFlowPage';
 import { TemplateUpdatePage } from './pages/TemplateUpdatePage';
 import { GettingStartedPage } from './pages/GettingStartedPage';
 import { ConnectionConfigPage } from './pages/ConnectionConfigPage';
@@ -39,6 +40,12 @@ function Layout() {
 /** Agent-scoped routes — all Studio pages live under /agents/:agentId/ */
 const agentRoutes = [
   { index: true, element: <IndexPage /> },
+  // Onboarding chat lives at its own URL so the IndexPage probe at
+  // `/agents/:agentId` can't auto-flip to OverviewPage mid-setup.
+  // IndexPage redirects here when amodal.json is missing or the
+  // setup_state row is still in flight; AdminChat's setup_completed
+  // handler navigates back to the agent root once commit lands.
+  { path: 'setup', element: <CreateFlowPage /> },
   { path: 'updates/:slug', element: <TemplateUpdatePage /> },
   { path: 'getting-started', element: <GettingStartedPage /> },
   { path: 'connections/:packageName', element: <ConnectionConfigPage /> },

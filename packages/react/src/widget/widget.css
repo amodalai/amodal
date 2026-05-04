@@ -226,6 +226,36 @@
   line-height: 1.5;
 }
 
+/* Consistent 8px rhythm between any two siblings inside an assistant
+ * message — text blocks, tool-call rows, and every inline panel
+ * (ask_choice, ask_user, plan_summary, proposal, show_preview,
+ * connection_panel, confirmation cards). The universal direct-child
+ * rule means new panel types automatically inherit the rhythm
+ * without per-class wiring. First child keeps its native margin
+ * (usually 0) so the message doesn't get a leading gap. */
+.pcw-bubble--assistant > *:not(:first-child) {
+  margin-top: 8px;
+}
+
+/* Inline panels grow to fit their intrinsic content, no forced
+ * full-width stretch. `fit-content` shrinks the box to match the
+ * widest line of content; the `max-width` is just a runaway-content
+ * guard (a 30-line paragraph in a card shouldn't span 1000px), not
+ * a target size. Agent prose (`.pcw-bubble__text`) and tool-call
+ * rows are excluded — they should still flow the chat column's
+ * full width. */
+.pcw-bubble--assistant > .pcw-ask-choice,
+.pcw-bubble--assistant > .pcw-ask-user,
+.pcw-bubble--assistant > .pcw-plan-summary,
+.pcw-bubble--assistant > .pcw-proposal,
+.pcw-bubble--assistant > .pcw-agent-card,
+.pcw-bubble--assistant > .amodal-confirm-card,
+.pcw-bubble--assistant > .amodal-review-card,
+.pcw-bubble--assistant > .studio-connection-panel {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .pcw-bubble__extras {
   display: flex;
   flex-direction: column;

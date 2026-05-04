@@ -25,7 +25,6 @@
  */
 
 import { useState } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
 import type { ConnectionDetail } from '../hooks/useConnectionDetail';
 
 interface ConnectionConfigFormProps {
@@ -46,7 +45,6 @@ export function ConnectionConfigForm({
   saveSecret,
   onOAuthPopup,
 }: ConnectionConfigFormProps) {
-  const { runtimeUrl } = useStudioConfig();
   const [savingName, setSavingName] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -78,8 +76,12 @@ export function ConnectionConfigForm({
     setConnecting(true);
     setConnectError(null);
     try {
+      // OAuth start lives on Studio (not the runtime) so the flow works
+      // before `amodal.json` exists and the runtime has booted. Studio
+      // writes the resolved tokens to <repoPath>/.amodal/secrets.env;
+      // the runtime watches that file and reloads on change.
       const r = await fetch(
-        `${runtimeUrl}/api/oauth/start?package=${encodeURIComponent(data.name)}`,
+        `/api/oauth/start?package=${encodeURIComponent(data.name)}`,
         { signal: AbortSignal.timeout(5_000) },
       );
       if (!r.ok) {

@@ -262,11 +262,14 @@ adminChatRoutes.post('/api/studio/admin-chat/start', async (c) => {
 //
 // Wipe the in-progress setup so the user can start over. Always
 // deletes the setup_state row. When `wipeFiles: true` is passed,
-// also removes files install_template would have placed:
+// also removes files install_template would have placed plus any
+// runtime-issued secrets that were tied to that setup attempt:
 //   - amodal.json, template.json (root manifests)
 //   - package.json, package-lock.json, node_modules/ (npm artifacts)
 //   - skills/, knowledge/, automations/, connections/, agents/,
 //     tools/, pages/, evals/, stores/ (vendored template dirs)
+//   - .amodal/secrets.env (OAuth tokens + paste-saved env-vars from
+//     the previous attempt; stale ones could mask new auth issues)
 // User-authored files outside this list (.git, .gitignore, .env,
 // READMEs) are preserved.
 // ---------------------------------------------------------------------------
@@ -286,6 +289,7 @@ const RESTART_WIPED_PATHS = [
   'pages',
   'evals',
   'stores',
+  '.amodal/secrets.env',
 ] as const;
 
 adminChatRoutes.post('/api/studio/admin-chat/restart', async (c) => {

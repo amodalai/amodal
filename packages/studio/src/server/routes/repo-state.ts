@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { getDb, getSetupState } from '@amodalai/db';
+import { getDb, getSetupState, markComplete } from '@amodalai/db';
 
 import { getAgentId } from '../../lib/config.js';
 import { logger } from '../../lib/logger.js';
@@ -46,10 +46,43 @@ repoStateRoutes.get('/api/repo-state', async (c) => {
   const hasAmodalJson = existsSync(manifestPath);
 
   let setupInProgress = false;
+  const agentId = getAgentId();
   try {
     const db = getDb();
-    const row = await getSetupState(db, getAgentId(), DEFAULT_SCOPE_ID);
-    setupInProgress = row !== null && row.completedAt === null;
+    const row = await getSetupState(db, agentId, DEFAULT_SCOPE_ID);
+
+    // Auto-recovery: amodal.json on disk + setup_state row exists with
+    // completed_at null is the "crashed mid-commit" signature
+    // (commit_setup writes the file before marking the DB; a process
+    // exit between the two leaves this state). Stamp the row complete
+    // here so the IndexPage probe self-heals — without this, the
+    // recovery only runs when the user re-opens the chat (which they
+    // can't get to without going through this probe first → loop).
+    let effectiveRow = row;
+    if (hasAmodalJson && row !== null && row.completedAt === null) {
+      try {
+        const completedAt = await markComplete(db, agentId, DEFAULT_SCOPE_ID);
+        if (completedAt) {
+          effectiveRow = { ...row, completedAt };
+          logger.info('repo_state_auto_recover', { agentId, completedAt: completedAt.toISOString() });
+        }
+      } catch (err: unknown) {
+        logger.warn('repo_state_auto_recover_failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    setupInProgress = effectiveRow !== null && effectiveRow.completedAt === null;
+    // WARN level so the CLI's quiet filter doesn't drop it. Helps
+    // diagnose the "setup completes but UI loops back to /setup" case.
+    logger.warn('repo_state_probe_DIAG', {
+      agentId,
+      hasRow: effectiveRow !== null,
+      completedAt: effectiveRow?.completedAt ?? null,
+      setupInProgress,
+      hasAmodalJson,
+    });
   } catch (err: unknown) {
     // If the DB is unreachable, fall through to the disk-only signal.
     // Worst case the user sees the workspace one moment too soon — same

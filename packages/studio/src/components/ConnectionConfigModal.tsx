@@ -76,6 +76,35 @@ export function ConnectionConfigModal({
     };
   }, [popup, refetch]);
 
+  // Listen for the `amodal:oauth:done` postMessage Studio's callback
+  // emits from inside the popup. This fires regardless of whether
+  // `window.close()` succeeds (which browsers can block in some
+  // configurations), so the modal can refetch immediately instead of
+  // sitting on a stale state until the user closes the popup manually.
+  useEffect(() => {
+    if (!popup) return;
+    function onMessage(event: MessageEvent): void {
+      // Same-origin only — Studio's callback runs on the same origin
+      // as the parent. Cross-origin messages from the OAuth provider
+      // (which the popup hits before the callback) are ignored.
+      if (event.origin !== window.location.origin) return;
+      const data: unknown = event.data;
+      if (typeof data !== 'object' || data === null) return;
+       
+      const msg = data as { type?: unknown };
+      if (msg.type !== 'amodal:oauth:done') return;
+      // Try to close the popup from the parent side (parents have more
+      // permissive close access than the popup does for window.close()).
+      try { popup.close(); } catch { /* ignore */ }
+      setPopup(null);
+      refetch();
+    }
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+    };
+  }, [popup, refetch]);
+
   // Auto-dismiss when the connection is fully configured. Watches
   // `data.envVars` (refetched after popup close or after a paste-save)
   // and fires `onConfigured` exactly once per modal open.

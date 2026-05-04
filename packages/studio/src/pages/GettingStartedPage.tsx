@@ -7,7 +7,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AgentOffline } from '@/components/AgentOffline';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
 import {
   useGettingStarted,
   type GettingStartedPackage,
@@ -156,7 +155,6 @@ function FlatPackageList({ packages }: { packages: GettingStartedPackage[] }) {
 // ---------------------------------------------------------------------------
 
 function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
-  const { runtimeUrl } = useStudioConfig();
   const [connecting, setConnecting] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
 
@@ -165,10 +163,12 @@ function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
     setConnecting(true);
     setOauthError(null);
     try {
-      const r = await fetch(`${runtimeUrl}/api/oauth/start?package=${encodeURIComponent(pkg.name)}`, {signal: AbortSignal.timeout(5_000)});
+      // OAuth start lives on Studio (relative path). The runtime
+      // watches secrets.env for changes and reloads on completion.
+      const r = await fetch(`/api/oauth/start?package=${encodeURIComponent(pkg.name)}`, {signal: AbortSignal.timeout(5_000)});
       if (!r.ok) {
         const text = await r.text().catch(() => '');
-        throw new Error(`Runtime returned ${String(r.status)}${text ? ` — ${text}` : ''}`);
+        throw new Error(`OAuth start returned ${String(r.status)}${text ? ` — ${text}` : ''}`);
       }
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
       const { authorizeUrl } = (await r.json()) as { authorizeUrl: string };

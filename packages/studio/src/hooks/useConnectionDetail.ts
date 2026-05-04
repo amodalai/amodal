@@ -86,7 +86,11 @@ export function useConnectionDetail(packageName: string): ConnectionDetailResult
   const refetch = useCallback(() => setTick((t) => t + 1), []);
   const saveSecret = useCallback(
     async (name: string, value: string): Promise<void> => {
-      const r = await fetch(`${runtimeUrl}/api/secrets/${encodeURIComponent(name)}`, {
+      // Lives on Studio (not the runtime) so paste-saves work before
+      // the runtime has booted with an `amodal.json`. Studio writes
+      // to `<repoPath>/.amodal/secrets.env`; the runtime watches
+      // that file and hot-reloads `process.env` on change.
+      const r = await fetch(`/api/secrets/${encodeURIComponent(name)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value }),
@@ -98,7 +102,7 @@ export function useConnectionDetail(packageName: string): ConnectionDetailResult
       }
       setTick((t) => t + 1);
     },
-    [runtimeUrl],
+    [],
   );
 
   return {
