@@ -32,6 +32,8 @@ export default tseslint.config(
       'node_modules/*',
       'eslint.config.js',
       'packages/**/dist/**',
+      'packages/**/dist-server/**',
+      'packages/**/dist-dev/**',
       'packages/chat-widget/dist/**',
       'packages/test-harness/**/.next/**',
       'packages/test-harness/surveillance/dist/**',
