@@ -3,8 +3,13 @@
   "compilerOptions": {
     "outDir": "dist",
     "composite": true,
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@amodalai/types": ["../types/src/index.ts"]
+    }
   },
+  "references": [{ "path": "../types" }],
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
