@@ -386,7 +386,7 @@ async function runToolCall(
       output = cachedResult.output;
       inlineEvents = cachedResult.inlineEvents;
     } else {
-      const executed = await executeToolWithEvents(call, toolDef, ctx);
+      const executed = await executeTool(call, toolDef, ctx);
       output = executed.output;
       inlineEvents = executed.inlineEvents;
     }
@@ -525,22 +525,14 @@ function buildToolCallResultEvent(call: ToolCall, result: ToolResult, duration: 
 /**
  * Execute a tool call, building the ToolContext from the AgentContext.
  * Enforces a timeout via AbortSignal to prevent hanging on broken tools.
+ *
+ * Returns both the tool's output and any inline SSE events the tool
+ * emitted via `ctx.emit()`. Callers that only care about the output
+ * destructure `{output}`; the inline events stay an empty array when
+ * the tool doesn't emit. One shape, one function — no caller has to
+ * pick between two near-identical helpers.
  */
 export async function executeTool(
-  call: ToolCall,
-  toolDef: ToolDefinition,
-  ctx: AgentContext,
-): Promise<unknown> {
-  const result = await executeToolWithEvents(call, toolDef, ctx);
-  return result.output;
-}
-
-/**
- * Inner executor that returns both the tool's output and any inline SSE
- * events the tool emitted via `ctx.emit()`. Used by `runToolCall` to
- * surface emissions alongside the tool_call_result event.
- */
-export async function executeToolWithEvents(
   call: ToolCall,
   toolDef: ToolDefinition,
   ctx: AgentContext,

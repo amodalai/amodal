@@ -25,7 +25,7 @@ import type {
   TransitionResult,
   ToolCall,
 } from '../loop-types.js';
-import {executeToolWithEvents} from './executing.js';
+import {executeTool} from './executing.js';
 
 /**
  * Handle the STREAMING state.
@@ -80,14 +80,13 @@ export async function handleStreaming(
         };
         toolCalls.push(call);
 
-        // Pre-execute read-only tools while the model might still be generating
+        // Pre-execute read-only tools while the model might still be generating.
+        // executeTool returns {output, inlineEvents} — tools like
+        // `present_connection` and `show_preview` need their emissions to
+        // survive the cache hand-off to EXECUTING.
         const toolDef = ctx.toolRegistry.get(event.toolName);
         if (toolDef?.readOnly) {
-          // Use executeToolWithEvents so we capture both `output` AND any
-          // inline events the tool emitted via `ctx.emit()`. Tools like
-          // `present_connection` and `show_preview` need their emissions
-          // to survive the cache hand-off to EXECUTING.
-          const promise = executeToolWithEvents(call, toolDef, ctx);
+          const promise = executeTool(call, toolDef, ctx);
           // Log but suppress rejection — errors are re-surfaced when awaited in EXECUTING.
           // Without this, abort before reaching EXECUTING causes unhandled rejection.
           promise.catch((err: unknown) => {
@@ -232,7 +231,7 @@ export async function* handleStreamingIncremental(
 
         const toolDef = ctx.toolRegistry.get(event.toolName);
         if (toolDef?.readOnly) {
-          const promise = executeToolWithEvents(call, toolDef, ctx);
+          const promise = executeTool(call, toolDef, ctx);
           promise.catch((err: unknown) => {
             ctx.logger.debug('preexec_suppressed', {
               tool: event.toolName,
