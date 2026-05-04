@@ -20,6 +20,7 @@ import type {Session} from '../session/types.js';
 import type {ToolContext} from '../tools/types.js';
 import type {SessionComponents, SessionType} from '../session/session-builder.js';
 import {buildSessionComponents} from '../session/session-builder.js';
+import {loadIntents} from '../intent/index.js';
 import {loadMemoryContent} from '../tools/memory-tool.js';
 import type {AuthContext} from '../middleware/auth.js';
 import {SessionError} from '../errors.js';
@@ -144,6 +145,20 @@ async function buildComponents(
 
   const credentialResolver = shared.buildCredentialResolver?.(opts.scopeId);
 
+  // Load deterministic intents from <repoPath>/intents/. Empty array
+  // when the repo doesn't have one (most agents). Loaded async here
+  // because esbuild compile + dynamic import are async; the rest of
+  // session building stays sync.
+  const intents = bundle.source === 'local' && bundle.origin
+    ? await loadIntents(bundle.origin).catch((err: unknown) => {
+        shared.logger.warn('intent_load_failed', {
+          repoPath: bundle.origin,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return [];
+      })
+    : [];
+
   return buildSessionComponents({
     bundle,
     storeBackend: shared.storeBackend,
@@ -159,6 +174,7 @@ async function buildComponents(
     appId: shared.appId,
     scopeId: opts.scopeId,
     scopeContext: opts.scopeContext,
+    intents,
     ...(credentialResolver ? {credentialResolver} : {}),
   });
 }
@@ -280,6 +296,7 @@ export async function resolveSession(
     maxSessionTokens: opts.maxSessionTokens,
     appId: shared.appId,
     scopeId,
+    intents: components.intents,
   });
 
   return {session, toolContextFactory: components.toolContextFactory};

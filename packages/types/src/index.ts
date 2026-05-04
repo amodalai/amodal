@@ -38,6 +38,13 @@ export type {
 } from './tool-types.js';
 export {defineToolHandler} from './tool-types.js';
 
+// Intent routing
+export type {
+  IntentDefinition,
+  IntentContext,
+  IntentResult,
+} from './intent-types.js';
+
 // LLM / provider types
 export type {
   LLMChatRequest,

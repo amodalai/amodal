@@ -203,17 +203,20 @@ describeWhenCached('validate_connection integration (Phase A)', () => {
     expect(r.message).toMatch(/list_channels.*not exported/);
   });
 
-  it('reports error when validate.js is missing entirely', async () => {
+  it('returns soft-success when validate.js is missing entirely', async () => {
     // No writeFakeProbe — package dir exists but no validate.js inside.
+    // Most published connection packages don't ship a probe yet, so a
+    // missing validate.js is treated as "connected, no sanity check"
+    // rather than a hard error. The user already authenticated; the
+    // probe is a confidence-boost, not a gate.
     const result = await executor.execute(
       loadedTool(),
       {packageName: '@amodalai/connection-fake', probeName: 'list_channels'},
       buildCtx(),
     );
 
-    expect(result).toMatchObject({ok: false, reason: 'error'});
-     
-    const r = result as {message: string};
-    expect(r.message).toMatch(/not found/i);
+    expect(result).toMatchObject({ok: true, value: true});
+    const r = result as {formatted: string};
+    expect(r.formatted).toMatch(/^Connected/);
   });
 });

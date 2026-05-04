@@ -6,7 +6,7 @@
 
 import type {CommandModule} from 'yargs';
 import type {ChildProcess} from 'node:child_process';
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync, readFileSync, statSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {spawn} from 'node:child_process';
 import path from 'node:path';
@@ -106,9 +106,130 @@ interface ManagedProcess {
  * with a label. Lines are buffered per-stream to avoid interleaved output
  * from concurrent subprocesses.
  */
+/**
+ * Predicate for pipeWithLabel's quiet mode. Exported for unit tests so a
+ * format change in the runtime logger can't silently break dev observability.
+ *
+ * Passes warnings/errors and the Phase 4 intent-routing telemetry through
+ * (the latter is exactly what makes intent vs LLM ratios visible in dev).
+ */
+export function passesQuietFilter(line: string): boolean {
+  return (
+    line.includes('[WARN]') ||
+    line.includes('[ERROR]') ||
+    line.includes('Error') ||
+    line.includes('intent_') ||
+    line.includes('agent_loop_start') ||
+    line.includes('route_intent') ||
+    line.includes('route_llm')
+  );
+}
+
+/**
+ * Best-effort pretty-printer for routing telemetry. The runtime emits
+ * `[INFO] route_intent {…json…}` style lines (for production aggregators);
+ * in the dev terminal that's mostly visual noise. This rewrites the few
+ * route/intent lifecycle events into one-liner status lines so a human
+ * scanning their terminal can answer "is intent routing working?" at a
+ * glance. Falls back to the original line when parsing fails so we never
+ * eat a line that the user might need.
+ *
+ * Returns:
+ *   - a string (possibly the same as input) — print it verbatim
+ *   - null — suppress the line entirely (e.g. dropping intent_matched
+ *     once route_intent has already been printed for the same turn)
+ */
+export function formatLineForDev(line: string): string | null {
+  // Only touch our recognized events. Match `[LEVEL] event_name {json}` form.
+  const m = /^\[(INFO|WARN|ERROR)\] ([a-z_]+) (\{.*\})\s*$/.exec(line);
+  if (!m) return line;
+
+  const [, , event, jsonStr] = m;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    return line;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return line;
+  }
+  const data: Record<string, unknown> = Object.fromEntries(
+    Object.entries(parsed),
+  );
+
+  const str = (k: string): string =>
+    typeof data[k] === 'string' ? (data[k]) : '';
+  const num = (k: string): number =>
+    typeof data[k] === 'number' ? (data[k]) : 0;
+
+  switch (event) {
+    case 'route_intent': {
+      const preview = str('userMessagePreview');
+      return `→ INTENT  ${str('intentId').padEnd(22)} "${preview}"`;
+    }
+    case 'route_llm': {
+      const reason = str('reason');
+      const detail = str('intentId') || str('userMessagePreview');
+      return `→ LLM     ${reason.padEnd(22)} ${detail ? `"${detail}"` : ''}`.trimEnd();
+    }
+    case 'intent_completed': {
+      const toolCount = num('toolCount');
+      const ms = num('durationMs');
+      return `  ✓ ${str('intentId')} done (${String(toolCount)} tools, ${String(ms)}ms)`;
+    }
+    case 'intent_fell_through': {
+      const ms = num('durationMs');
+      return `  ↓ ${str('intentId')} fell through to LLM (${String(ms)}ms)`;
+    }
+    case 'intent_errored': {
+      return `  ✗ ${str('intentId')} ERRORED: ${str('error')}`;
+    }
+    case 'intent_blocked_by_confirmation': {
+      return `  ✗ ${str('intentId')} blocked: ${str('toolName')} requires confirmation`;
+    }
+    case 'intent_returned_null_after_committing': {
+      return `  ⚠ ${str('intentId')} returned null after ${String(num('toolCallsStarted'))} tool calls — treating as completion`;
+    }
+    case 'intent_matched':
+    case 'agent_loop_start': {
+      // Both are redundant in dev: intent_matched duplicates the
+      // route_intent line that fires a millisecond earlier, and
+      // agent_loop_start always follows a route_llm line (manager.ts
+      // emits route_llm immediately before invoking the LLM). Drop
+      // them to keep the dev terminal scannable; production
+      // aggregators still get them on stderr from the runtime
+      // process directly (this formatter only runs in pipeWithLabel).
+      return null;
+    }
+    case 'tool_log': {
+      // Tools call ctx.log(...) for noteworthy progress (e.g.
+      // install_template emits "Cloned whodatdev/template-X into
+      // agent repo (N connection packages installed)"). When fired
+      // during an intent run the callId starts with `intent_`, so
+      // these lines pass the quiet filter — but as raw JSON they
+      // bury the useful message inside callId/session noise. Strip
+      // to a clean nested bullet.
+      const msg = str('message');
+      if (!msg) return null;
+      return `    · ${msg}`;
+    }
+    default:
+      return line;
+  }
+}
+
 function pipeWithLabel(child: ChildProcess, label: string, opts?: {quiet?: boolean}): void {
   const prefix = `[${label}] `;
   const quiet = opts?.quiet ?? false;
+
+  const writeLine = (line: string): void => {
+    if (quiet && !passesQuietFilter(line)) return;
+    const pretty = formatLineForDev(line);
+    if (pretty === null) return;
+    process.stderr.write(`${prefix}${pretty}\n`);
+  };
+
   for (const stream of [child.stdout, child.stderr]) {
     if (!stream) continue;
     let buffer = '';
@@ -117,16 +238,11 @@ function pipeWithLabel(child: ChildProcess, label: string, opts?: {quiet?: boole
       buffer += chunk;
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        if (quiet && !line.includes('[WARN]') && !line.includes('[ERROR]') && !line.includes('Error')) continue;
-        process.stderr.write(`${prefix}${line}\n`);
-      }
+      for (const line of lines) writeLine(line);
     });
     stream.on('end', () => {
       if (buffer.length > 0) {
-        if (!quiet || buffer.includes('[WARN]') || buffer.includes('[ERROR]') || buffer.includes('Error')) {
-          process.stderr.write(`${prefix}${buffer}\n`);
-        }
+        writeLine(buffer);
         buffer = '';
       }
     });
@@ -409,7 +525,18 @@ Or add it to your agent's .env file:
   // Make DATABASE_URL available to child processes (runtime, Studio)
   process.env['DATABASE_URL'] = databaseUrl;
 
-  // Read agent name from amodal.json for AGENT_ID
+  // Resolve AGENT_ID — must be set BEFORE spawning subprocesses so
+  // Studio, runtime, and admin-agent all key `setup_state` rows by
+  // the same id. Three sources, in priority order:
+  //   1. amodal.json#name when the file exists (post-setup repos)
+  //   2. The repo dir basename (pre-setup repos — what the user calls
+  //      their working directory; stable across the setup flow)
+  //   3. 'default' as a last-ditch fallback
+  // Without this, the admin-agent process would compute its own id
+  // from its own bundle (name: "admin") and Studio's `getAgentId()`
+  // would fall back to "default", leaving `commit_setup` marking a
+  // different row than Studio reads — IndexPage would loop the user
+  // back to /setup even after a successful commit.
   const amodalJsonPath = path.join(repoPath, 'amodal.json');
   let agentId: string | undefined;
   if (existsSync(amodalJsonPath)) {
@@ -422,7 +549,6 @@ Or add it to your agent's .env file:
       const nameValue = parsed !== undefined ? (parsed as Record<string, unknown>)['name'] : undefined;
       if (typeof nameValue === 'string') {
         agentId = nameValue;
-        process.env['AGENT_ID'] = agentId;
       }
     } catch (err: unknown) {
       log.warn('amodal_json_parse_error', {
@@ -431,6 +557,14 @@ Or add it to your agent's .env file:
       });
     }
   }
+  if (!agentId) {
+    // Pre-setup fallback. `path.basename(repoPath)` gives "test-empty"
+    // or whatever the user named their working dir — stable enough
+    // for setup_state coordination, and the agent name will switch
+    // to amodal.json#name on the next CLI invocation post-commit.
+    agentId = path.basename(repoPath) || 'default';
+  }
+  process.env['AGENT_ID'] = agentId;
 
   // -------------------------------------------------------------------------
   // Run schema migrations
@@ -601,18 +735,31 @@ Or add it to your agent's .env file:
     }
 
     // -------------------------------------------------------------------
-    // Phase E.9 — runtime auto-spawn on amodal.json appearance.
+    // Phase E.9 — runtime auto-(re)spawn on amodal.json change.
     //
-    // When the runtime didn't start (no manifest at boot), poll
-    // amodal.json every 2s. Once it lands — written by
-    // commit_setup, the user-button commit-setup endpoint, or
-    // init-repo's skip-onboarding write — boot the runtime in
-    // place. Studio's runtime URL probe picks it up on the next
-    // tick. No restart required.
+    // Two flows watched by the same poller:
+    //
+    //   1. AUTO-BOOT — runtime didn't start at CLI launch (no manifest
+    //      yet). Once amodal.json lands (commit_setup, the user-button
+    //      commit-setup endpoint, or init-repo's skip-onboarding
+    //      write), boot the runtime in place. Studio's runtime URL
+    //      probe picks it up on the next tick.
+    //
+    //   2. AUTO-RESTART — runtime is already up but amodal.json has
+    //      been rewritten since the last spawn. Happens after a
+    //      Restart-Setup → re-commit, or when the user edits
+    //      amodal.json by hand (adding a connection package, etc.).
+    //      Without a restart, the running runtime keeps the stale
+    //      bundle in memory and the new packages/config never load.
+    //
+    // 500ms debounce after detecting a change — lets the writer
+    // (commit_setup's atomic rename, init-repo's full write) settle
+    // before loadRepo tries to read.
     // -------------------------------------------------------------------
 
     const RUNTIME_WATCH_INTERVAL_MS = 2_000;
     let runtimeWatcher: ReturnType<typeof setTimeout> | null = null;
+    let lastManifestMtime: number | null = null;
 
     const stopRuntimeWatch = (): void => {
       if (runtimeWatcher !== null) {
@@ -621,17 +768,37 @@ Or add it to your agent's .env file:
       }
     };
 
+    const manifestPath = path.join(repoPath, 'amodal.json');
+
+    /**
+     * Read the manifest's last-modified timestamp without throwing.
+     * Returns null when the file is missing.
+     */
+    const manifestMtime = (): number | null => {
+      try {
+        if (!existsSync(manifestPath)) return null;
+        return statSync(manifestPath).mtimeMs;
+      } catch {
+        return null;
+      }
+    };
+
+    // Seed lastManifestMtime if the runtime was booted at startup so
+    // we don't immediately self-restart on the first poll.
+    if (server) lastManifestMtime = manifestMtime();
+
     const watchForRuntime = (): void => {
-      if (server) return; // Already booted.
-      if (existsSync(path.join(repoPath, 'amodal.json'))) {
-        // 500ms debounce — let the writer (commit_setup's atomic
-        // rename or init-repo's full write) settle before loadRepo
-        // tries to read it.
+      const mtime = manifestMtime();
+      const exists = mtime !== null;
+
+      // Auto-boot path: no runtime yet, manifest just appeared.
+      if (!server && exists) {
         runtimeWatcher = setTimeout(() => {
           (async () => {
             try {
               process.stderr.write('\n[dev] amodal.json appeared — booting runtime...\n');
               server = await bootRuntime();
+              lastManifestMtime = manifestMtime();
               process.stderr.write(`  Runtime:     http://localhost:${String(runtimePort)}\n\n`);
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : String(err);
@@ -642,12 +809,35 @@ Or add it to your agent's .env file:
         }, 500);
         return;
       }
+
+      // Auto-restart path: runtime is up, manifest was rewritten.
+      if (server && exists && lastManifestMtime !== null && mtime > lastManifestMtime) {
+        const previousServer = server;
+        // Clear server immediately so a second mtime change while
+        // we're restarting doesn't re-enter this branch.
+        server = null;
+        runtimeWatcher = setTimeout(() => {
+          (async () => {
+            try {
+              process.stderr.write('\n[dev] amodal.json changed — restarting runtime...\n');
+              await previousServer.stop();
+              server = await bootRuntime();
+              lastManifestMtime = manifestMtime();
+              process.stderr.write(`  Runtime:     http://localhost:${String(runtimePort)} (restarted)\n\n`);
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : String(err);
+              process.stderr.write(`[dev] Runtime restart failed: ${msg}\n`);
+              process.stderr.write('       Try ctrl+C and re-running `amodal dev`.\n');
+            }
+          })().catch(() => undefined);
+        }, 500);
+        return;
+      }
+
       runtimeWatcher = setTimeout(watchForRuntime, RUNTIME_WATCH_INTERVAL_MS);
     };
 
-    if (!hasManifest) {
-      runtimeWatcher = setTimeout(watchForRuntime, RUNTIME_WATCH_INTERVAL_MS);
-    }
+    runtimeWatcher = setTimeout(watchForRuntime, RUNTIME_WATCH_INTERVAL_MS);
 
     // Graceful shutdown
     const shutdown = async (signal: string): Promise<void> => {

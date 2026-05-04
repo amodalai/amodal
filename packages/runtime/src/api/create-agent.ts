@@ -118,6 +118,7 @@ export async function createAgent(config: AgentConfig): Promise<Agent> {
         permissionChecker: components.permissionChecker,
         systemPrompt: components.systemPrompt,
         toolContextFactory: components.toolContextFactory,
+        intents: components.intents,
       });
 
       return createAgentSession(sessionManager, session.id, components);

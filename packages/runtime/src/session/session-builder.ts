@@ -21,6 +21,7 @@ import type {
   LoadedConnection,
   CustomToolExecutor,
   StoreBackend,
+  IntentDefinition,
 } from '@amodalai/types';
 import type {McpManager, AdminAgentContent, FieldScrubber} from '@amodalai/core';
 import {buildConnectionsMap, buildAccessConfigs} from '@amodalai/core';
@@ -83,6 +84,13 @@ export interface SessionComponents {
   permissionChecker: PermissionChecker;
   systemPrompt: string;
   toolContextFactory: (callId: string) => ToolContext;
+  /**
+   * Deterministic intents loaded from `<repoPath>/intents/` at session
+   * build time. Empty when the repo doesn't have an `intents/` dir
+   * (most agents) — `runMessage` short-circuits the intent path on
+   * empty arrays so this is zero-cost when unused.
+   */
+  intents: IntentDefinition[];
 }
 
 /** Options for building session components. */
@@ -131,6 +139,14 @@ export interface BuildSessionComponentsOptions {
    * resolver rather than left as literal strings.
    */
   credentialResolver?: CredentialResolver;
+  /**
+   * Pre-loaded intents from the agent's `intents/` directory. The
+   * caller is responsible for loading these (via `loadIntents`)
+   * because intent loading involves esbuild compile + dynamic
+   * import, which is async — `buildSessionComponents` itself stays
+   * sync. Default: empty array.
+   */
+  intents?: IntentDefinition[];
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +281,18 @@ function buildCustomToolSessionContext(
   // session-builder doesn't need to wire the db connection through
   // its existing flow. Skipped when the pool isn't initialized
   // (e.g. unit tests with no DATABASE_URL).
-  const agentId = bundle.config.name;
+  //
+  // Identity resolution: prefer `process.env.AGENT_ID` when the
+  // process was spawned with one (the CLI sets it for both Studio
+  // and the admin agent so all three subprocesses key
+  // `setup_state` rows by the SAME id). Fall back to
+  // `bundle.config.name` for the standalone runtime case where no
+  // CLI is in front. Without this, the admin-agent process — whose
+  // bundle is loaded from ~/.amodal/admin-agent (name: "admin") —
+  // would write/read rows under "admin" while Studio's repo-state
+  // probe queries under "default", and `commit_setup` would mark
+  // the wrong row complete.
+  const agentId = process.env['AGENT_ID'] ?? bundle.config.name;
   const setupStateFactory = buildSetupStateFactory(agentId);
 
   // Phase C: expose ctx.plan. The composer reads node_modules under
@@ -496,6 +523,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     memoryContent,
     memoryDb,
     credentialResolver,
+    intents = [],
   } = opts;
 
   // -------------------------------------------------------------------------
@@ -806,6 +834,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     permissionChecker: sessionPermissionChecker,
     systemPrompt: compiled.systemPrompt,
     toolContextFactory,
+    intents,
   };
 }
 
