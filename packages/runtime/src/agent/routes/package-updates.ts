@@ -28,6 +28,21 @@ const NPM_VIEW_TIMEOUT_MS = 10_000;
 const NPM_INSTALL_TIMEOUT_MS = 120_000;
 const PACKAGE_NAME_REGEX = /^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/;
 
+/**
+ * Resolve a path beneath `<repoPath>/node_modules` and verify the
+ * result stays inside that base. Returns null on traversal attempts
+ * (symlinks, double-resolved paths, etc.). The regex above already
+ * blocks `/` outside the scope segment, but CodeQL flags any flow
+ * from user input into a path expression — this is the belt and
+ * suspenders.
+ */
+function safeNodeModulesPath(repoPath: string, name: string, ...rest: string[]): string | null {
+  const base = path.resolve(repoPath, 'node_modules');
+  const candidate = path.resolve(base, name, ...rest);
+  if (candidate !== base && !candidate.startsWith(base + path.sep)) return null;
+  return candidate;
+}
+
 export interface PackageUpdate {
   /** Package name, e.g. "@amodalai/connection-slack". */
   name: string;
@@ -80,8 +95,8 @@ export function createPackageUpdatesRouter(deps: RouterDeps): Router {
         res.status(400).json({error: 'invalid_package_name'});
         return;
       }
-      const cardPath = path.join(deps.repoPath, 'node_modules', name, 'card', 'card.json');
-      if (!existsSync(cardPath)) {
+      const cardPath = safeNodeModulesPath(deps.repoPath, name, 'card', 'card.json');
+      if (cardPath === null || !existsSync(cardPath)) {
         res.status(404).json({error: 'card_not_found'});
         return;
       }
@@ -164,8 +179,8 @@ function readAmodalPackages(repoPath: string): string[] {
 }
 
 function readInstalledVersion(repoPath: string, name: string): string | null {
-  const pkgPath = path.join(repoPath, 'node_modules', name, 'package.json');
-  if (!existsSync(pkgPath)) return null;
+  const pkgPath = safeNodeModulesPath(repoPath, name, 'package.json');
+  if (pkgPath === null || !existsSync(pkgPath)) return null;
   try {
     const raw: unknown = JSON.parse(readFileSync(pkgPath, 'utf-8'));
     if (typeof raw !== 'object' || raw === null) return null;

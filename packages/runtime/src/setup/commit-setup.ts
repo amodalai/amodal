@@ -253,10 +253,14 @@ function collectPackages(state: SetupState, plan: SetupPlan | null): string[] {
  */
 function sanitizeName(value: string | undefined): string | null {
   if (typeof value !== 'string' || value.length === 0) return null;
-  const normalized = value
+  // Cap input length up front so the trim regexes below run on a bounded
+  // string — guards against ReDoS on adversarial repeated-dash inputs.
+  const bounded = value.slice(0, 200);
+  const normalized = bounded
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '')
     .slice(0, 80);
   return normalized.length > 0 ? normalized : null;
 }
