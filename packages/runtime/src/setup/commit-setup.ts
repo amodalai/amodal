@@ -123,6 +123,12 @@ export interface CommitSetupOptions {
 export async function commitSetup(
   options: CommitSetupOptions,
 ): Promise<CommitSetupResult> {
+  // WARN level so the CLI's quiet filter passes it — helps debug the
+  // "setup completes but Studio still says in_progress" case where
+  // commit-setup and repo-state disagree on agent_id.
+  // eslint-disable-next-line no-console
+  console.warn(`[WARN] commit_setup_start_DIAG ${JSON.stringify({agentId: options.agentId, scopeId: options.scopeId, force: options.force})}`);
+
   // 1. Read setup_state.
   const row = await getSetupState(options.db, options.agentId, options.scopeId);
   if (!row) {
@@ -175,6 +181,8 @@ export async function commitSetup(
   // race on the row lock; the first wins, the second sees the
   // existing completed_at and returns it unchanged.
   const completedAt = await markComplete(options.db, options.agentId, options.scopeId);
+  // eslint-disable-next-line no-console
+  console.warn(`[WARN] commit_setup_mark_complete_DIAG ${JSON.stringify({agentId: options.agentId, scopeId: options.scopeId, completedAt: completedAt?.toISOString() ?? null})}`);
   if (!completedAt) {
     // Defensive: row vanished between step 1 and step 5 (concurrent delete?).
     // Treat as no_state — caller decides whether to retry.

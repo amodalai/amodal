@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { FlaskConical } from 'lucide-react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { studioApiUrl } from '@/lib/api';
 import { useEvalSuites } from '@/hooks/useEvalSuites';
 import {
   EvalCard,
@@ -19,12 +19,12 @@ import {
 /*  SuitesTab                                                           */
 /* ------------------------------------------------------------------ */
 
-function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll, runtimeUrl }: { suites: EvalSuite[]; hideModelSelector?: boolean; runAllTrigger?: number; expandAll?: boolean | null; runtimeUrl: string }) {
+function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll }: { suites: EvalSuite[]; hideModelSelector?: boolean; runAllTrigger?: number; expandAll?: boolean | null }) {
   const [models, setModels] = useState<AvailableModel[]>([]);
   const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
 
   useEffect(() => {
-    fetch(`/api/evals/arena/models`, { signal: AbortSignal.timeout(5_000) })
+    fetch(studioApiUrl('/api/evals/arena/models'), { signal: AbortSignal.timeout(5_000) })
       .then((res) => {
         if (!res.ok) return;
         return res.json();
@@ -38,12 +38,12 @@ function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll, runtim
       .catch(() => {
         // Arena models endpoint may not exist yet
       });
-  }, [runtimeUrl]);
+  }, []);
 
   // Fetch per-eval history
   useEffect(() => {
     for (const suite of suites) {
-      fetch(`/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`, { signal: AbortSignal.timeout(5_000) })
+      fetch(studioApiUrl(`/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`), { signal: AbortSignal.timeout(5_000) })
         .then((res) => {
           if (!res.ok) return;
           return res.json();
@@ -58,7 +58,7 @@ function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll, runtim
           // History endpoint may not exist
         });
     }
-  }, [suites, runtimeUrl]);
+  }, [suites]);
 
   if (suites.length === 0) {
     return (
@@ -83,7 +83,6 @@ function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll, runtim
           hideModelSelector={hideModelSelector}
           autoRunTrigger={runAllTrigger}
           expandOverride={expandAll}
-          runtimeUrl={runtimeUrl}
         />
       ))}
     </div>
@@ -95,7 +94,6 @@ function SuitesTab({ suites, hideModelSelector, runAllTrigger, expandAll, runtim
 /* ------------------------------------------------------------------ */
 
 export function ArenaPage() {
-  const { runtimeUrl } = useStudioConfig();
   const [suites, setSuites] = useState<EvalSuite[]>([]);
   const [expandAll, setExpandAll] = useState<boolean | null>(null);
 
@@ -137,7 +135,7 @@ export function ArenaPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="max-w-4xl mx-auto px-6 py-6">
-          <SuitesTab suites={suites} expandAll={expandAll} runtimeUrl={runtimeUrl} />
+          <SuitesTab suites={suites} expandAll={expandAll} />
         </div>
       </div>
     </div>

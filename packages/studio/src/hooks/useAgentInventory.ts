@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useEffect } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { useState, useEffect, useCallback } from 'react';
+import { runtimeApiUrl } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,6 +30,7 @@ export interface AgentInventory {
   automations: string[];
   pages: string[];
   loading: boolean;
+  refetch: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,11 +51,13 @@ function extractChildNames(tree: FileTreeEntry[], dirName: string): string[] {
 // ---------------------------------------------------------------------------
 
 export function useAgentInventory(): AgentInventory {
-  const { runtimeUrl } = useStudioConfig();
-  const [inventory, setInventory] = useState<Omit<AgentInventory, 'loading'> | null>(null);
+  const [inventory, setInventory] = useState<Omit<AgentInventory, 'loading' | 'refetch'> | null>(null);
+  const [fetchKey, setFetchKey] = useState(0);
+
+  const refetch = useCallback(() => { setFetchKey((k) => k + 1); }, []);
 
   useEffect(() => {
-    fetch(`${runtimeUrl}/api/files`, { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl('/api/files'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
@@ -72,8 +75,6 @@ export function useAgentInventory(): AgentInventory {
         });
       })
       .catch(() => {
-        // If the runtime is unreachable, show nothing rather than an error —
-        // the individual pages already handle offline state.
         setInventory({
           skills: [],
           knowledge: [],
@@ -83,7 +84,7 @@ export function useAgentInventory(): AgentInventory {
           pages: [],
         });
       });
-  }, [runtimeUrl]);
+  }, [fetchKey]);
 
   if (!inventory) {
     return {
@@ -94,8 +95,9 @@ export function useAgentInventory(): AgentInventory {
       automations: [],
       pages: [],
       loading: true,
+      refetch,
     };
   }
 
-  return { ...inventory, loading: false };
+  return { ...inventory, loading: false, refetch };
 }

@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { RunNowButton, ToggleButton } from '@/components/studio/AutomationActions';
+import { studioApiUrl } from '@/lib/api';
 import { Zap, Clock } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -64,7 +65,7 @@ export function AutomationsPage() {
   const [loaded, setLoaded] = useState(false);
 
   const fetchAutomations = useCallback(() => {
-    fetch('/api/automations', { signal: AbortSignal.timeout(5_000) })
+    fetch(studioApiUrl('/api/automations'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Request failed: ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response

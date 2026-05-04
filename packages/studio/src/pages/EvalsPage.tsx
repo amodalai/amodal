@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
+import { studioApiUrl } from '@/lib/api';
 import { useEvalSuites } from '@/hooks/useEvalSuites';
 import {
   EvalCard,
@@ -15,7 +15,6 @@ import {
 } from '@/components/views/EvalCard';
 
 export function EvalsPage() {
-  const { runtimeUrl } = useStudioConfig();
   const { suites: rawSuites, loading } = useEvalSuites();
   const [models, setModels] = useState<AvailableModel[]>([]);
   const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
@@ -31,7 +30,7 @@ export function EvalsPage() {
 
   // Fetch available models so EvalCard has the main model info
   useEffect(() => {
-    fetch(`/api/evals/arena/models`, { signal: AbortSignal.timeout(5_000) })
+    fetch(studioApiUrl('/api/evals/arena/models'), { signal: AbortSignal.timeout(5_000) })
       .then((res) => {
         if (!res.ok) return;
         return res.json();
@@ -45,12 +44,12 @@ export function EvalsPage() {
       .catch(() => {
         // Models endpoint may not exist yet
       });
-  }, [runtimeUrl]);
+  }, []);
 
   // Fetch per-eval history
   useEffect(() => {
     for (const suite of suites) {
-      fetch(`/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`, { signal: AbortSignal.timeout(5_000) })
+      fetch(studioApiUrl(`/api/evals/runs/by-eval/${encodeURIComponent(suite.name)}`), { signal: AbortSignal.timeout(5_000) })
         .then((res) => {
           if (!res.ok) return;
           return res.json();
@@ -66,7 +65,7 @@ export function EvalsPage() {
         });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- suites derived from rawSuites, using rawSuites as dep
-  }, [rawSuites, runtimeUrl]);
+  }, [rawSuites]);
 
   if (loading) return null;
 
@@ -94,7 +93,6 @@ export function EvalsPage() {
               models={models}
               history={historyMap[suite.name] ?? []}
               hideModelSelector={true}
-              runtimeUrl={runtimeUrl}
             />
           ))}
         </div>

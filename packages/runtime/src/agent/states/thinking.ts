@@ -8,7 +8,7 @@
  * THINKING state handler.
  *
  * Prepares and sends a request to the LLM:
- * 1. Detect tool call loops (warn at 3+, force stop at maxLoopIterations)
+ * 1. Check tool repeat limit (maxToolRepeats, 0 = no limit)
  * 2. Clear old tool result bodies (keep last N full, summarize rest)
  * 3. Strip execute functions from tools (schemas only for AI SDK)
  * 4. Call provider.streamText()
@@ -54,69 +54,37 @@ export async function handleThinking(
   // 1. Increment turn counter
   ctx.turnCount++;
 
-  // 2. Loop detection — check before spending tokens on an LLM call
-  const loop = detectLoop(state.messages);
-  if (loop && loop.count >= ctx.config.maxLoopIterations) {
-    ctx.logger.warn('agent_loop_detected', {
-      session: ctx.sessionId,
-      tool: loop.toolName,
-      count: loop.count,
-    });
-    return {
-      next: {type: 'done', usage: {...ctx.usage}, reason: 'loop_detected'},
-      effects: [{
-        type: SSEEventType.Error,
-        message: `Agent stuck in a loop: ${loop.toolName} called ${loop.count} times with similar parameters`,
-        timestamp: new Date().toISOString(),
-      }],
-    };
+  // 2. Tool repeat limit — if the same tool has been called too many times
+  // with similar params in this turn, stop the loop. The user can say
+  // "keep going" to start a new turn with a fresh counter. 0 = no limit.
+  const maxRepeats = ctx.config.maxToolRepeats;
+  if (maxRepeats > 0) {
+    const loop = detectLoop(state.messages);
+    if (loop && loop.count >= maxRepeats) {
+      ctx.logger.info('agent_tool_repeat_limit', {
+        session: ctx.sessionId,
+        tool: loop.toolName,
+        count: loop.count,
+        limit: maxRepeats,
+      });
+      return {
+        next: {type: 'done', usage: {...ctx.usage}, reason: 'loop_detected'},
+        effects: [{
+          type: SSEEventType.TextDelta,
+          content: `\n\nI've made ${loop.count} API calls in this response. Let me stop here and share what I have so far. Say "keep going" if you'd like me to continue.`,
+          timestamp: new Date().toISOString(),
+        }],
+      };
+    }
   }
 
-  // Clear old tool result bodies and persist back to ctx. Without this
-  // writeback, every subsequent turn re-calls the summarizer hook for the
-  // same messages (expensive). Once a result is cleared, it stays cleared.
-  // Must happen before turn-specific warnings are appended, since warnings
-  // are local-to-this-turn and should not persist.
+  // Clear old tool result bodies and persist back to ctx.
   ctx.messages = await clearOldToolResults(state.messages, ctx);
-  let messages = ctx.messages;
+  const messages = ctx.messages;
 
-  // Purge any disabled-tool entries whose cooldown has expired, so a tool
-  // re-entering the tool set is available to the model again.
+  // Purge any disabled-tool entries whose cooldown has expired
   for (const [name, untilTurn] of ctx.disabledToolsUntilTurn) {
     if (ctx.turnCount >= untilTurn) ctx.disabledToolsUntilTurn.delete(name);
-  }
-
-  if (loop && loop.count >= ctx.config.loopEscalationThreshold) {
-    // Escalation tier: strongly nudge the model AND disable the looping
-    // tool for a cooldown window. Without the cooldown, the agent could
-    // immediately re-call the tool next turn, drop the loop count below
-    // threshold, and keep oscillating.
-    const cooldown = ctx.config.loopEscalationCooldownTurns;
-    const untilTurn = ctx.turnCount + cooldown;
-    ctx.disabledToolsUntilTurn.set(loop.toolName, untilTurn);
-    ctx.logger.warn('agent_loop_escalation', {
-      session: ctx.sessionId,
-      tool: loop.toolName,
-      count: loop.count,
-      cooldownTurns: cooldown,
-      disabledUntilTurn: untilTurn,
-    });
-    const escalationMessage: ModelMessage = {
-      role: 'user',
-      content: `[System Notice — Escalation] You have called ${loop.toolName} ${loop.count} times with similar parameters and are not making progress. The ${loop.toolName} tool has been temporarily disabled for the next ${cooldown} turns — use a different tool or ask the user for help.`,
-    };
-    messages = [...messages, escalationMessage];
-  } else if (loop && loop.count >= ctx.config.loopWarningThreshold) {
-    ctx.logger.info('agent_loop_warning', {
-      session: ctx.sessionId,
-      tool: loop.toolName,
-      count: loop.count,
-    });
-    const warningMessage: ModelMessage = {
-      role: 'user',
-      content: `[System Notice — Warning] You have called ${loop.toolName} ${loop.count} times with similar parameters. Try a different approach.`,
-    };
-    messages = [...messages, warningMessage];
   }
 
   // 4. Build tool schemas for the AI SDK (strip execute functions — we handle

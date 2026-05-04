@@ -37,6 +37,11 @@ function inlineMarkdown(text: string): string {
     /\[([^\]]+)\]\(([^)]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
   );
+  // Bare URLs (must run after markdown link replacement to avoid double-linking)
+  html = html.replace(
+    /(?<!href="|<a[^>]*>)(https?:\/\/[^\s<)]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
+  );
   return html;
 }
 

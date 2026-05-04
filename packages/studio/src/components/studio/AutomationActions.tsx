@@ -6,23 +6,24 @@
 
 import { useCallback, useState } from 'react';
 import { Play, Square, RotateCw } from 'lucide-react';
+import { studioApiUrl } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Route constants
 // ---------------------------------------------------------------------------
 
-const AUTOMATIONS_API_BASE = '/api/automations';
+const AUTOMATIONS_API_PATH = '/api/automations';
 
 function automationRunUrl(name: string): string {
-  return `${AUTOMATIONS_API_BASE}/${encodeURIComponent(name)}/run`;
+  return studioApiUrl(`${AUTOMATIONS_API_PATH}/${encodeURIComponent(name)}/run`);
 }
 
 function automationStartUrl(name: string): string {
-  return `${AUTOMATIONS_API_BASE}/${encodeURIComponent(name)}/start`;
+  return studioApiUrl(`${AUTOMATIONS_API_PATH}/${encodeURIComponent(name)}/start`);
 }
 
 function automationStopUrl(name: string): string {
-  return `${AUTOMATIONS_API_BASE}/${encodeURIComponent(name)}/stop`;
+  return studioApiUrl(`${AUTOMATIONS_API_PATH}/${encodeURIComponent(name)}/stop`);
 }
 
 // ---------------------------------------------------------------------------

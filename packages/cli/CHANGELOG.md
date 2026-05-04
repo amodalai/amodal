@@ -1,5 +1,124 @@
 # @amodalai/amodal
 
+## 0.3.49
+
+### Patch Changes
+
+- Updated dependencies [fadad93]
+  - @amodalai/runtime@0.3.49
+  - @amodalai/types@0.3.49
+  - @amodalai/core@0.3.49
+  - @amodalai/runtime-app@0.3.49
+  - @amodalai/db@0.3.49
+  - @amodalai/studio@0.3.49
+
+## 0.3.48
+
+### Patch Changes
+
+- Updated dependencies [1249171]
+  - @amodalai/types@0.3.48
+  - @amodalai/runtime@0.3.48
+  - @amodalai/runtime-app@0.3.48
+  - @amodalai/studio@0.3.48
+  - @amodalai/core@0.3.48
+  - @amodalai/db@0.3.48
+
+## 0.3.47
+
+### Patch Changes
+
+- Updated dependencies [0cbf502]
+  - @amodalai/runtime@0.3.47
+  - @amodalai/studio@0.3.47
+  - @amodalai/runtime-app@0.3.47
+  - @amodalai/types@0.3.47
+  - @amodalai/core@0.3.47
+  - @amodalai/db@0.3.47
+
+## 0.3.46
+
+### Patch Changes
+
+- 4be518d: Silent 404 session resume, imperative sendMessage API, simplified loop detection (maxToolRepeats), onboarding flow, Studio BASE_PATH asset fixes
+- Updated dependencies [4be518d]
+  - @amodalai/runtime@0.3.46
+  - @amodalai/core@0.3.46
+  - @amodalai/runtime-app@0.3.46
+  - @amodalai/studio@0.3.46
+  - @amodalai/types@0.3.46
+  - @amodalai/db@0.3.46
+
+## 0.3.45
+
+### Patch Changes
+
+- 2589dab: Onboarding polish: template card previews, scrolling wizard, bare URL auto-linking, dead SSE cleanup, admin agent file write fix
+- 87f5214: Onboarding wizard, Studio proxy refactor, hot-reload improvements, admin agent tools
+- Updated dependencies [2589dab]
+- Updated dependencies [87f5214]
+- Updated dependencies [054a9ce]
+  - @amodalai/runtime@0.3.45
+  - @amodalai/types@0.3.45
+  - @amodalai/studio@0.3.45
+  - @amodalai/runtime-app@0.3.45
+  - @amodalai/core@0.3.45
+  - @amodalai/db@0.3.45
+
+## 0.3.44
+
+### Patch Changes
+
+- e99a932: Studio sidebar reorg, dashboard with cost tracking, sessions page, incremental text streaming, markdown fix, CLI port flags
+- Updated dependencies [e99a932]
+  - @amodalai/runtime@0.3.44
+  - @amodalai/runtime-app@0.3.44
+  - @amodalai/studio@0.3.44
+  - @amodalai/types@0.3.44
+  - @amodalai/core@0.3.44
+  - @amodalai/db@0.3.44
+
+## 0.3.43
+
+### Patch Changes
+
+- Updated dependencies [6dcaf1c]
+  - @amodalai/studio@0.3.43
+  - @amodalai/types@0.3.43
+  - @amodalai/core@0.3.43
+  - @amodalai/runtime@0.3.43
+  - @amodalai/runtime-app@0.3.43
+  - @amodalai/db@0.3.43
+
+## 0.3.42
+
+### Patch Changes
+
+- Updated dependencies [fa9d31a]
+  - @amodalai/studio@0.3.42
+  - @amodalai/types@0.3.42
+  - @amodalai/core@0.3.42
+  - @amodalai/runtime@0.3.42
+  - @amodalai/runtime-app@0.3.42
+  - @amodalai/db@0.3.42
+
+## 0.3.41
+
+### Patch Changes
+
+- f235fee: Add BASE_PATH support to Studio for subpath deployments
+
+  Studio can now be mounted at a subpath (e.g., `/studio/`) via the `BASE_PATH` env var. Server routes, Vite asset paths, and frontend API calls all respect the prefix. Default is empty string (root), preserving existing behavior.
+
+- Updated dependencies [b4d056c]
+- Updated dependencies [f235fee]
+  - @amodalai/studio@0.3.41
+  - @amodalai/runtime@0.3.41
+  - @amodalai/types@0.3.41
+  - @amodalai/core@0.3.41
+  - @amodalai/runtime-app@0.3.41
+  - @amodalai/db@0.3.41
+
 ## 0.3.40
 
 ### Patch Changes

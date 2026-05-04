@@ -1,5 +1,111 @@
 # @amodalai/runtime
 
+## 0.3.49
+
+### Patch Changes
+
+- fadad93: Fix crash on Cloud: guard LocalFsBackend against non-path bundle origins
+  - @amodalai/types@0.3.49
+  - @amodalai/core@0.3.49
+  - @amodalai/db@0.3.49
+
+## 0.3.48
+
+### Patch Changes
+
+- 1249171: Add FsBackend abstraction with local and HTTP implementations for ctx.fs in custom tools
+- Updated dependencies [1249171]
+  - @amodalai/types@0.3.48
+  - @amodalai/core@0.3.48
+  - @amodalai/db@0.3.48
+
+## 0.3.47
+
+### Patch Changes
+
+- 0cbf502: Show directory-based connections in Studio's connections page
+  - @amodalai/types@0.3.47
+  - @amodalai/core@0.3.47
+  - @amodalai/db@0.3.47
+
+## 0.3.46
+
+### Patch Changes
+
+- 4be518d: Silent 404 session resume, imperative sendMessage API, simplified loop detection (maxToolRepeats), onboarding flow, Studio BASE_PATH asset fixes
+- Updated dependencies [4be518d]
+  - @amodalai/core@0.3.46
+  - @amodalai/types@0.3.46
+  - @amodalai/db@0.3.46
+
+## 0.3.45
+
+### Patch Changes
+
+- 2589dab: Onboarding polish: template card previews, scrolling wizard, bare URL auto-linking, dead SSE cleanup, admin agent file write fix
+- 87f5214: Onboarding wizard, Studio proxy refactor, hot-reload improvements, admin agent tools
+- 054a9ce: Runtime: Disable tool loop detection by default (all thresholds set to 0). The maxTurns limit (default 50) is sufficient to prevent runaway loops. Loop detection can be re-enabled by setting non-zero values.
+
+  React: Block send during streaming with shake feedback. Text stays in input box until stream ends. Silent 404 on session resume (starts fresh instead of error).
+
+- Updated dependencies [2589dab]
+- Updated dependencies [87f5214]
+  - @amodalai/types@0.3.45
+  - @amodalai/core@0.3.45
+  - @amodalai/db@0.3.45
+
+## 0.3.44
+
+### Patch Changes
+
+- e99a932: Studio sidebar reorg, dashboard with cost tracking, sessions page, incremental text streaming, markdown fix, CLI port flags
+  - @amodalai/types@0.3.44
+  - @amodalai/core@0.3.44
+  - @amodalai/db@0.3.44
+
+## 0.3.43
+
+### Patch Changes
+
+- @amodalai/types@0.3.43
+- @amodalai/core@0.3.43
+- @amodalai/db@0.3.43
+
+## 0.3.42
+
+### Patch Changes
+
+- @amodalai/types@0.3.42
+- @amodalai/core@0.3.42
+- @amodalai/db@0.3.42
+
+## 0.3.41
+
+### Patch Changes
+
+- b4d056c: Add a "Getting started" tab, runtime OAuth broker, and per-connection configure pages.
+
+  **Getting started tab** (`/agents/:agentId/getting-started`) — universal home for first-run agent configuration. Two render modes:
+  - **Templated agent** (`template.json` exists in the repo) — slot-by-slot list with the curated providers from each `template.connections[]` slot.
+  - **No template** — flat list of every connection package the agent has installed.
+
+  Each row shows the package's `amodal.displayName` / icon / description, declared `auth.envVars` with per-var ✓/○, and a Connect button when OAuth is available. Backed by `GET /api/getting-started`.
+
+  **Runtime-hosted OAuth broker** (`/api/oauth/{start,callback}`). When a package declares `amodal.oauth` and the user has set `<APPKEY>_CLIENT_ID` / `_CLIENT_SECRET` in env, the runtime brokers the redirect dance on the localhost loopback — no tunnel, no cloud dependency. Tokens persist to `<repoPath>/.amodal/secrets.env`, get pushed into `process.env`, and reload on every startup.
+
+  **Per-connection configure page** (`/agents/:agentId/connections/:packageName`). Reached by clicking "Configure" on a Getting Started row. Renders different forms based on `auth.type`:
+  - `bearer` / `api-key` → password input per envVar with description
+  - `basic` → username + password (when declared)
+  - OAuth-supported → Connect button + scopes preview alongside paste fallback
+  - Anything else → generic per-envVar paste form
+
+  Saves go through new `POST /api/secrets/:name` (writes to `secrets.env` + `process.env`). Backed by `GET /api/connections/:packageName` which returns the full `amodal.auth` block with `authType` + per-var status.
+
+  Cloud uses the platform-api's broker instead — same protocol, different home.
+  - @amodalai/types@0.3.41
+  - @amodalai/core@0.3.41
+  - @amodalai/db@0.3.41
+
 ## 0.3.40
 
 ### Patch Changes

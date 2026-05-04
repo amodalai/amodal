@@ -22,12 +22,10 @@ export function StreamingIndicator({ startTime }: StreamingIndicatorProps) {
 
   return (
     <div className="pcw-streaming" aria-label="Streaming">
-      <span className="pcw-streaming__dot" />
-      <span className="pcw-streaming__dot" />
-      <span className="pcw-streaming__dot" />
-      {startTime && elapsed >= 1 && (
-        <span className="pcw-streaming__elapsed">{elapsed}s</span>
-      )}
+      <span className="pcw-streaming__bar" />
+      <span className="pcw-streaming__label">
+        Thinking{startTime && elapsed >= 3 ? ` (${String(elapsed)}s)` : '...'}
+      </span>
     </div>
   );
 }

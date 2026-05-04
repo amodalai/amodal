@@ -489,6 +489,7 @@ export function translateEvent(
     case SSEEventType.ExploreEnd:
     case SSEEventType.PlanMode:
     case SSEEventType.FieldScrub:
+    case SSEEventType.StartOAuth:
       break;
 
     default: {

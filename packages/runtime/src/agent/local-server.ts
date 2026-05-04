@@ -61,7 +61,7 @@ import {StandaloneSessionManager} from '../session/manager.js';
 import {selectSessionStore} from '../session/session-store-selector.js';
 import {resolveEnvRef} from '../env-ref.js';
 import {buildSessionComponents} from '../session/session-builder.js';
-import type {SharedResources} from '../routes/session-resolver.js';
+import type {SharedResources, BundleResolver} from '../routes/session-resolver.js';
 import {LocalToolExecutor} from './tool-executor-local.js';
 import {buildMcpConfigs} from './mcp-config.js';
 import {ConfigWatcher} from './config-watcher.js';
@@ -354,6 +354,12 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Helper: get current bundle (updated by config watcher)
   const getBundle = (): AgentBundle => bundle;
+
+  // Bundle resolver uses a getter so routes always see the latest bundle
+  // after config-watcher hot reloads.
+  const bundleResolver: BundleResolver = {
+    get staticBundle() { return bundle; },
+  };
 
   // Helper: create task session components
   const createTaskSessionComponents = () => {
@@ -697,7 +703,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       const studioUrl = config.studioUrl ?? process.env['STUDIO_URL'] ?? '';
       const studioReturn = (params: URLSearchParams): string => {
         if (!studioUrl) return `/?${params.toString()}`;
-        return `${studioUrl}/agents/${appId}/getting-started?${params.toString()}`;
+        return `${studioUrl}/agents/${appId}/connections?${params.toString()}`;
       };
       if (errParam) {
         log.warn('oauth_provider_error', {error: errParam});
@@ -822,6 +828,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       res.status(400).json({ error: 'value is required' });
       return;
     }
+    // Set immediately so the current process sees it. The file is the
+    // source of truth — ConfigWatcher re-reads on reload for persistence.
     process.env[name] = value;
     persistSecret(name, value);
     log.info('secret_saved', {name});
@@ -932,7 +940,28 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
       for (const conn of bundleData.connections.values()) {
         const pkgDir = findPackageRoot(conn.location);
-        if (!pkgDir) continue;
+
+        if (!pkgDir) {
+          // Directory-based connection (connections/<name>/ in the repo).
+          // Derive env var info from spec.json auth and baseUrl fields.
+          if (packageMap.has(conn.name)) continue;
+          const envVars: EnvVarStatus[] = [];
+          const addEnvRef = (value: string | undefined, description: string) => {
+            if (value?.startsWith('env:')) {
+              const envName = value.slice(4);
+              envVars.push({ name: envName, description, set: !!process.env[envName] });
+            }
+          };
+          addEnvRef(conn.spec.baseUrl, 'Base URL');
+          addEnvRef(conn.spec.auth?.token, 'Auth token');
+          packageMap.set(conn.name, {
+            name: conn.name,
+            displayName: conn.name,
+            envVars,
+          });
+          continue;
+        }
+
         const pkgJsonPath = path.join(pkgDir, 'package.json');
         if (!existsSync(pkgJsonPath)) continue;
         try {
@@ -1083,13 +1112,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   // route-helpers, so no explicit hooks are needed here.
   app.use(createChatStreamRouter({
     sessionManager,
-    bundleResolver: {staticBundle: bundle},
+    bundleResolver,
     shared,
     summarizeToolResult: config.summarizeToolResult,
   }));
   app.use(createChatRouter({
     sessionManager,
-    bundleResolver: {staticBundle: bundle},
+    bundleResolver,
     shared,
     summarizeToolResult: config.summarizeToolResult,
   }));
@@ -1118,7 +1147,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.use(createEvalRouter({
     getBundle,
     sessionManager,
-    bundleResolver: {staticBundle: bundle},
+    bundleResolver,
     shared,
   }));
 

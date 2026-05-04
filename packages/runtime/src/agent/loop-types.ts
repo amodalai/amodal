@@ -183,24 +183,13 @@ export interface AgentLoopConfig {
   keepRecentResults: number;
   /** Number of tool results before clearing old ones. Default 15. */
   clearThreshold: number;
-  /** Max repeated tool calls before forcing loop_detected. Default 8. */
-  maxLoopIterations: number;
-  /** Repeated tool call count that triggers a warning injection. Default 3. */
-  loopWarningThreshold: number;
   /**
-   * Repeated tool call count that escalates: stronger warning + the looping
-   * tool is temporarily removed from the tool set passed to the model, so
-   * it is forced to try a different approach. Default 5 (between
-   * loopWarningThreshold=3 and maxLoopIterations=8).
+   * Max times the same tool can be called with similar parameters in a
+   * single agent turn (one user message → agent loop). When hit, the loop
+   * stops and the agent responds with what it has. The counter resets on
+   * the next user message. 0 = no limit (default).
    */
-  loopEscalationThreshold: number;
-  /**
-   * Number of turns the looping tool stays disabled after an escalation
-   * fires. Without this cooldown the agent could re-call the tool next
-   * turn, drop the loop count, and re-trigger escalation forever. Default
-   * 3 (covers the turns between escalation and hard-stop).
-   */
-  loopEscalationCooldownTurns: number;
+  maxToolRepeats: number;
   /** Max output tokens per LLM call. */
   maxOutputTokens: number;
   /** Timeout for individual tool execution in milliseconds. Default 30_000. */
@@ -232,10 +221,7 @@ export const DEFAULT_LOOP_CONFIG: AgentLoopConfig = {
   compactThreshold: 0.7,
   keepRecentResults: 5,
   clearThreshold: 15,
-  maxLoopIterations: 8,
-  loopWarningThreshold: 3,
-  loopEscalationThreshold: 5,
-  loopEscalationCooldownTurns: 3,
+  maxToolRepeats: 0,
   maxOutputTokens: 16_384,
   toolTimeoutMs: 30_000,
   confirmationTimeoutMs: 300_000,

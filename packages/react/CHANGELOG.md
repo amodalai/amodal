@@ -1,5 +1,48 @@
 # @amodalai/react
 
+## 0.3.49
+
+## 0.3.48
+
+### Patch Changes
+
+- de7d384: Fix "New Chat" button not starting a fresh session
+
+## 0.3.47
+
+### Patch Changes
+
+- ed112ba: Compact tool call UI: slim single-line rows replace heavy bordered boxes, with verboseTools theme option to restore full detail view
+
+## 0.3.46
+
+### Patch Changes
+
+- 4be518d: Silent 404 session resume, imperative sendMessage API, simplified loop detection (maxToolRepeats), onboarding flow, Studio BASE_PATH asset fixes
+
+## 0.3.45
+
+### Patch Changes
+
+- 2589dab: Onboarding polish: template card previews, scrolling wizard, bare URL auto-linking, dead SSE cleanup, admin agent file write fix
+- 87f5214: Onboarding wizard, Studio proxy refactor, hot-reload improvements, admin agent tools
+- 054a9ce: Runtime: Disable tool loop detection by default (all thresholds set to 0). The maxTurns limit (default 50) is sufficient to prevent runaway loops. Loop detection can be re-enabled by setting non-zero values.
+
+  React: Block send during streaming with shake feedback. Text stays in input box until stream ends. Silent 404 on session resume (starts fresh instead of error).
+
+## 0.3.44
+
+### Patch Changes
+
+- 8909a18: Add imperative `sendMessage` API to ChatWidget via React ref, and gracefully handle 404 when resuming a deleted session
+- e99a932: Studio sidebar reorg, dashboard with cost tracking, sessions page, incremental text streaming, markdown fix, CLI port flags
+
+## 0.3.43
+
+## 0.3.42
+
+## 0.3.41
+
 ## 0.3.40
 
 ### Patch Changes

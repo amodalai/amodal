@@ -131,6 +131,7 @@ export enum SSEEventType {
   Warning = 'warning',
   Error = 'error',
   Done = 'done',
+  StartOAuth = 'start_oauth',
 }
 
 export interface SSEInitEvent {
@@ -440,7 +441,8 @@ export type SSEEvent =
   | SSEToolLabelUpdateEvent
   | SSEWarningEvent
   | SSEErrorEvent
-  | SSEDoneEvent;
+  | SSEDoneEvent
+  | SSEStartOAuthEvent;
 
 export interface SSEToolLogEvent {
   type: SSEEventType.ToolLog;
@@ -461,6 +463,39 @@ export interface SSEToolLabelUpdateEvent {
   tool_id: string;
   running_label?: string;
   completed_label?: string;
+  timestamp: string;
+}
+
+// ---------------------------------------------------------------------------
+// Inline tool events (emitted via ctx.emit during tool execution)
+// ---------------------------------------------------------------------------
+
+export interface SSEAskChoiceEvent {
+  type: SSEEventType.AskChoice;
+  ask_id: string;
+  question: string;
+  options: Array<{label: string; value: string}>;
+  multi?: boolean;
+  timestamp: string;
+}
+
+export interface SSEShowPreviewEvent {
+  type: SSEEventType.ShowPreview;
+  card: {
+    title: string;
+    tagline: string;
+    platforms: string[];
+    thumbnailConversation: Array<{role: 'user' | 'agent'; content: string}>;
+  };
+  timestamp: string;
+}
+
+export interface SSEStartOAuthEvent {
+  type: SSEEventType.StartOAuth;
+  package_name: string;
+  display_name?: string;
+  description?: string;
+  skippable?: boolean;
   timestamp: string;
 }
 

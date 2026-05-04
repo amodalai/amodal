@@ -17,6 +17,17 @@ import type {
 import type { InteractionEvent } from '../events/types';
 import { ToolCallCard } from './ToolCallCard';
 import { KBProposalCard } from './KBProposalCard';
+
+/** Convert bare URLs to markdown links so react-markdown renders them as clickable. */
+function autolinkUrls(text: string): string {
+  return text.replace(
+    /(?<!\[.*?\]\()(?<!\()(https?:\/\/[^\s<)]+)/g,
+    '[$1]($1)',
+  );
+}
+
+/** Tools that render their own UI via inline SSE events. Hide the ToolCallCard chrome for these. */
+const UI_TOOLS = new Set(['collect_secret', 'start_oauth', 'ask_choice', 'show_preview', 'clone_template', 'onboarding_step']);
 import { SkillPill } from './SkillPill';
 import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
@@ -108,6 +119,7 @@ interface MessageListProps {
   emptyStateText?: string;
   sessionId?: string;
   showFeedback?: boolean;
+  verboseTools?: boolean;
   /** H.2 — Studio-supplied renderers for non-native block types. */
   inlineBlockRenderers?: InlineBlockRendererRegistry;
   /** Reducer dispatch handle, threaded down so registered renderers can dispatch (e.g. PANEL_UPDATE). */
@@ -178,6 +190,7 @@ function AssistantBubble({
   onAskChoiceSubmit,
   onProposalSubmit,
   onConfirmationRespond,
+  verboseTools,
   inlineBlockRenderers,
   dispatch,
 }: {
@@ -189,6 +202,7 @@ function AssistantBubble({
   onAskChoiceSubmit?: (askId: string, values: string[], message: string) => void;
   onProposalSubmit?: (proposalId: string, answer: 'confirm' | 'adjust', message: string) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
+  verboseTools?: boolean;
   inlineBlockRenderers?: InlineBlockRendererRegistry;
   dispatch?: React.Dispatch<ChatAction>;
 }) {
@@ -197,6 +211,10 @@ function AssistantBubble({
     message.toolCalls.length > 0 ||
     message.skillActivations.length > 0 ||
     message.kbProposals.length > 0;
+
+  // Don't render an empty bubble while waiting for content
+  const hasAnyContent = hasContentBlocks || message.text.length > 0 || hasExtras;
+  if (!hasAnyContent) return null;
 
   // If we have content blocks, render them in order for proper interleaving
   if (hasContentBlocks) {
@@ -212,7 +230,7 @@ function AssistantBubble({
             case 'text':
               return block.text.length > 0 ? (
                 <div key={`text-${String(i)}`} className="pcw-bubble__text pcw-markdown">
-                  <Markdown>{block.text}</Markdown>
+                  <Markdown>{autolinkUrls(block.text)}</Markdown>
                 </div>
               ) : null;
             case 'widget':
@@ -226,14 +244,17 @@ function AssistantBubble({
                   onInteraction={onInteraction}
                 />
               );
-            case 'tool_calls':
+            case 'tool_calls': {
+              const visibleCalls = block.calls.filter((tc) => !UI_TOOLS.has(tc.toolName));
+              if (visibleCalls.length === 0) return null;
               return (
                 <div key={`tools-${String(i)}`} className="pcw-bubble__extras">
-                  {block.calls.map((tc) => (
-                    <ToolCallCard key={tc.toolId} toolCall={tc} />
+                  {visibleCalls.map((tc) => (
+                    <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
                   ))}
                 </div>
               );
+            }
             case 'ask_user':
               return (
                 <AskUserCard
@@ -311,13 +332,13 @@ function AssistantBubble({
       ))}
       {message.text.length > 0 && (
         <div className="pcw-bubble__text pcw-markdown">
-          <Markdown>{message.text}</Markdown>
+          <Markdown>{autolinkUrls(message.text)}</Markdown>
         </div>
       )}
       {hasExtras && (
         <div className="pcw-bubble__extras">
           {message.toolCalls.map((tc) => (
-            <ToolCallCard key={tc.toolId} toolCall={tc} />
+            <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
           ))}
           {message.kbProposals.map((proposal, idx) => (
             <KBProposalCard key={`${proposal.title}-${String(idx)}`} proposal={proposal} />
@@ -328,9 +349,26 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onAskChoiceSubmit, onProposalSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false, inlineBlockRenderers, dispatch }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onAskChoiceSubmit, onProposalSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false, verboseTools = false, inlineBlockRenderers, dispatch }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+  const [fadingElapsed, setFadingElapsed] = useState<number | null>(null);
+  const wasStreamingRef = useRef(false);
+
+  useEffect(() => {
+    if (isStreaming) {
+      wasStreamingRef.current = true;
+      setFadingElapsed(null);
+    } else if (wasStreamingRef.current && streamStartTime) {
+      const elapsed = Math.floor((Date.now() - streamStartTime) / 1000);
+      wasStreamingRef.current = false;
+      if (elapsed >= 1) {
+        setFadingElapsed(elapsed);
+        const timer = setTimeout(() => setFadingElapsed(null), 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isStreaming, streamStartTime]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -396,6 +434,7 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
                   onAskChoiceSubmit={onAskChoiceSubmit}
                   onProposalSubmit={onProposalSubmit}
                   onConfirmationRespond={onConfirmationRespond}
+                  verboseTools={verboseTools}
                   inlineBlockRenderers={inlineBlockRenderers}
                   dispatch={dispatch}
                 />
@@ -416,6 +455,9 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
         }
       })}
       {isStreaming && <StreamingIndicator startTime={streamStartTime} />}
+      {fadingElapsed !== null && (
+        <div className="pcw-elapsed pcw-elapsed--fading">{String(fadingElapsed)}s</div>
+      )}
     </div>
   );
 }

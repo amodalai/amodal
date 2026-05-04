@@ -83,6 +83,7 @@ export function ConnectionConfigModal({
   // sitting on a stale state until the user closes the popup manually.
   useEffect(() => {
     if (!popup) return;
+    const popupRef = popup;
     function onMessage(event: MessageEvent): void {
       // Same-origin only — Studio's callback runs on the same origin
       // as the parent. Cross-origin messages from the OAuth provider
@@ -90,12 +91,12 @@ export function ConnectionConfigModal({
       if (event.origin !== window.location.origin) return;
       const data: unknown = event.data;
       if (typeof data !== 'object' || data === null) return;
-       
+
       const msg = data as { type?: unknown };
       if (msg.type !== 'amodal:oauth:done') return;
       // Try to close the popup from the parent side (parents have more
       // permissive close access than the popup does for window.close()).
-      try { popup.close(); } catch { /* ignore */ }
+      try { popupRef.close(); } catch { /* ignore */ }
       setPopup(null);
       refetch();
     }

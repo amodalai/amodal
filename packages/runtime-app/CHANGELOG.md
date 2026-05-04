@@ -1,5 +1,78 @@
 # @amodalai/runtime-app
 
+## 0.3.49
+
+### Patch Changes
+
+- @amodalai/types@0.3.49
+- @amodalai/react@0.3.49
+
+## 0.3.48
+
+### Patch Changes
+
+- Updated dependencies [de7d384]
+- Updated dependencies [1249171]
+  - @amodalai/react@0.3.48
+  - @amodalai/types@0.3.48
+
+## 0.3.47
+
+### Patch Changes
+
+- Updated dependencies [ed112ba]
+  - @amodalai/react@0.3.47
+  - @amodalai/types@0.3.47
+
+## 0.3.46
+
+### Patch Changes
+
+- Updated dependencies [4be518d]
+  - @amodalai/react@0.3.46
+  - @amodalai/types@0.3.46
+
+## 0.3.45
+
+### Patch Changes
+
+- Updated dependencies [2589dab]
+- Updated dependencies [87f5214]
+- Updated dependencies [054a9ce]
+  - @amodalai/react@0.3.45
+  - @amodalai/types@0.3.45
+
+## 0.3.44
+
+### Patch Changes
+
+- e99a932: Studio sidebar reorg, dashboard with cost tracking, sessions page, incremental text streaming, markdown fix, CLI port flags
+- Updated dependencies [8909a18]
+- Updated dependencies [e99a932]
+  - @amodalai/react@0.3.44
+  - @amodalai/types@0.3.44
+
+## 0.3.43
+
+### Patch Changes
+
+- @amodalai/types@0.3.43
+- @amodalai/react@0.3.43
+
+## 0.3.42
+
+### Patch Changes
+
+- @amodalai/types@0.3.42
+- @amodalai/react@0.3.42
+
+## 0.3.41
+
+### Patch Changes
+
+- @amodalai/types@0.3.41
+- @amodalai/react@0.3.41
+
 ## 0.3.40
 
 ### Patch Changes

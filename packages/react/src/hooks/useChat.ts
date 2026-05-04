@@ -29,7 +29,7 @@ import type {
   ChatUser,
   SSEEvent,
 } from '../types';
-import { streamChat, getSessionHistory } from '../client/chat-api';
+import { ChatApiError, streamChat, getSessionHistory } from '../client/chat-api';
 import type { WidgetEventBus } from '../events/event-bus';
 import type { WidgetEvent, EntityExtractor } from '../events/types';
 import { useChatStream } from './useChatStream';
@@ -207,7 +207,28 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     if (!resumeSessionId || resumeLoadedRef.current) return;
     resumeLoadedRef.current = true;
     initialMessageDeliveredRef.current = true;
-    loadSession(resumeSessionId);
+
+    const doResume = async (): Promise<void> => {
+      try {
+        const rawToken = authRef.current.getToken?.();
+        const token = (rawToken instanceof Promise ? await rawToken : rawToken) ?? undefined;
+        const detail = await getSessionHistory(serverUrl, resumeSessionId, token);
+        const chatMessages = rehydrateHistory(detail.messages);
+        stream.dispatch({ type: 'LOAD_HISTORY', sessionId: resumeSessionId, messages: chatMessages });
+      } catch (err: unknown) {
+        if (err instanceof ChatApiError && err.status === 404) {
+          // Session was deleted — start fresh, no error shown
+          initialMessageDeliveredRef.current = false;
+          onSessionCreated?.('');
+          return;
+        }
+        stream.dispatch({
+          type: 'STREAM_ERROR',
+          message: err instanceof Error ? err.message : 'Failed to resume session',
+        });
+      }
+    };
+    void doResume();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeSessionId]);
 
@@ -318,6 +339,22 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     [],
   );
 
+  // ---------------------------------------------------------------------
+  // reset — wraps stream.reset to also clear the session-resume +
+  // initialMessage refs and notify the embedder that the persisted
+  // session id is gone. Without this, "New Chat" leaves stale refs
+  // behind and a refresh reloads the old session.
+  // ---------------------------------------------------------------------
+
+  const reset = useCallback(() => {
+    stream.reset();
+    initialMessageSentRef.current = false;
+    initialMessageDeliveredRef.current = false;
+    resumeLoadedRef.current = false;
+    onSessionCreated?.('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only stream.reset / onSessionCreated are referenced; `stream` itself is intentionally stable across renders
+  }, [stream.reset, onSessionCreated]);
+
   return {
     messages: stream.messages,
     send: stream.send,
@@ -326,7 +363,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     activeToolCalls: stream.activeToolCalls,
     session: { id: stream.sessionId },
     error: stream.error,
-    reset: stream.reset,
+    reset,
     eventBus: stream.eventBus,
     submitAskUserResponse,
     submitAskChoiceResponse,

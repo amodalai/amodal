@@ -49,7 +49,15 @@ export function InputBar({ onSend, onStop, disabled, isStreaming, placeholder }:
   const { images, handlePaste, removeImage, clearImages } = useImagePaste();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [shake, setShake] = useState(false);
+
   const handleSend = useCallback(() => {
+    if (isStreaming) {
+      // Brief shake to indicate enter is blocked while streaming
+      setShake(true);
+      setTimeout(() => setShake(false), 400);
+      return;
+    }
     const trimmed = value.trim();
     if (trimmed.length === 0 && images.length === 0) return;
     onSend(trimmed || DEFAULT_IMAGE_PROMPT, images.length > 0 ? images : undefined);
@@ -58,7 +66,7 @@ export function InputBar({ onSend, onStop, disabled, isStreaming, placeholder }:
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [value, images, onSend, clearImages]);
+  }, [value, images, onSend, clearImages, isStreaming]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -98,7 +106,7 @@ export function InputBar({ onSend, onStop, disabled, isStreaming, placeholder }:
       )}
       <textarea
         ref={textareaRef}
-        className="pcw-input__textarea"
+        className={`pcw-input__textarea${shake ? ' pcw-input__shake' : ''}`}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}

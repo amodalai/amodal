@@ -11,6 +11,7 @@
 
 import { createContext, useContext, useEffect, useRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
+import { studioApiUrl } from '../lib/api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,7 +37,7 @@ export interface StudioEventsContextValue {
 // Constants
 // ---------------------------------------------------------------------------
 
-const SSE_ENDPOINT = '/api/events';
+const SSE_ENDPOINT_PATH = '/api/events';
 
 // ---------------------------------------------------------------------------
 // Context
@@ -54,7 +55,7 @@ export function StudioEventsProvider({ children }: { children: ReactNode }) {
   const listenersRef = useRef(new Map<StudioEventType, Set<EventHandler>>());
 
   useEffect(() => {
-    const es = new EventSource(SSE_ENDPOINT);
+    const es = new EventSource(studioApiUrl(SSE_ENDPOINT_PATH));
 
     for (const type of STUDIO_EVENT_TYPES) {
       es.addEventListener(type, (e: MessageEvent) => {

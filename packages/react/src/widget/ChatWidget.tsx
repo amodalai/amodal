@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { WidgetConfig, SSEEvent, InlineBlockRendererRegistry, ChatAction } from '../types';
 import type { InteractionEvent } from '../events/types';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
@@ -32,6 +32,13 @@ function CloseIcon() {
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   );
+}
+
+export interface ChatWidgetHandle {
+  /** Send a message in the current session, as if the user typed it. */
+  sendMessage: (text: string) => void;
+  /** Get the current session ID. */
+  getSessionId: () => string | null;
 }
 
 export type ChatWidgetProps = WidgetConfig & {
@@ -68,7 +75,7 @@ export type ChatWidgetProps = WidgetConfig & {
   onReady?: (handle: { dispatch: (action: ChatAction) => void }) => void;
 };
 
-export function ChatWidget({
+export const ChatWidget = forwardRef<ChatWidgetHandle, ChatWidgetProps>(({
   serverUrl,
   user,
   getToken,
@@ -96,7 +103,7 @@ export function ChatWidget({
   onStateChange,
   inlineBlockRenderers,
   onReady,
-}: ChatWidgetProps) {
+}: ChatWidgetProps, ref: React.ForwardedRef<ChatWidgetHandle>) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [showHistory, setShowHistory] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -148,8 +155,9 @@ export function ChatWidget({
       // chosen text as a regular user turn but can't lock the buttons
       // because we don't own their reducer.
       void send(message);
-       
+
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `send` is stable across renders for this hook
     [],
   );
   const noopLoadSession = useCallback((_sessionId: string) => { /* noop */ }, []);
@@ -158,6 +166,11 @@ export function ChatWidget({
   const submitProposalResponse = customStreamFn ? noopProposal : chatHook.submitProposalResponse;
   const loadSession = customStreamFn ? noopLoadSession : chatHook.loadSession;
   const session = customStreamFn ? { id: directStream.sessionId } : chatHook.session;
+
+  useImperativeHandle(ref, () => ({
+    sendMessage: (text: string) => { send(text); },
+    getSessionId: () => session.id ?? null,
+  }), [send, session.id]);
 
   // Auto-send initialMessage on the customStreamFn path. The default path
   // already handles this inside `useChat`; this catch-up is for embedders
@@ -171,8 +184,6 @@ export function ChatWidget({
     customInitialSentRef.current = true;
     const timer = setTimeout(() => { send(initialMessage); }, 0);
     return () => { clearTimeout(timer); };
-    // Only re-evaluate when initialMessage changes; `send` is stable enough
-    // for our purposes (we guard with the ref).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customStreamFn, initialMessage]);
 
@@ -270,9 +281,11 @@ export function ChatWidget({
             onNewChat={handleNewChat}
             onClose={() => setShowHistory(false)}
             onUpdateTags={history.updateTags}
+            onUpdateTitle={history.updateTitle}
+            onDeleteSession={history.removeSession}
           />
         )}
-        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onAskChoiceSubmit={submitAskChoiceResponse} onProposalSubmit={submitProposalResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} inlineBlockRenderers={inlineBlockRenderers} dispatch={dispatch} />
+        <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onAskChoiceSubmit={submitAskChoiceResponse} onProposalSubmit={submitProposalResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} verboseTools={mergedTheme.verboseTools} inlineBlockRenderers={inlineBlockRenderers} dispatch={dispatch} />
         {error && <div className="pcw-error">{error}</div>}
         {showInput && (
           <InputBar
@@ -328,7 +341,7 @@ export function ChatWidget({
           onUpdateTags={history.updateTags}
         />
       )}
-      <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} inlineBlockRenderers={inlineBlockRenderers} dispatch={dispatch} />
+      <MessageList messages={messages} isStreaming={isStreaming} streamStartTime={streamStartTime} sendMessage={send} customWidgets={customWidgets} onInteraction={handleInteraction} onAskUserSubmit={submitAskUserResponse} onAskChoiceSubmit={submitAskChoiceResponse} onProposalSubmit={submitProposalResponse} onConfirmationRespond={respondToConfirmation} emptyStateText={mergedTheme.emptyStateText} sessionId={session.id ?? undefined} showFeedback={showFeedback} verboseTools={mergedTheme.verboseTools} inlineBlockRenderers={inlineBlockRenderers} dispatch={dispatch} />
       {error && <div className="pcw-error">{error}</div>}
       {showInput && (
         <InputBar
@@ -341,7 +354,8 @@ export function ChatWidget({
       )}
     </div>
   );
-}
+});
+ChatWidget.displayName = 'ChatWidget';
 
 function HistoryIcon() {
   return (

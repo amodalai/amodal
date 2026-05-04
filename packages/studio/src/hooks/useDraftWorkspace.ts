@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DraftFile, PublishResult, PreviewResult } from '@/lib/types';
+import { studioApiUrl } from '@/lib/api';
 import { createBrowserLogger } from '@/lib/browser-logger';
 
 const log = createBrowserLogger('useDraftWorkspace');
@@ -25,10 +26,10 @@ const log = createBrowserLogger('useDraftWorkspace');
 // API route constants
 // ---------------------------------------------------------------------------
 
-const DRAFTS_API = '/api/drafts';
-const DISCARD_API = '/api/discard';
-const PUBLISH_API = '/api/publish';
-const PREVIEW_API = '/api/preview';
+const DRAFTS_API_PATH = '/api/drafts';
+const DISCARD_API_PATH = '/api/discard';
+const PUBLISH_API_PATH = '/api/publish';
+const PREVIEW_API_PATH = '/api/preview';
 
 // ---------------------------------------------------------------------------
 // Error class for fetch failures
@@ -146,7 +147,7 @@ export function useDraftWorkspace(): UseDraftWorkspace {
 
   const listDrafts = useCallback(async (): Promise<void> => {
     await runRequest('listDrafts', async () => {
-      const response = await apiFetch<{ drafts: DraftFile[] }>(DRAFTS_API);
+      const response = await apiFetch<{ drafts: DraftFile[] }>(studioApiUrl(DRAFTS_API_PATH));
       if (mountedRef.current) setDrafts(response.drafts);
       return response.drafts;
     });
@@ -155,7 +156,7 @@ export function useDraftWorkspace(): UseDraftWorkspace {
   const saveDraft = useCallback(
     async (filePath: string, content: string): Promise<void> => {
       const ok = await runRequest('saveDraft', async () => {
-        await apiFetch<unknown>(`${DRAFTS_API}/${encodeURIComponent(filePath)}`, {
+        await apiFetch<unknown>(studioApiUrl(`${DRAFTS_API_PATH}/${encodeURIComponent(filePath)}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content }),
@@ -170,7 +171,7 @@ export function useDraftWorkspace(): UseDraftWorkspace {
   const deleteDraft = useCallback(
     async (filePath: string): Promise<void> => {
       const ok = await runRequest('deleteDraft', async () => {
-        await apiFetch<unknown>(`${DRAFTS_API}/${encodeURIComponent(filePath)}`, {
+        await apiFetch<unknown>(studioApiUrl(`${DRAFTS_API_PATH}/${encodeURIComponent(filePath)}`), {
           method: 'DELETE',
         });
         return true;
@@ -182,7 +183,7 @@ export function useDraftWorkspace(): UseDraftWorkspace {
 
   const discardAll = useCallback(async (): Promise<void> => {
     const ok = await runRequest('discardAll', async () => {
-      await apiFetch<unknown>(DISCARD_API, { method: 'POST' });
+      await apiFetch<unknown>(studioApiUrl(DISCARD_API_PATH), { method: 'POST' });
       return true;
     });
     if (ok) await listDrafts();
@@ -191,7 +192,7 @@ export function useDraftWorkspace(): UseDraftWorkspace {
   const publish = useCallback(
     async (commitMessage: string): Promise<PublishResult | null> => {
       const result = await runRequest('publish', async () =>
-        apiFetch<PublishResult>(PUBLISH_API, {
+        apiFetch<PublishResult>(studioApiUrl(PUBLISH_API_PATH), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ commitMessage }),
@@ -206,7 +207,7 @@ export function useDraftWorkspace(): UseDraftWorkspace {
   const buildPreview = useCallback(
     async (): Promise<PreviewResult | null> =>
       runRequest('buildPreview', async () =>
-        apiFetch<PreviewResult>(PREVIEW_API, { method: 'POST' }),
+        apiFetch<PreviewResult>(studioApiUrl(PREVIEW_API_PATH), { method: 'POST' }),
       ),
     [runRequest],
   );

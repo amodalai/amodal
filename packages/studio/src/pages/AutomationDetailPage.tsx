@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { RunNowButton, ToggleButton } from '@/components/studio/AutomationActions';
 import { AutomationLiveStatus } from '@/components/studio/AutomationLiveStatus';
+import { studioApiUrl } from '@/lib/api';
 import {
   ArrowLeft,
   Clock,
@@ -97,7 +98,7 @@ export function AutomationDetailPage() {
 
   const fetchData = useCallback(() => {
     if (!name) return;
-    fetch(`/api/automations/${encodeURIComponent(name)}`, {
+    fetch(studioApiUrl(`/api/automations/${encodeURIComponent(name)}`), {
       signal: AbortSignal.timeout(5_000),
     })
       .then((r) => {

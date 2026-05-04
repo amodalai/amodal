@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {watch, type FSWatcher} from 'node:fs';
+import {watch, existsSync, readFileSync, type FSWatcher} from 'node:fs';
 import {join} from 'node:path';
 import {loadRepo} from '@amodalai/core';
 import type {AgentBundle} from '@amodalai/core';
@@ -12,13 +12,29 @@ import {log} from '../logger.js';
 
 const DEBOUNCE_MS = 300;
 
+const WATCH_TARGETS = [
+  'amodal.json',
+  'package.json',
+  'skills',
+  'knowledge',
+  'connections',
+  'tools',
+  'evals',
+  'stores',
+  'pages',
+  'automations',
+  '.amodal',
+];
+
 /**
  * Watches agent config directories for changes and reloads the repo.
+ * Also re-reads secrets from .amodal/secrets.env on each reload so
+ * credentials saved during onboarding are picked up without restart.
  */
 export class ConfigWatcher {
   private readonly repoPath: string;
   private readonly onChange: (repo: AgentBundle) => void;
-  private watchers: FSWatcher[] = [];
+  private watchers = new Map<string, FSWatcher>();
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(repoPath: string, onChange: (repo: AgentBundle) => void) {
@@ -27,31 +43,27 @@ export class ConfigWatcher {
   }
 
   start(): void {
-    if (this.watchers.length > 0) {
-      return;
-    }
+    this.refreshWatchers();
+  }
 
-    const targets = [
-      'amodal.json',
-      'skills',
-      'knowledge',
-      'connections',
-      'tools',
-      'evals',
-      'stores',
-      'pages',
-      'automations',
-    ];
-
-    for (const target of targets) {
+  private refreshWatchers(): void {
+    for (const target of WATCH_TARGETS) {
+      if (this.watchers.has(target)) continue;
       const targetPath = join(this.repoPath, target);
       try {
         const w = watch(targetPath, {recursive: true}, (_eventType, _filename) => {
           this.scheduleReload();
         });
-        this.watchers.push(w);
-      } catch {
-        // Directory or file might not exist yet
+        this.watchers.set(target, w);
+        log.debug('watcher_established', {target});
+      } catch (err: unknown) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- fs.watch throws ErrnoException
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === 'ENOENT') {
+          log.debug('watcher_skipped', {target, reason: 'does not exist yet'});
+        } else {
+          throw err;
+        }
       }
     }
   }
@@ -61,10 +73,10 @@ export class ConfigWatcher {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
-    for (const w of this.watchers) {
+    for (const w of this.watchers.values()) {
       w.close();
     }
-    this.watchers = [];
+    this.watchers.clear();
   }
 
   private scheduleReload(): void {
@@ -80,12 +92,38 @@ export class ConfigWatcher {
 
   private async reload(): Promise<void> {
     try {
+      // Re-read secrets so credentials saved during onboarding are available
+      this.loadSecrets();
+
       const repo = await loadRepo({localPath: this.repoPath});
       this.onChange(repo);
+
+      // Watch any directories that were created since the last reload
+      this.refreshWatchers();
+
       log.debug('Config reloaded', 'config-watcher');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error(`Reload failed: ${msg}`, 'config-watcher');
+    }
+  }
+
+  private loadSecrets(): void {
+    const file = join(this.repoPath, '.amodal', 'secrets.env');
+    if (!existsSync(file)) return;
+    try {
+      const content = readFileSync(file, 'utf-8');
+      let count = 0;
+      for (const line of content.split('\n')) {
+        const eq = line.indexOf('=');
+        if (eq <= 0) continue;
+        const k = line.slice(0, eq).trim();
+        const v = line.slice(eq + 1);
+        if (k) { process.env[k] = v; count++; }
+      }
+      if (count > 0) log.debug('secrets_reloaded', {count});
+    } catch (err: unknown) {
+      log.debug('secrets_load_error', {file, error: err instanceof Error ? err.message : String(err)});
     }
   }
 }

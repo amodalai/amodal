@@ -1,5 +1,32 @@
 # @amodalai/types
 
+## 0.3.49
+
+## 0.3.48
+
+### Patch Changes
+
+- 1249171: Add FsBackend abstraction with local and HTTP implementations for ctx.fs in custom tools
+
+## 0.3.47
+
+## 0.3.46
+
+## 0.3.45
+
+### Patch Changes
+
+- 2589dab: Onboarding polish: template card previews, scrolling wizard, bare URL auto-linking, dead SSE cleanup, admin agent file write fix
+- 87f5214: Onboarding wizard, Studio proxy refactor, hot-reload improvements, admin agent tools
+
+## 0.3.44
+
+## 0.3.43
+
+## 0.3.42
+
+## 0.3.41
+
 ## 0.3.40
 
 ## 0.3.39

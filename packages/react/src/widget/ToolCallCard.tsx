@@ -10,7 +10,231 @@ import { FormattedText } from './FormattedText';
 
 interface ToolCallCardProps {
   toolCall: ToolCallInfo;
+  verbose?: boolean;
 }
+
+/**
+ * Resolve the user-facing label for a tool call. Prefers the curated
+ * `runningLabel` / `completedLabel` from the tool definition (Phase I.1 —
+ * dynamic per-action copy with `{{paramName}}` placeholders pre-substituted
+ * server-side), falling back to the raw tool name when none was declared.
+ */
+function labelFor(toolCall: ToolCallInfo): string {
+  if (toolCall.status === 'running') {
+    return toolCall.runningLabel ?? toolCall.toolName;
+  }
+  return toolCall.completedLabel ?? toolCall.runningLabel ?? toolCall.toolName;
+}
+
+// ---------------------------------------------------------------------------
+// Status icon helper
+// ---------------------------------------------------------------------------
+
+function StatusIcon({ status }: { status: string }) {
+  if (status === 'running') {
+    return <span className="pcw-tc-icon pcw-tc-icon--running" />;
+  }
+  if (status === 'error') {
+    return <span className="pcw-tc-icon pcw-tc-icon--error">{'\u2717'}</span>;
+  }
+  return <span className="pcw-tc-icon pcw-tc-icon--success">{'\u2713'}</span>;
+}
+
+// ---------------------------------------------------------------------------
+// Compact mode — slim single-line rows
+// ---------------------------------------------------------------------------
+
+function CompactToolCall({ toolCall }: { toolCall: ToolCallInfo }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasDetails = Boolean(toolCall.parameters) || Boolean(toolCall.error);
+
+  return (
+    <div className="pcw-tc-compact">
+      <button
+        type="button"
+        className={`pcw-tc-compact__row${hasDetails ? '' : ' pcw-tc-compact__row--static'}`}
+        onClick={() => { if (hasDetails) setExpanded(!expanded); }}
+      >
+        <StatusIcon status={toolCall.status} />
+        <span className="pcw-tc-compact__name">{labelFor(toolCall)}</span>
+        {toolCall.error && <span className="pcw-tc-compact__error-hint">failed</span>}
+      </button>
+      {expanded && (
+        <div className="pcw-tc-compact__details">
+          {toolCall.error && <pre className="pcw-tc-compact__error">{toolCall.error}</pre>}
+          {toolCall.parameters && (
+            <pre className="pcw-tc-compact__params">{JSON.stringify(toolCall.parameters, null, 2)}</pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Compact dispatch — shows subagent activity inline
+// ---------------------------------------------------------------------------
+
+function CompactDispatch({ toolCall }: { toolCall: ToolCallInfo }) {
+  const [expanded, setExpanded] = useState(false);
+  const segments = buildInlineSegments(toolCall.subagentEvents);
+  const toolCallCount = segments.filter((s) => s.kind === 'tool' && s.event.eventType === 'tool_call_end').length;
+  const isRunning = toolCall.status === 'running';
+
+  return (
+    <div className="pcw-tc-compact">
+      <button
+        type="button"
+        className="pcw-tc-compact__row"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <StatusIcon status={toolCall.status} />
+        <span className="pcw-tc-compact__name">
+          {isRunning ? 'Working...' : `Completed${toolCallCount > 0 ? ` (${String(toolCallCount)} steps)` : ''}`}
+        </span>
+      </button>
+      {isRunning && segments.length > 0 && (
+        <div className="pcw-tc-compact__activity">
+          {segments.map((seg, i) =>
+            seg.kind === 'text' ? (
+              <FormattedText key={i} text={seg.text} className="pcw-tc-compact__thought" />
+            ) : (
+              <div key={i} className="pcw-tc-compact__substep">
+                <StatusIcon status={seg.event.error ? 'error' : seg.event.eventType === 'tool_call_end' ? 'success' : 'running'} />
+                <span className="pcw-tc-compact__name">{seg.event.toolName ?? 'unknown'}</span>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+      {expanded && !isRunning && segments.length > 0 && (
+        <div className="pcw-tc-compact__activity">
+          {segments.map((seg, i) =>
+            seg.kind === 'text' ? (
+              <FormattedText key={i} text={seg.text} className="pcw-tc-compact__thought" />
+            ) : (
+              <SubagentEventRow key={i} event={seg.event} />
+            ),
+          )}
+        </div>
+      )}
+      {toolCall.error && <pre className="pcw-tc-compact__error">{toolCall.error}</pre>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Verbose mode — full box UI (original design)
+// ---------------------------------------------------------------------------
+
+function VerboseToolCall({ toolCall }: { toolCall: ToolCallInfo }) {
+  const [expanded, setExpanded] = useState(false);
+  const statusClass = `pcw-tool-call__status pcw-tool-call__status--${toolCall.status}`;
+
+  const label = labelFor(toolCall);
+  const summary = toolCall.duration_ms
+    ? `${label} (${String(toolCall.duration_ms)}ms)`
+    : label;
+
+  return (
+    <div className="pcw-tool-call">
+      <button
+        type="button"
+        className="pcw-tool-call__header"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span className="pcw-tool-call__chevron">{expanded ? '\u25BC' : '\u25B6'}</span>
+        <span className="pcw-tool-call__name">{summary}</span>
+        <span className={statusClass}>{toolCall.status}</span>
+      </button>
+      {expanded && toolCall.parameters && (
+        <pre className="pcw-tool-call__details">
+          {JSON.stringify(toolCall.parameters, null, 2)}
+        </pre>
+      )}
+      {toolCall.error && <p className="pcw-tool-call__error">{toolCall.error}</p>}
+    </div>
+  );
+}
+
+function VerboseDispatch({ toolCall }: { toolCall: ToolCallInfo }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const statusClass = `pcw-tool-call__status pcw-tool-call__status--${toolCall.status}`;
+
+  const summary = toolCall.duration_ms
+    ? `dispatch (${String(toolCall.duration_ms)}ms)`
+    : 'dispatch';
+
+  const completeEvent = toolCall.subagentEvents?.find(
+    (e) => e.eventType === 'complete',
+  );
+
+  const segments = buildInlineSegments(toolCall.subagentEvents);
+  const hasActivity = segments.length > 0;
+  const toolCallCount = segments.filter((s) => s.kind === 'tool' && s.event.eventType === 'tool_call_end').length;
+  const hasDetails = hasActivity || Boolean(completeEvent?.text);
+
+  return (
+    <div className="pcw-tool-call">
+      <div className="pcw-tool-call__header pcw-tool-call__header--static">
+        <span className="pcw-tool-call__name">{summary}</span>
+        <span className={statusClass}>{toolCall.status}</span>
+      </div>
+      {toolCall.parameters && <DispatchArgs params={toolCall.parameters} />}
+      {toolCall.status === 'running' && hasActivity && (
+        <div className="pcw-dispatch-streaming">
+          {segments.map((seg, i) =>
+            seg.kind === 'text' ? (
+              <FormattedText key={i} text={seg.text} />
+            ) : (
+              <InlineToolRow key={i} event={seg.event} />
+            ),
+          )}
+        </div>
+      )}
+      {toolCall.status !== 'running' && hasDetails && (
+        <div className="pcw-dispatch-details">
+          <button
+            type="button"
+            className="pcw-dispatch-details__toggle"
+            onClick={() => setDetailsOpen(!detailsOpen)}
+          >
+            <span className="pcw-tool-call__chevron">{detailsOpen ? '\u25BC' : '\u25B6'}</span>
+            <span>details</span>
+            {toolCallCount > 0 && (
+              <span className="pcw-dispatch-details__count">
+                {String(toolCallCount)} tool calls
+              </span>
+            )}
+          </button>
+          {detailsOpen && (
+            <div className="pcw-dispatch-details__body">
+              {completeEvent?.text && (
+                <FormattedText text={completeEvent.text} className="pcw-tool-call__subagent-summary" />
+              )}
+              {segments.length > 0 && (
+                <div className="pcw-tool-call__subagent">
+                  {segments.map((seg, i) =>
+                    seg.kind === 'text' ? (
+                      <FormattedText key={i} text={seg.text} className="pcw-dispatch-inline-text" />
+                    ) : (
+                      <SubagentEventRow key={i} event={seg.event} />
+                    ),
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {toolCall.error && <p className="pcw-tool-call__error">{toolCall.error}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers (used by both modes)
+// ---------------------------------------------------------------------------
 
 function SubagentEventRow({ event }: { event: SubagentEventInfo }) {
   const [expanded, setExpanded] = useState(false);
@@ -24,10 +248,10 @@ function SubagentEventRow({ event }: { event: SubagentEventInfo }) {
         onClick={() => { if (hasDetail) setExpanded(!expanded); }}
       >
         {hasDetail && (
-          <span className="pcw-subagent-row__chevron">{expanded ? '▼' : '▶'}</span>
+          <span className="pcw-subagent-row__chevron">{expanded ? '\u25BC' : '\u25B6'}</span>
         )}
         <span className={`pcw-subagent-row__icon${event.error ? ' pcw-subagent-row__icon--error' : ''}`}>
-          {event.error ? '✗' : '✓'}
+          {event.error ? '\u2717' : '\u2713'}
         </span>
         <span className="pcw-subagent-row__name">{event.toolName ?? 'unknown'}</span>
       </button>
@@ -44,7 +268,6 @@ function SubagentEventRow({ event }: { event: SubagentEventInfo }) {
   );
 }
 
-/** Format dispatch parameters into a readable args summary. */
 function DispatchArgs({ params }: { params: Record<string, unknown> }) {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dispatch params from server
   const subagent = params['subagent'] as string | undefined;
@@ -101,14 +324,15 @@ function DispatchArgs({ params }: { params: Record<string, unknown> }) {
   );
 }
 
-/**
- * Collapse consecutive thought events into text blocks, keeping tool call
- * events inline between them. Returns an ordered list of render segments.
- */
 type InlineSegment =
   | { kind: 'text'; text: string }
   | { kind: 'tool'; event: SubagentEventInfo };
 
+/**
+ * Collapse consecutive thought events into text blocks, keeping tool call
+ * events inline between them. 'complete' and 'error' events are skipped —
+ * they're handled by the caller separately.
+ */
 function buildInlineSegments(events: SubagentEventInfo[] | undefined): InlineSegment[] {
   if (!events || events.length === 0) return [];
   const segments: InlineSegment[] = [];
@@ -123,7 +347,6 @@ function buildInlineSegments(events: SubagentEventInfo[] | undefined): InlineSeg
       }
       segments.push({ kind: 'tool', event: e });
     }
-    // skip 'complete' and 'error' — handled separately
   }
   if (pendingText) {
     segments.push({ kind: 'text', text: pendingText });
@@ -131,10 +354,9 @@ function buildInlineSegments(events: SubagentEventInfo[] | undefined): InlineSeg
   return segments;
 }
 
-/** Render an inline tool call row (for running subagent events). */
 function InlineToolRow({ event }: { event: SubagentEventInfo }) {
   const isEnd = event.eventType === 'tool_call_end';
-  const icon = event.error ? '✗' : isEnd ? '✓' : '⦿';
+  const icon = event.error ? '\u2717' : isEnd ? '\u2713' : '\u29BF';
   const iconClass = event.error
     ? 'pcw-subagent-row__icon--error'
     : isEnd
@@ -148,224 +370,17 @@ function InlineToolRow({ event }: { event: SubagentEventInfo }) {
   );
 }
 
-function DispatchToolCallCard({ toolCall }: ToolCallCardProps) {
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const statusClass = `pcw-tool-call__status pcw-tool-call__status--${toolCall.status}`;
+// ---------------------------------------------------------------------------
+// Main export — routes to compact or verbose based on prop
+// ---------------------------------------------------------------------------
 
-  const summary = toolCall.duration_ms
-    ? `dispatch (${String(toolCall.duration_ms)}ms)`
-    : 'dispatch';
-
-  const completeEvent = toolCall.subagentEvents?.find(
-    (e) => e.eventType === 'complete',
-  );
-
-  const segments = buildInlineSegments(toolCall.subagentEvents);
-  const hasActivity = segments.length > 0;
-  const toolCallCount = segments.filter((s) => s.kind === 'tool' && s.event.eventType === 'tool_call_end').length;
-  const hasDetails = hasActivity || Boolean(completeEvent?.text);
-
-  return (
-    <div className="pcw-tool-call">
-      <div className="pcw-tool-call__header pcw-tool-call__header--static">
-        <span className="pcw-tool-call__name">{summary}</span>
-        <span className={statusClass}>{toolCall.status}</span>
-      </div>
-      {toolCall.parameters && <DispatchArgs params={toolCall.parameters} />}
-      {toolCall.status === 'running' && hasActivity && (
-        <div className="pcw-dispatch-streaming">
-          {segments.map((seg, i) =>
-            seg.kind === 'text' ? (
-              <FormattedText key={i} text={seg.text} />
-            ) : (
-              <InlineToolRow key={i} event={seg.event} />
-            ),
-          )}
-        </div>
-      )}
-      {toolCall.status !== 'running' && hasDetails && (
-        <div className="pcw-dispatch-details">
-          <button
-            type="button"
-            className="pcw-dispatch-details__toggle"
-            onClick={() => setDetailsOpen(!detailsOpen)}
-          >
-            <span className="pcw-tool-call__chevron">{detailsOpen ? '▼' : '▶'}</span>
-            <span>details</span>
-            {toolCallCount > 0 && (
-              <span className="pcw-dispatch-details__count">
-                {String(toolCallCount)} tool calls
-              </span>
-            )}
-          </button>
-          {detailsOpen && (
-            <div className="pcw-dispatch-details__body">
-              {completeEvent?.text && (
-                <FormattedText text={completeEvent.text} className="pcw-tool-call__subagent-summary" />
-              )}
-              {segments.length > 0 && (
-                <div className="pcw-tool-call__subagent">
-                  {segments.map((seg, i) =>
-                    seg.kind === 'text' ? (
-                      <FormattedText key={i} text={seg.text} className="pcw-dispatch-inline-text" />
-                    ) : (
-                      <SubagentEventRow key={i} event={seg.event} />
-                    ),
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-      {toolCall.error && <p className="pcw-tool-call__error">{toolCall.error}</p>}
-    </div>
-  );
-}
-
-export function ToolCallCard({ toolCall }: ToolCallCardProps) {
-  const [expanded, setExpanded] = useState(false);
-
-  // Use the specialized layout for dispatch tool calls
+export function ToolCallCard({ toolCall, verbose = false }: ToolCallCardProps) {
   if (toolCall.toolName === 'dispatch') {
-    return <DispatchToolCallCard toolCall={toolCall} />;
+    return verbose
+      ? <VerboseDispatch toolCall={toolCall} />
+      : <CompactDispatch toolCall={toolCall} />;
   }
-  const statusClass = `pcw-tool-call__status pcw-tool-call__status--${toolCall.status}`;
-
-  // Prefer the friendly running/completed labels when the tool definition
-  // provides them. Fall back to the raw tool name so tools that haven't
-  // declared labels keep working unchanged.
-  const friendlyLabel =
-    toolCall.status === 'running'
-      ? toolCall.runningLabel ?? toolCall.toolName
-      : (toolCall.completedLabel ?? toolCall.runningLabel ?? toolCall.toolName);
-
-  const summary = toolCall.duration_ms
-    ? `${friendlyLabel} (${String(toolCall.duration_ms)}ms)`
-    : friendlyLabel;
-
-  // Build timeline entries: arguments → (log) → result/error. Each
-  // entry renders as a small bullet on a vertical rail when expanded;
-  // no background panel, just indented text.
-  const hasArgs = toolCall.parameters && Object.keys(toolCall.parameters).length > 0;
-  const timelineEntries: Array<{label: string; data?: string; tone?: 'error'}> = [];
-  if (hasArgs) {
-    timelineEntries.push({label: 'Called', data: formatJson(toolCall.parameters)});
-  } else {
-    timelineEntries.push({label: 'Called'});
-  }
-  if (toolCall.logMessage) {
-    timelineEntries.push({label: 'Logged', data: toolCall.logMessage});
-  }
-  if (toolCall.error) {
-    timelineEntries.push({label: 'Errored', data: toolCall.error, tone: 'error'});
-  } else if (toolCall.status === 'success' && toolCall.result !== undefined) {
-    timelineEntries.push({label: 'Returned', data: formatResult(toolCall.result)});
-  }
-
-  return (
-    <div className="pcw-tool-call">
-      <button
-        type="button"
-        className="pcw-tool-call__header"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <span className={statusClass} aria-label={toolCall.status}>
-          <StatusIcon status={toolCall.status} />
-        </span>
-        <span className="pcw-tool-call__name">{summary}</span>
-        <span className="pcw-tool-call__chevron" aria-hidden="true">
-          {expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-        </span>
-      </button>
-      {expanded && (
-        <ol className="pcw-tool-call__timeline">
-          {timelineEntries.map((entry, i) => (
-            <li
-              key={i}
-              className={`pcw-tool-call__timeline-event${entry.tone === 'error' ? ' pcw-tool-call__timeline-event--error' : ''}`}
-            >
-              <span className="pcw-tool-call__timeline-label">{entry.label}</span>
-              {entry.data && (
-                <pre className="pcw-tool-call__timeline-data">{entry.data}</pre>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
-
-function formatJson(value: Record<string, unknown>): string {
-  return JSON.stringify(value, null, 2);
-}
-
-function formatResult(value: unknown): string {
-  if (typeof value === 'string') return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Icons (inline SVG — Lucide paths, MIT-licensed)
-//
-// Inline so @amodalai/react stays dependency-light. All sized via the
-// containing `<span>` font-size + currentColor so the icons inherit
-// alignment and color from CSS instead of hardcoded pixel values.
-// ---------------------------------------------------------------------------
-
-function ChevronRightIcon() {
-  // Filled right-pointing triangle (matches the ▸ glyph). Closed
-  // path with currentColor fill so it inherits the wrapper opacity.
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M9 6 l6 6 -6 6 z" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon() {
-  // Filled down-pointing triangle — same family as the right one.
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M6 9 l6 6 6 -6 z" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-function XIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
-    </svg>
-  );
-}
-
-function RunningDotIcon() {
-  // Pulsing filled circle for in-flight calls. The pulse animation
-  // lives in widget.css so it can be toggled by prefers-reduced-motion.
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <circle cx="12" cy="12" r="5" />
-    </svg>
-  );
-}
-
-function StatusIcon({ status }: { status: 'running' | 'success' | 'error' }) {
-  if (status === 'success') return <CheckIcon />;
-  if (status === 'error') return <XIcon />;
-  return <RunningDotIcon />;
+  return verbose
+    ? <VerboseToolCall toolCall={toolCall} />
+    : <CompactToolCall toolCall={toolCall} />;
 }

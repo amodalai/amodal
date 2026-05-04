@@ -6,6 +6,7 @@
 
 import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
 import { CheckCircle2, XCircle, FlaskConical, Loader2, ChevronDown } from 'lucide-react';
+import { runtimeApiUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
@@ -118,7 +119,6 @@ function gradientColor(value: number, min: number, max: number): string {
 /* ------------------------------------------------------------------ */
 
 export function streamEvalRun(
-  runtimeUrl: string,
   evalNames: string[],
   onEvent: (event: Record<string, unknown>) => void,
   model?: { provider: string; model: string },
@@ -133,7 +133,7 @@ export function streamEvalRun(
 
   const promise = (async () => {
     try {
-      const resp = await fetch(`${runtimeUrl}/api/evals/run`, {
+      const resp = await fetch(runtimeApiUrl('/api/evals/run'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ evalNames, ...(model ? { model } : {}) }),
@@ -177,7 +177,6 @@ export function streamEvalRun(
 }
 
 export async function runSingleModelEval(
-  runtimeUrl: string,
   evalName: string,
   model: AvailableModel,
   timeoutMs?: number,
@@ -198,7 +197,6 @@ export async function runSingleModelEval(
     };
 
     const { promise, abort } = streamEvalRun(
-      runtimeUrl,
       [evalName],
       (event) => {
         const type = String(event['type'] ?? '');
@@ -468,7 +466,6 @@ export function EvalCard({
   hideModelSelector,
   autoRunTrigger,
   expandOverride,
-  runtimeUrl,
 }: {
   suite: EvalSuite;
   models: AvailableModel[];
@@ -476,7 +473,6 @@ export function EvalCard({
   hideModelSelector?: boolean;
   autoRunTrigger?: number;
   expandOverride?: boolean | null;
-  runtimeUrl: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const lastAutoRun = useRef(0);
@@ -531,7 +527,7 @@ export function EvalCard({
       setCurrentRunningModel(model);
       setRunPhase('querying');
       setRunStartTime(Date.now());
-      const r = await runSingleModelEval(runtimeUrl, suite.name, model, timeout * 1000, () => {
+      const r = await runSingleModelEval(suite.name, model, timeout * 1000, () => {
         setRunPhase('judging');
         setRunStartTime(Date.now());
       });
@@ -540,7 +536,7 @@ export function EvalCard({
 
     setCurrentRunningModel(null);
     setIsRunning(false);
-  }, [suite.name, timeout, models, selectedModels, runtimeUrl]);
+  }, [suite.name, timeout, models, selectedModels]);
 
   // Auto-run when triggered by parent (e.g., Run All)
   useEffect(() => {

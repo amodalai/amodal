@@ -11,6 +11,7 @@
 
 import { saveEvalRun } from './eval-queries';
 import { parseEvalMarkdown } from './eval-parser';
+import { runtimeApiUrl } from './api';
 import { logger } from './logger';
 import { StudioError } from './errors';
 
@@ -65,17 +66,17 @@ const FETCH_TIMEOUT_MS = 5_000;
  * record pass/fail, and persist the run to Postgres.
  *
  * @param evalName — the eval file name (without .md extension)
- * @param runtimeUrl — the runtime URL to fetch the eval from and run against
+ * @param _runtimeUrl — deprecated, runtime calls now go through the Studio server proxy
  * @param agentId — the agent ID to scope the run to
  * @returns the new run ID
  */
-export async function runEvalSuite(evalName: string, runtimeUrl: string, agentId: string): Promise<string> {
+export async function runEvalSuite(evalName: string, _runtimeUrl: string, agentId: string): Promise<string> {
 
   // Fetch the eval file from the runtime
   const filePath = `evals/${evalName}.md`;
   let fileContent: string;
   try {
-    const res = await fetch(`${runtimeUrl}/api/files/${encodeURIComponent(filePath)}`, {
+    const res = await fetch(runtimeApiUrl(`/api/files/${encodeURIComponent(filePath)}`), {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) {
@@ -105,7 +106,7 @@ export async function runEvalSuite(evalName: string, runtimeUrl: string, agentId
   for (const testCase of cases) {
     const caseStart = Date.now();
     try {
-      const res = await fetch(`${runtimeUrl}/chat`, {
+      const res = await fetch(runtimeApiUrl('/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: testCase.input }),
