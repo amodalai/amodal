@@ -1,5 +1,102 @@
 # @amodalai/runtime
 
+## 0.3.50
+
+### Patch Changes
+
+- 1a0732b: Plumb marketplace card thumbnails (`imageUrl`) end-to-end so the chat-inline preview and the create-flow detail view both render the image when platform-api ships one.
+  - `@amodalai/types` — `AgentCard` gains `imageUrl?: string` and makes `thumbnailConversation?` optional. The marketplace image is the canonical visual; the conversation snippet stays as a fallback for self-hosted/legacy templates.
+  - `@amodalai/runtime` — `SSEShowPreviewEvent.card` mirror gains `imageUrl?` so the inline event carries the URL through unchanged. Drive-by: removed a duplicate `SSEShowPreviewEvent` declaration left over from a prior auto-merge.
+  - `@amodalai/react` — `AgentCardInline` mirror gains `imageUrl?`. `<AgentCardInlinePreview>` renders the image as a small thumbnail when set (180w × 120h, 3:2 aspect — sits inside chat without dominating). The empty `__convo` div is now hidden when there are no thumbnail turns.
+  - `@amodalai/studio` — `useTemplateCatalog` builds the agent card from platform-api fields including `cardImageUrl` (mapped to `card.imageUrl`); also synthesizes a partial `detail` from `longDescription` so the detail view renders real copy instead of a placeholder. `<AgentCard>` (gallery) renders the image as a 3:2 hero when present, falling back to the existing conversation block. `<DetailView>` (`CreateFlowPage`) leads with a hero image when set, plus shows the tagline as a subheading. `<PickerCard>` shows the image in place of the snippet block when present. Backend `template-resolve` route now reads `cardImageUrl` and `cardPlatforms` from platform-api and maps them onto the local `card` shape; the legacy `displayName` field still falls back to `name` so the inline preview no longer renders the slug as the title.
+
+- 1a0732b: Add a "Getting started" tab, runtime OAuth broker, and per-connection configure pages.
+
+  **Getting started tab** (`/agents/:agentId/getting-started`) — universal home for first-run agent configuration. Two render modes:
+  - **Templated agent** (`template.json` exists in the repo) — slot-by-slot list with the curated providers from each `template.connections[]` slot.
+  - **No template** — flat list of every connection package the agent has installed.
+
+  Each row shows the package's `amodal.displayName` / icon / description, declared `auth.envVars` with per-var ✓/○, and a Connect button when OAuth is available. Backed by `GET /api/getting-started`.
+
+  **Runtime-hosted OAuth broker** (`/api/oauth/{start,callback}`). When a package declares `amodal.oauth` and the user has set `<APPKEY>_CLIENT_ID` / `_CLIENT_SECRET` in env, the runtime brokers the redirect dance on the localhost loopback — no tunnel, no cloud dependency. Tokens persist to `<repoPath>/.amodal/secrets.env`, get pushed into `process.env`, and reload on every startup.
+
+  **Per-connection configure page** (`/agents/:agentId/connections/:packageName`). Reached by clicking "Configure" on a Getting Started row. Renders different forms based on `auth.type`:
+  - `bearer` / `api-key` → password input per envVar with description
+  - `basic` → username + password (when declared)
+  - OAuth-supported → Connect button + scopes preview alongside paste fallback
+  - Anything else → generic per-envVar paste form
+
+  Saves go through new `POST /api/secrets/:name` (writes to `secrets.env` + `process.env`). Backed by `GET /api/connections/:packageName` which returns the full `amodal.auth` block with `authType` + per-var status.
+
+  Cloud uses the platform-api's broker instead — same protocol, different home.
+
+- 1a0732b: Admin agent tools for the conversational setup flow (Onboarding v4 — Phase 4).
+
+  **Five new admin-only tools** (gated by `sessionType === 'admin'`):
+  - `show_preview` — emits an inline `show_preview` SSE event with a curated agent-card snippet. The admin agent leads with this when recommending a template.
+  - `ask_choice` — emits a button-row question; the user's click posts the chosen value as the next user turn (no server round-trip).
+  - `search_packages` — wraps `npm` registry search (`/-/v1/search`) for keyword-based discovery.
+  - `install_package` — adds the package to `amodal.json#packages` and runs `npm install` in the agent repo.
+  - `write_skill` — scaffolds a `skills/<name>/SKILL.md` with frontmatter, trigger, and methodology.
+
+  **SSE event additions:**
+  - `@amodalai/types` — `SSEEventType.AskChoice`, `SSEEventType.ShowPreview` plus matching event interfaces.
+  - `@amodalai/runtime` — runtime mirrors the new event types and routes them through `ai-stream.ts`.
+  - `@amodalai/react` — widget renders `show_preview` events as inline `<AgentCardInlinePreview>` cards and `ask_choice` events as `<AskChoiceCard>` button rows. New `submitAskChoiceResponse` callback on `useChat` posts the chosen value as the next user turn.
+
+  **Tool-context plumbing:**
+  - New `ctx.emit(event)` method on `ToolContext` lets tools push inline SSE events. Per-call `inlineEvents` sink is drained by the executing state and emitted before the `tool_call_result` event so the chat UI can render the card / buttons above the result block.
+
+- 1a0732b: Lifecycle + power-user surfaces (Onboarding v4 — Phase 5).
+
+  **View config toggle.** New toggle in `SystemPage` (localStorage-backed, off by default). When on, the sidebar surfaces the GettingStarted form and per-connection configure pages — the v4 home-first flow stays the user-facing default; ISVs and power users flip the bit when they need the underlying config UI back.
+
+  **Template update notifications.**
+  - New runtime endpoint `GET /api/package-updates` walks `amodal.json#packages`, reads each installed version from `node_modules/<pkg>/package.json`, runs `npm view <pkg> version` for the latest, and returns `{name, installed, latest, hasUpdate}` per package. Results are cached in-memory for 24 hours.
+  - New `POST /api/package-updates/install` runs `npm install <pkg>@latest` and invalidates the cache.
+  - New `GET /api/package-card?name=…` reads the installed `node_modules/<pkg>/card/card.json` for the diff page.
+  - Studio polls on home-screen mount via `usePackageUpdates`. When any package has an update, an inline banner above the popular-agents row links to the diff page.
+
+  **See-what-changed page** at `/agents/:agentId/updates/:slug`. Shows the package's currently-installed `card.json`, the version delta (installed → latest), and an "Update" button that POSTs the install. After install, the user is told to reload Studio to see the new card.
+
+- 1a0732b: OAuth polish — inline Connect buttons in chat (Onboarding v4 — Phase 6).
+
+  **`start_oauth_connection` admin tool.** Renders an inline Connect button in the chat for an installed connection package; click → `GET /api/oauth/start?package=<name>` (the existing OSS broker on localhost, or the new platform-api shim on cloud) → opens the provider's authorize URL in a popup. The user finishes auth without leaving chat.
+  - New `SSEEventType.StartOAuth` / `SSEStartOAuthEvent` in `@amodalai/types` and the runtime mirror, plus an `ai-stream.ts` mapping.
+  - Routed through `ToolInlineEvent` so the existing `ctx.emit` plumbing in the executing state surfaces it before each `tool_call_result`.
+  - `@amodalai/react` mirrors the type, adds a `StartOAuthBlock` content block + reducer case, and renders the new `<StartOAuthCard>` widget. Existing CSS variables match the rest of the chat surface.
+  - Admin agent prompt updated to mention `start_oauth_connection` and explicitly say "never tell the user to visit `/getting-started`."
+
+- 1a0732b: Add `internal` flag for plumbing tool calls.
+
+  Tools can now declare `"internal": true` in `tool.json` to mark themselves as background plumbing the user shouldn't see by default (state I/O, version checks, internal coordination). The runtime stamps the flag onto `tool_call_start` SSE events; the React widget hides these calls from the chat unless the embedder enables `verboseTools` on the chat theme.
+
+  This keeps the chat surface honest — users see the meaningful steps (`Connected HubSpot`, `Added Slack`, `Tested the connection`) while bookkeeping calls (`read_setup_state`, `update_setup_state`) stay out of the way. Toggling `verboseTools` brings the full machinery back for debugging or demo use.
+  - `@amodalai/types` — `LoadedTool.internal`, `SSEToolCallStartEvent.internal`.
+  - `@amodalai/core` — `ToolJsonSchema.internal: z.boolean().optional()`.
+  - `@amodalai/runtime` — `ToolDefinition.internal`, propagation through `custom-tool-adapter` and `buildToolCallStartEvent`.
+  - `@amodalai/react` — `ToolCallInfo.internal`, reducer pass-through, `MessageList` filter on `verboseTools || !tc.internal`.
+
+  Anything that does _work_ (installs, OAuth, external API calls, file modifications) should leave the flag unset so users can see it. Tool authors only mark internal when the call is purely about coordination and the user-visible signal is conveyed elsewhere.
+
+- 1a0732b: Unify `executeTool` and `executeToolWithEvents` into a single function.
+
+  The two functions differed only in whether they captured inline SSE events emitted via `ctx.emit()`. The wrapper version (`executeTool`) was unused outside its own definition, but provided a type shape that mismatched the `preExecutionCache`. During recent merges from main this caused a footgun where one branch called `executeTool` while the other imported `executeToolWithEvents`, types compiled, runtime broke.
+
+  `executeTool` now always returns `{output, inlineEvents}`. Callers that don't care about events destructure `{output}`; the inline events array is empty when the tool didn't emit. One shape, one function — no caller has to choose.
+
+  This also simplifies the foundation for intent executors (regex-driven shortcuts that bypass the LLM) which need to capture inline events tools emit when running them directly.
+
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+  - @amodalai/types@0.3.50
+  - @amodalai/core@0.3.50
+  - @amodalai/db@0.3.50
+
 ## 0.3.49
 
 ### Patch Changes
