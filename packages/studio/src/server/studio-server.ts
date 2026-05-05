@@ -58,6 +58,8 @@ export { setRuntimeResolver } from '../lib/runtime-client.js';
 export type { RuntimeResolver, ResolvedRuntime } from '../lib/runtime-client.js';
 export { setPreviewHandler } from './routes/preview.js';
 export type { PreviewHandler } from './routes/preview.js';
+export { setStudioDbProvider } from '../lib/db.js';
+export { disableEventBridge } from '../lib/event-bridge.js';
 
 // ---------------------------------------------------------------------------
 // App factory

@@ -8,9 +8,10 @@ import { Hono } from 'hono';
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { getDb, getSetupState, markComplete } from '@amodalai/db';
+import { getSetupState, markComplete } from '@amodalai/db';
 
 import { getAgentId } from '../../lib/config.js';
+import { getStudioDb } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
 
 const REPO_PATH_ENV_KEY = 'REPO_PATH';
@@ -48,7 +49,7 @@ repoStateRoutes.get('/api/repo-state', async (c) => {
   let setupInProgress = false;
   const agentId = getAgentId();
   try {
-    const db = getDb();
+    const db = await getStudioDb();
     const row = await getSetupState(db, agentId, DEFAULT_SCOPE_ID);
 
     // Auto-recovery: amodal.json on disk + setup_state row exists with
