@@ -43,6 +43,8 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-2.0-flash': {inputPerMToken: 100_000, outputPerMToken: 400_000},
   'gemini-3-flash-preview': {inputPerMToken: 300_000, outputPerMToken: 2_500_000},
   'gemini-3.1-pro-preview': {inputPerMToken: 1_250_000, outputPerMToken: 10_000_000},
+  'gemini-3-pro-preview': {inputPerMToken: 1_250_000, outputPerMToken: 10_000_000},
+  'gemini-3.1-flash-lite-preview': {inputPerMToken: 100_000, outputPerMToken: 400_000},
   // DeepSeek — source: api-docs.deepseek.com (both models same price)
   'deepseek-chat': {inputPerMToken: 280_000, outputPerMToken: 420_000},
   'deepseek-reasoner': {inputPerMToken: 280_000, outputPerMToken: 420_000},
@@ -54,6 +56,13 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'qwen/qwen3-32b': {inputPerMToken: 290_000, outputPerMToken: 590_000},
   'moonshotai/kimi-k2-instruct': {inputPerMToken: 1_000_000, outputPerMToken: 3_000_000},
   'openai/gpt-oss-120b': {inputPerMToken: 150_000, outputPerMToken: 600_000},
+  // Mistral
+  'mistral-large-latest': {inputPerMToken: 2_000_000, outputPerMToken: 6_000_000},
+  'mistral-small-latest': {inputPerMToken: 100_000, outputPerMToken: 300_000},
+  'codestral-latest': {inputPerMToken: 300_000, outputPerMToken: 900_000},
+  // xAI
+  'grok-3': {inputPerMToken: 3_000_000, outputPerMToken: 15_000_000},
+  'grok-3-mini': {inputPerMToken: 300_000, outputPerMToken: 500_000},
 };
 
 /**

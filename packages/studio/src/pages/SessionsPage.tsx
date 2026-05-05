@@ -4,14 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {Fragment, useMemo, useState, useEffect} from 'react';
+import {Fragment, useMemo, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {AgentOffline} from '@/components/AgentOffline';
 import {runtimeApiUrl} from '@/lib/api';
+import {useSessionHistory} from '../hooks/useSessionHistory';
+import type {SessionHistoryRow} from '../hooks/useSessionHistory';
 import {
   PROVIDER_COLORS,
   modelToProvider,
-  estimateCost,
+  modelDisplayName,
 } from '../lib/model-pricing';
 import {formatShortDateTime, formatTokens} from '@/lib/format';
 import {
@@ -24,18 +26,7 @@ import {
   Wrench,
 } from 'lucide-react';
 
-interface SessionRow {
-  id: string;
-  app_id: string;
-  scope_id: string;
-  title: string;
-  message_count: number;
-  token_usage: { input_tokens: number; output_tokens: number; total_tokens: number };
-  model: string | null;
-  provider: string | null;
-  created_at: string;
-  updated_at: string;
-}
+type SessionRow = SessionHistoryRow;
 
 interface ToolCall {
   toolName: string;
@@ -59,11 +50,6 @@ interface SortState {
   direction: SortDirection;
 }
 
-const MODEL_LABELS: Record<string, string> = {
-  'claude-sonnet-4-20250514': 'Claude Sonnet 4',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-};
-
 function compactText(text: string, max = 180): string {
   const normalized = text.replace(/\s+/g, ' ').trim();
   if (normalized.length <= max) return normalized;
@@ -78,14 +64,6 @@ function countToolCalls(messages: HistoryMessage[]): number {
   return messages.reduce((sum, m) => sum + (m.toolCalls?.length ?? 0), 0);
 }
 
-function modelLabel(model: string): string {
-  const known = MODEL_LABELS[model];
-  if (known) return known;
-  return model
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
 function providerLabel(model: string | null, provider: string | null): string {
   if (provider) return provider;
   if (!model) return '';
@@ -93,9 +71,7 @@ function providerLabel(model: string | null, provider: string | null): string {
 }
 
 function sessionCost(session: SessionRow): number | null {
-  return session.model
-    ? estimateCost(session.model, session.token_usage.input_tokens, session.token_usage.output_tokens)
-    : null;
+  return session.cost ? session.cost.estimatedCostMicros / 1_000_000 : null;
 }
 
 function compareNullableNumber(a: number | null, b: number | null): number {
@@ -173,25 +149,11 @@ function SortHeader({
 
 export function SessionsPage() {
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const {sessions, error} = useSessionHistory();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, SessionDetail>>({});
   const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
   const [sort, setSort] = useState<SortState>({key: 'updated', direction: 'desc'});
-
-  useEffect(() => {
-    fetch(runtimeApiUrl('/sessions/history'), { signal: AbortSignal.timeout(5_000) })
-      .then((r) => {
-        if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
-        return r.json() as Promise<SessionRow[]>;
-      })
-      .then(setSessions)
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
-  }, []);
 
   const toggleExpanded = (sessionId: string) => {
     const nextId = expandedId === sessionId ? null : sessionId;
@@ -324,7 +286,7 @@ export function SessionsPage() {
                             <div className="flex min-w-0 items-center gap-1.5">
                               {colors && <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${colors.dot}`} />}
                               <span className="truncate text-xs font-medium text-foreground">
-                                {modelLabel(s.model)}
+                                {modelDisplayName(s.model)}
                               </span>
                             </div>
                             <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground/70">

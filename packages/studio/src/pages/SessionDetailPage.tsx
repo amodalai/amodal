@@ -11,9 +11,9 @@ import {runtimeApiUrl} from '@/lib/api';
 import {
   PROVIDER_COLORS,
   modelToProvider,
-  estimateCost,
   formatPrice,
 } from '@/lib/model-pricing';
+import type {SessionCostSnapshot} from '@/lib/types';
 import {formatShortDateTime, formatTokens} from '@/lib/format';
 import {MessageList} from '@amodalai/react/widget';
 import type {ChatMessage, ToolCallInfo} from '@amodalai/react/widget';
@@ -51,6 +51,7 @@ interface SessionDetail {
   };
   model: string | null;
   provider: string | null;
+  cost: SessionCostSnapshot | null;
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -205,13 +206,7 @@ export function SessionDetailPage() {
     );
   }
 
-  const cost = session.model
-    ? estimateCost(
-        session.model,
-        session.token_usage.input_tokens,
-        session.token_usage.output_tokens,
-      )
-    : null;
+  const cost = session.cost ? session.cost.estimatedCostMicros / 1_000_000 : null;
   const colors = session.model
     ? PROVIDER_COLORS[modelToProvider(session.model)]
     : null;

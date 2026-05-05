@@ -30,6 +30,7 @@ import {
   PanelRightOpen,
   PanelRightClose,
   Brain,
+  DollarSign,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAgentInventory } from '../hooks/useAgentInventory';
@@ -54,6 +55,7 @@ interface NavItemDef extends NavItem {
 const NAV_ITEMS: readonly NavItemDef[] = [
   { href: '/getting-started', label: 'Getting started', icon: Sparkles, powerUserOnly: true },
   { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/cost', label: 'Cost', icon: DollarSign },
   { href: '/files', label: 'Files', icon: FileCode },
   { href: '/evals', label: 'Evals', icon: FlaskConical },
   { href: '/arena', label: 'Arena', icon: FlaskConical },
@@ -75,8 +77,8 @@ function SidebarNavLink({ item, active, to }: { item: NavItem; active: boolean; 
       to={to}
       className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
         active
-          ? 'bg-[hsl(var(--sidebar-active))] text-foreground font-medium shadow-sm ring-1 ring-border/70'
-          : 'text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--sidebar-active))]/70'
+          ? 'bg-sidebar-active text-foreground font-medium shadow-sm ring-1 ring-border/70'
+          : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-active/70'
       }`}
     >
       <Icon className={`h-4 w-4 flex-shrink-0 ${active ? 'text-foreground' : ''}`} />
@@ -127,7 +129,7 @@ export function StudioShell({ children }: Props) {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
-      <aside className="flex w-56 flex-shrink-0 flex-col border-r border-border bg-[hsl(var(--sidebar))]">
+      <aside className="flex w-56 flex-shrink-0 flex-col border-r border-border bg-sidebar">
         {/* Header */}
         <div className="border-b border-border px-4 py-3">
           <h1 className="text-sm font-semibold text-foreground truncate">{agentName}</h1>
@@ -171,8 +173,8 @@ export function StudioShell({ children }: Props) {
                           to={agentPath(`${section.pathPrefix}/${name}`)}
                           className={`flex items-center gap-2 rounded-md px-3 py-1 text-xs transition-colors ${
                             pathname === agentPath(`${section.pathPrefix}/${name}`)
-                              ? 'bg-[hsl(var(--sidebar-active))] text-foreground font-medium shadow-sm ring-1 ring-border/70'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--sidebar-active))]/70'
+                              ? 'bg-sidebar-active text-foreground font-medium shadow-sm ring-1 ring-border/70'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-active/70'
                           }`}
                         >
                           <section.icon className={`w-3 h-3 flex-shrink-0 ${section.iconColor}`} />
@@ -201,8 +203,8 @@ export function StudioShell({ children }: Props) {
               onClick={() => setChatOpen((prev) => !prev)}
               className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
                 chatOpen
-                  ? 'bg-[hsl(var(--sidebar-active))] text-foreground font-medium shadow-sm ring-1 ring-border/70'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--sidebar-active))]/70'
+                  ? 'bg-sidebar-active text-foreground font-medium shadow-sm ring-1 ring-border/70'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-active/70'
               }`}
             >
               <MessageSquare className="w-4 h-4 flex-shrink-0" />

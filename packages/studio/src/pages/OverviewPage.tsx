@@ -9,13 +9,10 @@ import { AgentOffline } from '@/components/AgentOffline';
 import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
 import { useStats } from '../hooks/useStats';
 import { useGettingStarted } from '../hooks/useGettingStarted';
-import { MODEL_META, PROVIDER_COLORS, modelToProvider, estimateCost, formatPrice } from '../lib/model-pricing';
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+import { MODEL_META, PROVIDER_COLORS, modelDisplayName, modelToProvider, formatPrice } from '../lib/model-pricing';
+import { useSessionHistory } from '../hooks/useSessionHistory';
+import { dailyCostBuckets, groupSessions, percentOf, scopeLabel, summarizeCost, trendDeltaPercent } from '../lib/cost-analytics';
+import { formatTokens } from '../lib/format';
 
 function formatTimeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -32,14 +29,28 @@ export function OverviewPage() {
   const { config, error: configError, loading: configLoading } = useRuntimeConfig();
   const { data: stats, error: statsError } = useStats();
   const { data: gettingStarted } = useGettingStarted();
+  const { sessions } = useSessionHistory();
 
   if (configError) return <AgentOffline page="dashboard" detail={configError} />;
   if (configLoading || !config) return null;
 
-  const totalCost = stats?.topModels.reduce((sum, m) => {
-    const cost = estimateCost(m.model, m.inputTokens, m.outputTokens);
-    return sum + (cost ?? 0);
-  }, 0) ?? 0;
+  const sessionCostSummary = sessions ? summarizeCost(sessions) : null;
+  const costBuckets = sessions ? dailyCostBuckets(sessions, 14) : [];
+  const costTrend = costBuckets.length > 0 ? trendDeltaPercent(costBuckets) : null;
+  const costByModel = sessions
+    ? groupSessions(
+      sessions,
+      (session) => session.model ?? 'unknown',
+      (session) => session.model ?? 'Unknown model',
+    )
+    : [];
+  const topScope = sessions
+    ? groupSessions(
+      sessions,
+      (session) => `${session.app_id}:${session.scope_id || 'agent'}`,
+      (session) => scopeLabel(session),
+    )[0]
+    : null;
 
   const connTotal = gettingStarted?.packages.length ?? 0;
   const connFulfilled = gettingStarted?.packages.filter((p) => p.isFulfilled).length ?? 0;
@@ -57,8 +68,9 @@ export function OverviewPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryCard
           label="Estimated Spend"
-          value={totalCost > 0 ? `$${totalCost.toFixed(2)}` : '$0.00'}
-          detail={stats ? `${formatTokens(stats.tokens.total)} tokens` : null}
+          value={sessionCostSummary ? formatPrice(sessionCostSummary.totalCost) : '$0.00'}
+          detail={costTrend == null ? 'Estimated model cost' : `${formatOverviewTrend(costTrend)} vs prior period`}
+          link="cost"
         />
         <SummaryCard
           label="Sessions"
@@ -79,22 +91,56 @@ export function OverviewPage() {
         />
       </div>
 
+      {sessions && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="bg-card border border-border rounded-lg p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                Cost Trend
+              </h2>
+              <Link to="cost" className="text-xs text-muted-foreground hover:text-foreground">
+                View cost →
+              </Link>
+            </div>
+            <MiniCostBars buckets={costBuckets} />
+          </div>
+          <div className="bg-card border border-border rounded-lg p-4">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
+              Attention
+            </h2>
+            <div className="space-y-2 text-sm">
+              <AttentionRow
+                label="Top scope"
+                value={topScope ? `${topScope.label} · ${formatPrice(topScope.cost)}` : 'No scope usage'}
+              />
+              <AttentionRow
+                label="Unpriced sessions"
+                value={sessionCostSummary && sessionCostSummary.unknownCostSessions > 0 ? String(sessionCostSummary.unknownCostSessions) : 'All priced'}
+              />
+              <AttentionRow
+                label="Connection gaps"
+                value={connTotal > 0 ? String(connTotal - connFulfilled) : '0'}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cost breakdown by model */}
-      {stats && stats.topModels.length > 0 && (
+      {costByModel.length > 0 && (
         <div className="bg-card border border-border rounded-lg p-4">
           <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
             Usage by Model
           </h2>
           <div className="space-y-2">
-            {stats.topModels.map((m) => {
-              const cost = estimateCost(m.model, m.inputTokens, m.outputTokens);
-              const meta = MODEL_META[m.model];
-              const colors = PROVIDER_COLORS[modelToProvider(m.model)];
+            {costByModel.map((m) => {
+              const meta = MODEL_META[m.key];
+              const colors = PROVIDER_COLORS[modelToProvider(m.key)];
               return (
-                <div key={m.model} className="flex items-center justify-between text-sm">
+                <div key={m.key} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     {colors && <span className={`w-2 h-2 rounded-full ${colors.dot}`} />}
-                    <span className="text-foreground font-mono text-xs">{m.model}</span>
+                    <span className="text-foreground text-xs">{modelDisplayName(m.key)}</span>
                     {meta && (
                       <span className="text-[10px] text-muted-foreground">{meta.context} ctx</span>
                     )}
@@ -102,9 +148,7 @@ export function OverviewPage() {
                   <div className="flex items-center gap-4 text-xs">
                     <span className="text-muted-foreground">{m.sessions} sessions</span>
                     <span className="text-muted-foreground">{formatTokens(m.totalTokens)} tokens</span>
-                    {cost != null && (
-                      <span className="font-mono text-foreground">{formatPrice(cost)}</span>
-                    )}
+                    <span className="font-mono text-foreground">{formatPrice(m.cost)}</span>
                   </div>
                 </div>
               );
@@ -172,6 +216,50 @@ export function OverviewPage() {
           </dl>
         </div>
       )}
+    </div>
+  );
+}
+
+function formatOverviewTrend(delta: number): string {
+  const rounded = Math.round(delta);
+  if (rounded === 0) return 'Flat';
+  return `${rounded > 0 ? '+' : ''}${String(rounded)}%`;
+}
+
+function MiniCostBars({buckets}: {buckets: Array<{key: string; label: string; cost: number; sessions: number}>}) {
+  const maxCost = Math.max(...buckets.map((bucket) => bucket.cost), 0);
+  return (
+    <div
+      className="mt-4 grid h-24 items-end gap-1.5"
+      style={{gridTemplateColumns: `repeat(${String(buckets.length)}, minmax(0, 1fr))`}}
+    >
+      {buckets.map((bucket) => {
+        const height = maxCost <= 0 ? 2 : percentOf(bucket.cost, maxCost);
+        return (
+          <div key={bucket.key} className="group relative flex h-full items-end">
+            <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-40 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-left text-xs text-card-foreground shadow-lg group-hover:block">
+              <div className="font-medium text-foreground">{bucket.label}</div>
+              <div className="mt-1 font-mono text-foreground">{formatPrice(bucket.cost)}</div>
+              <div className="mt-1 text-muted-foreground">
+                {bucket.sessions} sessions
+              </div>
+            </div>
+            <div
+              className="w-full rounded-t bg-emerald-600/75"
+              style={{height: `${height}%`}}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AttentionRow({label, value}: {label: string; value: string}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate text-right font-medium text-foreground">{value}</span>
     </div>
   );
 }

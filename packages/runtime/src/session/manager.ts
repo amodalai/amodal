@@ -35,6 +35,7 @@ import type {
 import {SessionError} from '../errors.js';
 import {VISION_PROVIDERS} from '../providers/types.js';
 import type {Logger} from '../logger.js';
+import {estimateSessionCostSnapshot} from './cost.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -415,6 +416,7 @@ export class StandaloneSessionManager {
     // matches what the live session would say.
     const now = Date.now();
     session.lastAccessedAt = now;
+    const cost = estimateSessionCostSnapshot(session.providerName, session.model, session.usage);
 
     const persisted: PersistedSession = {
       version: 1,
@@ -422,7 +424,10 @@ export class StandaloneSessionManager {
       scopeId: session.scopeId,
       messages: session.messages,
       tokenUsage: session.usage,
-      metadata: session.metadata,
+      metadata: {
+        ...session.metadata,
+        ...(cost ? {cost} : {}),
+      },
       imageData: {},
       createdAt: new Date(session.createdAt),
       updatedAt: new Date(now),
