@@ -7,81 +7,26 @@
 import {Link} from 'react-router-dom';
 import {AgentOffline} from '@/components/AgentOffline';
 import {useSessionHistory} from '../hooks/useSessionHistory';
-import type {SessionHistoryRow} from '../hooks/useSessionHistory';
 import {formatShortDateTime, formatTokens} from '../lib/format';
 import {
   PROVIDER_COLORS,
-  estimateCost,
   formatPrice,
   modelToProvider,
 } from '../lib/model-pricing';
-
-interface CostGroup {
-  key: string;
-  label: string;
-  sessions: number;
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  cost: number;
-  unknownCostSessions: number;
-}
-
-function sessionCost(session: SessionHistoryRow): number | null {
-  return session.model
-    ? estimateCost(session.model, session.token_usage.input_tokens, session.token_usage.output_tokens)
-    : null;
-}
-
-function addToGroup(group: CostGroup, session: SessionHistoryRow, cost: number | null): void {
-  group.sessions += 1;
-  group.inputTokens += session.token_usage.input_tokens;
-  group.outputTokens += session.token_usage.output_tokens;
-  group.totalTokens += session.token_usage.total_tokens;
-  if (cost == null) {
-    group.unknownCostSessions += 1;
-  } else {
-    group.cost += cost;
-  }
-}
-
-function groupSessions(
-  sessions: SessionHistoryRow[],
-  keyOf: (session: SessionHistoryRow) => string,
-  labelOf: (session: SessionHistoryRow) => string,
-): CostGroup[] {
-  const groups = new Map<string, CostGroup>();
-  for (const session of sessions) {
-    const key = keyOf(session);
-    const existing = groups.get(key);
-    const group = existing ?? {
-      key,
-      label: labelOf(session),
-      sessions: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      cost: 0,
-      unknownCostSessions: 0,
-    };
-    addToGroup(group, session, sessionCost(session));
-    if (!existing) groups.set(key, group);
-  }
-  return [...groups.values()].sort((a, b) => b.cost - a.cost || b.totalTokens - a.totalTokens);
-}
+import {
+  dailyCostBuckets,
+  groupSessions,
+  percentOf,
+  scopeLabel,
+  sessionCost,
+  summarizeCost,
+  trendDeltaPercent,
+} from '../lib/cost-analytics';
+import type {CostBucket, CostGroup} from '../lib/cost-analytics';
 
 function costPerSession(group: CostGroup): string {
   if (group.sessions === 0) return '—';
   return formatPrice(group.cost / group.sessions);
-}
-
-function percentOf(value: number, total: number): number {
-  if (total <= 0) return 0;
-  return Math.max(2, Math.round((value / total) * 100));
-}
-
-function scopeLabel(session: SessionHistoryRow): string {
-  return session.scope_id || 'agent scope';
 }
 
 export function CostPage() {
@@ -90,13 +35,9 @@ export function CostPage() {
   if (error) return <AgentOffline page="cost" detail={error} />;
   if (!sessions) return null;
 
-  const knownCostSessions = sessions.filter((session) => sessionCost(session) != null);
-  const totalCost = knownCostSessions.reduce((sum, session) => sum + (sessionCost(session) ?? 0), 0);
-  const totalTokens = sessions.reduce((sum, session) => sum + session.token_usage.total_tokens, 0);
-  const totalInput = sessions.reduce((sum, session) => sum + session.token_usage.input_tokens, 0);
-  const totalOutput = sessions.reduce((sum, session) => sum + session.token_usage.output_tokens, 0);
-  const unknownCostSessions = sessions.length - knownCostSessions.length;
-
+  const summary = summarizeCost(sessions);
+  const buckets = dailyCostBuckets(sessions, 14);
+  const delta = trendDeltaPercent(buckets);
   const byModel = groupSessions(
     sessions,
     (session) => session.model ?? 'unknown',
@@ -122,17 +63,30 @@ export function CostPage() {
           </p>
         </div>
         <div className="text-left md:text-right">
-          <div className="text-3xl font-semibold tracking-tight text-foreground">{formatPrice(totalCost)}</div>
+          <div className="text-3xl font-semibold tracking-tight text-foreground">{formatPrice(summary.totalCost)}</div>
           <div className="text-xs text-muted-foreground">estimated total in loaded history</div>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <MetricCard label="Sessions" value={String(sessions.length)} detail={`${knownCostSessions.length} priced`} />
-        <MetricCard label="Total tokens" value={formatTokens(totalTokens)} detail={`${formatTokens(totalInput)} in / ${formatTokens(totalOutput)} out`} />
-        <MetricCard label="Avg cost/session" value={knownCostSessions.length > 0 ? formatPrice(totalCost / knownCostSessions.length) : '—'} detail="estimated" />
-        <MetricCard label="Unpriced sessions" value={String(unknownCostSessions)} detail="missing model price" />
+        <MetricCard label="Sessions" value={String(sessions.length)} detail={`${summary.knownCostSessions} priced`} />
+        <MetricCard label="Total tokens" value={formatTokens(summary.totalTokens)} detail={`${formatTokens(summary.totalInputTokens)} in / ${formatTokens(summary.totalOutputTokens)} out`} />
+        <MetricCard label="Avg cost/session" value={summary.knownCostSessions > 0 ? formatPrice(summary.totalCost / summary.knownCostSessions) : '—'} detail="estimated" />
+        <MetricCard label="14-day trend" value={formatTrend(delta)} detail="current vs prior period" />
       </div>
+
+      <section className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Cost over time</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Daily estimated model spend from session activity.</p>
+          </div>
+          <div className="text-right text-xs text-muted-foreground">
+            14 days · {summary.unknownCostSessions} unpriced
+          </div>
+        </div>
+        <CostBars buckets={buckets} />
+      </section>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
@@ -158,7 +112,7 @@ export function CostPage() {
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-emerald-600"
-                      style={{width: `${percentOf(group.cost, totalCost)}%`}}
+                      style={{width: `${percentOf(group.cost, summary.totalCost)}%`}}
                     />
                   </div>
                   <div className="text-right font-mono text-xs text-foreground">{formatPrice(group.cost)}</div>
@@ -187,7 +141,7 @@ export function CostPage() {
                 <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full bg-primary-solid"
-                    style={{width: `${percentOf(group.cost, totalCost)}%`}}
+                    style={{width: `${percentOf(group.cost, summary.totalCost)}%`}}
                   />
                 </div>
                 <div className="text-[11px] text-muted-foreground">
@@ -247,6 +201,36 @@ export function CostPage() {
           </tbody>
         </table>
       </section>
+    </div>
+  );
+}
+
+function formatTrend(delta: number | null): string {
+  if (delta == null) return '—';
+  const rounded = Math.round(delta);
+  if (rounded === 0) return 'flat';
+  return `${rounded > 0 ? '+' : ''}${String(rounded)}%`;
+}
+
+function CostBars({buckets}: {buckets: CostBucket[]}) {
+  const maxCost = Math.max(...buckets.map((bucket) => bucket.cost), 0);
+  return (
+    <div className="mt-5 grid h-44 grid-cols-14 items-end gap-2">
+      {buckets.map((bucket) => {
+        const height = maxCost <= 0 ? 2 : Math.max(2, Math.round((bucket.cost / maxCost) * 100));
+        return (
+          <div key={bucket.key} className="flex h-full min-w-0 flex-col justify-end gap-2">
+            <div className="flex flex-1 items-end">
+              <div
+                className="w-full rounded-t bg-emerald-600/80 transition-colors hover:bg-emerald-600"
+                style={{height: `${height}%`}}
+                title={`${bucket.label}: ${formatPrice(bucket.cost)} · ${String(bucket.sessions)} sessions`}
+              />
+            </div>
+            <div className="truncate text-center text-[10px] text-muted-foreground">{bucket.label}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }

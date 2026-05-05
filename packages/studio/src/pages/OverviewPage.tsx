@@ -10,12 +10,9 @@ import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
 import { useStats } from '../hooks/useStats';
 import { useGettingStarted } from '../hooks/useGettingStarted';
 import { MODEL_META, PROVIDER_COLORS, modelToProvider, estimateCost, formatPrice } from '../lib/model-pricing';
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+import { useSessionHistory } from '../hooks/useSessionHistory';
+import { dailyCostBuckets, groupSessions, percentOf, scopeLabel, summarizeCost, trendDeltaPercent } from '../lib/cost-analytics';
+import { formatTokens } from '../lib/format';
 
 function formatTimeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -32,6 +29,7 @@ export function OverviewPage() {
   const { config, error: configError, loading: configLoading } = useRuntimeConfig();
   const { data: stats, error: statsError } = useStats();
   const { data: gettingStarted } = useGettingStarted();
+  const { sessions } = useSessionHistory();
 
   if (configError) return <AgentOffline page="dashboard" detail={configError} />;
   if (configLoading || !config) return null;
@@ -40,6 +38,16 @@ export function OverviewPage() {
     const cost = estimateCost(m.model, m.inputTokens, m.outputTokens);
     return sum + (cost ?? 0);
   }, 0) ?? 0;
+  const sessionCostSummary = sessions ? summarizeCost(sessions) : null;
+  const costBuckets = sessions ? dailyCostBuckets(sessions, 14) : [];
+  const costTrend = costBuckets.length > 0 ? trendDeltaPercent(costBuckets) : null;
+  const topScope = sessions
+    ? groupSessions(
+      sessions,
+      (session) => `${session.app_id}:${session.scope_id || 'agent'}`,
+      (session) => scopeLabel(session),
+    )[0]
+    : null;
 
   const connTotal = gettingStarted?.packages.length ?? 0;
   const connFulfilled = gettingStarted?.packages.filter((p) => p.isFulfilled).length ?? 0;
@@ -57,8 +65,9 @@ export function OverviewPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryCard
           label="Estimated Spend"
-          value={totalCost > 0 ? `$${totalCost.toFixed(2)}` : '$0.00'}
-          detail={stats ? `${formatTokens(stats.tokens.total)} tokens` : null}
+          value={sessionCostSummary ? formatPrice(sessionCostSummary.totalCost) : totalCost > 0 ? `$${totalCost.toFixed(2)}` : '$0.00'}
+          detail={costTrend == null ? 'Estimated model cost' : `${formatOverviewTrend(costTrend)} vs prior period`}
+          link="cost"
         />
         <SummaryCard
           label="Sessions"
@@ -78,6 +87,41 @@ export function OverviewPage() {
           detail={`${config.providerStatuses?.length ?? 0} configured`}
         />
       </div>
+
+      {sessions && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="bg-card border border-border rounded-lg p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                Cost Trend
+              </h2>
+              <Link to="cost" className="text-xs text-muted-foreground hover:text-foreground">
+                View cost →
+              </Link>
+            </div>
+            <MiniCostBars buckets={costBuckets} />
+          </div>
+          <div className="bg-card border border-border rounded-lg p-4">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
+              Attention
+            </h2>
+            <div className="space-y-2 text-sm">
+              <AttentionRow
+                label="Top scope"
+                value={topScope ? `${topScope.label} · ${formatPrice(topScope.cost)}` : 'No scope usage'}
+              />
+              <AttentionRow
+                label="Unpriced sessions"
+                value={sessionCostSummary ? String(sessionCostSummary.unknownCostSessions) : '0'}
+              />
+              <AttentionRow
+                label="Connection gaps"
+                value={connTotal > 0 ? String(connTotal - connFulfilled) : '0'}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cost breakdown by model */}
       {stats && stats.topModels.length > 0 && (
@@ -172,6 +216,41 @@ export function OverviewPage() {
           </dl>
         </div>
       )}
+    </div>
+  );
+}
+
+function formatOverviewTrend(delta: number): string {
+  const rounded = Math.round(delta);
+  if (rounded === 0) return 'Flat';
+  return `${rounded > 0 ? '+' : ''}${String(rounded)}%`;
+}
+
+function MiniCostBars({buckets}: {buckets: Array<{key: string; label: string; cost: number; sessions: number}>}) {
+  const maxCost = Math.max(...buckets.map((bucket) => bucket.cost), 0);
+  return (
+    <div className="mt-4 grid h-24 grid-cols-14 items-end gap-1.5">
+      {buckets.map((bucket) => {
+        const height = maxCost <= 0 ? 2 : percentOf(bucket.cost, maxCost);
+        return (
+          <div key={bucket.key} className="flex h-full items-end">
+            <div
+              className="w-full rounded-t bg-emerald-600/75"
+              style={{height: `${height}%`}}
+              title={`${bucket.label}: ${formatPrice(bucket.cost)} · ${String(bucket.sessions)} sessions`}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AttentionRow({label, value}: {label: string; value: string}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate text-right font-medium text-foreground">{value}</span>
     </div>
   );
 }

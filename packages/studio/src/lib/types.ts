@@ -106,3 +106,20 @@ export interface StudioUser {
   /** Human-readable display name. */
   displayName: string;
 }
+
+// ---------------------------------------------------------------------------
+// Runtime session history types
+// ---------------------------------------------------------------------------
+
+export interface SessionHistoryRow {
+  id: string;
+  app_id: string;
+  scope_id: string;
+  title: string;
+  message_count: number;
+  token_usage: {input_tokens: number; output_tokens: number; total_tokens: number};
+  model: string | null;
+  provider: string | null;
+  created_at: string;
+  updated_at: string;
+}

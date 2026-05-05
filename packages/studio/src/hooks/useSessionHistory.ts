@@ -5,20 +5,9 @@
  */
 
 import {useEffect, useState} from 'react';
-import {runtimeApiUrl} from '@/lib/api';
-
-export interface SessionHistoryRow {
-  id: string;
-  app_id: string;
-  scope_id: string;
-  title: string;
-  message_count: number;
-  token_usage: {input_tokens: number; output_tokens: number; total_tokens: number};
-  model: string | null;
-  provider: string | null;
-  created_at: string;
-  updated_at: string;
-}
+import {runtimeApiUrl} from '../lib/api';
+import type {SessionHistoryRow} from '../lib/types';
+export type {SessionHistoryRow} from '../lib/types';
 
 export interface SessionHistoryResult {
   sessions: SessionHistoryRow[] | null;
