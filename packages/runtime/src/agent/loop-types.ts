@@ -295,8 +295,15 @@ export interface AgentContext {
   /** Mutable: consecutive compaction failures (circuit breaker counter) */
   compactionFailures: number;
 
-  /** Cache for pre-executed read-only tool results (populated during STREAMING) */
-  preExecutionCache: Map<string, Promise<unknown>>;
+  /**
+   * Cache for pre-executed read-only tool results (populated during STREAMING).
+   * Stores both the tool's `output` and any `inlineEvents` it emitted via
+   * `ctx.emit()` — without the events here, read-only tools that surface
+   * inline UI (`present_connection`, `show_preview`, `propose_plan`,
+   * `update_plan`) silently lose their emissions when the cached entry
+   * is consumed in EXECUTING instead of running fresh.
+   */
+  preExecutionCache: Map<string, Promise<{output: unknown; inlineEvents: SSEEvent[]}>>;
 
   /**
    * Map of tool names temporarily disabled after a loop-escalation event,

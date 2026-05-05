@@ -118,6 +118,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         toolName: action.toolName,
         parameters: action.parameters,
         status: 'running',
+        ...(action.runningLabel ? { runningLabel: action.runningLabel } : {}),
+        ...(action.completedLabel ? { completedLabel: action.completedLabel } : {}),
+        ...(action.internal ? { internal: true } : {}),
       };
       if (last && last.type === 'assistant_text') {
         const updatedToolCalls = [...last.toolCalls, toolCall];
@@ -258,18 +261,16 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
-    case 'STREAM_COLLECT_SECRET': {
+    case 'STREAM_ASK_CHOICE': {
       const msgs = [...state.messages];
       const last = msgs[msgs.length - 1];
       if (last && last.type === 'assistant_text') {
         const block: ContentBlock = {
-          type: 'collect_secret',
-          secretId: action.secretId,
-          name: action.name,
-          label: action.label,
-          description: action.description,
-          link: action.link,
-          required: action.required,
+          type: 'ask_choice',
+          askId: action.askId,
+          question: action.question,
+          options: action.options,
+          multi: action.multi,
           status: 'pending',
         };
         msgs[msgs.length - 1] = {
@@ -279,18 +280,150 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
       return { ...state, messages: msgs };
     }
-    case 'COLLECT_SECRET_SAVED': {
+    case 'ASK_CHOICE_SUBMITTED': {
       const msgs = [...state.messages];
       const last = msgs[msgs.length - 1];
       if (last && last.type === 'assistant_text') {
         const blocks = last.contentBlocks.map((block) =>
-          block.type === 'collect_secret' && block.secretId === action.secretId
-            ? { ...block, status: 'saved' as const }
+          block.type === 'ask_choice' && block.askId === action.askId
+            ? { ...block, status: 'submitted' as const, answer: action.values }
             : block,
         );
         msgs[msgs.length - 1] = { ...last, contentBlocks: blocks };
       }
       return { ...state, messages: msgs };
+    }
+    case 'STREAM_SHOW_PREVIEW': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'show_preview',
+          card: action.card,
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_CONNECTION_PANEL': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'connection_panel',
+          panelId: action.panelId,
+          packageName: action.packageName,
+          displayName: action.displayName,
+          description: action.description,
+          skippable: action.skippable,
+          state: 'idle',
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_PLAN_SUMMARY': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'plan_summary',
+          templateTitle: action.templateTitle,
+          requiredSlots: action.requiredSlots,
+          optionalSlots: action.optionalSlots,
+          configQuestions: action.configQuestions,
+          completionSuggestions: action.completionSuggestions,
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'PANEL_UPDATE': {
+      // Mutate the matching connection_panel block by panelId.
+      // Studio dispatches this from inside its renderer (Skip /
+      // Configure-success) AND from the H.10 reconciliation effect on
+      // mount. Last-write-wins by design.
+      const msgs = state.messages.map((msg) => {
+        if (msg.type !== 'assistant_text') return msg;
+        let touched = false;
+        const blocks = msg.contentBlocks.map((block) => {
+          if (block.type !== 'connection_panel' || block.panelId !== action.panelId) return block;
+          touched = true;
+          return { ...block, ...action.patch };
+        });
+        if (!touched) return msg;
+        return { ...msg, contentBlocks: blocks };
+      });
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_PROPOSAL': {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const block: ContentBlock = {
+          type: 'proposal',
+          proposalId: action.proposalId,
+          summary: action.summary,
+          skills: action.skills,
+          requiredConnections: action.requiredConnections,
+          optionalConnections: action.optionalConnections,
+          status: 'pending',
+        };
+        msgs[msgs.length - 1] = {
+          ...last,
+          contentBlocks: [...last.contentBlocks, block],
+        };
+      }
+      return { ...state, messages: msgs };
+    }
+    case 'STREAM_UPDATE_PLAN': {
+      // Mutate the existing ProposalBlock in place (matched by
+      // proposalId) so the chat doesn't accumulate duplicate
+      // proposals as the user iterates. Walk every assistant turn
+      // looking for the original card — the proposal may have been
+      // emitted multiple turns back during a long Adjust thread.
+      const msgs = state.messages.map((msg) => {
+        if (msg.type !== 'assistant_text') return msg;
+        let touched = false;
+        const blocks = msg.contentBlocks.map((block) => {
+          if (block.type !== 'proposal' || block.proposalId !== action.proposalId) return block;
+          touched = true;
+          return {
+            ...block,
+            ...(action.summary !== undefined ? {summary: action.summary} : {}),
+            ...(action.skills !== undefined ? {skills: action.skills} : {}),
+            ...(action.requiredConnections !== undefined ? {requiredConnections: action.requiredConnections} : {}),
+            ...(action.optionalConnections !== undefined ? {optionalConnections: action.optionalConnections} : {}),
+            // Re-open the buttons after an update so the user can
+            // re-confirm against the patched card.
+            status: 'pending' as const,
+          };
+        });
+        return touched ? {...msg, contentBlocks: blocks} : msg;
+      });
+      return {...state, messages: msgs};
+    }
+    case 'PROPOSAL_SUBMITTED': {
+      const msgs = state.messages.map((msg) => {
+        if (msg.type !== 'assistant_text') return msg;
+        let touched = false;
+        const blocks = msg.contentBlocks.map((block) => {
+          if (block.type !== 'proposal' || block.proposalId !== action.proposalId) return block;
+          touched = true;
+          return {...block, status: 'submitted' as const, answer: action.answer};
+        });
+        return touched ? {...msg, contentBlocks: blocks} : msg;
+      });
+      return {...state, messages: msgs};
     }
     case 'STREAM_CONFIRMATION_REQUIRED': {
       const msgs = [...state.messages];
@@ -346,6 +479,41 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         msgs[msgs.length - 1] = { ...last, toolCalls: updatedCalls, contentBlocks: blocks };
       }
       return { ...state, messages: msgs };
+    }
+    case 'STREAM_TOOL_LABEL_UPDATE': {
+      // The handler called ctx.setLabel(...) — patch the matching tool
+      // call's labels in place. The widget swaps between running and
+      // completed labels purely on status, so updating the values here
+      // is enough.
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.type === 'assistant_text') {
+        const patch = (tc: ToolCallInfo): ToolCallInfo =>
+          tc.toolId === action.toolId
+            ? {
+                ...tc,
+                ...(action.runningLabel !== undefined ? { runningLabel: action.runningLabel } : {}),
+                ...(action.completedLabel !== undefined ? { completedLabel: action.completedLabel } : {}),
+              }
+            : tc;
+        const updatedCalls = last.toolCalls.map(patch);
+        const blocks = last.contentBlocks.map((block) =>
+          block.type === 'tool_calls'
+            ? { ...block, calls: block.calls.map(patch) }
+            : block,
+        );
+        msgs[msgs.length - 1] = { ...last, toolCalls: updatedCalls, contentBlocks: blocks };
+      }
+      const updatedActive = state.activeToolCalls.map((tc) =>
+        tc.toolId === action.toolId
+          ? {
+              ...tc,
+              ...(action.runningLabel !== undefined ? { runningLabel: action.runningLabel } : {}),
+              ...(action.completedLabel !== undefined ? { completedLabel: action.completedLabel } : {}),
+            }
+          : tc,
+      );
+      return { ...state, messages: msgs, activeToolCalls: updatedActive };
     }
     case 'STREAM_CREDENTIAL_SAVED':
     case 'STREAM_APPROVED':
@@ -491,6 +659,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
   const send = useCallback(
     (text: string, images?: Array<{mimeType: string; data: string; preview: string}>): void => {
       if (state.isStreaming) return;
+
       dispatch({ type: 'SEND_MESSAGE', text, images: images?.map((i) => i.preview) });
 
       const controller = new AbortController();
@@ -623,6 +792,9 @@ function processEvent(
         toolId: event.tool_id,
         toolName: event.tool_name,
         parameters: event.parameters,
+        ...(event.running_label ? { runningLabel: event.running_label } : {}),
+        ...(event.completed_label ? { completedLabel: event.completed_label } : {}),
+        ...(event.internal ? { internal: true } : {}),
       });
       pending.set(event.tool_id, {
         toolName: event.tool_name,
@@ -733,6 +905,70 @@ function processEvent(
         questions: event.questions,
       });
       return;
+    case 'ask_choice':
+      dispatch({
+        type: 'STREAM_ASK_CHOICE',
+        askId: event.ask_id,
+        question: event.question,
+        options: event.options,
+        multi: event.multi ?? false,
+      });
+      return;
+    case 'show_preview':
+      dispatch({ type: 'STREAM_SHOW_PREVIEW', card: event.card });
+      return;
+    case 'connection_panel':
+      dispatch({
+        type: 'STREAM_CONNECTION_PANEL',
+        panelId: event.panel_id,
+        packageName: event.package_name,
+        displayName: event.display_name,
+        description: event.description,
+        skippable: event.skippable,
+      });
+      return;
+    case 'plan_summary':
+      dispatch({
+        type: 'STREAM_PLAN_SUMMARY',
+        templateTitle: event.template_title,
+        requiredSlots: event.required_slots.map((s) => ({
+          label: s.label,
+          description: s.description,
+          options: s.options.map((o) => ({displayName: o.display_name, packageName: o.package_name})),
+        })),
+        optionalSlots: event.optional_slots.map((s) => ({
+          label: s.label,
+          description: s.description,
+          options: s.options.map((o) => ({displayName: o.display_name, packageName: o.package_name})),
+        })),
+        configQuestions: event.config_questions,
+        completionSuggestions: event.completion_suggestions,
+      });
+      return;
+    case 'proposal':
+      dispatch({
+        type: 'STREAM_PROPOSAL',
+        proposalId: event.proposal_id,
+        summary: event.summary,
+        skills: event.skills,
+        requiredConnections: event.required_connections,
+        optionalConnections: event.optional_connections,
+      });
+      return;
+    case 'update_plan':
+      dispatch({
+        type: 'STREAM_UPDATE_PLAN',
+        proposalId: event.proposal_id,
+        ...(event.summary !== undefined ? {summary: event.summary} : {}),
+        ...(event.skills !== undefined ? {skills: event.skills} : {}),
+        ...(event.required_connections !== undefined
+          ? {requiredConnections: event.required_connections}
+          : {}),
+        ...(event.optional_connections !== undefined
+          ? {optionalConnections: event.optional_connections}
+          : {}),
+      });
+      return;
     case 'credential_saved':
       dispatch({ type: 'STREAM_CREDENTIAL_SAVED', connectionName: event.connection_name });
       return;
@@ -761,6 +997,14 @@ function processEvent(
     case 'tool_log':
       dispatch({ type: 'STREAM_TOOL_LOG', toolName: event.tool_name, message: event.message });
       return;
+    case 'tool_label_update':
+      dispatch({
+        type: 'STREAM_TOOL_LABEL_UPDATE',
+        toolId: event.tool_id,
+        ...(event.running_label !== undefined ? { runningLabel: event.running_label } : {}),
+        ...(event.completed_label !== undefined ? { completedLabel: event.completed_label } : {}),
+      });
+      return;
     case 'warning':
       dispatch({ type: 'STREAM_ERROR', message: event.message });
       return;
@@ -776,22 +1020,23 @@ function processEvent(
       });
       callbacks.onStreamEnd?.();
       return;
-    case 'collect_secret':
-      dispatch({
-        type: 'STREAM_COLLECT_SECRET',
-        secretId: event.secret_id,
-        name: event.name,
-        label: event.label,
-        description: event.description,
-        link: event.link,
-        required: event.required,
-      });
-      return;
     case 'explore_start':
     case 'explore_end':
     case 'plan_mode':
     case 'field_scrub':
       // Observability-only events — not reflected in message state today.
+      return;
+    case 'setup_cancelled':
+      // Phase E.10/E.11 — the agent's cancel_setup tool emits this so
+      // the parent surface (e.g. CreateFlowPage) can flip back to the
+      // picker. The reducer doesn't render anything; embedders
+      // intercept the SSE event in their custom streamFn.
+      return;
+    case 'setup_completed':
+      // Emitted by request_complete_setup / force_complete_setup so
+      // AdminChat can deterministically transition to OverviewPage.
+      // Like setup_cancelled, the reducer doesn't render anything;
+      // embedders intercept in their streamFn.
       return;
     default: {
       // Exhaustiveness check — any new SSE event must be routed here.

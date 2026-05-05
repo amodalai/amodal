@@ -83,12 +83,21 @@ export interface UseChatReturn {
   eventBus: WidgetEventBus;
   /** Submit answers to a pending ask_user prompt. */
   submitAskUserResponse: (askId: string, answers: Record<string, string>) => void;
+  submitAskChoiceResponse: (askId: string, values: string[], message: string) => void;
+  /** Submit a Path-B Proposal card click (Looks right or Adjust). */
+  submitProposalResponse: (proposalId: string, answer: 'confirm' | 'adjust', message: string) => void;
   /** Respond to a confirmation request (approve or deny). */
   respondToConfirmation: (correlationId: string, approved: boolean) => void;
   /** Load a historical session for read-only viewing. */
   loadSession: (sessionId: string) => void;
   /** True when viewing a loaded historical session. */
   isHistorical: boolean;
+  /**
+   * Reducer dispatch handle. Exposed for Studio (and other embedders)
+   * so renderers registered via `<ChatWidget inlineBlockRenderers>`
+   * can dispatch typed reducer actions like `PANEL_UPDATE` (Phase H.2).
+   */
+  dispatch: import('./useChatStream').UseChatStreamReturn['dispatch'];
 }
 
 // ---------------------------------------------------------------------------
@@ -297,14 +306,53 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     [serverUrl],
   );
 
+  // ---------------------------------------------------------------------
+  // submitAskChoiceResponse — for `ask_choice` button rows. No server
+  // round-trip: clicking a button posts the chosen value as the next user
+  // turn, same as if the user had typed it.
+  // ---------------------------------------------------------------------
+
+  const submitAskChoiceResponse = useCallback(
+    (askId: string, values: string[], message: string): void => {
+      stream.dispatch({ type: 'ASK_CHOICE_SUBMITTED', askId, values });
+      stream.send(message);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // ---------------------------------------------------------------------
+  // submitProposalResponse — for the Path B Proposal card. Same model
+  // as submitAskChoiceResponse: clicking Looks right or Adjust posts
+  // the corresponding text as the next user turn, no server round-trip.
+  // The reducer locks the buttons via PROPOSAL_SUBMITTED so the click
+  // can't double-fire; subsequent update_plan events from the agent
+  // re-open them when the agent revises the card.
+  // ---------------------------------------------------------------------
+
+  const submitProposalResponse = useCallback(
+    (proposalId: string, answer: 'confirm' | 'adjust', message: string): void => {
+      stream.dispatch({ type: 'PROPOSAL_SUBMITTED', proposalId, answer });
+      stream.send(message);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // ---------------------------------------------------------------------
+  // reset — wraps stream.reset to also clear the session-resume +
+  // initialMessage refs and notify the embedder that the persisted
+  // session id is gone. Without this, "New Chat" leaves stale refs
+  // behind and a refresh reloads the old session.
+  // ---------------------------------------------------------------------
+
   const reset = useCallback(() => {
     stream.reset();
-    // Clear refs so initialMessage can re-fire and resume won't re-load the old session
     initialMessageSentRef.current = false;
     initialMessageDeliveredRef.current = false;
     resumeLoadedRef.current = false;
-    // Notify parent to clear persisted session ID (e.g. localStorage)
     onSessionCreated?.('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only stream.reset / onSessionCreated are referenced; `stream` itself is intentionally stable across renders
   }, [stream.reset, onSessionCreated]);
 
   return {
@@ -318,9 +366,18 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     reset,
     eventBus: stream.eventBus,
     submitAskUserResponse,
+    submitAskChoiceResponse,
+    submitProposalResponse,
     respondToConfirmation: stream.respondToConfirmation,
     loadSession,
     isHistorical: stream.isHistorical,
+    /**
+     * Reducer dispatch handle — exposed for Studio (and other
+     * embedders) so renderers registered via
+     * `<ChatWidget inlineBlockRenderers={...}>` can dispatch
+     * `PANEL_UPDATE` and similar (Phase H.2).
+     */
+    dispatch: stream.dispatch,
   };
 }
 
@@ -386,6 +443,31 @@ function rehydrateHistory(stored: readonly StoredMessage[]): ChatMessage[] {
               // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
               data: (block['data'] as Record<string, unknown>) ?? {},
             });
+          } else if (blockType === 'proposal') {
+            // Phase D — Path B Proposal card. Restore the card with
+            // its persisted status (pending vs submitted) so a reload
+            // mid-proposal shows the same actionable buttons (or the
+            // already-chosen answer summary) the user saw before.
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+            const status = (block['status'] as 'pending' | 'submitted' | undefined) ?? 'pending';
+            const proposalBlock: ContentBlock = {
+              type: 'proposal',
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              proposalId: (block['proposalId'] as string) ?? '',
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              summary: (block['summary'] as string) ?? '',
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              skills: (block['skills'] as Array<{label: string; description: string}> | undefined) ?? [],
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              requiredConnections: (block['requiredConnections'] as Array<{label: string; description: string}> | undefined) ?? [],
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+              optionalConnections: (block['optionalConnections'] as Array<{label: string; description: string}> | undefined) ?? [],
+              status,
+            };
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- stored field
+            const answer = block['answer'] as 'confirm' | 'adjust' | undefined;
+            if (answer && status === 'submitted') proposalBlock.answer = answer;
+            contentBlocks.push(proposalBlock);
           }
         }
       } else {

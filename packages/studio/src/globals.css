@@ -91,3 +91,199 @@
     background-color: hsl(var(--muted-foreground) / 0.4);
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Studio connection panel + modal — Phase H.3 / H.4 / H.7 of the
+ * admin-setup build plan. Lives in Studio (not in the widget CSS)
+ * because the panel and modal are Studio-owned: they fetch
+ * /api/connections-status, summon Studio's modal stack, and
+ * inspect env vars. The widget package stays generic.
+ * --------------------------------------------------------------------------- */
+
+.studio-connection-panel {
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card));
+  padding: 12px 14px;
+  margin: 4px 0;
+  /* Reuse the F.3 card-enter animation defined in widget.css. The panel
+   * sits inside an assistant bubble so it inherits .pcw-bubble--assistant's
+   * animation, but we add a settled-state collapse below for parity with
+   * the old Connect-card behaviour. */
+  transition: background 150ms ease-out, border-color 150ms ease-out, opacity 150ms ease-out;
+}
+.studio-connection-panel--settled {
+  background: hsl(var(--muted) / 0.4);
+  opacity: 0.85;
+}
+
+.studio-connection-panel__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+.studio-connection-panel__text {
+  flex: 1;
+  min-width: 0;
+}
+.studio-connection-panel__name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+.studio-connection-panel__description {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin-top: 2px;
+}
+.studio-connection-panel__error {
+  font-size: 11.5px;
+  color: hsl(var(--destructive));
+  margin-top: 4px;
+}
+.studio-connection-panel__success-detail {
+  font-size: 11.5px;
+  color: hsl(var(--muted-foreground));
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.studio-connection-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.studio-connection-panel__btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 120ms ease-out, opacity 120ms ease-out;
+}
+.studio-connection-panel__btn--primary {
+  background: hsl(var(--primary-solid));
+  color: white;
+  border-color: hsl(var(--primary-solid));
+}
+.studio-connection-panel__btn--primary:hover {
+  opacity: 0.9;
+}
+.studio-connection-panel__btn--secondary {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+.studio-connection-panel__btn--secondary:hover {
+  background: hsl(var(--muted) / 0.4);
+}
+.studio-connection-panel__btn--ghost {
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+}
+.studio-connection-panel__btn--ghost:hover {
+  color: hsl(var(--foreground));
+}
+
+.studio-connection-panel__pill {
+  font-size: 11.5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.studio-connection-panel__pill--success {
+  color: rgb(5 122 85);
+  background: rgb(16 185 129 / 0.12);
+}
+.dark .studio-connection-panel__pill--success {
+  color: rgb(110 231 183);
+  background: rgb(16 185 129 / 0.18);
+}
+.studio-connection-panel__pill--skipped {
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted) / 0.5);
+}
+
+/* Modal — a single overlay; outer container stays mounted while the
+ * OAuth popup is open so the popup-closed polling effect survives.
+ * The inner container hides via display:none rather than unmounting.
+ */
+.studio-connection-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.4);
+  padding: 16px;
+}
+.studio-connection-modal {
+  width: 100%;
+  max-width: 540px;
+  max-height: 85vh;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgb(0 0 0 / 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.studio-connection-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.studio-connection-modal__header-text {
+  flex: 1;
+  min-width: 0;
+}
+.studio-connection-modal__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  letter-spacing: -0.01em;
+}
+.studio-connection-modal__description {
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  margin-top: 2px;
+}
+.studio-connection-modal__close {
+  padding: 4px;
+  margin: -4px;
+  color: hsl(var(--muted-foreground));
+  border-radius: 4px;
+  cursor: pointer;
+}
+.studio-connection-modal__close:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.4);
+}
+.studio-connection-modal__body {
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+.studio-connection-modal__error {
+  font-size: 12.5px;
+  color: hsl(var(--destructive));
+  border: 1px solid hsl(var(--destructive) / 0.3);
+  background: hsl(var(--destructive) / 0.05);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+.studio-connection-modal__loading {
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  padding: 16px 0;
+  text-align: center;
+}

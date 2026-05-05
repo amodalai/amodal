@@ -42,8 +42,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@amodalai/core": "workspace:*",
     "@amodalai/db": "workspace:*",
     "@amodalai/react": "workspace:*",
+    "@amodalai/runtime": "workspace:*",
     "@amodalai/types": "workspace:*",
     "@codemirror/autocomplete": "^6.20.1",
     "@codemirror/commands": "^6.10.3",

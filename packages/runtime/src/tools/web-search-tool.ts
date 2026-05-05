@@ -147,6 +147,8 @@ If the first query returns off-topic results, rewrite more specifically and sear
     parameters: WebSearchParamsSchema,
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Searching the web for "{{query}}"',
+    completedLabel: 'Searched the web for "{{query}}"',
 
     async execute(params, ctx: ToolContext): Promise<WebSearchToolResult> {
       const maxResults = params.max_results ?? DEFAULT_MAX_RESULTS;

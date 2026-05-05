@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type * as React from 'react';
+
 // ---------------------------------------------------------------------------
 // SSE event types — mirrored from runtime/src/types.ts for browser use
 // (no @amodalai/core dependency)
@@ -21,16 +23,20 @@ export type SSEEventType =
   | 'credential_saved'
   | 'approved'
   | 'ask_user'
+  | 'ask_choice'
+  | 'show_preview'
+  | 'connection_panel'
+  | 'plan_summary'
   | 'explore_start'
   | 'explore_end'
   | 'plan_mode'
   | 'field_scrub'
   | 'confirmation_required'
   | 'tool_log'
+  | 'tool_label_update'
   | 'warning'
   | 'error'
-  | 'done'
-  | 'collect_secret';
+  | 'done';
 
 export interface SSEInitEvent {
   type: 'init';
@@ -49,6 +55,15 @@ export interface SSEToolCallStartEvent {
   tool_name: string;
   tool_id: string;
   parameters: Record<string, unknown>;
+  /** Resolved present-participle label rendered while running. */
+  running_label?: string;
+  /** Resolved past-tense label rendered after success. */
+  completed_label?: string;
+  /**
+   * Marks the call as internal plumbing the user shouldn't see by
+   * default. Hidden unless `verboseTools` is enabled.
+   */
+  internal?: boolean;
   timestamp: string;
 }
 
@@ -141,6 +156,162 @@ export interface SSEAskUserEvent {
   timestamp: string;
 }
 
+/**
+ * Single- or multi-select chat-inline question rendered as a button row.
+ * Mirrored from @amodalai/types — see SSEAskChoiceEvent for full docs.
+ */
+export interface SSEAskChoiceEvent {
+  type: 'ask_choice';
+  ask_id: string;
+  question: string;
+  options: AskChoiceOption[];
+  multi?: boolean;
+  timestamp: string;
+}
+
+export interface AskChoiceOption {
+  label: string;
+  value: string;
+  /**
+   * Optional one-line description shown beneath the label. When any
+   * option in a `multi: true` block has a description, the card
+   * renders as a checkbox list (used for optional-connection batches).
+   */
+  description?: string;
+}
+
+/**
+ * Inline preview card emitted by the admin agent's `show_preview` tool to
+ * surface a template's curated card snippet inside the chat stream.
+ * Mirrored from @amodalai/types.
+ */
+export interface SSEShowPreviewEvent {
+  type: 'show_preview';
+  card: AgentCardInline;
+  timestamp: string;
+}
+
+/**
+ * Inline connection panel emitted by `present_connection` (Phase
+ * H.1). Auth-agnostic — the modal behind the panel handles dispatch.
+ * Mirrored from @amodalai/types — see SSEConnectionPanelEvent.
+ */
+export interface SSEConnectionPanelEvent {
+  type: 'connection_panel';
+  panel_id: string;
+  package_name: string;
+  display_name: string;
+  description: string;
+  skippable: boolean;
+  timestamp: string;
+}
+
+/**
+ * Plan summary card emitted by `load_template_plan` after the
+ * SetupPlan composes from the installed template. Read-only —
+ * surfaces required + optional connections + config questions so
+ * the user sees what got loaded inline. Mirrored from @amodalai/types.
+ */
+export interface SSEPlanSummaryEvent {
+  type: 'plan_summary';
+  template_title: string;
+  required_slots: Array<{
+    label: string;
+    description: string;
+    options: Array<{display_name: string; package_name: string}>;
+  }>;
+  optional_slots: Array<{
+    label: string;
+    description: string;
+    options: Array<{display_name: string; package_name: string}>;
+  }>;
+  config_questions: Array<{key: string; question: string}>;
+  completion_suggestions: string[];
+  timestamp: string;
+}
+
+/**
+ * One slot label + description shown on the Proposal card. Skill /
+ * connection display names only — the proposal tool never quotes
+ * raw npm package names.
+ */
+export interface ProposalEntry {
+  label: string;
+  description: string;
+}
+
+/**
+ * Plan proposal card emitted on Path B (custom description). The user
+ * sees the inferred set of skills + connections with `Looks right →`
+ * and `Adjust` buttons. Mirrored from @amodalai/types.
+ */
+export interface SSEProposalEvent {
+  type: 'proposal';
+  proposal_id: string;
+  summary: string;
+  skills: ProposalEntry[];
+  required_connections: ProposalEntry[];
+  optional_connections: ProposalEntry[];
+  timestamp: string;
+}
+
+/**
+ * Patch event for an in-flight proposal. Matched by `proposal_id`
+ * to mutate the existing card in place. Each field is optional;
+ * unspecified fields preserve the current card's values.
+ */
+export interface SSEUpdatePlanEvent {
+  type: 'update_plan';
+  proposal_id: string;
+  summary?: string;
+  skills?: ProposalEntry[];
+  required_connections?: ProposalEntry[];
+  optional_connections?: ProposalEntry[];
+  timestamp: string;
+}
+
+/**
+ * Setup cancelled — Phase E.10. The setup_state row has been deleted;
+ * the chat surface flips back to the picker. `reason` is opaque
+ * human-readable text for an optional acknowledgement message.
+ */
+export interface SSESetupCancelledEvent {
+  type: 'setup_cancelled';
+  reason?: string;
+  timestamp: string;
+}
+
+/**
+ * Setup committed — emitted by request_complete_setup /
+ * force_complete_setup once amodal.json is on disk and
+ * setup_state.completedAt is set. Studio's AdminChat catches this
+ * and reloads `/` to flip from CreateFlowPage to OverviewPage.
+ */
+export interface SSESetupCompletedEvent {
+  type: 'setup_completed';
+  completed_at: string;
+  timestamp: string;
+}
+
+/** Mirrored from @amodalai/types AgentCard — see card-types.ts. */
+export interface AgentCardInline {
+  title: string;
+  tagline: string;
+  platforms: string[];
+  thumbnailConversation: AgentCardInlineTurn[];
+  /**
+   * Marketplace card thumbnail URL (R2-hosted JPEG). When present, the
+   * inline card renders the image as a hero above the text. Optional —
+   * cards without an image render with title + tagline + platforms only.
+   */
+  imageUrl?: string;
+}
+
+export interface AgentCardInlineTurn {
+  role: 'user' | 'agent';
+  content: string;
+}
+
 export interface SSEExploreStartEvent {
   type: 'explore_start';
   query: string;
@@ -188,6 +359,15 @@ export interface SSEToolLogEvent {
   timestamp: string;
 }
 
+/** Live label update emitted by a tool via `ctx.setLabel(...)`. */
+export interface SSEToolLabelUpdateEvent {
+  type: 'tool_label_update';
+  tool_id: string;
+  running_label?: string;
+  completed_label?: string;
+  timestamp: string;
+}
+
 export interface SSEErrorEvent {
   type: 'error';
   message: string;
@@ -218,27 +398,24 @@ export type SSEEvent =
   | SSECredentialSavedEvent
   | SSEApprovedEvent
   | SSEAskUserEvent
+  | SSEAskChoiceEvent
+  | SSEShowPreviewEvent
+  | SSEConnectionPanelEvent
+  | SSEPlanSummaryEvent
+  | SSEProposalEvent
+  | SSEUpdatePlanEvent
+  | SSESetupCancelledEvent
+  | SSESetupCompletedEvent
   | SSEExploreStartEvent
   | SSEExploreEndEvent
   | SSEPlanModeEvent
   | SSEFieldScrubEvent
   | SSEConfirmationRequiredEvent
   | SSEToolLogEvent
+  | SSEToolLabelUpdateEvent
   | SSEWarningEvent
   | SSEErrorEvent
-  | SSEDoneEvent
-  | SSECollectSecretEvent;
-
-export interface SSECollectSecretEvent {
-  type: 'collect_secret';
-  secret_id: string;
-  name: string;
-  label: string;
-  description?: string;
-  link?: string;
-  required: boolean;
-  timestamp: string;
-}
+  | SSEDoneEvent;
 
 // ---------------------------------------------------------------------------
 // Ask user types
@@ -286,6 +463,23 @@ export interface ToolCallInfo {
   subagentEvents?: SubagentEventInfo[];
   /** Ephemeral progress message from the tool executor (via ctx.log). */
   logMessage?: string;
+  /**
+   * Resolved present-participle label rendered while the tool is
+   * running. Comes from the runtime's tool definition, with
+   * `{{paramName}}` placeholders pre-substituted server-side.
+   */
+  runningLabel?: string;
+  /**
+   * Resolved past-tense label rendered after a successful run. Same
+   * substitution as `runningLabel`. The widget swaps to this purely
+   * based on `status`.
+   */
+  completedLabel?: string;
+  /**
+   * Marks the call as internal plumbing. MessageList filters these
+   * out unless the embedder enables `verboseTools`.
+   */
+  internal?: boolean;
 }
 
 export interface ConfirmationInfo {
@@ -318,6 +512,100 @@ export interface AskUserBlock {
   questions: AskUserQuestion[];
   status: AskUserStatus;
   answers?: Record<string, string>;
+}
+
+/**
+ * Inline button row asking the user to pick one (or several) of a small set.
+ * Status mirrors AskUserBlock — once the user clicks, we lock the buttons
+ * to prevent double-submit and show the chosen value(s) as a summary.
+ */
+export interface AskChoiceBlock {
+  type: 'ask_choice';
+  askId: string;
+  question: string;
+  options: AskChoiceOption[];
+  multi: boolean;
+  status: AskUserStatus;
+  /** Selected value(s) after the user picks. Single-select stores one entry. */
+  answer?: string[];
+}
+
+/** Inline template-card preview surfaced by the `show_preview` tool. */
+export interface ShowPreviewBlock {
+  type: 'show_preview';
+  card: AgentCardInline;
+}
+
+/**
+ * Plan summary surfaced by the `load_template_plan` tool. Read-only.
+ * Renders required + optional connection slots and config questions
+ * so the user can verify the right template loaded. No interaction
+ * affordances — just structured content.
+ */
+export interface PlanSummaryBlock {
+  type: 'plan_summary';
+  templateTitle: string;
+  requiredSlots: Array<{
+    label: string;
+    description: string;
+    options: Array<{displayName: string; packageName: string}>;
+  }>;
+  optionalSlots: Array<{
+    label: string;
+    description: string;
+    options: Array<{displayName: string; packageName: string}>;
+  }>;
+  configQuestions: Array<{key: string; question: string}>;
+  completionSuggestions: string[];
+}
+
+/**
+ * Inline connection panel surfaced by the `present_connection` tool
+ * (Phase H.1). Auth-agnostic — Studio supplies the renderer via
+ * `inlineBlockRenderers` (Phase H.2). The widget itself doesn't
+ * render this block natively; it falls through to the registry or a
+ * placeholder.
+ *
+ * `state` is a cache the renderer last drew. Studio overwrites it
+ * via reconciliation against real env-var status on every chat
+ * mount (Phase H.10), so it is never trusted blind. Only
+ * `userSkipped` survives reload.
+ */
+export interface ConnectionPanelBlock {
+  type: 'connection_panel';
+  panelId: string;
+  packageName: string;
+  displayName: string;
+  description: string;
+  skippable: boolean;
+  state: 'idle' | 'success' | 'skipped' | 'error';
+  /** Persisted hint that the user clicked Later. Only field that survives reload. */
+  userSkipped?: boolean;
+  /** Optional inline data point shown beside the success state. */
+  successDetail?: string;
+  /** Optional error message shown beneath the panel in the error state. */
+  errorMessage?: string;
+}
+
+/**
+ * Plan proposal card surfaced by the `propose_plan` tool (Phase D —
+ * Path B custom-description flow). Mutated in place by subsequent
+ * `update_plan` events keyed off `proposalId`, never duplicated.
+ *
+ * `status` mirrors AskUserBlock — once the user clicks Looks right
+ * or Adjust, we lock the buttons and show the chosen action as a
+ * summary so the conversation history reads cleanly.
+ */
+export interface ProposalBlock {
+  type: 'proposal';
+  proposalId: string;
+  summary: string;
+  skills: ProposalEntry[];
+  requiredConnections: ProposalEntry[];
+  optionalConnections: ProposalEntry[];
+  status: AskUserStatus;
+  /** 'confirm' or 'adjust', set once the user clicks. */
+  answer?: 'confirm' | 'adjust';
 }
 
 export interface UserMessage {
@@ -353,16 +641,40 @@ export interface ErrorMessage {
 
 export type ChatMessage = UserMessage | AssistantTextMessage | ErrorMessage;
 
-export interface CollectSecretBlock {
-  type: 'collect_secret';
-  secretId: string;
-  name: string;
-  label: string;
-  description?: string;
-  link?: string;
-  required: boolean;
-  status: 'pending' | 'saved' | 'skipped';
+/**
+ * Props passed to a renderer registered via `inlineBlockRenderers`
+ * on `<ChatWidget>` (Phase H.2). Studio supplies its own renderer
+ * for `connection_panel` so the widget itself stays auth-agnostic
+ * (and stays free of `/api/connections-status`, modal-stack, and
+ * env-var-inspection plumbing).
+ *
+ * - `block` — the typed ContentBlock entry to render.
+ * - `dispatch` — reducer dispatch handle, scoped to actions the
+ *   renderer should ever fire (today: `PANEL_UPDATE`).
+ * - `postUserMessage` — post a user turn into the conversation,
+ *   same as if the user had typed it. Used by Skip / Configure-success
+ *   to inject `Skip {displayName} for now` / `Configured {displayName}`.
+ */
+export interface BlockRendererProps<TBlock extends ContentBlock = ContentBlock> {
+  block: TBlock;
+  dispatch: React.Dispatch<ChatAction>;
+  postUserMessage: (text: string) => void;
 }
+
+/**
+ * Optional prop on `<ChatWidget>` (Phase H.2). Each entry maps a
+ * block type to a Studio-supplied renderer. The widget falls back to
+ * the registry only for block types it doesn't render natively
+ * (`connection_panel` is the first opt-in; future Studio-only blocks
+ * can register similarly). Native block types (text, ask_choice,
+ * proposal, etc.) cannot be overridden — that's a non-goal of the
+ * extension point.
+ */
+export type InlineBlockRendererRegistry = Partial<{
+  [K in ContentBlock['type']]: React.ComponentType<
+    BlockRendererProps<Extract<ContentBlock, {type: K}>>
+  >;
+}>;
 
 export type ContentBlock =
   | { type: 'text'; text: string }
@@ -370,7 +682,11 @@ export type ContentBlock =
   | { type: 'tool_calls'; calls: ToolCallInfo[] }
   | { type: 'confirmation'; confirmation: ConfirmationInfo }
   | AskUserBlock
-  | CollectSecretBlock;
+  | AskChoiceBlock
+  | ShowPreviewBlock
+  | ConnectionPanelBlock
+  | PlanSummaryBlock
+  | ProposalBlock;
 
 // ---------------------------------------------------------------------------
 // Widget configuration
@@ -456,7 +772,7 @@ export type ChatAction =
   | { type: 'SEND_MESSAGE'; text: string; images?: string[] }
   | { type: 'STREAM_INIT'; sessionId: string }
   | { type: 'STREAM_TEXT_DELTA'; content: string }
-  | { type: 'STREAM_TOOL_CALL_START'; toolId: string; toolName: string; parameters: Record<string, unknown> }
+  | { type: 'STREAM_TOOL_CALL_START'; toolId: string; toolName: string; parameters: Record<string, unknown>; runningLabel?: string; completedLabel?: string; internal?: boolean }
   | { type: 'STREAM_TOOL_CALL_RESULT'; toolId: string; status: 'success' | 'error'; result?: unknown; parameters?: Record<string, unknown>; duration_ms?: number; error?: string }
   | { type: 'STREAM_SUBAGENT_EVENT'; parentToolId: string; event: SubagentEventInfo }
   | { type: 'STREAM_SKILL_ACTIVATED'; skill: string }
@@ -466,13 +782,53 @@ export type ChatAction =
   | { type: 'STREAM_APPROVED'; resourceType: string; previewId: string }
   | { type: 'STREAM_ASK_USER'; askId: string; questions: AskUserQuestion[] }
   | { type: 'ASK_USER_SUBMITTED'; askId: string; answers: Record<string, string> }
+  | { type: 'STREAM_ASK_CHOICE'; askId: string; question: string; options: AskChoiceOption[]; multi: boolean }
+  | { type: 'ASK_CHOICE_SUBMITTED'; askId: string; values: string[] }
+  | { type: 'STREAM_SHOW_PREVIEW'; card: AgentCardInline }
+  | {
+      type: 'STREAM_CONNECTION_PANEL';
+      panelId: string;
+      packageName: string;
+      displayName: string;
+      description: string;
+      skippable: boolean;
+    }
+  | {
+      type: 'PANEL_UPDATE';
+      panelId: string;
+      patch: Partial<Pick<ConnectionPanelBlock, 'state' | 'userSkipped' | 'successDetail' | 'errorMessage'>>;
+    }
+  | {
+      type: 'STREAM_PLAN_SUMMARY';
+      templateTitle: string;
+      requiredSlots: PlanSummaryBlock['requiredSlots'];
+      optionalSlots: PlanSummaryBlock['optionalSlots'];
+      configQuestions: PlanSummaryBlock['configQuestions'];
+      completionSuggestions: string[];
+    }
+  | {
+      type: 'STREAM_PROPOSAL';
+      proposalId: string;
+      summary: string;
+      skills: ProposalEntry[];
+      requiredConnections: ProposalEntry[];
+      optionalConnections: ProposalEntry[];
+    }
+  | {
+      type: 'STREAM_UPDATE_PLAN';
+      proposalId: string;
+      summary?: string;
+      skills?: ProposalEntry[];
+      requiredConnections?: ProposalEntry[];
+      optionalConnections?: ProposalEntry[];
+    }
+  | { type: 'PROPOSAL_SUBMITTED'; proposalId: string; answer: 'confirm' | 'adjust' }
   | { type: 'STREAM_CONFIRMATION_REQUIRED'; confirmation: ConfirmationInfo }
   | { type: 'CONFIRMATION_RESPONDED'; correlationId: string; approved: boolean }
   | { type: 'STREAM_ERROR'; message: string }
   | { type: 'STREAM_TOOL_LOG'; toolName: string; message: string }
+  | { type: 'STREAM_TOOL_LABEL_UPDATE'; toolId: string; runningLabel?: string; completedLabel?: string }
   | { type: 'STREAM_DONE'; usage?: {inputTokens: number; outputTokens: number} }
-  | { type: 'STREAM_COLLECT_SECRET'; secretId: string; name: string; label: string; description?: string; link?: string; required: boolean }
-  | { type: 'COLLECT_SECRET_SAVED'; secretId: string }
   | { type: 'LOAD_HISTORY'; sessionId: string; messages: ChatMessage[] }
   | { type: 'RESET' };
 

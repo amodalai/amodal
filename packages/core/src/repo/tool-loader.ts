@@ -129,6 +129,13 @@ async function loadToolWithJson(
     loaded.responseShaping = toolJson.responseShaping;
   }
 
+  if (toolJson.runningLabel) {
+    loaded.runningLabel = toolJson.runningLabel;
+  }
+  if (toolJson.completedLabel) {
+    loaded.completedLabel = toolJson.completedLabel;
+  }
+
   return loaded;
 }
 

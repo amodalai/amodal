@@ -15,18 +15,33 @@
 import type {z} from 'zod';
 import type {FlexibleSchema} from 'ai';
 import type {SearchProvider} from '../providers/search-provider.js';
-import type {SSEAskChoiceEvent, SSEShowPreviewEvent, SSEStartOAuthEvent, SSECollectSecretEvent} from '../types.js';
+import type {
+  SSEAskChoiceEvent,
+  SSEShowPreviewEvent,
+  SSEConnectionPanelEvent,
+  SSEPlanSummaryEvent,
+  SSEProposalEvent,
+  SSEUpdatePlanEvent,
+  SSESetupCancelledEvent,
+  SSESetupCompletedEvent,
+  SSEToolLabelUpdateEvent,
+} from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Inline tool events (emitted via ctx.emit)
 // ---------------------------------------------------------------------------
 
-/** SSE events tools can emit inline during execution. */
+/** Discriminated set of SSE events tools can emit inline. */
 export type ToolInlineEvent =
   | SSEAskChoiceEvent
   | SSEShowPreviewEvent
-  | SSEStartOAuthEvent
-  | SSECollectSecretEvent;
+  | SSEConnectionPanelEvent
+  | SSEPlanSummaryEvent
+  | SSEProposalEvent
+  | SSEUpdatePlanEvent
+  | SSESetupCancelledEvent
+  | SSESetupCompletedEvent
+  | SSEToolLabelUpdateEvent;
 
 // ---------------------------------------------------------------------------
 // Tool context (provided to execute functions)
@@ -57,6 +72,35 @@ export interface ToolContext {
   /** Log a message (emitted as tool_log SSE event) */
   log(message: string): void;
 
+  /**
+   * Emit an inline SSE event (e.g. `show_preview`, `ask_choice`). Drained by
+   * the executing state and pushed onto the stream alongside the tool result.
+   * Tools that don't need inline UI never call this — keep the API surface
+   * narrow.
+   */
+  emit?(event: ToolInlineEvent): void;
+
+  /**
+   * Update the friendly running / completed phrase the chat ToolCallCard
+   * shows for this call. Either or both fields may be set; subsequent
+   * calls overwrite the previous values. Internally emits a
+   * `tool_label_update` SSE event the widget consumes to patch the
+   * card in-place — useful for long-running tools that move through
+   * stages ("Cloning…" → "Installing packages" → "Composed plan").
+   *
+   * `tool_call_start` already carries the static defaults from the
+   * tool's `runningLabel` / `completedLabel`, so a tool that doesn't
+   * call this still gets sensible labels.
+   */
+  setLabel?(opts: {running?: string; completed?: string}): void;
+
+  /**
+   * Sink populated by `emit()` and drained by the executing state. Public on
+   * the type so the caller can read it; not part of the documented tool API.
+   * @internal
+   */
+  inlineEvents?: ToolInlineEvent[];
+
   /** Abort signal for cancellation/timeout */
   signal: AbortSignal;
 
@@ -75,19 +119,6 @@ export interface ToolContext {
 
   /** Scope context key-value pairs associated with this scope */
   scopeContext?: Record<string, string>;
-
-  /**
-   * Emit an inline SSE event (e.g. `show_gallery`, `ask_choice`).
-   * Drained by the executing state and pushed onto the stream
-   * alongside the tool result.
-   */
-  emit?(event: ToolInlineEvent): void;
-
-  /**
-   * Sink populated by `emit()` and drained by the executing state.
-   * @internal
-   */
-  inlineEvents?: ToolInlineEvent[];
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +184,30 @@ export interface ToolDefinition<TParams = unknown> {
 
   /** Optional metadata for permission, routing, and UI */
   metadata?: ToolMetadata;
+
+  /**
+   * Present-participle label rendered while the tool is running, e.g.
+   * "Looking up template 'marketing-digest'". Supports `{{paramName}}`
+   * substitution against the call's parameters. Optional — undefined
+   * tools fall back to their `name` in the UI.
+   */
+  runningLabel?: string;
+
+  /**
+   * Past-tense label rendered after the tool completes successfully,
+   * e.g. "Looked up template". Same `{{paramName}}` substitution as
+   * `runningLabel`. Optional — when omitted the UI keeps the running
+   * label after completion (the status icon differentiates them).
+   */
+  completedLabel?: string;
+
+  /**
+   * Marks the tool as internal plumbing the user shouldn't see by
+   * default (state I/O, version checks, coordination calls). Stamped
+   * onto `tool_call_start` / `tool_call_result` SSE events; the chat
+   * widget hides these calls unless `verboseTools` is enabled.
+   */
+  internal?: boolean;
 }
 
 // ---------------------------------------------------------------------------

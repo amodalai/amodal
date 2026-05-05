@@ -16,7 +16,7 @@
 
 import express from 'express';
 import type http from 'node:http';
-import {existsSync, readFileSync, mkdirSync, writeFileSync} from 'node:fs';
+import {existsSync, readFileSync, mkdirSync, writeFileSync, watch} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
@@ -72,6 +72,7 @@ import {createChatStreamRouter} from '../routes/chat-stream.js';
 import {createChatRouter} from '../routes/chat.js';
 import {createTaskRouter} from './routes/task.js';
 import {createInspectRouter} from './routes/inspect.js';
+import {createPackageUpdatesRouter} from './routes/package-updates.js';
 import {createFeedbackRouter} from './routes/feedback.js';
 import {FeedbackStore} from './feedback-store.js';
 import {createStoresRouter} from './routes/stores.js';
@@ -377,6 +378,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       systemPrompt: components.systemPrompt,
       toolContextFactory: components.toolContextFactory,
       appId,
+      intents: components.intents,
     });
     return {session, toolContextFactory: components.toolContextFactory};
   };
@@ -622,6 +624,19 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     return out;
   }
 
+  // ---------------------------------------------------------------------------
+  // /api/oauth/start + /api/oauth/callback — DEPRECATED
+  //
+  // OAuth start/callback moved to Studio (packages/studio/src/server/routes/oauth.ts).
+  // Studio is the boot surface — it's up before `amodal.json` exists, so the
+  // setup-time Configure flow can run before this runtime even starts. The
+  // runtime now watches `<repoPath>/.amodal/secrets.env` for changes and
+  // reloads `process.env` automatically when Studio writes a new credential.
+  //
+  // These handlers stay in for backward compat (any older Studio build or
+  // direct caller) but are no longer the canonical path. Plan: remove after
+  // one release.
+  // ---------------------------------------------------------------------------
   app.get('/api/oauth/start', (req, res) => {
     void (async () => {
       reapExpiredOauthStates();
@@ -740,13 +755,30 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     });
   });
 
-  // Load any previously-persisted OAuth secrets into process.env on startup.
-  // (Idempotent — overwrites any existing value with the persisted one,
-  // which is what users want after a runtime restart.)
+  // Load any previously-persisted secrets into process.env on startup,
+  // then watch the file for changes — Studio writes to this file when
+  // it completes an OAuth dance or saves a paste-field, so the runtime
+  // needs to pick up new credentials without a restart.
+  //
+  // Path resolution: the admin agent is spawned with `cwd: <admin
+  // agent dir>` but `REPO_PATH=<user's repo>` in env. We want to
+  // watch the USER's secrets.env in both cases (main runtime and
+  // admin agent), so prefer REPO_PATH when set. Falls back to
+  // config.repoPath, which is the right path for the main runtime.
   {
-    const file = path.join(config.repoPath, '.amodal', 'secrets.env');
-    if (existsSync(file)) {
-      const content = readFileSync(file, 'utf-8');
+    const secretsRepoPath = process.env['REPO_PATH'] ?? config.repoPath;
+    const dir = path.join(secretsRepoPath, '.amodal');
+    const file = path.join(dir, 'secrets.env');
+
+    function loadSecrets(reason: 'startup' | 'change'): void {
+      if (!existsSync(file)) return;
+      let content: string;
+      try {
+        content = readFileSync(file, 'utf-8');
+      } catch (err: unknown) {
+        log.warn('secrets_read_failed', {file, error: err instanceof Error ? err.message : String(err)});
+        return;
+      }
       let count = 0;
       for (const line of content.split('\n')) {
         const eq = line.indexOf('=');
@@ -755,7 +787,28 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         const v = line.slice(eq + 1);
         if (k) { process.env[k] = v; count++; }
       }
-      if (count > 0) log.info('secrets_loaded_from_disk', {count, file});
+      if (count > 0) {
+        log.info(reason === 'startup' ? 'secrets_loaded_from_disk' : 'secrets_reloaded_from_disk', {count, file});
+      }
+    }
+
+    loadSecrets('startup');
+
+    // Watch the parent dir (not the file directly) so we still pick up
+    // the first write — fs.watch on a non-existent file throws, and
+    // editor-style "atomic save" replaces the inode which most
+    // file-watchers miss when scoped to the path.
+    if (existsSync(dir)) {
+      try {
+        const watcher = watch(dir, {persistent: false}, (_event, filename) => {
+          if (filename === 'secrets.env') loadSecrets('change');
+        });
+        watcher.on('error', (err) => {
+          log.warn('secrets_watcher_error', {file, error: err.message});
+        });
+      } catch (err: unknown) {
+        log.warn('secrets_watch_failed', {dir, error: err instanceof Error ? err.message : String(err)});
+      }
     }
   }
 
@@ -1075,6 +1128,9 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // Inspect
   app.use(createInspectRouter({getBundle, repoPath: config.repoPath}));
+
+  // Package updates (npm view + cache)
+  app.use(createPackageUpdatesRouter({repoPath: config.repoPath, logger: log}));
 
   // Messaging channels
   if (channelsResult) {

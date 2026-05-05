@@ -130,4 +130,155 @@ describe('useChatStream — direct usage', () => {
     await waitFor(() => { expect(result.current.isStreaming).toBe(false); });
     expect(result.current.error).toBe('transport boom');
   });
+
+  // -------------------------------------------------------------------
+  // Phase D — Path B Proposal card reducer flows
+  // -------------------------------------------------------------------
+
+  describe('Phase D — proposal + update_plan reducer', () => {
+    function streamWithProposal(): AsyncIterable<SSEEvent> {
+      return events([
+        { type: 'init', session_id: 'sP', timestamp: now() },
+        {
+          type: 'proposal',
+          proposal_id: 'p_abc',
+          summary: 'Plumbing scheduler + reminders',
+          skills: [{ label: 'Scheduler', description: 'Daily schedule' }],
+          required_connections: [{ label: 'Twilio', description: 'SMS' }],
+          optional_connections: [{ label: 'Calendar', description: 'Sync' }],
+          timestamp: now(),
+        },
+        { type: 'done', timestamp: now() },
+      ]);
+    }
+
+    type StreamHookResult = ReturnType<typeof useChatStream>;
+
+    function proposalBlockOf(result: { current: StreamHookResult }) {
+      const last = result.current.messages[result.current.messages.length - 1];
+      if (last.type !== 'assistant_text') throw new Error('expected assistant_text');
+      const block = last.contentBlocks.find((b) => b.type === 'proposal');
+      if (!block || block.type !== 'proposal') throw new Error('expected proposal block');
+      return block;
+    }
+
+    it('appends a ProposalBlock from a proposal SSE event with status: pending', async () => {
+      const streamFn = (): AsyncIterable<SSEEvent> => streamWithProposal();
+      const { result } = renderHook(() => useChatStream({ streamFn }));
+      act(() => { result.current.send('I run a plumbing company'); });
+      await waitFor(() => { expect(result.current.isStreaming).toBe(false); });
+
+      const block = proposalBlockOf(result);
+      expect(block.proposalId).toBe('p_abc');
+      expect(block.status).toBe('pending');
+      expect(block.summary).toBe('Plumbing scheduler + reminders');
+      expect(block.skills).toHaveLength(1);
+      expect(block.requiredConnections[0]?.label).toBe('Twilio');
+      expect(block.optionalConnections[0]?.label).toBe('Calendar');
+    });
+
+    it('STREAM_UPDATE_PLAN patches in place by proposalId, preserving unspecified fields', async () => {
+      const streamFn = (): AsyncIterable<SSEEvent> => streamWithProposal();
+      const { result } = renderHook(() => useChatStream({ streamFn }));
+      act(() => { result.current.send('I run a plumbing company'); });
+      await waitFor(() => { expect(result.current.isStreaming).toBe(false); });
+
+      // Simulate the agent sending an update_plan that only changes
+      // optional_connections — required + skills + summary should
+      // stay intact from the original proposal.
+      act(() => {
+        result.current.dispatch({
+          type: 'STREAM_UPDATE_PLAN',
+          proposalId: 'p_abc',
+          optionalConnections: [{ label: 'QuickBooks', description: 'Invoicing' }],
+        });
+      });
+
+      const block = proposalBlockOf(result);
+      expect(block.proposalId).toBe('p_abc');
+      expect(block.summary).toBe('Plumbing scheduler + reminders');
+      expect(block.skills).toEqual([{ label: 'Scheduler', description: 'Daily schedule' }]);
+      expect(block.requiredConnections).toEqual([{ label: 'Twilio', description: 'SMS' }]);
+      expect(block.optionalConnections).toEqual([{ label: 'QuickBooks', description: 'Invoicing' }]);
+      expect(block.status).toBe('pending');
+    });
+
+    it('STREAM_UPDATE_PLAN with empty array replaces (vs undefined preserves)', async () => {
+      const streamFn = (): AsyncIterable<SSEEvent> => streamWithProposal();
+      const { result } = renderHook(() => useChatStream({ streamFn }));
+      act(() => { result.current.send('I run a plumbing company'); });
+      await waitFor(() => { expect(result.current.isStreaming).toBe(false); });
+
+      // optionalConnections: [] should clear, summary undefined should preserve.
+      act(() => {
+        result.current.dispatch({
+          type: 'STREAM_UPDATE_PLAN',
+          proposalId: 'p_abc',
+          optionalConnections: [],
+        });
+      });
+
+      const block = proposalBlockOf(result);
+      expect(block.optionalConnections).toEqual([]);
+      expect(block.summary).toBe('Plumbing scheduler + reminders');
+    });
+
+    it('STREAM_UPDATE_PLAN with a non-matching proposalId is a no-op', async () => {
+      const streamFn = (): AsyncIterable<SSEEvent> => streamWithProposal();
+      const { result } = renderHook(() => useChatStream({ streamFn }));
+      act(() => { result.current.send('x'); });
+      await waitFor(() => { expect(result.current.isStreaming).toBe(false); });
+
+      const before = proposalBlockOf(result);
+      act(() => {
+        result.current.dispatch({
+          type: 'STREAM_UPDATE_PLAN',
+          proposalId: 'never-existed',
+          summary: 'should not apply',
+        });
+      });
+      const after = proposalBlockOf(result);
+      expect(after.summary).toBe(before.summary);
+    });
+
+    it('PROPOSAL_SUBMITTED locks the buttons and stores the answer', async () => {
+      const streamFn = (): AsyncIterable<SSEEvent> => streamWithProposal();
+      const { result } = renderHook(() => useChatStream({ streamFn }));
+      act(() => { result.current.send('x'); });
+      await waitFor(() => { expect(result.current.isStreaming).toBe(false); });
+
+      act(() => {
+        result.current.dispatch({ type: 'PROPOSAL_SUBMITTED', proposalId: 'p_abc', answer: 'confirm' });
+      });
+
+      const block = proposalBlockOf(result);
+      expect(block.status).toBe('submitted');
+      expect(block.answer).toBe('confirm');
+    });
+
+    it('STREAM_UPDATE_PLAN re-opens a previously submitted card', async () => {
+      const streamFn = (): AsyncIterable<SSEEvent> => streamWithProposal();
+      const { result } = renderHook(() => useChatStream({ streamFn }));
+      act(() => { result.current.send('x'); });
+      await waitFor(() => { expect(result.current.isStreaming).toBe(false); });
+
+      // User submits Adjust → card locks.
+      act(() => {
+        result.current.dispatch({ type: 'PROPOSAL_SUBMITTED', proposalId: 'p_abc', answer: 'adjust' });
+      });
+      expect(proposalBlockOf(result).status).toBe('submitted');
+
+      // Agent sends an updated plan → card re-opens for re-confirmation.
+      act(() => {
+        result.current.dispatch({
+          type: 'STREAM_UPDATE_PLAN',
+          proposalId: 'p_abc',
+          summary: 'Revised plan',
+        });
+      });
+      const after = proposalBlockOf(result);
+      expect(after.status).toBe('pending');
+      expect(after.summary).toBe('Revised plan');
+    });
+  });
 });

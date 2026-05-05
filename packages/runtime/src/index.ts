@@ -58,6 +58,28 @@ export type { TaskRouterOptions } from './agent/routes/task.js';
 export { getAuthContext } from './middleware/auth.js';
 export type { AuthContext } from './middleware/auth.js';
 
+// Setup-completion primitive (Phase E.2). Used by both the agent
+// `request_complete_setup` / `force_complete_setup` tools and the
+// Studio "Finish setup" button via /api/admin-chat/commit-setup.
+export {
+  commitSetup,
+  composeAmodalJson,
+  SetupNotReadyError,
+} from './setup/commit-setup.js';
+export type {
+  CommitSetupOptions,
+  CommitSetupResult,
+  CommitSetupSuccess,
+  CommitSetupNotReady,
+  CommitSetupNoState,
+} from './setup/commit-setup.js';
+
+// Custom-tool SDK is exported from the `@amodalai/runtime/tools` subpath
+// (not re-exported here to avoid colliding with the internal `ToolContext`
+// defined in ./tools/types.ts and used throughout the runtime's tool
+// implementations). Tool handler authors:
+//   import type { ToolContext } from '@amodalai/runtime/tools';
+
 // Scope resolution
 export { resolveScope } from './scope.js';
 export type { ResolvedScope } from './scope.js';

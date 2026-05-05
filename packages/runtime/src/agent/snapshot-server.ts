@@ -130,6 +130,7 @@ export async function createSnapshotServer(config: SnapshotServerConfig): Promis
       permissionChecker: components.permissionChecker,
       systemPrompt: components.systemPrompt,
       toolContextFactory: components.toolContextFactory,
+      intents: components.intents,
     });
     return {session, toolContextFactory: components.toolContextFactory};
   };

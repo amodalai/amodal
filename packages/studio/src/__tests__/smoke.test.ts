@@ -116,6 +116,7 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
     expect(body).toHaveProperty('agentName');
     expect(body).toHaveProperty('runtimeUrl');
     expect(body).toHaveProperty('agentId');
+    expect(body).toHaveProperty('registryUrl');
   });
 
   // -------------------------------------------------------------------------

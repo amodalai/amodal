@@ -27,11 +27,23 @@ export type {
   ResponseShaping,
   LoadedTool,
   CustomToolContext,
+  CustomToolInlineEvent,
+  CustomToolSetupStateOps,
+  CustomToolSetupStateRow,
+  CustomToolPlanOps,
+  CustomToolCompletionOps,
   ToolHandlerDefinition,
   CustomToolExecutor,
   CustomShellExecutor,
 } from './tool-types.js';
 export {defineToolHandler} from './tool-types.js';
+
+// Intent routing
+export type {
+  IntentDefinition,
+  IntentContext,
+  IntentResult,
+} from './intent-types.js';
 
 // LLM / provider types
 export type {
@@ -78,6 +90,12 @@ export type {
   SSECredentialSavedEvent,
   SSEApprovedEvent,
   SSEAskUserEvent,
+  SSEAskChoiceEvent,
+  SSEShowPreviewEvent,
+  SSEConnectionPanelEvent,
+  SSEProposalEvent,
+  SSEUpdatePlanEvent,
+  SSESetupCancelledEvent,
   SSEDoneEvent,
   SSEExploreStartEvent,
   SSEExploreEndEvent,
@@ -168,6 +186,74 @@ export type {
   ChannelAuthRejectedEvent,
 } from './runtime-event-types.js';
 
+// Agent card types
+export type {
+  AgentCard,
+  AgentCardPreview,
+  AgentCardTurn,
+} from './card-types.js';
+
+// Inline content blocks emitted by custom tools
+export type {
+  Block,
+  BlockOfType,
+  TextBlock,
+  AskChoiceBlock,
+  AgentCardPreviewBlock,
+  ConnectionPanelBlock,
+  ProposalBlock,
+  UpdatePlanBlock,
+} from './blocks.js';
+
+// Filesystem backend contract (implementations live in @amodalai/runtime)
+export type {
+  FsBackend,
+  RepoFileEntry,
+  RepoDirListing,
+  RepoMode,
+} from './fs.js';
+
+// Connection-validation probes (Phase A)
+export type {
+  ProbeResult,
+  ProbeFailureReason,
+  ValidationResult,
+  ValidationFormat,
+} from './validation.js';
+
+// Durable setup state (Phase B)
+export type {
+  SetupPhase,
+  CompletedSlot,
+  SkippedSlot,
+  ConfigAnswers,
+  DeferredRequest,
+  ProvidedContext,
+  SetupPlanSnapshot,
+  SetupState,
+  SetupStatePatch,
+  SetupWarning,
+  SetupReadinessResult,
+  ConnectionStatusEntry,
+  ConnectionsStatusMap,
+} from './setup-state.js';
+export {
+  SETUP_PHASES,
+  emptySetupState,
+  setupStateSchema,
+  setupStatePatchSchema,
+} from './setup-state.js';
+
+// Composed setup plan (Phase C)
+export type {
+  SetupPlan,
+  SetupPlanSlot,
+  SetupPlanSlotOption,
+  SetupPlanConfigQuestion,
+  SetupPlanCompletion,
+  SetupPolish,
+} from './setup-plan.js';
+
 // Snapshot types
 export type {
   SnapshotConnection,
@@ -183,17 +269,3 @@ export type {
   BuildSnapshotOptions,
 } from './snapshot-types.js';
 
-// Agent card types (template gallery)
-export type {
-  AgentCardTurn,
-  AgentCard,
-  AgentCardPreview,
-} from './card-types.js';
-
-// Filesystem backend
-export type {
-  FsBackend,
-  RepoFileEntry,
-  RepoDirListing,
-  RepoMode,
-} from './fs.js';

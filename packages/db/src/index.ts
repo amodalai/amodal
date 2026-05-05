@@ -14,6 +14,9 @@
 // Schema exports
 export * from './schema/index.js';
 
+// Per-domain query modules (Midday pattern — db as first arg)
+export * from './queries/index.js';
+
 // Connection
 export { createDbPool, getDb, closeDb, DatabaseConfigError } from './connection.js';
 export type { Db, DbSchema } from './connection.js';

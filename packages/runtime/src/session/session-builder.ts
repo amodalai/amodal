@@ -21,6 +21,7 @@ import type {
   LoadedConnection,
   CustomToolExecutor,
   StoreBackend,
+  IntentDefinition,
 } from '@amodalai/types';
 import type {McpManager, AdminAgentContent, FieldScrubber} from '@amodalai/core';
 import {buildConnectionsMap, buildAccessConfigs} from '@amodalai/core';
@@ -35,10 +36,17 @@ import {registerStoreTools} from '../tools/store-tools.js';
 import {createRequestTool, REQUEST_TOOL_NAME} from '../tools/request-tool.js';
 import {createCustomToolDefinition} from '../tools/custom-tool-adapter.js';
 import type {CustomToolSessionContext} from '../tools/custom-tool-adapter.js';
-import type {FsBackend} from '@amodalai/types';
 import {LocalFsBackend} from '../tools/fs/local.js';
-import {HttpFsBackend} from '../tools/fs/http.js';
-import {registerHttpFileTools} from '../tools/http-file-tools.js';
+import {
+  getDb,
+  getSetupState,
+  upsertSetupState,
+  markComplete,
+  deleteSetupState,
+} from '@amodalai/db';
+import {composePlan} from '@amodalai/core';
+import {commitSetup} from '../setup/commit-setup.js';
+import type {CustomToolCompletionOps} from '@amodalai/types';
 import {registerMcpTools} from '../tools/mcp-tool-adapter.js';
 import {
   AccessJsonPermissionChecker,
@@ -57,8 +65,8 @@ import {createWebSearchTool, WEB_SEARCH_TOOL_NAME} from '../tools/web-search-too
 import {createFetchUrlTool, FETCH_URL_TOOL_NAME} from '../tools/fetch-url-tool.js';
 import {createMemoryTool, MEMORY_TOOL_NAME} from '../tools/memory-tool.js';
 import {registerFileTools, DEFAULT_ALLOWED_DIRS, DEFAULT_BLOCKED_FILES} from '../tools/file-tools.js';
-import {registerCollectSecretTool} from '../tools/collect-secret-tool.js';
-import {registerAgentConfigTool} from '../tools/agent-config-tool.js';
+import {registerAdminTools} from '../tools/admin-tools.js';
+import {ASK_CHOICE_TOOL_NAME, createAskChoiceTool} from '../tools/builtin/ask-choice.js';
 import type {Logger} from '../logger.js';
 import type {CredentialResolver} from '../credentials.js';
 
@@ -76,6 +84,13 @@ export interface SessionComponents {
   permissionChecker: PermissionChecker;
   systemPrompt: string;
   toolContextFactory: (callId: string) => ToolContext;
+  /**
+   * Deterministic intents loaded from `<repoPath>/intents/` at session
+   * build time. Empty when the repo doesn't have an `intents/` dir
+   * (most agents) — `runMessage` short-circuits the intent path on
+   * empty arrays so this is zero-cost when unused.
+   */
+  intents: IntentDefinition[];
 }
 
 /** Options for building session components. */
@@ -124,6 +139,14 @@ export interface BuildSessionComponentsOptions {
    * resolver rather than left as literal strings.
    */
   credentialResolver?: CredentialResolver;
+  /**
+   * Pre-loaded intents from the agent's `intents/` directory. The
+   * caller is responsible for loading these (via `loadIntents`)
+   * because intent loading involves esbuild compile + dynamic
+   * import, which is async — `buildSessionComponents` itself stays
+   * sync. Default: empty array.
+   */
+  intents?: IntentDefinition[];
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +187,8 @@ Widget selection:
     }),
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Showing widget',
+    completedLabel: 'Showed widget',
 
     async execute(params: {widget: string; data: Record<string, unknown>}): Promise<unknown> {
       // The present tool's result is consumed by the SSE layer to emit a
@@ -187,6 +212,8 @@ function createStopExecutionTool(): ToolDefinition {
     }),
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Stopping',
+    completedLabel: 'Stopped',
 
     async execute(params: {reason: string}): Promise<unknown> {
       // The __stop sentinel is checked by the EXECUTING state handler.
@@ -233,7 +260,7 @@ function buildCustomToolSessionContext(
   connectionsMap: import('../tools/request-tool.js').ConnectionsMap,
   storeBackend: StoreBackend | null,
   appId: string,
-  fs?: import('@amodalai/types').FsBackend,
+  repoRoot: string | null | undefined,
 ): CustomToolSessionContext {
   // Adapt StoreBackend.put (returns StorePutResult) to CustomToolSessionContext.storeBackend.put (returns void)
   const adaptedBackend = storeBackend
@@ -243,6 +270,39 @@ function buildCustomToolSessionContext(
         },
       }
     : undefined;
+
+  // Phase A: expose ctx.fs to handlers when we know the repo root.
+  // Defaults to LocalFsBackend; the cloud backend will plug in here in
+  // Phase 0G via the same factory selection used for the SDK ToolContext.
+  const fs = repoRoot ? new LocalFsBackend({repoRoot}) : undefined;
+
+  // Phase B: expose ctx.setupState. The factory closes over the agent
+  // id + a Drizzle handle pulled lazily from the runtime's pool so
+  // session-builder doesn't need to wire the db connection through
+  // its existing flow. Skipped when the pool isn't initialized
+  // (e.g. unit tests with no DATABASE_URL).
+  //
+  // Identity resolution: prefer `process.env.AGENT_ID` when the
+  // process was spawned with one (the CLI sets it for both Studio
+  // and the admin agent so all three subprocesses key
+  // `setup_state` rows by the SAME id). Fall back to
+  // `bundle.config.name` for the standalone runtime case where no
+  // CLI is in front. Without this, the admin-agent process — whose
+  // bundle is loaded from ~/.amodal/admin-agent (name: "admin") —
+  // would write/read rows under "admin" while Studio's repo-state
+  // probe queries under "default", and `commit_setup` would mark
+  // the wrong row complete.
+  const agentId = process.env['AGENT_ID'] ?? bundle.config.name;
+  const setupStateFactory = buildSetupStateFactory(agentId);
+
+  // Phase C: expose ctx.plan. The composer reads node_modules under
+  // repoPath, so this is undefined when no repoPath is resolvable.
+  const plan = repoRoot ? buildPlanOps(repoRoot) : undefined;
+
+  // Phase E: expose ctx.completion. Needs both a db pool (to read
+  // setup_state + write completed_at) and a fs backend (to write
+  // amodal.json). Skipped when either is missing.
+  const completionFactory = fs ? buildCompletionFactory(agentId, fs) : undefined;
 
   return {
     config: {
@@ -260,8 +320,163 @@ function buildCustomToolSessionContext(
     },
     storeBackend: adaptedBackend,
     appId,
-    ...(fs ? {fs} : {}),
+    repoRoot: repoRoot ?? undefined,
+    fs,
+    agentId,
+    ...(setupStateFactory ? {setupStateFactory} : {}),
+    ...(plan ? {plan} : {}),
+    ...(completionFactory ? {completionFactory} : {}),
   };
+}
+
+/**
+ * Build the `ctx.plan` ops bound to the agent's repo path. The
+ * composer reads files under `<repoPath>/node_modules/<pkg>/`; when
+ * the package isn't installed we surface a typed `not_installed`
+ * soft-fail instead of throwing the underlying ENOENT.
+ */
+function buildPlanOps(repoPath: string): NonNullable<CustomToolSessionContext['plan']> {
+  return {
+    async compose(templatePackageName: string) {
+      try {
+        const composed = await composePlan({repoPath, templatePackage: templatePackageName});
+        return {ok: true, plan: composed};
+      } catch (err) {
+        if (
+          err !== null &&
+          typeof err === 'object' &&
+          'code' in err &&
+          (err as {code: unknown}).code === 'CONFIG_NOT_FOUND'
+        ) {
+          return {
+            ok: false,
+            reason: 'not_installed',
+            message: `Template "${templatePackageName}" is not installed. Call install_package first.`,
+          };
+        }
+        if (
+          err !== null &&
+          typeof err === 'object' &&
+          'code' in err &&
+          ((err as {code: unknown}).code === 'CONFIG_PARSE_FAILED' ||
+            (err as {code: unknown}).code === 'CONFIG_VALIDATION_FAILED')
+        ) {
+          return {
+            ok: false,
+            reason: 'malformed',
+            message: err instanceof Error ? err.message : String(err),
+          };
+        }
+        return {
+          ok: false,
+          reason: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  };
+}
+
+/**
+ * Build a `setupState` ops factory closed over the runtime's Drizzle
+ * pool. Returns undefined when no pool is initialized — `amodal dev`
+ * always has one (it requires DATABASE_URL), but unit tests that
+ * exercise the session-builder without a db pool see this as a soft
+ * skip and the handler falls back to its own no-db error path.
+ */
+function buildSetupStateFactory(agentId: string): NonNullable<CustomToolSessionContext['setupStateFactory']> | undefined {
+  let db: ReturnType<typeof getDb>;
+  try {
+    db = getDb();
+  } catch {
+    // No DATABASE_URL configured — setupState ops not available for this session.
+    return undefined;
+  }
+
+  return (scopeId) => ({
+    async read() {
+      const row = await getSetupState(db, agentId, scopeId);
+      if (!row) return null;
+      return {
+        state: row.state,
+        completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+      };
+    },
+    async upsert(patch) {
+      const row = await upsertSetupState(db, agentId, scopeId, patch);
+      return {
+        state: row.state,
+        completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+      };
+    },
+    async markComplete() {
+      const dt = await markComplete(db, agentId, scopeId);
+      return dt ? dt.toISOString() : null;
+    },
+  });
+}
+
+/**
+ * Build the `ctx.completion` ops factory closed over (agentId, db,
+ * fs). The factory takes scopeId at call-time so concurrent
+ * per-scope sessions don't share the same ops object — same
+ * pattern as `buildSetupStateFactory`.
+ */
+function buildCompletionFactory(
+  agentId: string,
+  fs: import('@amodalai/types').FsBackend,
+): NonNullable<CustomToolSessionContext['completionFactory']> | undefined {
+  let db: ReturnType<typeof getDb>;
+  try {
+    db = getDb();
+  } catch {
+    // No DATABASE_URL — completion ops not available.
+    return undefined;
+  }
+
+  return (scopeId): CustomToolCompletionOps => ({
+    async commit(opts) {
+      try {
+        const result = await commitSetup({
+          db,
+          fs,
+          agentId,
+          scopeId,
+          force: opts?.force ?? false,
+          ...(opts?.connectionsStatus ? {connectionsStatus: opts.connectionsStatus} : {}),
+        });
+        if (result.ok) {
+          return {
+            ok: true,
+            alreadyComplete: result.alreadyComplete,
+            completedAt: result.completedAt.toISOString(),
+          };
+        }
+        if (result.reason === 'not_ready') {
+          return {ok: false, reason: 'not_ready', warnings: result.warnings};
+        }
+        return {ok: false, reason: 'no_state', message: result.message};
+      } catch (err) {
+        return {
+          ok: false,
+          reason: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+    async cancel() {
+      try {
+        const deleted = await deleteSetupState(db, agentId, scopeId);
+        return {ok: true, deleted};
+      } catch (err) {
+        return {
+          ok: false,
+          reason: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +523,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     memoryContent,
     memoryDb,
     credentialResolver,
+    intents = [],
   } = opts;
 
   // -------------------------------------------------------------------------
@@ -379,29 +595,22 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   }
 
   // -------------------------------------------------------------------------
-  // 4b. Create fs backend (shared by custom tools + file tools)
-  // -------------------------------------------------------------------------
-
-  // TODO: refactor file-tools.ts to use FsBackend directly instead of
-  // duplicating tool implementations in http-file-tools.ts
-  let fsBackend: FsBackend | undefined;
-  const workspaceApiUrl = process.env['WORKSPACE_API_URL'];
-  const fsRepoRoot = process.env['REPO_PATH'] ?? bundle.origin;
-  const isRealPath = fsRepoRoot && fsRepoRoot.startsWith('/');
-  if (workspaceApiUrl) {
-    fsBackend = new HttpFsBackend({runtimeUrl: workspaceApiUrl, authToken: process.env['WORKSPACE_AUTH_TOKEN']});
-    logger.debug('fs_backend_http', {url: workspaceApiUrl});
-  } else if (isRealPath) {
-    fsBackend = new LocalFsBackend({repoRoot: fsRepoRoot});
-    logger.debug('fs_backend_local', {repoRoot: fsRepoRoot});
-  }
-
-  // -------------------------------------------------------------------------
   // 5. Register custom tools
   // -------------------------------------------------------------------------
 
+  // repoRoot is needed both for custom tools (so handlers can read repo
+  // files via ctx.fs, Phase A) and the file-tools / admin-tools registration
+  // further down. Compute it once here.
+  const repoRoot = process.env['REPO_PATH'] ?? bundle.origin;
+
   if (toolExecutor) {
-    const customToolSessionCtx = buildCustomToolSessionContext(bundle, connectionsMap, scopedBackend, appId, fsBackend);
+    const customToolSessionCtx = buildCustomToolSessionContext(
+      bundle,
+      connectionsMap,
+      scopedBackend,
+      appId,
+      repoRoot,
+    );
     for (const tool of bundle.tools) {
       // Skip tools with confirm: 'never' — they exist but are not callable
       if (tool.confirm === 'never') continue;
@@ -435,6 +644,14 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
   // -------------------------------------------------------------------------
 
   registry.register(DISPATCH_TOOL_NAME, createDispatchTool());
+
+  // -------------------------------------------------------------------------
+  // 10a-pre. Register ask_choice as a runtime built-in (Phase 0.6).
+  //          Every agent gets it without declaring — templates and custom
+  //          agents can prompt the user with structured options.
+  // -------------------------------------------------------------------------
+
+  registry.register(ASK_CHOICE_TOOL_NAME, createAskChoiceTool());
 
   // -------------------------------------------------------------------------
   // 10a. Build search provider + register web tools (if webTools configured)
@@ -488,13 +705,8 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
 
   const fileToolsConfig = bundle.config.fileTools;
   const fileToolsEnabled = fileToolsConfig === true || (typeof fileToolsConfig === 'object' && fileToolsConfig !== null);
-  const repoRoot = process.env['REPO_PATH'] ?? bundle.origin;
 
-  if (fileToolsEnabled && workspaceApiUrl && fsBackend) {
-    // Cloud mode: file tools call the remote runtime's workspace API
-    registerHttpFileTools(registry, {fs: fsBackend, logger});
-    logger.debug('file_tools_registered', {mode: 'http', url: workspaceApiUrl});
-  } else if (fileToolsEnabled && repoRoot) {
+  if (fileToolsEnabled && repoRoot) {
     const customConfig = typeof fileToolsConfig === 'object' ? fileToolsConfig : {};
     registerFileTools(registry, {
       repoRoot,
@@ -503,22 +715,19 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
       studioUrl: process.env['STUDIO_URL'],
       logger,
     });
-    logger.debug('file_tools_registered', {mode: 'local', repoRoot});
+    logger.debug('file_tools_registered', {repoRoot});
   } else if (fileToolsConfig) {
     logger.debug('file_tools_not_registered', {reason: 'no_repo_root'});
   }
 
   // -------------------------------------------------------------------------
-  // 10b. Admin agent tools
+  // 10d. Register admin onboarding tools when this is an admin session
+  //      (show_preview, ask_choice, search_packages, install_package, write_skill)
   // -------------------------------------------------------------------------
 
-  const isAdminAgent = process.env['AMODAL_NO_ADMIN'] === '1';
-  const userRepoPath = process.env['REPO_PATH'];
-  if (isAdminAgent) {
-    registerCollectSecretTool(registry);
-    if (userRepoPath) {
-      registerAgentConfigTool(registry, userRepoPath);
-    }
+  if (sessionType === 'admin' && repoRoot) {
+    registerAdminTools(registry, {repoRoot, logger});
+    logger.debug('admin_tools_registered', {repoRoot});
   }
 
   // -------------------------------------------------------------------------
@@ -625,6 +834,7 @@ export function buildSessionComponents(opts: BuildSessionComponentsOptions): Ses
     permissionChecker: sessionPermissionChecker,
     systemPrompt: compiled.systemPrompt,
     toolContextFactory,
+    intents,
   };
 }
 

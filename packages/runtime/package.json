@@ -14,6 +14,18 @@
   },
   "type": "module",
   "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./tools": {
+      "types": "./dist/src/tools/index.d.ts",
+      "default": "./dist/src/tools/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "build": "node ../../scripts/build_package.js",
     "lint": "eslint . --ext .ts,.tsx",

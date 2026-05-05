@@ -324,6 +324,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
     }),
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Reading {{path}}',
+    completedLabel: 'Read {{path}}',
 
     async execute(params: {path: string; offset?: number; limit?: number}, _ctx: ToolContext): Promise<unknown> {
       const startMs = Date.now();
@@ -367,6 +369,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
     }),
     readOnly: false,
     metadata: {category: 'system'},
+    runningLabel: 'Writing {{path}}',
+    completedLabel: 'Wrote {{path}}',
 
     async execute(params: {path: string; content: string}, _ctx: ToolContext): Promise<unknown> {
       const startMs = Date.now();
@@ -406,6 +410,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
     }),
     readOnly: false,
     metadata: {category: 'system'},
+    runningLabel: 'Editing {{path}}',
+    completedLabel: 'Edited {{path}}',
 
     async execute(
       params: {path: string; old_string: string; new_string: string; allow_multiple?: boolean},
@@ -471,6 +477,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
     }),
     readOnly: false,
     metadata: {category: 'system'},
+    runningLabel: 'Deleting {{path}}',
+    completedLabel: 'Deleted {{path}}',
 
     async execute(params: {path: string}, _ctx: ToolContext): Promise<unknown> {
       const startMs = Date.now();
@@ -513,6 +521,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
     }),
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Listing files',
+    completedLabel: 'Listed files',
 
     async execute(params: {dir?: string}, _ctx: ToolContext): Promise<unknown> {
       const startMs = Date.now();
@@ -562,6 +572,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
     }),
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Finding files matching {{pattern}}',
+    completedLabel: 'Found files matching {{pattern}}',
 
     async execute(params: {pattern: string}, _ctx: ToolContext): Promise<unknown> {
       const startMs = Date.now();
@@ -607,6 +619,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
     }),
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Searching for "{{pattern}}"',
+    completedLabel: 'Searched for "{{pattern}}"',
 
     async execute(params: {pattern: string; dir?: string}, _ctx: ToolContext): Promise<unknown> {
       const startMs = Date.now();
@@ -686,6 +700,8 @@ export function registerFileTools(registry: ToolRegistry, opts: FileToolsOptions
     }),
     readOnly: true,
     metadata: {category: 'system'},
+    runningLabel: 'Reading multiple files',
+    completedLabel: 'Read multiple files',
 
     async execute(params: {paths: string[]}, _ctx: ToolContext): Promise<unknown> {
       const startMs = Date.now();

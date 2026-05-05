@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLocation, useParams, Link } from 'react-router-dom';
 import { useTheme } from './ThemeProvider';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAgentInventory } from '../hooks/useAgentInventory';
+import { useViewConfig } from '../hooks/useViewConfig';
 import { CollapsibleSection } from './studio/CollapsibleSection';
 
 interface Props {
@@ -45,24 +46,22 @@ interface NavItem {
   readonly icon: LucideIcon;
 }
 
-/** The agent's repo contents — maps to directories in the repo. */
-const AGENT_NAV: readonly NavItem[] = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/connections', label: 'Connections', icon: Plug },
-  { href: '/evals', label: 'Evals', icon: FlaskConical },
-];
+interface NavItemDef extends NavItem {
+  /** When true, only render when the "View config" toggle is on. */
+  readonly powerUserOnly?: boolean;
+}
 
-/** Live runtime state — only exists when the agent is running. */
-const RUNTIME_NAV: readonly NavItem[] = [
-  { href: '/sessions', label: 'Sessions', icon: MessageSquare },
+const NAV_ITEMS: readonly NavItemDef[] = [
+  { href: '/getting-started', label: 'Getting started', icon: Sparkles, powerUserOnly: true },
+  { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/files', label: 'Files', icon: FileCode },
+  { href: '/evals', label: 'Evals', icon: FlaskConical },
+  { href: '/arena', label: 'Arena', icon: FlaskConical },
   { href: '/feedback', label: 'Feedback', icon: MessageSquare },
   { href: '/memory', label: 'Memory', icon: Brain },
 ];
 
-/** Developer plumbing and diagnostics. */
-const TOOLS_NAV: readonly NavItem[] = [
-  { href: '/arena', label: 'Arena', icon: FlaskConical },
-  { href: '/files', label: 'Files', icon: FileCode },
+const SECONDARY_NAV: readonly NavItem[] = [
   { href: '/prompt', label: 'Prompt', icon: ScrollText },
   { href: '/secrets', label: 'Secrets', icon: KeyRound },
   { href: '/models', label: 'Models', icon: Cpu },
@@ -97,6 +96,7 @@ interface InventorySectionDef {
 const INVENTORY_SECTIONS: readonly InventorySectionDef[] = [
   { key: 'skills', label: 'Skills', icon: Sparkles, iconColor: 'text-amber-500/60', pathPrefix: '/inspect/skills' },
   { key: 'knowledge', label: 'Knowledge', icon: BookOpen, iconColor: 'text-blue-500/60', pathPrefix: '/inspect/knowledge' },
+  { key: 'connections', label: 'Connections', icon: Plug, iconColor: 'text-emerald-500/60', pathPrefix: '/inspect/connections' },
   { key: 'stores', label: 'Stores', icon: Database, iconColor: 'text-violet-500/60', pathPrefix: '/stores' },
   { key: 'automations', label: 'Automations', icon: Zap, iconColor: 'text-orange-500/60', pathPrefix: '/automations' },
   { key: 'pages', label: 'Pages', icon: FileText, iconColor: 'text-cyan-500/60', pathPrefix: '/pages' },
@@ -108,25 +108,10 @@ export function StudioShell({ children }: Props) {
   const { agentName, runtimeUrl } = useStudioConfig();
   const { dark, toggle } = useTheme();
   const inventory = useAgentInventory();
+  const { viewConfig } = useViewConfig();
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatSeed, setChatSeed] = useState<string | undefined>(undefined);
 
-  // Listen for programmatic open from the onboarding wizard
-  useEffect(() => {
-    const handler = (e: Event) => {
-      setChatOpen(true);
-      // Extract seed message if provided via CustomEvent detail
-      if ('detail' in e) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- extracting detail from CustomEvent
-        const obj = e as unknown as Record<string, unknown>;
-        if (typeof obj['detail'] === 'string') {
-          setChatSeed(obj['detail']);
-        }
-      }
-    };
-    window.addEventListener('admin-chat-open', handler);
-    return () => window.removeEventListener('admin-chat-open', handler);
-  }, []);
+  const visibleNavItems = NAV_ITEMS.filter((item) => viewConfig || !item.powerUserOnly);
 
   const basePath = `/agents/${agentId ?? 'local'}`;
 
@@ -156,61 +141,55 @@ export function StudioShell({ children }: Props) {
           </a>
         </div>
 
-        {/* Navigation */}
+        {/* Primary nav */}
         <nav className="flex-1 py-2 overflow-y-auto">
-          {/* Agent — repo contents */}
           <div className="px-2 space-y-0.5">
-            {AGENT_NAV.map((item) => (
+            {visibleNavItems.map((item) => (
               <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} to={agentPath(item.href)} />
             ))}
           </div>
 
-          {/* Agent inventory — collapsible per-type lists */}
+          {/* Agent inventory sections */}
           {!inventory.loading && INVENTORY_SECTIONS.some((s) => inventory[s.key].length > 0) && (
-            <div className="px-2 space-y-0.5 mt-1">
-              {INVENTORY_SECTIONS.map((section) => {
-                const items = inventory[section.key];
-                if (items.length === 0) return null;
-                return (
-                  <CollapsibleSection
-                    key={section.key}
-                    label={section.label}
-                    icon={section.icon}
-                    iconColor={section.iconColor}
-                    count={items.length}
-                  >
-                    {items.map((name) => (
-                      <Link
-                        key={name}
-                        to={agentPath(`${section.pathPrefix}/${name}`)}
-                        className={`flex items-center gap-2 px-3 py-1 rounded text-xs transition-colors ${
-                          pathname === agentPath(`${section.pathPrefix}/${name}`)
-                            ? 'bg-primary/10 text-primary font-medium'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                        }`}
-                      >
-                        <section.icon className={`w-3 h-3 flex-shrink-0 ${section.iconColor}`} />
-                        {name}
-                      </Link>
-                    ))}
-                  </CollapsibleSection>
-                );
-              })}
-            </div>
+            <>
+              <div className="my-3 mx-4 border-t border-border" />
+              <div className="px-2 space-y-0.5">
+                {INVENTORY_SECTIONS.map((section) => {
+                  const items = inventory[section.key];
+                  if (items.length === 0) return null;
+                  return (
+                    <CollapsibleSection
+                      key={section.key}
+                      label={section.label}
+                      icon={section.icon}
+                      iconColor={section.iconColor}
+                      count={items.length}
+                    >
+                      {items.map((name) => (
+                        <Link
+                          key={name}
+                          to={agentPath(`${section.pathPrefix}/${name}`)}
+                          className={`flex items-center gap-2 px-3 py-1 rounded text-xs transition-colors ${
+                            pathname === agentPath(`${section.pathPrefix}/${name}`)
+                              ? 'bg-primary/10 text-primary font-medium'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <section.icon className={`w-3 h-3 flex-shrink-0 ${section.iconColor}`} />
+                          {name}
+                        </Link>
+                      ))}
+                    </CollapsibleSection>
+                  );
+                })}
+              </div>
+            </>
           )}
 
-          {/* Runtime — live state */}
           <div className="my-3 mx-4 border-t border-border" />
-          <div className="px-2 space-y-0.5">
-            {RUNTIME_NAV.map((item) => (
-              <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} to={agentPath(item.href)} />
-            ))}
-          </div>
 
-          {/* Tools — developer plumbing */}
-          <div className="my-3 mx-4 border-t border-border" />
           <div className="px-2 space-y-0.5">
-            {TOOLS_NAV.map((item) => (
+            {SECONDARY_NAV.map((item) => (
               <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} to={agentPath(item.href)} />
             ))}
           </div>
@@ -268,7 +247,7 @@ export function StudioShell({ children }: Props) {
             </button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <AdminChat initialMessage={chatSeed} />
+            <AdminChat />
           </div>
         </div>
       )}

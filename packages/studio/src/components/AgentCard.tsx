@@ -27,12 +27,23 @@ function isPreview(card: AgentCard | AgentCardPreview): card is AgentCardPreview
   return 'conversation' in card;
 }
 
+/**
+ * Returns the conversation turns to render in the legacy snippet block.
+ * Empty array means "no conversation"; the caller renders an image or
+ * a text-only fallback layout instead.
+ */
 function turnsOf(card: AgentCard | AgentCardPreview): AgentCardTurn[] {
-  return isPreview(card) ? card.conversation : card.thumbnailConversation;
+  if (isPreview(card)) return card.conversation;
+  return card.thumbnailConversation ?? [];
 }
 
 function blurbOf(card: AgentCard | AgentCardPreview): string {
   return isPreview(card) ? card.description : card.tagline;
+}
+
+/** Image URL when this is a thumbnail card with one set, else undefined. */
+function imageUrlOf(card: AgentCard | AgentCardPreview): string | undefined {
+  return isPreview(card) ? undefined : card.imageUrl;
 }
 
 function ConversationTurn({ turn }: { turn: AgentCardTurn }) {
@@ -71,10 +82,47 @@ export function AgentCard({
 }: AgentCardProps) {
   const turns = turnsOf(card);
   const blurb = blurbOf(card);
+  const imageUrl = imageUrlOf(card);
   const isExpanded = variant === 'expanded';
   const interactive = Boolean(onClick);
 
   const Container: React.ElementType = interactive ? 'button' : 'div';
+
+  // Visual-content block: image > conversation snippet > nothing.
+  // Image is the canonical marketplace artifact; the conversation
+  // path stays as a fallback for self-hosted/legacy templates that
+  // still ship a card.json with `thumbnailConversation`.
+  let visual: React.ReactNode = null;
+  if (imageUrl) {
+    visual = (
+      <div
+        className={cn(
+          'overflow-hidden rounded-md border border-border bg-muted/30',
+          isExpanded ? 'aspect-[3/2]' : 'aspect-[3/2] max-h-64',
+        )}
+      >
+        <img
+          src={imageUrl}
+          alt={card.title}
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
+      </div>
+    );
+  } else if (turns.length > 0) {
+    visual = (
+      <div
+        className={cn(
+          'flex flex-col gap-3 bg-muted/40 border border-border rounded-md p-3',
+          !isExpanded && 'max-h-64 overflow-hidden',
+        )}
+      >
+        {turns.map((turn, i) => (
+          <ConversationTurn key={i} turn={turn} />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <Container
@@ -102,16 +150,7 @@ export function AgentCard({
         )}
       </header>
 
-      <div
-        className={cn(
-          'flex flex-col gap-3 bg-muted/40 border border-border rounded-md p-3',
-          !isExpanded && 'max-h-64 overflow-hidden',
-        )}
-      >
-        {turns.map((turn, i) => (
-          <ConversationTurn key={i} turn={turn} />
-        ))}
-      </div>
+      {visual}
 
       {blurb && (
         <p

@@ -19,6 +19,7 @@ import type {ModelMessage} from 'ai';
 import {runAgent} from '../agent/loop.js';
 import {DEFAULT_LOOP_CONFIG} from '../agent/loop-types.js';
 import type {AgentContext, AgentLoopConfig} from '../agent/loop-types.js';
+import {matchIntent, runIntent} from '../intent/index.js';
 import {SSEEventType} from '../types.js';
 import type {SSEEvent} from '../types.js';
 import type {ToolContext} from '../tools/types.js';
@@ -164,6 +165,7 @@ export class StandaloneSessionManager {
       maxContextTokens: opts.maxContextTokens ?? this.defaultMaxContextTokens,
       maxSessionTokens: opts.maxSessionTokens ?? this.defaultMaxSessionTokens,
       toolContextFactory: opts.toolContextFactory,
+      intents: opts.intents ?? [],
     };
 
     this.sessions.set(id, session);
@@ -239,6 +241,115 @@ export class StandaloneSessionManager {
         message: `Images are not supported by ${session.providerName} — your image was not sent to the model.`,
         timestamp: new Date().toISOString(),
       } satisfies SSEEvent;
+    }
+
+    // Intent routing — deterministic shortcut layer in front of the
+    // agent loop. Tested only when the user message is plain text;
+    // multimodal turns (image-bearing) always go to the LLM since
+    // intent regexes are textual. First-match-wins; on a clean
+    // completion we skip the agent loop entirely. On fall-through
+    // (handler returned null before any tool ran) we proceed to the
+    // LLM as if no intent existed.
+    if (session.intents.length > 0 && images.length === 0) {
+      const matched = matchIntent(session.intents, userMessage);
+      if (matched) {
+        // Single-line route marker — easy to grep + visible in dev
+        // (passesQuietFilter passes `intent_` lines through). Pairs
+        // with the route_llm log below so each turn reports exactly
+        // one route decision.
+        session.logger.info('route_intent', {
+          sessionId: session.id,
+          intentId: matched.intent.id,
+          userMessagePreview: userMessage.slice(0, 80),
+        });
+        const buildToolContext =
+          opts?.buildToolContext ?? makeNoOpToolContext(session);
+        const intentGen = runIntent({
+          match: matched,
+          userMessage,
+          sessionId: session.id,
+          scopeId: session.scopeId,
+          toolRegistry: session.toolRegistry,
+          buildToolContext,
+          logger: session.logger,
+        });
+        let next = await intentGen.next();
+        while (!next.done) {
+          yield next.value;
+          next = await intentGen.next();
+        }
+        const outcome = next.value;
+        if (outcome.kind === 'completed') {
+          session.messages = [
+            ...session.messages,
+            outcome.assistantMessage,
+            ...outcome.toolMessages,
+          ];
+          if (this.store) {
+            await this.persist(session);
+          }
+          return;
+        }
+        if (outcome.kind === 'completedContinue') {
+          // Intent did its deterministic part — validate, persist,
+          // whatever — then handed off to the LLM for the next-step
+          // rendering (multi-option ask_choice, conversational
+          // framing, optional-batch copy). Append the synthetic
+          // messages so the LLM sees the new state, then fall
+          // through to the agent loop. The agent loop emits its own
+          // Done event when the LLM turn finishes; runIntent
+          // suppresses the intent-side Done so we don't double-fire.
+          session.messages = [
+            ...session.messages,
+            outcome.assistantMessage,
+            ...outcome.toolMessages,
+          ];
+          if (this.store) {
+            await this.persist(session);
+          }
+          session.logger.info('route_llm', {
+            sessionId: session.id,
+            reason: 'intent_continued',
+            intentId: matched.intent.id,
+          });
+          // Fall through to agent loop below.
+        } else if (outcome.kind === 'errored') {
+          // Intent emitted an error SSE; the user has the failure
+          // visible. Don't fall through — they retry or type
+          // something more general (which won't match any intent
+          // and will hit the LLM next turn).
+          if (this.store) {
+            await this.persist(session);
+          }
+          return;
+        } else {
+          // outcome.kind === 'fellThrough' — fall through to the LLM.
+          // No SSE events emitted, no messages appended; the agent
+          // loop runs as if intent routing never happened. Log the
+          // route flip so the dev terminal shows why the LLM ran.
+          session.logger.info('route_llm', {
+            sessionId: session.id,
+            reason: 'intent_fell_through',
+            intentId: matched.intent.id,
+          });
+        }
+      } else {
+        session.logger.info('route_llm', {
+          sessionId: session.id,
+          reason: 'no_intent_match',
+          userMessagePreview: userMessage.slice(0, 80),
+        });
+      }
+    } else if (session.intents.length === 0) {
+      session.logger.info('route_llm', {
+        sessionId: session.id,
+        reason: 'no_intents_loaded',
+      });
+    } else if (images.length > 0) {
+      session.logger.info('route_llm', {
+        sessionId: session.id,
+        reason: 'multimodal_skips_intent',
+      });
     }
 
     // Build AgentContext from Session

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { getBasePath } from '../../lib/config.js';
+import { getBasePath } from '../../lib/api.js';
 
 /**
  * Extract the wildcard portion of a request path after a known prefix.

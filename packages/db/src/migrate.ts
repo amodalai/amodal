@@ -179,6 +179,26 @@ const DDL_STATEMENTS = [
   sql`CREATE INDEX IF NOT EXISTS idx_memory_entries_scope ON agent_memory_entries (app_id, scope_id)`,
   sql`CREATE INDEX IF NOT EXISTS idx_memory_entries_search ON agent_memory_entries
     USING GIN (to_tsvector('english', content))`,
+
+  // --- setup_state (Phase B — durable admin onboarding state) ---
+  sql`CREATE TABLE IF NOT EXISTS setup_state (
+    agent_id TEXT NOT NULL,
+    scope_id TEXT NOT NULL DEFAULT '',
+    phase TEXT NOT NULL DEFAULT 'planning',
+    current_step TEXT,
+    completed JSONB NOT NULL DEFAULT '[]'::jsonb,
+    skipped JSONB NOT NULL DEFAULT '[]'::jsonb,
+    config_answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+    deferred_requests JSONB NOT NULL DEFAULT '[]'::jsonb,
+    provided_context JSONB NOT NULL DEFAULT '{}'::jsonb,
+    plan JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    PRIMARY KEY (agent_id, scope_id)
+  )`,
+  sql`CREATE INDEX IF NOT EXISTS idx_setup_state_phase ON setup_state (phase)`,
+  sql`CREATE INDEX IF NOT EXISTS idx_setup_state_updated ON setup_state (updated_at)`,
 ] as const;
 
 export async function ensureSchema<T extends Record<string, unknown> = Record<string, never>>(db: NodePgDatabase<T>): Promise<void> {

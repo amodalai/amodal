@@ -279,6 +279,99 @@ export function translateEvent(
       break;
     }
 
+    case SSEEventType.AskChoice: {
+      out.push({
+        type: 'data-ask-choice',
+        data: {
+          ask_id: event.ask_id,
+          question: event.question,
+          options: event.options,
+          multi: event.multi ?? false,
+        },
+      });
+      break;
+    }
+
+    case SSEEventType.ShowPreview: {
+      out.push({
+        type: 'data-show-preview',
+        data: {card: event.card},
+      });
+      break;
+    }
+
+    case SSEEventType.ConnectionPanel: {
+      out.push({
+        type: 'data-connection-panel',
+        data: {
+          panel_id: event.panel_id,
+          package_name: event.package_name,
+          display_name: event.display_name,
+          description: event.description,
+          skippable: event.skippable,
+        },
+      });
+      break;
+    }
+
+    case SSEEventType.PlanSummary: {
+      out.push({
+        type: 'data-plan-summary',
+        data: {
+          template_title: event.template_title,
+          required_slots: event.required_slots,
+          optional_slots: event.optional_slots,
+          config_questions: event.config_questions,
+          completion_suggestions: event.completion_suggestions,
+        },
+      });
+      break;
+    }
+
+    case SSEEventType.Proposal: {
+      out.push({
+        type: 'data-proposal',
+        data: {
+          proposal_id: event.proposal_id,
+          summary: event.summary,
+          skills: event.skills,
+          required_connections: event.required_connections,
+          optional_connections: event.optional_connections,
+        },
+      });
+      break;
+    }
+
+    case SSEEventType.UpdatePlan: {
+      out.push({
+        type: 'data-update-plan',
+        data: {
+          proposal_id: event.proposal_id,
+          summary: event.summary,
+          skills: event.skills,
+          required_connections: event.required_connections,
+          optional_connections: event.optional_connections,
+        },
+      });
+      break;
+    }
+
+    case SSEEventType.SetupCancelled: {
+      out.push({
+        type: 'data-setup-cancelled',
+        data: {reason: event.reason},
+      });
+      break;
+    }
+
+    case SSEEventType.SetupCompleted: {
+      out.push({
+        type: 'data-setup-completed',
+        data: {completed_at: event.completed_at},
+      });
+      break;
+    }
+
     case SSEEventType.KBProposal: {
       out.push({
         type: 'data-kb-proposal',
@@ -369,6 +462,18 @@ export function translateEvent(
       break;
     }
 
+    case SSEEventType.ToolLabelUpdate: {
+      out.push({
+        type: 'data-tool-label-update',
+        data: {
+          tool_id: event.tool_id,
+          ...(event.running_label !== undefined ? {running_label: event.running_label} : {}),
+          ...(event.completed_label !== undefined ? {completed_label: event.completed_label} : {}),
+        },
+      });
+      break;
+    }
+
     // Audit/telemetry events — not forwarded to the chat UI. They're
     // surfaced via other channels (audit log, field-scrub notifications,
     // explore subagent stream in SubagentEvent).
@@ -384,10 +489,7 @@ export function translateEvent(
     case SSEEventType.ExploreEnd:
     case SSEEventType.PlanMode:
     case SSEEventType.FieldScrub:
-    case SSEEventType.AskChoice:
-    case SSEEventType.ShowPreview:
     case SSEEventType.StartOAuth:
-    case SSEEventType.CollectSecret:
       break;
 
     default: {

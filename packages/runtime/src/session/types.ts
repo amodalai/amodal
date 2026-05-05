@@ -9,7 +9,7 @@
  */
 
 import type {ModelMessage} from 'ai';
-import type {RuntimeEventPayload} from '@amodalai/types';
+import type {RuntimeEventPayload, IntentDefinition} from '@amodalai/types';
 import type {TokenUsage, LLMProvider} from '../providers/types.js';
 import type {ToolRegistry, ToolContext} from '../tools/types.js';
 import type {PermissionChecker} from '../security/permission-checker.js';
@@ -187,6 +187,15 @@ export interface Session {
 
   /** Tool context factory cached from session creation (avoids rebuilding per request) */
   toolContextFactory?: (callId: string) => ToolContext;
+
+  /**
+   * Deterministic intents loaded from the agent's `intents/` directory.
+   * Each user message is tested against these regexes before the agent
+   * loop runs; on first match, the intent's handler executes the tool
+   * sequence and the LLM is skipped. Empty array for agents that don't
+   * declare intents (the default).
+   */
+  intents: IntentDefinition[];
 }
 
 // ---------------------------------------------------------------------------
@@ -233,4 +242,7 @@ export interface CreateSessionOptions {
   onUsage?: (usage: TurnUsage) => void;
   /** Optional: tool context factory to cache on the session */
   toolContextFactory?: (callId: string) => ToolContext;
+  /** Deterministic intents loaded from the agent's `intents/` directory.
+   *  Default: empty (no shortcut routing — every turn goes to the LLM). */
+  intents?: IntentDefinition[];
 }

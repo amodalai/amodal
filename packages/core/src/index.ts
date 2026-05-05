@@ -36,6 +36,9 @@ export * from './versions/index.js';
 // Template engine and connection types
 export * from './templates/index.js';
 
+// Agent cards (template marketplace surface)
+export * from './cards/index.js';
+
 // Role definitions and filtering
 export * from './roles/index.js';
 

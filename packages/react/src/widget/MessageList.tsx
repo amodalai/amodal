@@ -6,7 +6,14 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Markdown from 'react-markdown';
-import type { ChatMessage, AssistantTextMessage, ConfirmationInfo } from '../types';
+import type {
+  ChatMessage,
+  AssistantTextMessage,
+  ConfirmationInfo,
+  InlineBlockRendererRegistry,
+  ChatAction,
+  ContentBlock,
+} from '../types';
 import type { InteractionEvent } from '../events/types';
 import { ToolCallCard } from './ToolCallCard';
 import { KBProposalCard } from './KBProposalCard';
@@ -24,7 +31,10 @@ const UI_TOOLS = new Set(['collect_secret', 'start_oauth', 'ask_choice', 'show_p
 import { SkillPill } from './SkillPill';
 import { StreamingIndicator } from './StreamingIndicator';
 import { AskUserCard } from './AskUserCard';
-import { CollectSecretCard } from './CollectSecretCard';
+import { AskChoiceCard } from './AskChoiceCard';
+import { AgentCardInlinePreview } from './AgentCardInline';
+import { PlanSummaryCard } from './PlanSummaryCard';
+import { ProposalCard } from './ProposalCard';
 import { WidgetRenderer } from './widgets/WidgetRenderer';
 import type { WidgetRegistry } from './widgets/WidgetRenderer';
 import { ConfirmCard } from '../components/ConfirmCard';
@@ -103,13 +113,61 @@ interface MessageListProps {
   customWidgets?: WidgetRegistry;
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
+  onAskChoiceSubmit?: (askId: string, values: string[], message: string) => void;
+  onProposalSubmit?: (proposalId: string, answer: 'confirm' | 'adjust', message: string) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
-  onCollectSecretSaved?: (secretId: string) => void;
-  serverUrl?: string;
   emptyStateText?: string;
   sessionId?: string;
   showFeedback?: boolean;
   verboseTools?: boolean;
+  /** H.2 — Studio-supplied renderers for non-native block types. */
+  inlineBlockRenderers?: InlineBlockRendererRegistry;
+  /** Reducer dispatch handle, threaded down so registered renderers can dispatch (e.g. PANEL_UPDATE). */
+  dispatch?: React.Dispatch<ChatAction>;
+}
+
+/**
+ * H.2 fallback path. When MessageList's switch hits a block type it
+ * doesn't render natively, look it up in the consumer-supplied
+ * registry. Renderers receive the typed block plus a `dispatch`
+ * (for `PANEL_UPDATE` and similar) and `postUserMessage` (to inject
+ * "Skip Slack for now" / "Configured Slack" replies). Returns a
+ * dev-only placeholder when no renderer is registered so missed
+ * registrations are visible rather than silent.
+ */
+function renderInlineBlock(
+  block: ContentBlock,
+  index: number,
+  registry: InlineBlockRendererRegistry | undefined,
+  dispatch: React.Dispatch<ChatAction> | undefined,
+  postUserMessage: ((text: string) => void) | undefined,
+): React.ReactNode {
+  const key = `${block.type}-${String(index)}`;
+  if (!registry || !dispatch) {
+    return <InlineBlockPlaceholder key={key} type={block.type} />;
+  }
+  const Renderer = registry[block.type];
+  if (!Renderer) {
+    return <InlineBlockPlaceholder key={key} type={block.type} />;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- registry maps each block type to a renderer for that exact type via Extract<>
+  const Typed = Renderer as React.ComponentType<{block: ContentBlock; dispatch: React.Dispatch<ChatAction>; postUserMessage: (text: string) => void}>;
+  return (
+    <Typed
+      key={key}
+      block={block}
+      dispatch={dispatch}
+      postUserMessage={postUserMessage ?? (() => undefined)}
+    />
+  );
+}
+
+function InlineBlockPlaceholder({ type }: { type: string }) {
+  return (
+    <div className="pcw-bubble__placeholder" role="status">
+      [{type} — no renderer registered]
+    </div>
+  );
 }
 
 function ConfirmationCard({ confirmation, onApprove, onDeny }: {
@@ -129,20 +187,24 @@ function AssistantBubble({
   customWidgets,
   onInteraction,
   onAskUserSubmit,
+  onAskChoiceSubmit,
+  onProposalSubmit,
   onConfirmationRespond,
-  onCollectSecretSaved,
-  serverUrl,
   verboseTools,
+  inlineBlockRenderers,
+  dispatch,
 }: {
   message: AssistantTextMessage;
   sendMessage?: (text: string) => void;
   customWidgets?: WidgetRegistry;
   onInteraction?: (event: InteractionEvent) => void;
   onAskUserSubmit?: (askId: string, answers: Record<string, string>) => void;
+  onAskChoiceSubmit?: (askId: string, values: string[], message: string) => void;
+  onProposalSubmit?: (proposalId: string, answer: 'confirm' | 'adjust', message: string) => void;
   onConfirmationRespond?: (correlationId: string, approved: boolean) => void;
-  onCollectSecretSaved?: (secretId: string) => void;
-  serverUrl?: string;
   verboseTools?: boolean;
+  inlineBlockRenderers?: InlineBlockRendererRegistry;
+  dispatch?: React.Dispatch<ChatAction>;
 }) {
   const hasContentBlocks = message.contentBlocks && message.contentBlocks.length > 0;
   const hasExtras =
@@ -183,7 +245,9 @@ function AssistantBubble({
                 />
               );
             case 'tool_calls': {
-              const visibleCalls = block.calls.filter((tc) => !UI_TOOLS.has(tc.toolName));
+              const visibleCalls = block.calls.filter(
+                (tc) => !UI_TOOLS.has(tc.toolName) && (verboseTools || !tc.internal),
+              );
               if (visibleCalls.length === 0) return null;
               return (
                 <div key={`tools-${String(i)}`} className="pcw-bubble__extras">
@@ -201,6 +265,36 @@ function AssistantBubble({
                   onSubmit={onAskUserSubmit ?? (() => {})}
                 />
               );
+            case 'ask_choice':
+              return (
+                <AskChoiceCard
+                  key={`choice-${block.askId}`}
+                  block={block}
+                  onSubmit={onAskChoiceSubmit ?? (() => {})}
+                />
+              );
+            case 'show_preview':
+              return (
+                <AgentCardInlinePreview
+                  key={`preview-${String(i)}`}
+                  card={block.card}
+                />
+              );
+            case 'plan_summary':
+              return (
+                <PlanSummaryCard
+                  key={`plan-${String(i)}`}
+                  block={block}
+                />
+              );
+            case 'proposal':
+              return (
+                <ProposalCard
+                  key={`proposal-${block.proposalId}`}
+                  block={block}
+                  onSubmit={onProposalSubmit ?? (() => {})}
+                />
+              );
             case 'confirmation': {
               const conf = block.confirmation;
               return (
@@ -212,17 +306,13 @@ function AssistantBubble({
                 />
               );
             }
-            case 'collect_secret':
-              return (
-                <CollectSecretCard
-                  key={`secret-${block.secretId}`}
-                  block={block}
-                  serverUrl={serverUrl ?? window.location.origin}
-                  onSaved={onCollectSecretSaved}
-                />
-              );
+            case 'connection_panel':
+              // H.2 — connection_panel is the first non-native block;
+              // Studio supplies the renderer via inlineBlockRenderers.
+              // Falls through to the registry / placeholder below.
+              return renderInlineBlock(block, i, inlineBlockRenderers, dispatch, sendMessage);
             default:
-              return null;
+              return renderInlineBlock(block, i, inlineBlockRenderers, dispatch, sendMessage);
           }
         })}
         {hasKBProposals && (
@@ -249,9 +339,11 @@ function AssistantBubble({
       )}
       {hasExtras && (
         <div className="pcw-bubble__extras">
-          {message.toolCalls.map((tc) => (
-            <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
-          ))}
+          {message.toolCalls
+            .filter((tc) => verboseTools || !tc.internal)
+            .map((tc) => (
+              <ToolCallCard key={tc.toolId} toolCall={tc} verbose={verboseTools} />
+            ))}
           {message.kbProposals.map((proposal, idx) => (
             <KBProposalCard key={`${proposal.title}-${String(idx)}`} proposal={proposal} />
           ))}
@@ -261,7 +353,7 @@ function AssistantBubble({
   );
 }
 
-export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onConfirmationRespond, onCollectSecretSaved, serverUrl, emptyStateText, sessionId, showFeedback = false, verboseTools = false }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamStartTime, sendMessage, customWidgets, onInteraction, onAskUserSubmit, onAskChoiceSubmit, onProposalSubmit, onConfirmationRespond, emptyStateText, sessionId, showFeedback = false, verboseTools = false, inlineBlockRenderers, dispatch }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
   const [fadingElapsed, setFadingElapsed] = useState<number | null>(null);
@@ -343,10 +435,12 @@ export function MessageList({ messages, isStreaming, streamStartTime, sendMessag
                   customWidgets={customWidgets}
                   onInteraction={onInteraction}
                   onAskUserSubmit={onAskUserSubmit}
+                  onAskChoiceSubmit={onAskChoiceSubmit}
+                  onProposalSubmit={onProposalSubmit}
                   onConfirmationRespond={onConfirmationRespond}
-                  onCollectSecretSaved={onCollectSecretSaved}
-                  serverUrl={serverUrl}
                   verboseTools={verboseTools}
+                  inlineBlockRenderers={inlineBlockRenderers}
+                  dispatch={dispatch}
                 />
                 {showFeedback && !isStreaming && (
                   <FeedbackButtons messageId={msg.id} sessionId={sessionId} query={qText} response={rText} />

@@ -5,7 +5,7 @@
  */
 
 import {describe, it, expect, afterEach} from 'vitest';
-import {getBasePath} from './config.js';
+import {getBasePath} from './api.js';
 
 describe('getBasePath', () => {
   const originalEnv = process.env['BASE_PATH'];

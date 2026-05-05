@@ -42,6 +42,7 @@ export function App({
           agentName: 'Agent',
           runtimeUrl: 'http://localhost:3847',
           agentId: 'default',
+          registryUrl: 'https://api.amodalai.com',
         });
       });
   }, [configUrl]);

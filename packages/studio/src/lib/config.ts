@@ -18,11 +18,18 @@ const AGENT_ID_ENV_KEY = 'AGENT_ID';
 const AGENT_NAME_ENV_KEY = 'AGENT_NAME';
 const RUNTIME_URL_ENV_KEY = 'RUNTIME_URL';
 const ADMIN_AGENT_URL_ENV_KEY = 'ADMIN_AGENT_URL';
-const BASE_PATH_ENV_KEY = 'BASE_PATH';
+const REGISTRY_URL_ENV_KEY = 'REGISTRY_URL';
 
 const DEFAULT_AGENT_ID = 'default';
 const DEFAULT_AGENT_NAME = 'default';
 const DEFAULT_RUNTIME_URL = 'http://localhost:3847';
+/**
+ * Public registry/marketplace API. Same URL serves cloud and OSS — the
+ * featured-agents row on the home screen reads from
+ * `${registryUrl}/api/templates?featured=true`. Self-hosted instances can
+ * point at their own mirror by setting `REGISTRY_URL`.
+ */
+const DEFAULT_REGISTRY_URL = 'https://api.amodalai.com';
 
 // ---------------------------------------------------------------------------
 // Accessors
@@ -52,14 +59,9 @@ export function getAdminAgentUrl(): string | null {
 }
 
 /**
- * Returns the base path prefix for Studio (e.g. '/studio').
- * Empty string when Studio is served at root (default).
- * Never includes a trailing slash.
+ * Returns the registry/marketplace API URL. Defaults to the public
+ * api.amodalai.com endpoint; self-hosted instances override via REGISTRY_URL.
  */
-export function getBasePath(): string {
-  const raw = process.env[BASE_PATH_ENV_KEY] ?? '';
-  // Normalize: strip trailing slash, ensure leading slash if non-empty
-  if (!raw) return '';
-  const trimmed = raw.endsWith('/') ? raw.slice(0, -1) : raw;
-  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+export function getRegistryUrl(): string {
+  return process.env[REGISTRY_URL_ENV_KEY] ?? DEFAULT_REGISTRY_URL;
 }

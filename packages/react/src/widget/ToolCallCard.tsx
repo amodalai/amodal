@@ -13,6 +13,19 @@ interface ToolCallCardProps {
   verbose?: boolean;
 }
 
+/**
+ * Resolve the user-facing label for a tool call. Prefers the curated
+ * `runningLabel` / `completedLabel` from the tool definition (Phase I.1 —
+ * dynamic per-action copy with `{{paramName}}` placeholders pre-substituted
+ * server-side), falling back to the raw tool name when none was declared.
+ */
+function labelFor(toolCall: ToolCallInfo): string {
+  if (toolCall.status === 'running') {
+    return toolCall.runningLabel ?? toolCall.toolName;
+  }
+  return toolCall.completedLabel ?? toolCall.runningLabel ?? toolCall.toolName;
+}
+
 // ---------------------------------------------------------------------------
 // Status icon helper
 // ---------------------------------------------------------------------------
@@ -43,7 +56,7 @@ function CompactToolCall({ toolCall }: { toolCall: ToolCallInfo }) {
         onClick={() => { if (hasDetails) setExpanded(!expanded); }}
       >
         <StatusIcon status={toolCall.status} />
-        <span className="pcw-tc-compact__name">{toolCall.toolName}</span>
+        <span className="pcw-tc-compact__name">{labelFor(toolCall)}</span>
         {toolCall.error && <span className="pcw-tc-compact__error-hint">failed</span>}
       </button>
       {expanded && (
@@ -118,9 +131,10 @@ function VerboseToolCall({ toolCall }: { toolCall: ToolCallInfo }) {
   const [expanded, setExpanded] = useState(false);
   const statusClass = `pcw-tool-call__status pcw-tool-call__status--${toolCall.status}`;
 
+  const label = labelFor(toolCall);
   const summary = toolCall.duration_ms
-    ? `${toolCall.toolName} (${String(toolCall.duration_ms)}ms)`
-    : toolCall.toolName;
+    ? `${label} (${String(toolCall.duration_ms)}ms)`
+    : label;
 
   return (
     <div className="pcw-tool-call">

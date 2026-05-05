@@ -24,6 +24,7 @@ import type {PersistedSession, SessionMetadata, ImageDataMap} from './types.js';
 import type {TokenUsage} from '../providers/types.js';
 import type {ModelMessage} from 'ai';
 import {SessionStoreError} from '../errors.js';
+import {scrubMessagesForPersistence} from './credential-scrubber.js';
 
 const IMAGE_REF_PREFIX = '__amodal_imgref:';
 const IMAGE_REF_PATTERN = /^__amodal_imgref:([a-f0-9-]+)__$/;
@@ -285,10 +286,17 @@ export function sessionToRow(session: PersistedSession): {
   // newly extracted images from this turn.
   const mergedImageData = {...(session.imageData ?? {}), ...imageData};
 
+  // Phase F.5 — sanitize credential-shaped substrings from user-role
+  // messages at the persistence boundary. The agent's reasoning
+  // context still sees the raw text in the active SSE stream (so it
+  // can recognize a pasted token and redirect per the F.4 rule);
+  // only what hits the database is sanitized.
+  const scrubbedMessages = scrubMessagesForPersistence(messages);
+
   return {
     id: session.id,
     scopeId: session.scopeId,
-    messages: messages as unknown[],
+    messages: scrubbedMessages,
     tokenUsage: session.tokenUsage as {
       inputTokens: number;
       outputTokens: number;
@@ -300,6 +308,43 @@ export function sessionToRow(session: PersistedSession): {
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
+}
+
+/**
+ * Defensive recovery for sessions that already contain duplicate
+ * tool-result messages from before the streaming.ts fix that filters
+ * SDK placeholder tool entries. Walks the message list and drops any
+ * tool-result block whose `toolCallId` was already seen earlier in
+ * the same array. Keeps the first occurrence, preserves message
+ * shape otherwise. A tool message that becomes empty after dedup is
+ * dropped wholesale — Anthropic rejects empty tool messages.
+ *
+ * Cheap (single pass, Set lookup) so always-on at load time is fine.
+ * Idempotent — re-running on a clean session is a no-op.
+ */
+function dedupeToolResults(messages: ModelMessage[]): ModelMessage[] {
+  const seenToolCallIds = new Set<string>();
+  const out: ModelMessage[] = [];
+  for (const msg of messages) {
+    if (msg.role !== 'tool' || !Array.isArray(msg.content)) {
+      out.push(msg);
+      continue;
+    }
+    const keptBlocks = msg.content.filter((block) => {
+      if (typeof block !== 'object' || !('type' in block) || block.type !== 'tool-result') {
+        return true;
+      }
+       
+      const id = (block as {toolCallId?: string}).toolCallId;
+      if (typeof id !== 'string') return true;
+      if (seenToolCallIds.has(id)) return false;
+      seenToolCallIds.add(id);
+      return true;
+    });
+    if (keptBlocks.length === 0) continue;
+    out.push({...msg, content: keptBlocks});
+  }
+  return out;
 }
 
 /**
@@ -338,12 +383,13 @@ export function rowToPersistedSession(
   const imageData = (row.imageData ?? {}) as ImageDataMap;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSONB boundary: array-shape checked above; element shape is not validated
   const rawMessages = row.messages as ModelMessage[];
+  const dedupedMessages = dedupeToolResults(rawMessages);
 
   return {
     version: 1,
     id: row.id,
     scopeId: row.scopeId ?? '',
-    messages: rehydrateImages(rawMessages, imageData),
+    messages: rehydrateImages(dedupedMessages, imageData),
      
     tokenUsage: row.tokenUsage as TokenUsage,
      

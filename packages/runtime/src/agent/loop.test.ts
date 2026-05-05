@@ -887,8 +887,11 @@ describe('handleExecuting (via transition)', () => {
     const registry = makeMockRegistry({read_data: readTool});
     const ctx = makeMockContext({toolRegistry: registry});
 
-    // Simulate pre-execution cache from streaming phase
-    ctx.preExecutionCache.set('call-cached', Promise.resolve({data: 'cached'}));
+    // Simulate pre-execution cache from streaming phase. The cache now
+    // stores {output, inlineEvents} so read-only tools that emit inline
+    // SSE events (present_connection, show_preview, etc.) keep their
+    // emissions across the cache hand-off.
+    ctx.preExecutionCache.set('call-cached', Promise.resolve({output: {data: 'cached'}, inlineEvents: []}));
 
     const state: ExecutingState = {
       type: 'executing',

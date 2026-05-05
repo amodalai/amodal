@@ -4,6 +4,44 @@
  * SPDX-License-Identifier: MIT
  */
 
+import type {
+  SSEAskChoiceEvent,
+  SSEShowPreviewEvent,
+  SSEConnectionPanelEvent,
+  SSEPlanSummaryEvent,
+  SSEProposalEvent,
+  SSEUpdatePlanEvent,
+  SSESetupCancelledEvent,
+  SSESetupCompletedEvent,
+  SSEToolLabelUpdateEvent,
+} from './sse-types.js';
+import type {FsBackend} from './fs.js';
+import type {
+  ConnectionsStatusMap,
+  SetupState,
+  SetupStatePatch,
+  SetupWarning,
+} from './setup-state.js';
+import type {SetupPlan} from './setup-plan.js';
+
+/**
+ * Inline SSE events a custom tool handler may emit through `ctx.emit`.
+ *
+ * Kept narrow on purpose — only events the chat widget renders inline
+ * are reachable from a tool. Tool-call events, errors, and stream-level
+ * events are emitted by the runtime, not by handlers.
+ */
+export type CustomToolInlineEvent =
+  | SSEAskChoiceEvent
+  | SSEShowPreviewEvent
+  | SSEConnectionPanelEvent
+  | SSEPlanSummaryEvent
+  | SSEProposalEvent
+  | SSEUpdatePlanEvent
+  | SSESetupCancelledEvent
+  | SSESetupCompletedEvent
+  | SSEToolLabelUpdateEvent;
+
 /**
  * Tool definition shape used by amodal tools.
  */
@@ -45,10 +83,40 @@ export interface LoadedTool {
   hasDockerfile: boolean;
   sandboxLanguage: string;
   responseShaping?: ResponseShaping;
+  /**
+   * Present-participle phrase rendered while the tool is running.
+   * Supports `{{paramName}}` substitution against call params. Optional.
+   */
+  runningLabel?: string;
+  /**
+   * Past-tense phrase rendered after the tool completes successfully.
+   * Same `{{paramName}}` substitution. Optional.
+   */
+  completedLabel?: string;
+  /**
+   * Marks the tool as internal plumbing the user shouldn't see by
+   * default. Stamped onto SSE events; the chat widget hides these
+   * calls unless `verboseTools` is enabled.
+   */
+  internal?: boolean;
 }
 
 /**
  * Context provided to custom tool handlers at execution time.
+ *
+ * The base surface (`request`, `exec`, `store`, `env`, `log`, `signal`)
+ * is the legacy one custom tools have always received. The optional
+ * fields below are populated by the runtime adapter for handlers that
+ * opt into the richer SDK shape — they let a handler emit inline UI
+ * (`emit`), read repo files through the sandboxed backend (`fs`), and
+ * scope work to the active agent / scope / session (`agentId`,
+ * `scopeId`, `sessionId`). Older handlers that don't reach for them
+ * keep working unchanged.
+ *
+ * Phase 0 added `emit?`. Phase A adds `fs?` and the identity fields so
+ * the validate_connection tool can read a connection package's
+ * `validate.ts` through the sandbox. Subsequent phases will extend
+ * with `db?` and `fetch?` when their consumers land.
  */
 export interface CustomToolContext {
   request(connection: string, endpoint: string, params?: {
@@ -65,14 +133,138 @@ export interface CustomToolContext {
   env(name: string): string | undefined;
   log(message: string): void;
   signal: AbortSignal;
-  /** Filesystem backend for reading/writing agent repo files. */
-  fs?: import('./fs.js').FsBackend;
-  /** Set dynamic labels on the tool call in the UI. */
+  /**
+   * Emit an inline SSE event the chat widget renders alongside the
+   * agent's prose. Used by handlers that produce inline UI (e.g.
+   * `show_preview` cards). Optional — most tools never call it.
+   */
+  emit?(event: CustomToolInlineEvent): void;
+  /**
+   * Replace the friendly running / completed phrase the chat widget
+   * shows for this call. Either or both may be set; subsequent calls
+   * overwrite the previous values. Useful for tools that move through
+   * stages and want the in-flight card to reflect the current step
+   * ("Cloning template" → "Installing 12 connection packages" →
+   * "Composed plan"). Static defaults from `tool.json#runningLabel` /
+   * `completedLabel` apply when this isn't called.
+   */
   setLabel?(opts: {running?: string; completed?: string}): void;
-  /** Session ID for correlation. */
+  /**
+   * Repo file access, sandboxed to the agent's repo root. Absolute
+   * paths and `..` traversal are rejected. Used by handlers that read
+   * config or per-package metadata (e.g. `validate_connection` reading
+   * a connection package's probe file).
+   */
+  fs?: FsBackend;
+  /**
+   * Setup-state operations scoped to the active agent + scope. The
+   * runtime closes over a Drizzle handle and exposes high-level
+   * read / upsert / mark-complete methods so the agent-admin handler
+   * doesn't need to import `@amodalai/db` (it ships outside the
+   * runtime's node_modules and module resolution from the cached
+   * tools dir wouldn't reach the workspace).
+   *
+   * Phase B's `read_setup_state` / `update_setup_state` tools are the
+   * first consumers. Later phases (Plan composer, completion gate,
+   * per-domain query modules) follow the same pattern: domain-specific
+   * ctx namespaces backed by query modules in `@amodalai/db/queries`.
+   */
+  setupState?: CustomToolSetupStateOps;
+  /**
+   * Plan composer operations (Phase C). The runtime closes over the
+   * agent's repo path so the handler doesn't need to know it; the
+   * tool just passes a template package name and gets a typed
+   * SetupPlan back.
+   */
+  plan?: CustomToolPlanOps;
+  /**
+   * Setup-completion operations (Phase E). The runtime closes over
+   * the agent's id, scope, db, and fs backend; the handler just
+   * decides whether to commit (force or non-force) or cancel.
+   */
+  completion?: CustomToolCompletionOps;
+  /** Stable id of the agent the tool is running on behalf of. */
+  agentId?: string;
+  /** Per-user scope key. Empty string = agent-level (no scope). */
+  scopeId?: string;
+  /** Session id for log correlation and ask-id derivation. */
   sessionId?: string;
-  /** Emit an inline SSE event. */
-  emit?(event: unknown): void;
+}
+
+/**
+ * Live row data plus its `completedAt` lifecycle timestamp. Mirrors
+ * the row shape returned by `@amodalai/db/queries/setup-state.ts`,
+ * except `completedAt` is serialized as an ISO-8601 string for clean
+ * JSON traversal in tool args.
+ */
+export interface CustomToolSetupStateRow {
+  state: SetupState;
+  /** ISO-8601 timestamp; null until `commit_setup` (Phase E) sets it. */
+  completedAt: string | null;
+}
+
+/**
+ * Domain-specific setup-state operations exposed via `ctx.setupState`.
+ * The runtime injects the agent + scope identity automatically — the
+ * handler never passes them explicitly.
+ */
+export interface CustomToolSetupStateOps {
+  /** Read the row, or null when no row exists for this (agent, scope). */
+  read(): Promise<CustomToolSetupStateRow | null>;
+  /** Apply a patch (JSONB merge in SQL) and return the post-patch row. */
+  upsert(patch: SetupStatePatch): Promise<CustomToolSetupStateRow>;
+  /**
+   * Stamp `completed_at` and flip phase to 'complete'. Idempotent.
+   * Returns the ISO timestamp, or null if no row existed.
+   */
+  markComplete(): Promise<string | null>;
+}
+
+/**
+ * Plan composer operations exposed via `ctx.plan` (Phase C). The
+ * runtime closes over the agent's repo path; the handler just passes
+ * the template package name.
+ *
+ * `compose` returns either the typed `SetupPlan` or a soft-fail
+ * descriptor (`reason: 'not_installed' | 'malformed' | 'error'`) so
+ * the LLM-facing handler can surface a clear message without parsing
+ * thrown errors.
+ */
+export interface CustomToolPlanOps {
+  compose(
+    templatePackageName: string,
+  ): Promise<
+    | {ok: true; plan: SetupPlan}
+    | {ok: false; reason: 'not_installed' | 'malformed' | 'error'; message: string}
+  >;
+}
+
+/**
+ * Setup-completion operations exposed via `ctx.completion` (Phase E).
+ * The runtime closes over the agent's id, scope, Drizzle handle, and
+ * fs backend; the handler just decides whether to commit (force or
+ * non-force) or cancel the setup state row.
+ *
+ * `commit` is idempotent — calling twice is safe; the second call
+ * sees `completedAt` already set and returns `alreadyComplete: true`.
+ *
+ * `cancel` deletes the setup_state row and emits a `setup_cancelled`
+ * SSE event so Studio can flip back to the picker. Used for "actually
+ * I want a different template" bail-out (Phase E.10).
+ */
+export interface CustomToolCompletionOps {
+  commit(opts?: {
+    force?: boolean;
+    connectionsStatus?: ConnectionsStatusMap;
+  }): Promise<
+    | {ok: true; alreadyComplete: boolean; completedAt: string}
+    | {ok: false; reason: 'not_ready'; warnings: SetupWarning[]}
+    | {ok: false; reason: 'no_state' | 'no_db' | 'error'; message: string}
+  >;
+  cancel(): Promise<
+    | {ok: true; deleted: boolean}
+    | {ok: false; reason: 'no_state' | 'no_db' | 'error'; message: string}
+  >;
 }
 
 /**

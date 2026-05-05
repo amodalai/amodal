@@ -7,12 +7,11 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
-// serveStatic removed — we serve files manually with correct MIME types
+import { serveStatic } from '@hono/node-server/serve-static';
 import path from 'node:path';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { logger } from '../lib/logger.js';
-import { getBasePath } from '../lib/config.js';
 import { getAllowedOrigins } from './middleware/cors.js';
 import { handleError } from './middleware/error-handler.js';
 import { initEventBridge } from '../lib/event-bridge.js';
@@ -30,8 +29,13 @@ import { feedbackRoutes } from './routes/feedback.js';
 import { memoryRoutes } from './routes/memory.js';
 import { eventsRoutes } from './routes/events.js';
 import { adminChatRoutes } from './routes/admin-chat.js';
+import { connectionsStatusRoutes } from './routes/connections-status.js';
+import { templateResolveRoutes } from './routes/template-resolve.js';
+import { connectionDetailRoutes } from './routes/connection-detail.js';
+import { repoStateRoutes } from './routes/repo-state.js';
+import { initRepoRoutes } from './routes/init-repo.js';
 import { runtimeProxyRoutes } from './routes/runtime-proxy.js';
-import { onboardingRoutes } from './routes/onboarding.js';
+import { oauthRoutes } from './routes/oauth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -62,8 +66,6 @@ export type { PreviewHandler } from './routes/preview.js';
 export interface CreateStudioAppOptions {
   /** Whether to serve the Vite SPA static files. Defaults to true. */
   serveStaticFiles?: boolean;
-  /** Override the base path. Defaults to `getBasePath()` (reads `BASE_PATH` env). */
-  basePath?: string;
 }
 
 /**
@@ -75,21 +77,14 @@ export interface CreateStudioAppOptions {
  * - Cloud deployments that need the Hono app as a serverless handler
  */
 export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
-  const { serveStaticFiles = true, basePath: basePathOverride } = options;
-  const basePath = basePathOverride ?? getBasePath();
+  const { serveStaticFiles = true } = options;
   const app = new Hono();
-
-  // ---------------------------------------------------------------------------
-  // Sub-app: all API routes and static files live under the base path
-  // ---------------------------------------------------------------------------
-
-  const sub = new Hono();
 
   // ---------------------------------------------------------------------------
   // Middleware
   // ---------------------------------------------------------------------------
 
-  sub.use('/api/*', cors({
+  app.use('/api/*', cors({
     origin: (origin) => {
       const allowed = getAllowedOrigins();
       return allowed.includes(origin) ? origin : '';
@@ -103,27 +98,32 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
   // API routes
   // ---------------------------------------------------------------------------
 
-  sub.route('', configRoutes);
-  sub.route('', workspaceRoutes);
-  sub.route('', draftsRoutes);
-  sub.route('', publishRoutes);
-  sub.route('', discardRoutes);
-  sub.route('', previewRoutes);
-  sub.route('', storesRoutes);
-  sub.route('', automationsRoutes);
-  sub.route('', evalsRoutes);
-  sub.route('', feedbackRoutes);
-  sub.route('', memoryRoutes);
-  sub.route('', eventsRoutes);
-  sub.route('', adminChatRoutes);
-  sub.route('', runtimeProxyRoutes);
-  sub.route('', onboardingRoutes);
+  app.route('', configRoutes);
+  app.route('', repoStateRoutes);
+  app.route('', initRepoRoutes);
+  app.route('', workspaceRoutes);
+  app.route('', draftsRoutes);
+  app.route('', publishRoutes);
+  app.route('', discardRoutes);
+  app.route('', previewRoutes);
+  app.route('', storesRoutes);
+  app.route('', automationsRoutes);
+  app.route('', evalsRoutes);
+  app.route('', feedbackRoutes);
+  app.route('', memoryRoutes);
+  app.route('', eventsRoutes);
+  app.route('', adminChatRoutes);
+  app.route('', connectionsStatusRoutes);
+  app.route('', templateResolveRoutes);
+  app.route('', connectionDetailRoutes);
+  app.route('', oauthRoutes);
+  app.route('', runtimeProxyRoutes);
 
   // ---------------------------------------------------------------------------
   // Error handler
   // ---------------------------------------------------------------------------
 
-  sub.onError(handleError);
+  app.onError(handleError);
 
   // ---------------------------------------------------------------------------
   // Static files + SPA catch-all (production)
@@ -137,67 +137,20 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
       : path.resolve(__dirname, '..', 'dist');
 
     if (existsSync(path.join(distDir, 'index.html'))) {
-      // MIME type map for static assets
-      const MIME_TYPES: Record<string, string> = {
-        '.js': 'application/javascript',
-        '.css': 'text/css',
-        '.html': 'text/html',
-        '.json': 'application/json',
-        '.svg': 'image/svg+xml',
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.ico': 'image/x-icon',
-        '.woff': 'font/woff',
-        '.woff2': 'font/woff2',
-        '.map': 'application/json',
-      };
+      // Compute the relative path from cwd to distDir for serveStatic
+      const relativeRoot = path.relative(process.cwd(), distDir);
 
-      // SPA catch-all + static file serving with correct MIME types
-      let rawIndexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf-8');
-      if (basePath) {
-        rawIndexHtml = rawIndexHtml
-          .replace(/href="\//g, `href="${basePath}/`)
-          .replace(/src="\//g, `src="${basePath}/`);
-      }
-      const basePathScript = `<script>window.__STUDIO_BASE_PATH__=${JSON.stringify(basePath)};</script>`;
-      const indexHtml = rawIndexHtml.replace('</head>', `${basePathScript}\n</head>`);
+      app.use('/*', serveStatic({ root: relativeRoot }));
 
-      sub.get('*', (c) => {
-        const reqPath = basePath && c.req.path.startsWith(basePath)
-          ? c.req.path.slice(basePath.length)
-          : c.req.path;
-
-        // Don't serve HTML for API routes
-        if (reqPath.startsWith('/api/')) {
+      // SPA catch-all: serve index.html for non-API routes
+      const indexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf-8');
+      app.get('*', (c) => {
+        if (c.req.path.startsWith('/api/')) {
           return c.notFound();
         }
-
-        // Try to serve static file from dist (must be a file, not a directory)
-        const filePath = path.join(distDir, reqPath);
-        if (existsSync(filePath) && !filePath.includes('..') && statSync(filePath).isFile()) {
-          const ext = path.extname(filePath);
-          const mime = MIME_TYPES[ext] ?? 'application/octet-stream';
-          const body = readFileSync(filePath);
-          return c.body(body, 200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=31536000, immutable' });
-        }
-
-        // SPA fallback — return index.html for all other routes
         return c.html(indexHtml);
       });
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Mount under base path
-  // ---------------------------------------------------------------------------
-
-  if (basePath) {
-    app.route(basePath, sub);
-
-    // Redirect bare base path without trailing slash to the SPA
-    app.get(basePath, (c) => c.redirect(`${basePath}/`, 301));
-  } else {
-    app.route('', sub);
   }
 
   return app;

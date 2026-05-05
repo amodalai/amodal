@@ -7,7 +7,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AgentOffline } from '@/components/AgentOffline';
-import { runtimeApiUrl } from '@/lib/api';
 import {
   useGettingStarted,
   type GettingStartedPackage,
@@ -34,7 +33,7 @@ export function GettingStartedPage() {
   const { data, error, loading, refetch } = useGettingStarted();
   const callback = useOAuthCallbackBanner();
 
-  if (error) return <AgentOffline page="connections" detail={error} />;
+  if (error) return <AgentOffline page="getting-started" detail={error} />;
   if (loading || !data) return null;
 
   const { template, packages } = data;
@@ -43,10 +42,10 @@ export function GettingStartedPage() {
   return (
     <div className="space-y-8 max-w-3xl">
       <header>
-        <h1 className="text-xl font-semibold text-foreground">Connections</h1>
+        <h1 className="text-xl font-semibold text-foreground">Getting started</h1>
         <p className="text-sm text-muted-foreground mt-1">
           {template
-            ? `Configure the connections this agent needs. Each row shows the providers you can pick from and what credentials they require.`
+            ? `Configure the connections this template needs. Each row shows the providers you can pick from and what credentials they require.`
             : `Configure the connections this agent depends on. Each card lists the credentials a package declares; ✓ means the secret is set in the runtime's environment.`}
         </p>
       </header>
@@ -135,8 +134,8 @@ function FlatPackageList({ packages }: { packages: GettingStartedPackage[] }) {
   if (packages.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        This agent doesn&apos;t have any connections configured yet.
-        Add a <code className="font-mono">connections/</code> directory or install packages via <code className="font-mono">amodal.json</code>.
+        This agent doesn&apos;t have any connection packages installed yet.
+        Add packages to <code className="font-mono">amodal.json</code> to see them here.
       </p>
     );
   }
@@ -164,10 +163,12 @@ function PackageRow({ pkg }: { pkg: GettingStartedPackage }) {
     setConnecting(true);
     setOauthError(null);
     try {
-      const r = await fetch(runtimeApiUrl(`/api/oauth/start?package=${encodeURIComponent(pkg.name)}`), {signal: AbortSignal.timeout(5_000)});
+      // OAuth start lives on Studio (relative path). The runtime
+      // watches secrets.env for changes and reloads on completion.
+      const r = await fetch(`/api/oauth/start?package=${encodeURIComponent(pkg.name)}`, {signal: AbortSignal.timeout(5_000)});
       if (!r.ok) {
         const text = await r.text().catch(() => '');
-        throw new Error(`Runtime returned ${String(r.status)}${text ? ` — ${text}` : ''}`);
+        throw new Error(`OAuth start returned ${String(r.status)}${text ? ` — ${text}` : ''}`);
       }
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
       const { authorizeUrl } = (await r.json()) as { authorizeUrl: string };

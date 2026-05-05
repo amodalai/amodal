@@ -80,7 +80,10 @@ export async function handleStreaming(
         };
         toolCalls.push(call);
 
-        // Pre-execute read-only tools while the model might still be generating
+        // Pre-execute read-only tools while the model might still be generating.
+        // executeTool returns {output, inlineEvents} — tools like
+        // `present_connection` and `show_preview` need their emissions to
+        // survive the cache hand-off to EXECUTING.
         const toolDef = ctx.toolRegistry.get(event.toolName);
         if (toolDef?.readOnly) {
           const promise = executeTool(call, toolDef, ctx);
@@ -158,8 +161,21 @@ export async function handleStreaming(
   // provider-specific metadata — like Gemini 3's thought signatures — is
   // preserved. Without this, Gemini 3 rejects the next turn with
   // "Function call is missing a thought_signature."
+  //
+  // CRITICAL: filter out any role:'tool' entries the SDK includes here.
+  // We strip `execute` from tool definitions before passing them to
+  // streamText (see thinking.ts), so the SDK has no business emitting
+  // tool-result messages — but in practice it sometimes includes
+  // placeholder tool-result entries alongside the assistant's tool-call
+  // message. The EXECUTING state is the authoritative source of
+  // tool-result messages; if the SDK's placeholders also land in
+  // ctx.messages, every tool call ends up with two tool-result entries
+  // and Anthropic rejects the next turn with "each tool_use must have
+  // a single result." Provider metadata we care about lives on the
+  // assistant message, so dropping the tool entries is safe.
   const responseMessages = await state.stream.responseMessages;
-  ctx.messages = [...ctx.messages, ...responseMessages];
+  const filteredResponseMessages = responseMessages.filter((m) => m.role !== 'tool');
+  ctx.messages = [...ctx.messages, ...filteredResponseMessages];
 
   // No tool calls → model is done
   if (toolCalls.length === 0) {

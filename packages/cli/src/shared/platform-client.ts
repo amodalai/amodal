@@ -238,8 +238,8 @@ export class PlatformClient {
 
   /**
    * Trigger a remote build:
-   * 1. Get a presigned R2 upload URL from the platform API
-   * 2. Upload the tarball directly to R2
+   * 1. Get scoped R2 temp credentials from the platform API
+   * 2. Upload the tarball directly to R2 with those creds
    * 3. Tell the platform API to trigger a Fly Machine build
    *
    * Returns a buildId for polling.
@@ -250,27 +250,45 @@ export class PlatformClient {
     tarballPath: string,
     message?: string,
   ): Promise<{ buildId: string }> {
-    // Step 1: Get presigned upload URL
-     
-    const uploadInfo = await this.request<{buildId: string; tarballKey: string; uploadUrl: string}>(
+    // Step 1: Mint scoped R2 temp credentials for the upload
+
+    const uploadInfo = await this.request<{
+      buildId: string;
+      tarballKey: string;
+      bucket: string;
+      endpoint: string;
+      accessKeyId: string;
+      secretAccessKey: string;
+      sessionToken: string;
+    }>(
       'POST',
       '/api/deploys/build?action=upload-url',
       {appId},
     );
 
-    // Step 2: Upload tarball directly to R2
+    // Step 2: Upload tarball directly to R2 with the scoped temp creds
     const {readFileSync} = await import('node:fs');
     const tarball = readFileSync(tarballPath);
 
-    const uploadResp = await fetch(uploadInfo.uploadUrl, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/gzip'},
-      body: tarball,
+    const {S3Client, PutObjectCommand} = await import('@aws-sdk/client-s3');
+    const s3 = new S3Client({
+      region: 'auto',
+      endpoint: uploadInfo.endpoint,
+      credentials: {
+        accessKeyId: uploadInfo.accessKeyId,
+        secretAccessKey: uploadInfo.secretAccessKey,
+        sessionToken: uploadInfo.sessionToken,
+      },
     });
 
-    if (!uploadResp.ok) {
-      throw new Error(`Tarball upload failed: ${uploadResp.status}`);
-    }
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: uploadInfo.bucket,
+        Key: uploadInfo.tarballKey,
+        Body: tarball,
+        ContentType: 'application/gzip',
+      }),
+    );
 
     // Step 3: Trigger the build
      

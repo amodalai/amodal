@@ -14,6 +14,12 @@
   --pcw-user-text: #134e4a;
   --pcw-agent-bubble: #f3f4f6;
   --pcw-tool-call-bg: #f9fafb;
+  /* Background tint for inline panels (ask_choice, plan_summary,
+   * proposal, ask_user, show_preview, confirm/review). Sits between
+   * --pcw-bg and --pcw-tool-call-bg — subtle enough to not feel
+   * boxy, contrasted enough to read as a distinct UI affordance now
+   * that agent prose and tool calls no longer have bubbles. */
+  --pcw-panel-tint: #f5f7fa;
   --pcw-text: #111827;
   --pcw-text-muted: #6b7280;
   --pcw-border: #e5e7eb;
@@ -36,6 +42,7 @@
   --pcw-user-text: #ccfbf1;
   --pcw-agent-bubble: #1e293b;
   --pcw-tool-call-bg: #1e293b;
+  --pcw-panel-tint: #161b2a;
   --pcw-text: #e2e8f0;
   --pcw-text-muted: #94a3b8;
   --pcw-border: #334155;
@@ -50,6 +57,7 @@
     --pcw-user-text: #ccfbf1;
     --pcw-agent-bubble: #1e293b;
     --pcw-tool-call-bg: #1e293b;
+    --pcw-panel-tint: #161b2a;
     --pcw-text: #e2e8f0;
     --pcw-text-muted: #94a3b8;
     --pcw-border: #334155;
@@ -182,16 +190,73 @@
 }
 
 .pcw-bubble--assistant {
-  align-self: flex-start;
-  max-width: 92%;
-  background: var(--pcw-agent-bubble);
+  align-self: stretch;
+  /* Bubble-less agent prose: the text flows like document copy. The
+   * inline cards (ask_choice, proposal, show_preview, connection panel,
+   * plan_summary) keep their own visual treatment so they still read as
+   * distinct artifacts. Override the shared .pcw-bubble box rules so
+   * only user messages render with a chat-bubble look. */
+  max-width: 100%;
+  padding: 0;
+  background: transparent;
   color: var(--pcw-text);
+  /* Phase F.3 — 200ms fade-in-from-below for new agent messages and
+   * any inline cards they contain. User messages get no entrance
+   * animation — the spec is explicit: don't animate user-message entry. */
+  animation: pcw-card-enter 200ms ease-out;
+}
+
+@keyframes pcw-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcw-bubble--assistant {
+    animation: none;
+  }
 }
 
 .pcw-bubble__text {
   margin: 0;
   font-size: var(--pcw-font-size);
   line-height: 1.5;
+}
+
+/* Consistent 8px rhythm between any two siblings inside an assistant
+ * message — text blocks, tool-call rows, and every inline panel
+ * (ask_choice, ask_user, plan_summary, proposal, show_preview,
+ * connection_panel, confirmation cards). The universal direct-child
+ * rule means new panel types automatically inherit the rhythm
+ * without per-class wiring. First child keeps its native margin
+ * (usually 0) so the message doesn't get a leading gap. */
+.pcw-bubble--assistant > *:not(:first-child) {
+  margin-top: 8px;
+}
+
+/* Inline panels grow to fit their intrinsic content, no forced
+ * full-width stretch. `fit-content` shrinks the box to match the
+ * widest line of content; the `max-width` is just a runaway-content
+ * guard (a 30-line paragraph in a card shouldn't span 1000px), not
+ * a target size. Agent prose (`.pcw-bubble__text`) and tool-call
+ * rows are excluded — they should still flow the chat column's
+ * full width. */
+.pcw-bubble--assistant > .pcw-ask-choice,
+.pcw-bubble--assistant > .pcw-ask-user,
+.pcw-bubble--assistant > .pcw-plan-summary,
+.pcw-bubble--assistant > .pcw-proposal,
+.pcw-bubble--assistant > .pcw-agent-card,
+.pcw-bubble--assistant > .amodal-confirm-card,
+.pcw-bubble--assistant > .amodal-review-card,
+.pcw-bubble--assistant > .studio-connection-panel {
+  width: fit-content;
+  max-width: 100%;
 }
 
 .pcw-bubble__extras {
@@ -202,74 +267,178 @@
   margin-bottom: 6px;
 }
 
-/* Tool call card */
+/* Tool call row — bubble-less, reads like a list item */
 .pcw-tool-call {
-  background: var(--pcw-tool-call-bg);
-  border: 1px solid var(--pcw-border);
-  border-radius: 6px;
-  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
   font-size: 12px;
+  color: var(--pcw-text-muted);
 }
 
 .pcw-tool-call__header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
   background: none;
   border: none;
   width: 100%;
   text-align: left;
-  padding: 0;
+  padding: 2px 0;
   font-family: inherit;
   font-size: inherit;
-  color: var(--pcw-text);
+  color: inherit;
 }
 
+/* Caret — disclosure indicator immediately after the label. Sits
+ * flush against the text using the parent row's gap, no auto-margin
+ * so it doesn't drift to the far right. */
 .pcw-tool-call__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  font-size: 10px;
+  width: 16px;
+  height: 16px;
   color: var(--pcw-text-muted);
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+
+.pcw-tool-call__chevron svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pcw-tool-call__header:hover .pcw-tool-call__chevron {
+  opacity: 1;
 }
 
 .pcw-tool-call__name {
-  font-family: monospace;
-  font-weight: 500;
+  /* Prose labels read like a sentence — drop the monospace + bold. */
+  font-family: inherit;
+  font-weight: 400;
 }
 
+/* Status indicator: SVG icon (check / x / dot) at a fixed footprint
+ * so all three line up regardless of glyph metrics. */
 .pcw-tool-call__status {
-  margin-left: auto;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.pcw-tool-call__status svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .pcw-tool-call__status--running {
-  background: #ccfbf1;
-  color: #0d9e87;
+  color: var(--pcw-text-muted);
+}
+
+.pcw-tool-call__status--running svg {
+  animation: pcw-tool-pulse 1.4s ease-in-out infinite;
+  /* The dot is a 5px-radius circle inside a 24px viewBox; rendered
+   * at 14px the fill reads as a ~6px dot, similar weight to the
+   * status check/cross strokes. */
+  transform-origin: center;
+}
+
+@keyframes pcw-tool-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcw-tool-call__status--running svg {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 .pcw-tool-call__status--success {
-  background: #dcfce7;
-  color: #166534;
+  color: #16a34a;
 }
 
 .pcw-tool-call__status--error {
-  background: #fee2e2;
-  color: #991b1b;
+  color: #dc2626;
 }
 
+/* Legacy details container — kept for tools that still emit one. */
 .pcw-tool-call__details {
   margin-top: 8px;
-  background: var(--pcw-agent-bubble);
   border-radius: 4px;
-  padding: 8px;
+  padding: 8px 0;
   overflow-x: auto;
   font-family: monospace;
   font-size: 11px;
   white-space: pre-wrap;
+}
+
+/* Timeline shown when a tool call is expanded. Each entry sits on a
+ * vertical rail with a small dot — no background panel, just indented
+ * text so it reads as part of the surrounding chat prose. */
+.pcw-tool-call__timeline {
+  list-style: none;
+  margin: 4px 0 4px 14px;
+  padding: 0 0 0 12px;
+  border-left: 1px solid var(--pcw-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pcw-tool-call__timeline-event {
+  position: relative;
+  font-size: 12px;
+  color: var(--pcw-text-muted);
+}
+
+/* Dot on the rail, vertically aligned with the label baseline. */
+.pcw-tool-call__timeline-event::before {
+  content: '';
+  position: absolute;
+  left: -17px;
+  top: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pcw-border);
+}
+
+.pcw-tool-call__timeline-event--error::before {
+  background: #dc2626;
+}
+
+.pcw-tool-call__timeline-label {
+  display: block;
+  font-weight: 500;
+  color: var(--pcw-text);
+  font-size: 12px;
+}
+
+.pcw-tool-call__timeline-data {
+  margin: 4px 0 0;
+  padding: 0;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--pcw-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pcw-tool-call__timeline-event--error .pcw-tool-call__timeline-data {
+  color: #b91c1c;
 }
 
 .pcw-tool-call__subagent {
@@ -682,7 +851,7 @@
   padding: 10px 12px;
   border-radius: 6px;
   border: 1px solid var(--pcw-border, #e5e7eb);
-  background: var(--pcw-tool-call-bg, #f9fafb);
+  background: var(--pcw-panel-tint, #f5f7fa);
   font-size: 12px;
 }
 .amodal-confirm-card__header,
@@ -2002,7 +2171,7 @@
   padding: 10px;
   margin: 4px 0;
   font-size: 12px;
-  background: var(--pcw-bg);
+  background: var(--pcw-panel-tint);
 }
 
 .pcw-ask-user--submitted {
@@ -2697,101 +2866,353 @@
   background: rgba(239,68,68,0.2);
 }
 
-/* ---------------------------------------------------------------------------
- * Collect secret card (collect_secret tool)
- * --------------------------------------------------------------------------- */
+/* Ask choice — inline button row for single/multi-select questions */
+.pcw-ask-choice {
+  border: 1px solid var(--pcw-border);
+  border-radius: 6px;
+  padding: 10px;
+  margin: 4px 0;
+  background: var(--pcw-panel-tint);
+}
+.pcw-ask-choice--submitted {
+  background: var(--pcw-tool-call-bg);
+}
+.pcw-ask-choice__question {
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: var(--pcw-text);
+}
+.pcw-ask-choice__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pcw-ask-choice__btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--pcw-border);
+  background: var(--pcw-bg);
+  color: var(--pcw-text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pcw-ask-choice__btn:hover {
+  border-color: var(--pcw-primary);
+}
+.pcw-ask-choice__btn--active {
+  background: var(--pcw-primary);
+  color: white;
+  border-color: var(--pcw-primary);
+}
+.pcw-ask-choice__submit {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--pcw-primary);
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pcw-ask-choice__submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pcw-ask-choice__summary {
+  font-size: 12px;
+  color: var(--pcw-muted);
+  font-style: italic;
+}
 
-.pcw-collect-secret {
-  margin: 8px 0;
-  padding: 14px;
+/* Checkbox-list variant — used when options carry descriptions
+ * (the optional-connection batch question). */
+.pcw-ask-choice__checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pcw-ask-choice__check-row {
+  border-radius: 6px;
+  padding: 6px 8px;
+  transition: background 0.15s;
+}
+.pcw-ask-choice__check-row:hover {
+  background: var(--pcw-tool-call-bg);
+}
+.pcw-ask-choice__check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  width: 100%;
+}
+.pcw-ask-choice__check-input {
+  margin-top: 3px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.pcw-ask-choice__check-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pcw-ask-choice__check-name {
+  font-size: 13px;
+  color: var(--pcw-text);
+}
+.pcw-ask-choice__check-desc {
+  font-size: 11.5px;
+  color: var(--pcw-muted);
+  line-height: 1.35;
+}
+
+/* Proposal card emitted by the propose_plan tool (Phase D — Path B custom flow) */
+/* Plan summary card — emitted by load_template_plan to surface what
+ * got loaded (required + optional connections + config) inline. */
+.pcw-plan-summary {
   border: 1px solid var(--pcw-border);
   border-radius: 8px;
-  background: var(--pcw-bg);
+  padding: 12px 14px;
+  margin: 6px 0;
+  background: var(--pcw-panel-tint);
 }
-.pcw-collect-secret--saved {
-  border-color: rgba(16, 185, 129, 0.3);
-  background: rgba(16, 185, 129, 0.05);
-}
-.pcw-collect-secret--saved .pcw-collect-secret__label {
-  color: #10b981;
-}
-.pcw-collect-secret--skipped {
-  opacity: 0.5;
-}
-.pcw-collect-secret__label {
-  font-size: 13px;
+.pcw-plan-summary__title {
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--pcw-text);
-  margin-bottom: 4px;
+  margin-bottom: 10px;
 }
-.pcw-collect-secret__description {
+.pcw-plan-summary__section {
+  margin-top: 10px;
+}
+.pcw-plan-summary__section:first-of-type {
+  margin-top: 0;
+}
+.pcw-plan-summary__heading {
   font-size: 11px;
-  color: var(--pcw-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pcw-muted);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pcw-plan-summary__badge {
+  font-size: 9.5px;
+  font-weight: 500;
+  text-transform: lowercase;
+  letter-spacing: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--pcw-tool-call-bg);
+  color: var(--pcw-muted);
+}
+.pcw-plan-summary__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pcw-plan-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pcw-plan-summary__item-label {
+  font-size: 12.5px;
+  color: var(--pcw-text);
+}
+.pcw-plan-summary__item-options {
+  color: var(--pcw-muted);
+  font-weight: 400;
+}
+.pcw-plan-summary__item-desc {
+  font-size: 11.5px;
+  color: var(--pcw-muted);
+}
+
+.pcw-proposal {
+  border: 1px solid var(--pcw-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 6px 0;
+  background: var(--pcw-panel-tint);
+}
+.pcw-proposal--submitted {
+  background: var(--pcw-tool-call-bg);
+}
+.pcw-proposal__summary {
+  font-size: 13px;
+  color: var(--pcw-text);
   margin-bottom: 10px;
   line-height: 1.4;
 }
-.pcw-collect-secret__link {
-  color: var(--pcw-primary, #0d9e87);
-  text-decoration: none;
+.pcw-proposal__section {
+  margin-top: 10px;
 }
-.pcw-collect-secret__link:hover {
-  text-decoration: underline;
-}
-.pcw-collect-secret__input-row {
-  margin-bottom: 8px;
-}
-.pcw-collect-secret__input {
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: monospace;
-  border: 1px solid var(--pcw-border);
-  border-radius: 6px;
-  background: var(--pcw-bg);
-  color: var(--pcw-text);
-  outline: none;
-}
-.pcw-collect-secret__input:focus {
-  border-color: var(--pcw-primary, #0d9e87);
-}
-.pcw-collect-secret__error {
+.pcw-proposal__section-title {
   font-size: 11px;
-  color: #ef4444;
-  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pcw-muted);
+  margin-bottom: 4px;
 }
-.pcw-collect-secret__actions {
+.pcw-proposal__rows {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
 }
-.pcw-collect-secret__save {
-  padding: 6px 14px;
+.pcw-proposal__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+.pcw-proposal__row-label {
   font-size: 12px;
   font-weight: 500;
-  color: white;
-  background: var(--pcw-primary, #0d9e87);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.pcw-collect-secret__save:hover:not(:disabled) {
-  opacity: 0.9;
-}
-.pcw-collect-secret__save:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.pcw-collect-secret__skip {
-  padding: 6px 14px;
-  font-size: 12px;
-  color: var(--pcw-text-muted);
-  background: none;
-  border: 1px solid var(--pcw-border);
-  border-radius: 6px;
-  cursor: pointer;
-}
-.pcw-collect-secret__skip:hover {
   color: var(--pcw-text);
 }
+.pcw-proposal__row-desc {
+  font-size: 12px;
+  color: var(--pcw-muted);
+  line-height: 1.35;
+}
+.pcw-proposal__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pcw-proposal__btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pcw-proposal__btn--primary {
+  background: var(--pcw-primary);
+  color: white;
+  border: 1px solid var(--pcw-primary);
+}
+.pcw-proposal__btn--secondary {
+  background: var(--pcw-bg);
+  color: var(--pcw-text);
+  border: 1px solid var(--pcw-border);
+}
+.pcw-proposal__btn--secondary:hover {
+  border-color: var(--pcw-primary);
+}
+.pcw-proposal__answer {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--pcw-muted);
+  font-style: italic;
+}
+
+/* Inline agent-card preview emitted by the show_preview tool */
+.pcw-agent-card {
+  border: 1px solid var(--pcw-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 6px 0;
+  background: var(--pcw-panel-tint);
+}
+.pcw-agent-card__image {
+  display: block;
+  width: 100%;
+  /*
+   * Cap the inline preview at 180px wide so it reads as a true
+   * thumbnail. 3:2 aspect → 180w × 120h — small enough that the
+   * conversation flows around it instead of being interrupted by it.
+   */
+  max-width: 180px;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: 6px;
+  margin: -4px 0 10px;
+  background: var(--pcw-muted, rgba(0, 0, 0, 0.04));
+}
+.pcw-agent-card__title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--pcw-text);
+  margin-bottom: 8px;
+}
+.pcw-agent-card__convo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--pcw-tool-call-bg);
+  margin-bottom: 8px;
+}
+.pcw-agent-card__turn {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.pcw-agent-card__icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.pcw-agent-card__content {
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  color: var(--pcw-text);
+}
+.pcw-agent-card__turn--user .pcw-agent-card__content {
+  color: var(--pcw-muted);
+}
+.pcw-agent-card__tagline {
+  font-size: 11px;
+  color: var(--pcw-muted);
+  margin-bottom: 6px;
+}
+.pcw-agent-card__platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pcw-agent-card__chip {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--pcw-tool-call-bg);
+  font-size: 10px;
+  color: var(--pcw-muted);
+}
+
+/* Inline-block placeholder shown when MessageList encounters an
+ * unknown ContentBlock type and no renderer is registered via
+ * `inlineBlockRenderers` (Phase H.2). Lives here rather than in
+ * MessageList styled-inline so consumers can hide it with a
+ * Studio-style override if desired. */
+.pcw-bubble__placeholder {
+  display: inline-block;
+  padding: 4px 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--pcw-muted);
+  background: var(--pcw-tool-call-bg);
+  font-family: var(--pcw-font-mono, ui-monospace, monospace);
+}
+
+/* ---------------------------------------------------------------------------
+ * #323 — Streaming polish: spin/breathe keyframes + fading elapsed time
+ * --------------------------------------------------------------------------- */
 
 @keyframes pcw-spin {
   to { transform: rotate(360deg); }
@@ -2815,4 +3236,3 @@
   0%, 100% { width: 16px; opacity: 0.4; }
   50% { width: 32px; opacity: 1; }
 }
-

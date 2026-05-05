@@ -8,6 +8,8 @@ import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { getBasePath } from './lib/api';
 import { StudioShell } from './components/StudioShell';
 import { IndexPage } from './pages/IndexPage';
+import { CreateFlowPage } from './pages/CreateFlowPage';
+import { TemplateUpdatePage } from './pages/TemplateUpdatePage';
 import { SessionsPage } from './pages/SessionsPage';
 import { SessionDetailPage } from './pages/SessionDetailPage';
 import { GettingStartedPage } from './pages/GettingStartedPage';
@@ -41,8 +43,9 @@ function Layout() {
 /** Agent-scoped routes — all Studio pages live under /agents/:agentId/ */
 const agentRoutes = [
   { index: true, element: <IndexPage /> },
-  { path: 'connections', element: <GettingStartedPage /> },
-  { path: 'getting-started', element: <Navigate to="../connections" replace /> },
+  { path: 'setup', element: <CreateFlowPage /> },
+  { path: 'updates/:slug', element: <TemplateUpdatePage /> },
+  { path: 'getting-started', element: <GettingStartedPage /> },
   { path: 'connections/:packageName', element: <ConnectionConfigPage /> },
   { path: 'sessions', element: <SessionsPage /> },
   { path: 'sessions/:sessionId', element: <SessionDetailPage /> },

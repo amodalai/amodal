@@ -17,7 +17,15 @@
  */
 
 import {jsonSchema} from 'ai';
-import type {LoadedTool, CustomToolExecutor, CustomToolContext} from '@amodalai/types';
+import type {
+  CustomToolCompletionOps,
+  CustomToolContext,
+  CustomToolExecutor,
+  CustomToolPlanOps,
+  CustomToolSetupStateOps,
+  FsBackend,
+  LoadedTool,
+} from '@amodalai/types';
 
 import {ToolExecutionError} from '../errors.js';
 import {log} from '../logger.js';
@@ -41,7 +49,38 @@ export interface CustomToolSessionContext {
   shellExecutor?: {
     exec(command: string, options?: {cwd?: string; timeout?: number}): Promise<{stdout: string; stderr: string; exitCode: number}>;
   };
-  fs?: import('@amodalai/types').FsBackend;
+  /**
+   * Sandboxed fs backend the runtime exposes to handlers via `ctx.fs`.
+   * Phase A's `validate_connection` is the first heavy consumer (reads
+   * `node_modules/<pkg>/validate.ts` for connection probes); future
+   * tools follow the same pattern. Undefined when no `repoRoot` is
+   * resolvable for the session.
+   */
+  fs?: FsBackend;
+  /** Repo root the fs backend is sandboxed against, for path computations. */
+  repoRoot?: string;
+  /** Stable id of the agent the tool is running on behalf of. */
+  agentId?: string;
+  /**
+   * Factory that produces a `CustomToolSetupStateOps` bound to the
+   * active scope (Phase B). The session ctx caller passes a function
+   * rather than the ops directly because `scopeId` is per-runtime-call,
+   * not per-session — the adapter calls this with the live runtime
+   * scope when building each handler ctx.
+   */
+  setupStateFactory?: (scopeId: string) => CustomToolSetupStateOps;
+  /**
+   * Plan composer ops (Phase C). The session ctx provides this when
+   * a `repoPath` is available; the handler calls `ctx.plan.compose`
+   * with the template package name and gets back a typed SetupPlan.
+   */
+  plan?: CustomToolPlanOps;
+  /**
+   * Setup-completion ops factory (Phase E). The session ctx caller
+   * passes a function rather than the ops directly because `scopeId`
+   * varies per runtime call. Same shape as `setupStateFactory`.
+   */
+  completionFactory?: (scopeId: string) => CustomToolCompletionOps;
 }
 
 function buildCustomToolContext(
@@ -183,8 +222,45 @@ function buildCustomToolContext(
       runtimeCtx.log(message);
     },
 
+    emit(event) {
+      // Structural pass-through — the @amodalai/types CustomToolInlineEvent
+      // union and the runtime-internal ToolInlineEvent are structurally
+      // identical (same SSE event shapes) but live in two packages that
+      // each declare their own SSEEventType enum. Cast through unknown
+      // at the boundary; the legacy custom-tool surface keeps emitting
+      // exactly the same SSE wire shape it always did.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- cross-package SSE type alignment
+      runtimeCtx.emit?.(event as unknown as Parameters<NonNullable<typeof runtimeCtx.emit>>[0]);
+    },
+
+    setLabel(labelOpts) {
+      runtimeCtx.setLabel?.(labelOpts);
+    },
+
     signal: combinedSignal,
-    fs: sessionCtx.fs,
+
+    // Phase A: optional SDK fields populated when the runtime knows them.
+    // Handlers that don't reach for these (i.e. legacy custom tools) keep
+    // working unchanged because every field below is optional.
+    ...(sessionCtx.fs ? {fs: sessionCtx.fs} : {}),
+    ...(sessionCtx.agentId ? {agentId: sessionCtx.agentId} : {}),
+    // Phase B: setupState ops factory closes over the live scopeId so
+    // the handler doesn't need to plumb identity through every call.
+    ...(sessionCtx.setupStateFactory
+      ? {setupState: sessionCtx.setupStateFactory(runtimeCtx.scopeId)}
+      : {}),
+    // Phase C: plan composer ops. Bound to the agent's repoPath at
+    // session-build time; identity is repo-scoped, not scope-scoped,
+    // so the same ops object works for every handler in the session.
+    ...(sessionCtx.plan ? {plan: sessionCtx.plan} : {}),
+    // Phase E: completion ops factory. Like setupStateFactory, the
+    // factory closes over (agentId, db, fs) and binds the live
+    // scopeId per call so concurrent scopes don't collide.
+    ...(sessionCtx.completionFactory
+      ? {completion: sessionCtx.completionFactory(runtimeCtx.scopeId)}
+      : {}),
+    scopeId: runtimeCtx.scopeId,
+    sessionId: runtimeCtx.sessionId,
   };
 }
 
@@ -215,6 +291,9 @@ export function createCustomToolDefinition(
     metadata: {
       category: 'custom',
     },
+    ...(tool.runningLabel ? {runningLabel: tool.runningLabel} : {}),
+    ...(tool.completedLabel ? {completedLabel: tool.completedLabel} : {}),
+    ...(tool.internal ? {internal: true} : {}),
 
     async execute(params: unknown, ctx: ToolContext): Promise<unknown> {
       const customCtx = buildCustomToolContext(tool, sessionCtx, ctx);
