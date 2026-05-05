@@ -56,7 +56,7 @@ pnpm build
 ## Highlights
 
 - **Config-driven agents** — describe behavior in markdown and JSON, not application code
-- **Multi-provider** — Anthropic, OpenAI, Google Gemini, AWS Bedrock, Azure OpenAI, or any OpenAI-compatible endpoint
+- **Multi-provider** — Anthropic, OpenAI, Google Gemini, and OpenAI-compatible endpoints
 - **Skills & knowledge** — pre-built plugins for incident response, deal triage, compliance, lead scoring, and more
 - **Stores** — persistent key-value state (PGlite or PostgreSQL) that agents read and write across conversations
 - **Pages** — custom UI surfaces beyond chat, defined in config and rendered by the runtime
@@ -158,24 +158,36 @@ Use `scope:KEY` in connection headers/auth to read credentials from the scope's 
                                           └───────────┘
 ```
 
-**Core** handles the agent loop — config resolution, tool registration, LLM provider dispatch, knowledge retrieval, and security guardrails.
+**Core** handles shared agent-building primitives — repo/config loading, knowledge formatting, package management, snapshots, evals, MCP helpers, and shared security utilities.
 
-**Runtime** is the HTTP server — SSE streaming, session management, persistent stores, cron scheduling, and webhook handling.
+**Runtime** is the agent execution layer and HTTP server — the agent loop, provider dispatch, tool registration/execution, SSE streaming, session management, persistent stores, automation/webhook handling, and runtime guardrails.
 
 **CLI** is the developer interface — scaffold projects, run local dev servers, deploy, manage connections, and run evals.
 
 ## Packages
 
-These four packages are published to npm and versioned together:
+Primary packages:
 
-| Package                                   | What it does                                                | Who uses it                                 |
-| ----------------------------------------- | ----------------------------------------------------------- | ------------------------------------------- |
-| [`@amodalai/core`](./packages/core)       | Agent SDK — ReAct loop, tools, skills, knowledge, providers | Anyone building on or extending the runtime |
-| [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores     | Anyone self-hosting the agent server        |
-| [`@amodalai/amodal`](./packages/cli)      | CLI — chat, deploy, init, connect, eval                     | Every developer using the platform          |
-| [`@amodalai/react`](./packages/react)     | React hooks, components, chat widget, and embeddable UI     | ISVs embedding the agent in their product   |
+| Package                                   | What it does                                                                                  | Who uses it                               |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| [`@amodalai/core`](./packages/core)       | Shared agent SDK primitives — config/repo loading, packages, snapshots, evals, MCP, knowledge | Anyone building on or extending Amodal    |
+| [`@amodalai/runtime`](./packages/runtime) | HTTP server — SSE streaming, session management, stores                                       | Anyone self-hosting the agent server      |
+| [`@amodalai/amodal`](./packages/cli)      | CLI — chat, deploy, init, connect, eval                                                       | Every developer using the platform        |
+| [`@amodalai/react`](./packages/react)     | React hooks, components, chat widget, and embeddable UI                                       | ISVs embedding the agent in their product |
 
-Internal packages (not published to npm): `runtime-app` (Vite dev UI), `docs`, `test-utils`.
+Supporting workspace packages:
+
+| Package                                                   | What it does                                     |
+| --------------------------------------------------------- | ------------------------------------------------ |
+| [`@amodalai/types`](./packages/types)                     | Shared zero-dependency type definitions          |
+| [`@amodalai/db`](./packages/db)                           | Shared Drizzle schema and Postgres helpers       |
+| [`@amodalai/studio`](./packages/studio)                   | Agent editor, draft workspace, and Studio server |
+| [`@amodalai/studio-client`](./packages/studio-client)     | HTTP client for the Studio API                   |
+| [`@amodalai/runtime-app`](./packages/runtime-app)         | Vite runtime/admin UI                            |
+| [`@amodalai/snapshot-probe`](./packages/snapshot-probe)   | Release workflow smoke-test package              |
+| [`@amodalai/workspace-tools`](./packages/workspace-tools) | Internal workspace filesystem tools              |
+| [`@amodalai/test-utils`](./packages/test-utils)           | Internal test helpers                            |
+| [`@amodalai/docs`](./packages/docs)                       | Documentation site                               |
 
 ## CLI Commands
 
@@ -193,18 +205,19 @@ Internal packages (not published to npm): `runtime-app` (Vite dev UI), `docs`, `
 
 ### `amodal pkg` — Package management
 
-| Command                | Description                         |
-| ---------------------- | ----------------------------------- |
-| `amodal pkg connect`   | Add a connection (plugin or custom) |
-| `amodal pkg install`   | Install a package from the registry |
-| `amodal pkg uninstall` | Remove a package                    |
-| `amodal pkg update`    | Update packages or the admin agent  |
-| `amodal pkg list`      | List installed packages             |
-| `amodal pkg search`    | Search the marketplace              |
-| `amodal pkg diff`      | Show package changes                |
-| `amodal pkg publish`   | Publish a package to the registry   |
-| `amodal pkg link`      | Link project to platform app        |
-| `amodal pkg sync`      | Sync API specs from remote sources  |
+| Command                | Description                        |
+| ---------------------- | ---------------------------------- |
+| `amodal pkg install`   | Install packages                   |
+| `amodal pkg uninstall` | Remove a package                   |
+| `amodal pkg link`      | Link project to platform app       |
+| `amodal pkg sync`      | Sync API specs from remote sources |
+
+### `amodal connect` — Connections and channels
+
+| Command                     | Description               |
+| --------------------------- | ------------------------- |
+| `amodal connect connection` | Add a connection package  |
+| `amodal connect channel`    | Add a channel integration |
 
 ### `amodal deploy` — Deployment lifecycle
 
@@ -250,7 +263,9 @@ Amodal supports multiple LLM providers. Configure in `amodal.json`:
 }
 ```
 
-Supported: **Anthropic** (default), **OpenAI**, **Google Gemini**, **AWS Bedrock**, **Azure OpenAI**, and any **OpenAI-compatible** endpoint.
+Supported directly: **Anthropic** (default), **OpenAI**, and **Google Gemini**.
+
+OpenAI-compatible providers are supported by known provider names (`deepseek`, `groq`, `mistral`, `xai`, `fireworks`, `together`) or by setting `baseUrl` for another compatible endpoint.
 
 ## Web search & fetch
 
