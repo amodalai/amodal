@@ -198,7 +198,7 @@ export function ConnectionsPage() {
   const incompleteCount = connections.filter((conn) => !conn.loaded && conn.file && !conn.file.hasSpec).length;
   const unhealthyCount = connections.filter((conn) => conn.loaded && conn.status !== 'connected').length;
 
-  async function refreshAll(): Promise<void> {
+  function refreshAll(): void {
     connectionPackages.refetch();
     setRefreshKey((key) => key + 1);
   }
@@ -235,7 +235,7 @@ export function ConnectionsPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => void refreshAll()}
+            onClick={refreshAll}
             className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
           >
             <RefreshCw className="h-3.5 w-3.5" />
