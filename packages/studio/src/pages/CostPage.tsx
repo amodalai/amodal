@@ -38,6 +38,13 @@ function costPerSession(group: CostGroup): string {
   return formatPrice(group.cost / group.sessions);
 }
 
+function displayModelName(model: string | null | undefined): string {
+  if (!model) return '—';
+  if (model === 'claude-sonnet-4-20250514') return 'Sonnet 4';
+  if (model === 'gemini-2.5-flash') return 'Gemini 2.5 Flash';
+  return model;
+}
+
 export function CostPage() {
   const {sessions, error} = useSessionHistory();
   const [rangeDays, setRangeDays] = useState<RangeDays>(30);
@@ -132,7 +139,7 @@ export function CostPage() {
             ) : byModel.map((group) => {
               const colors = PROVIDER_COLORS[modelToProvider(group.key)];
               return (
-                <div key={group.key} className="grid grid-cols-[minmax(0,220px)_1fr_88px_96px_82px] items-center gap-4 px-4 py-3 text-sm">
+                <div key={group.key} className="grid grid-cols-[minmax(0,220px)_1fr_88px_96px] items-center gap-4 px-4 py-3 text-sm">
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
                       {colors && <span className={`h-2 w-2 flex-shrink-0 rounded-full ${colors.dot}`} />}
@@ -140,6 +147,7 @@ export function CostPage() {
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {group.sessions} sessions · {formatTokens(group.totalTokens)} tokens
+                      {group.unknownCostSessions > 0 ? ` · ${String(group.unknownCostSessions)} unpriced` : ''}
                     </div>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -150,9 +158,6 @@ export function CostPage() {
                   </div>
                   <div className="text-right font-mono text-xs text-foreground">{formatPrice(group.cost)}</div>
                   <div className="text-right font-mono text-xs text-muted-foreground">{costPerSession(group)}/ea</div>
-                  <div className="text-right text-xs text-muted-foreground">
-                    {group.unknownCostSessions > 0 ? `${group.unknownCostSessions} unpriced` : 'priced'}
-                  </div>
                 </div>
               );
             })}
@@ -208,7 +213,7 @@ export function CostPage() {
         <table className="w-full table-fixed text-sm">
           <colgroup>
             <col />
-            <col className="w-60" />
+            <col className="w-40" />
             <col className="w-32" />
             <col className="w-36" />
             <col className="w-32" />
@@ -241,9 +246,9 @@ export function CostPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1">
+                    <div className="inline-flex max-w-full items-center gap-1.5" title={session.model ?? undefined}>
                       {colors && <span className={`h-2 w-2 flex-shrink-0 rounded-full ${colors.dot}`} />}
-                      <span className="truncate font-mono text-xs text-muted-foreground">{session.model ?? '—'}</span>
+                      <span className="truncate text-xs text-muted-foreground">{displayModelName(session.model)}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right">
