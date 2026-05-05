@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { PickerCard } from '@/components/PickerCard';
@@ -320,6 +320,7 @@ function Header({
 }
 
 function SkipOnboardingButton() {
+  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -336,9 +337,13 @@ function SkipOnboardingButton() {
         const body = (await res.json().catch(() => ({}))) as { message?: string };
         throw new Error(body.message ?? `init-repo returned ${String(res.status)}`);
       }
-      // IndexPage's useRepoState({polling: true}) (Phase E.7) detects
-      // the new amodal.json and swaps to OverviewPage in-place within
-      // ~2s — no reload needed.
+      // amodal.json now exists. Navigate back to the agent root so
+      // IndexPage's useRepoState probe re-fires, sees the file, and
+      // swaps to OverviewPage. Without this nav the user stays stranded
+      // on /setup — the picker they just clicked Skip on.
+      // react-router v7's navigate may return a Promise during transitions;
+      // we don't need to await it here — the route swap is fire-and-forget.
+      void navigate('..', { relative: 'path' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to skip onboarding');
       setBusy(false);
