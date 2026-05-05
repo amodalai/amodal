@@ -10,6 +10,7 @@
  */
 
 export interface ModelMeta {
+  label?: string;
   input: number;
   output: number;
   cachedInput?: number;
@@ -17,20 +18,20 @@ export interface ModelMeta {
 }
 
 export const MODEL_META: Record<string, ModelMeta> = {
-  'claude-opus-4-6':              { input: 15,    output: 75,   cachedInput: 1.50,  context: '1M' },
-  'claude-sonnet-4-6':            { input: 3,     output: 15,   cachedInput: 0.30,  context: '1M' },
-  'claude-sonnet-4-20250514':      { input: 3,     output: 15,   cachedInput: 0.30,  context: '1M' },
-  'claude-haiku-4-5-20251001':    { input: 0.80,  output: 4,    cachedInput: 0.08,  context: '200K' },
+  'claude-opus-4-6':              { label: 'Opus 4.6', input: 15,    output: 75,   cachedInput: 1.50,  context: '1M' },
+  'claude-sonnet-4-6':            { label: 'Sonnet 4.6', input: 3,     output: 15,   cachedInput: 0.30,  context: '1M' },
+  'claude-sonnet-4-20250514':      { label: 'Sonnet 4', input: 3,     output: 15,   cachedInput: 0.30,  context: '1M' },
+  'claude-haiku-4-5-20251001':    { label: 'Haiku 4.5', input: 0.80,  output: 4,    cachedInput: 0.08,  context: '200K' },
   'gpt-4o':                       { input: 2.50,  output: 10,   context: '128K' },
   'gpt-4o-mini':                  { input: 0.15,  output: 0.60, context: '128K' },
   'gpt-4.1':                      { input: 2,     output: 8,    context: '1M' },
   'gpt-4.1-mini':                 { input: 0.40,  output: 1.60, context: '1M' },
-  'gemini-3.1-pro-preview':        { input: 2,     output: 12,   context: '1M' },
-  'gemini-3-pro-preview':          { input: 2,     output: 12,   context: '1M' },
-  'gemini-3-flash-preview':        { input: 0.50,  output: 3,    context: '1M' },
-  'gemini-3.1-flash-lite-preview': { input: 0.25,  output: 1.50, context: '1M' },
-  'gemini-2.5-pro':               { input: 1.25,  output: 10,   context: '1M' },
-  'gemini-2.5-flash':             { input: 0.15,  output: 0.60, context: '1M' },
+  'gemini-3.1-pro-preview':        { label: 'Gemini 3.1 Pro', input: 2,     output: 12,   context: '1M' },
+  'gemini-3-pro-preview':          { label: 'Gemini 3 Pro', input: 2,     output: 12,   context: '1M' },
+  'gemini-3-flash-preview':        { label: 'Gemini 3 Flash', input: 0.50,  output: 3,    context: '1M' },
+  'gemini-3.1-flash-lite-preview': { label: 'Gemini 3.1 Flash Lite', input: 0.25,  output: 1.50, context: '1M' },
+  'gemini-2.5-pro':               { label: 'Gemini 2.5 Pro', input: 1.25,  output: 10,   context: '1M' },
+  'gemini-2.5-flash':             { label: 'Gemini 2.5 Flash', input: 0.15,  output: 0.60, context: '1M' },
   'deepseek-chat':                { input: 0.27,  output: 1.10, cachedInput: 0.07, context: '64K' },
   'deepseek-reasoner':            { input: 0.55,  output: 2.19, cachedInput: 0.14, context: '64K' },
   'llama-3.3-70b-versatile':      { input: 0.59,  output: 0.79, context: '128K' },
@@ -68,6 +69,14 @@ export function modelToProvider(modelName: string): string {
     if (modelName.startsWith(prefix)) return provider;
   }
   return 'unknown';
+}
+
+export function modelDisplayName(modelName: string): string {
+  const meta = MODEL_META[modelName];
+  if (meta?.label) return meta.label;
+  return modelName
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export function formatPrice(price: number): string {

@@ -14,6 +14,7 @@ import {
   PROVIDER_COLORS,
   modelToProvider,
   estimateCost,
+  modelDisplayName,
 } from '../lib/model-pricing';
 import {formatShortDateTime, formatTokens} from '@/lib/format';
 import {
@@ -50,11 +51,6 @@ interface SortState {
   direction: SortDirection;
 }
 
-const MODEL_LABELS: Record<string, string> = {
-  'claude-sonnet-4-20250514': 'Claude Sonnet 4',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
-};
-
 function compactText(text: string, max = 180): string {
   const normalized = text.replace(/\s+/g, ' ').trim();
   if (normalized.length <= max) return normalized;
@@ -67,14 +63,6 @@ function firstMessage(messages: HistoryMessage[], role: 'user' | 'assistant'): s
 
 function countToolCalls(messages: HistoryMessage[]): number {
   return messages.reduce((sum, m) => sum + (m.toolCalls?.length ?? 0), 0);
-}
-
-function modelLabel(model: string): string {
-  const known = MODEL_LABELS[model];
-  if (known) return known;
-  return model
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function providerLabel(model: string | null, provider: string | null): string {
@@ -301,7 +289,7 @@ export function SessionsPage() {
                             <div className="flex min-w-0 items-center gap-1.5">
                               {colors && <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${colors.dot}`} />}
                               <span className="truncate text-xs font-medium text-foreground">
-                                {modelLabel(s.model)}
+                                {modelDisplayName(s.model)}
                               </span>
                             </div>
                             <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground/70">

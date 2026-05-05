@@ -12,6 +12,7 @@ import {formatShortDateTime, formatTokens} from '../lib/format';
 import {
   PROVIDER_COLORS,
   formatPrice,
+  modelDisplayName,
   modelToProvider,
 } from '../lib/model-pricing';
 import {
@@ -36,13 +37,6 @@ const RANGE_OPTIONS: ReadonlyArray<{days: RangeDays; label: string}> = [
 function costPerSession(group: CostGroup): string {
   if (group.sessions === 0) return '—';
   return formatPrice(group.cost / group.sessions);
-}
-
-function displayModelName(model: string | null | undefined): string {
-  if (!model) return '—';
-  if (model === 'claude-sonnet-4-20250514') return 'Sonnet 4';
-  if (model === 'gemini-2.5-flash') return 'Gemini 2.5 Flash';
-  return model;
 }
 
 export function CostPage() {
@@ -248,7 +242,7 @@ export function CostPage() {
                   <td className="px-4 py-3">
                     <div className="inline-flex max-w-full items-center gap-1.5" title={session.model ?? undefined}>
                       {colors && <span className={`h-2 w-2 flex-shrink-0 rounded-full ${colors.dot}`} />}
-                      <span className="truncate text-xs text-muted-foreground">{displayModelName(session.model)}</span>
+                      <span className="truncate text-xs text-muted-foreground">{session.model ? modelDisplayName(session.model) : '—'}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right">
