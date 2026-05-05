@@ -10,6 +10,11 @@
  * Called once at startup (from the SSE endpoint). Each Postgres
  * notification is forwarded to the StudioEventBus, which fans it
  * out to all connected SSE clients.
+ *
+ * Deployments that use a different real-time mechanism (e.g. Pusher in
+ * cloud-studio) call `disableEventBridge()` to skip the LISTEN/NOTIFY path,
+ * which avoids opening a persistent pg connection that's incompatible with
+ * serverless drivers like neon-http.
  */
 
 import { NOTIFY_CHANNELS } from '@amodalai/db';
@@ -18,12 +23,23 @@ import { getEventBus } from './event-bus';
 import { logger } from './logger';
 
 let bridged = false;
+let disabled = false;
+
+/**
+ * Disable the Postgres LISTEN bridge. Subsequent calls to `initEventBridge`
+ * become no-ops. Use this in deployments that have their own real-time
+ * pipeline (e.g. Pusher) and don't want a persistent pg connection opened.
+ */
+export function disableEventBridge(): void {
+  disabled = true;
+}
 
 /**
  * Initialize the Postgres listener -> event bus bridge.
- * Idempotent — safe to call multiple times.
+ * Idempotent — safe to call multiple times. No-op if disabled.
  */
 export async function initEventBridge(): Promise<void> {
+  if (disabled) return;
   if (bridged) return;
   bridged = true;
 
@@ -45,4 +61,5 @@ export async function initEventBridge(): Promise<void> {
  */
 export function resetEventBridge(): void {
   bridged = false;
+  disabled = false;
 }

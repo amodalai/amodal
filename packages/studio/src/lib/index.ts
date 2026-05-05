@@ -54,3 +54,9 @@ export { validateDraftPath } from './draft-path.js';
 // Logger
 export { logger } from './logger.js';
 export type { Logger } from './logger.js';
+
+// Database injection (for serverless deployments using neon-http etc.)
+export { setStudioDbProvider } from './db.js';
+
+// Real-time bridge opt-out (for deployments using non-PG real-time, e.g. Pusher)
+export { disableEventBridge } from './event-bridge.js';

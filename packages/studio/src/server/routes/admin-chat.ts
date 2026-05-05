@@ -13,7 +13,6 @@ import { validateSetupReadiness } from '@amodalai/core';
 import { existsSync as exists } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import {
-  getDb,
   getSetupState,
   upsertSetupState,
   markComplete,
@@ -22,12 +21,14 @@ import {
   deleteSetupStateByScope,
   deleteAgentSessionsByScope,
 } from '@amodalai/db';
+import type { Db } from '@amodalai/db';
 import { commitSetup } from '@amodalai/runtime';
 import { LocalFsBackend } from '@amodalai/runtime/tools';
 import type { SetupPhase, SetupReadinessResult } from '@amodalai/types';
 
 import { logger } from '../../lib/logger.js';
 import { getAdminAgentUrl, getAgentId } from '../../lib/config.js';
+import { getStudioDb } from '../../lib/db.js';
 import { computeConnectionsStatus } from './connections-status.js';
 
 const ADMIN_CHAT_TIMEOUT_MS = 300_000;
@@ -138,9 +139,9 @@ interface AdminChatStartBody {
 }
 
 adminChatRoutes.post('/api/studio/admin-chat/start', async (c) => {
-  let db: ReturnType<typeof getDb>;
+  let db: Db;
   try {
-    db = getDb();
+    db = await getStudioDb();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn('admin_chat_start_no_db', { error: message });
@@ -293,9 +294,9 @@ const RESTART_WIPED_PATHS = [
 ] as const;
 
 adminChatRoutes.post('/api/studio/admin-chat/restart', async (c) => {
-  let db: ReturnType<typeof getDb>;
+  let db: Db;
   try {
-    db = getDb();
+    db = await getStudioDb();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn('admin_chat_restart_no_db', { error: message });
@@ -380,9 +381,9 @@ adminChatRoutes.post('/api/studio/admin-chat/restart', async (c) => {
 // ---------------------------------------------------------------------------
 
 adminChatRoutes.post('/api/studio/admin-chat/check-completion', async (c) => {
-  let db: ReturnType<typeof getDb>;
+  let db: Db;
   try {
-    db = getDb();
+    db = await getStudioDb();
   } catch {
     return c.json({ error: { code: 'NO_DB', message: 'DATABASE_URL is not set' } }, 503);
   }
@@ -457,9 +458,9 @@ adminChatRoutes.post('/api/studio/admin-chat/commit-setup', async (c) => {
   if (!repoPath) {
     return c.json({ error: { code: 'NO_REPO', message: 'REPO_PATH is not set' } }, 503);
   }
-  let db: ReturnType<typeof getDb>;
+  let db: Db;
   try {
-    db = getDb();
+    db = await getStudioDb();
   } catch {
     return c.json({ error: { code: 'NO_DB', message: 'DATABASE_URL is not set' } }, 503);
   }
@@ -477,7 +478,7 @@ adminChatRoutes.post('/api/studio/admin-chat/commit-setup', async (c) => {
 
   try {
     // commitSetup's `db` param is typed against the runtime's loose
-    // `Record<string, unknown>` schema; getDb() returns the
+    // `Record<string, unknown>` schema; getStudioDb() returns the
     // schema-typed Drizzle handle. Same NodePgDatabase at runtime —
     // the variance is a TS-only artifact of Drizzle's generic schema.
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- cross-package Drizzle generic variance
