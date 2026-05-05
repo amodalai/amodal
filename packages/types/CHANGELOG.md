@@ -1,5 +1,71 @@
 # @amodalai/types
 
+## 0.3.50
+
+### Patch Changes
+
+- 1a0732b: Plumb marketplace card thumbnails (`imageUrl`) end-to-end so the chat-inline preview and the create-flow detail view both render the image when platform-api ships one.
+  - `@amodalai/types` — `AgentCard` gains `imageUrl?: string` and makes `thumbnailConversation?` optional. The marketplace image is the canonical visual; the conversation snippet stays as a fallback for self-hosted/legacy templates.
+  - `@amodalai/runtime` — `SSEShowPreviewEvent.card` mirror gains `imageUrl?` so the inline event carries the URL through unchanged. Drive-by: removed a duplicate `SSEShowPreviewEvent` declaration left over from a prior auto-merge.
+  - `@amodalai/react` — `AgentCardInline` mirror gains `imageUrl?`. `<AgentCardInlinePreview>` renders the image as a small thumbnail when set (180w × 120h, 3:2 aspect — sits inside chat without dominating). The empty `__convo` div is now hidden when there are no thumbnail turns.
+  - `@amodalai/studio` — `useTemplateCatalog` builds the agent card from platform-api fields including `cardImageUrl` (mapped to `card.imageUrl`); also synthesizes a partial `detail` from `longDescription` so the detail view renders real copy instead of a placeholder. `<AgentCard>` (gallery) renders the image as a 3:2 hero when present, falling back to the existing conversation block. `<DetailView>` (`CreateFlowPage`) leads with a hero image when set, plus shows the tagline as a subheading. `<PickerCard>` shows the image in place of the snippet block when present. Backend `template-resolve` route now reads `cardImageUrl` and `cardPlatforms` from platform-api and maps them onto the local `card` shape; the legacy `displayName` field still falls back to `name` so the inline preview no longer renders the slug as the title.
+
+- 1a0732b: Add agent card foundations (Onboarding v4 — Phase 1).
+
+  A template surfaces in the Studio gallery by shipping `card/card.json` (thumbnail) and optionally `card/preview.json` (expanded view) — a curated 2-4 turn conversation snippet that shows what the agent actually says, instead of a feature list.
+  - `@amodalai/types` — `AgentCard`, `AgentCardPreview`, `AgentCardTurn` interfaces.
+  - `@amodalai/core` — Zod schemas (`AgentCardSchema`, `AgentCardPreviewSchema`), parsers (`parseAgentCardJson`, `parseAgentCardPreviewJson`), and loaders (`loadAgentCard`, `loadAgentCardPreview`) that read from `<templateRoot>/card/`. Templates without a `card/` directory load as `null` rather than throwing.
+  - `@amodalai/studio` — `<AgentCard>` presentational component (thumbnail + expanded variants) used by the gallery grid and inline in admin chat.
+
+  No user-visible changes yet. Phase 2 (home screen) wires the renderer into routes and adds the `?featured=true` filter.
+
+- 1a0732b: Read marketplace card data straight from platform-api.
+
+  The Studio gallery (home featured row + browse page) now reads card image, tagline, and platforms directly from `${registryUrl}/api/templates`. No more cross-origin GitHub fetch for `card/card.json` per template, no more stub-catalog fallback.
+  - `AgentCard` interface gains `imageUrl?: string` and makes `thumbnailConversation?` optional. The `<AgentCard>` component renders the image when present and falls back to the legacy conversation block for self-hosted/legacy templates that still ship `card.json`.
+  - `useTemplateCatalog` builds cards from the catalog response in one round-trip — no GitHub raw fetches, no stub fallback. Templates without an image still render (text-only card layout); empty registry surfaces honestly via the error string.
+  - `<PickerCard>` renders the marketplace image when present; the snippet block is the fallback for image-less cards.
+  - Deleted: `stub-catalog.ts` (~700 lines of in-memory marketplace data) and `template-card-fetcher.ts` (GitHub raw fetcher). The `parseCard` helper moved inline into `TemplateUpdatePage` (only remaining consumer — reads the installed package's local `card.json` for the update-diff page).
+
+  Operationally requires platform-api at `api.amodalai.com` (or the configured `registryUrl`) to serve `cardImageUrl` for templates that have one. Templates without an image still appear in the picker; their cards render with title + tagline + platforms only.
+
+- 1a0732b: Admin agent tools for the conversational setup flow (Onboarding v4 — Phase 4).
+
+  **Five new admin-only tools** (gated by `sessionType === 'admin'`):
+  - `show_preview` — emits an inline `show_preview` SSE event with a curated agent-card snippet. The admin agent leads with this when recommending a template.
+  - `ask_choice` — emits a button-row question; the user's click posts the chosen value as the next user turn (no server round-trip).
+  - `search_packages` — wraps `npm` registry search (`/-/v1/search`) for keyword-based discovery.
+  - `install_package` — adds the package to `amodal.json#packages` and runs `npm install` in the agent repo.
+  - `write_skill` — scaffolds a `skills/<name>/SKILL.md` with frontmatter, trigger, and methodology.
+
+  **SSE event additions:**
+  - `@amodalai/types` — `SSEEventType.AskChoice`, `SSEEventType.ShowPreview` plus matching event interfaces.
+  - `@amodalai/runtime` — runtime mirrors the new event types and routes them through `ai-stream.ts`.
+  - `@amodalai/react` — widget renders `show_preview` events as inline `<AgentCardInlinePreview>` cards and `ask_choice` events as `<AskChoiceCard>` button rows. New `submitAskChoiceResponse` callback on `useChat` posts the chosen value as the next user turn.
+
+  **Tool-context plumbing:**
+  - New `ctx.emit(event)` method on `ToolContext` lets tools push inline SSE events. Per-call `inlineEvents` sink is drained by the executing state and emitted before the `tool_call_result` event so the chat UI can render the card / buttons above the result block.
+
+- 1a0732b: OAuth polish — inline Connect buttons in chat (Onboarding v4 — Phase 6).
+
+  **`start_oauth_connection` admin tool.** Renders an inline Connect button in the chat for an installed connection package; click → `GET /api/oauth/start?package=<name>` (the existing OSS broker on localhost, or the new platform-api shim on cloud) → opens the provider's authorize URL in a popup. The user finishes auth without leaving chat.
+  - New `SSEEventType.StartOAuth` / `SSEStartOAuthEvent` in `@amodalai/types` and the runtime mirror, plus an `ai-stream.ts` mapping.
+  - Routed through `ToolInlineEvent` so the existing `ctx.emit` plumbing in the executing state surfaces it before each `tool_call_result`.
+  - `@amodalai/react` mirrors the type, adds a `StartOAuthBlock` content block + reducer case, and renders the new `<StartOAuthCard>` widget. Existing CSS variables match the rest of the chat surface.
+  - Admin agent prompt updated to mention `start_oauth_connection` and explicitly say "never tell the user to visit `/getting-started`."
+
+- 1a0732b: Add `internal` flag for plumbing tool calls.
+
+  Tools can now declare `"internal": true` in `tool.json` to mark themselves as background plumbing the user shouldn't see by default (state I/O, version checks, internal coordination). The runtime stamps the flag onto `tool_call_start` SSE events; the React widget hides these calls from the chat unless the embedder enables `verboseTools` on the chat theme.
+
+  This keeps the chat surface honest — users see the meaningful steps (`Connected HubSpot`, `Added Slack`, `Tested the connection`) while bookkeeping calls (`read_setup_state`, `update_setup_state`) stay out of the way. Toggling `verboseTools` brings the full machinery back for debugging or demo use.
+  - `@amodalai/types` — `LoadedTool.internal`, `SSEToolCallStartEvent.internal`.
+  - `@amodalai/core` — `ToolJsonSchema.internal: z.boolean().optional()`.
+  - `@amodalai/runtime` — `ToolDefinition.internal`, propagation through `custom-tool-adapter` and `buildToolCallStartEvent`.
+  - `@amodalai/react` — `ToolCallInfo.internal`, reducer pass-through, `MessageList` filter on `verboseTools || !tc.internal`.
+
+  Anything that does _work_ (installs, OAuth, external API calls, file modifications) should leave the flag unset so users can see it. Tool authors only mark internal when the call is purely about coordination and the user-visible signal is conveyed elsewhere.
+
 ## 0.3.49
 
 ## 0.3.48

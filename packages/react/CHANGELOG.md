@@ -1,5 +1,58 @@
 # @amodalai/react
 
+## 0.3.50
+
+### Patch Changes
+
+- 1a0732b: Plumb marketplace card thumbnails (`imageUrl`) end-to-end so the chat-inline preview and the create-flow detail view both render the image when platform-api ships one.
+  - `@amodalai/types` — `AgentCard` gains `imageUrl?: string` and makes `thumbnailConversation?` optional. The marketplace image is the canonical visual; the conversation snippet stays as a fallback for self-hosted/legacy templates.
+  - `@amodalai/runtime` — `SSEShowPreviewEvent.card` mirror gains `imageUrl?` so the inline event carries the URL through unchanged. Drive-by: removed a duplicate `SSEShowPreviewEvent` declaration left over from a prior auto-merge.
+  - `@amodalai/react` — `AgentCardInline` mirror gains `imageUrl?`. `<AgentCardInlinePreview>` renders the image as a small thumbnail when set (180w × 120h, 3:2 aspect — sits inside chat without dominating). The empty `__convo` div is now hidden when there are no thumbnail turns.
+  - `@amodalai/studio` — `useTemplateCatalog` builds the agent card from platform-api fields including `cardImageUrl` (mapped to `card.imageUrl`); also synthesizes a partial `detail` from `longDescription` so the detail view renders real copy instead of a placeholder. `<AgentCard>` (gallery) renders the image as a 3:2 hero when present, falling back to the existing conversation block. `<DetailView>` (`CreateFlowPage`) leads with a hero image when set, plus shows the tagline as a subheading. `<PickerCard>` shows the image in place of the snippet block when present. Backend `template-resolve` route now reads `cardImageUrl` and `cardPlatforms` from platform-api and maps them onto the local `card` shape; the legacy `displayName` field still falls back to `name` so the inline preview no longer renders the slug as the title.
+
+- 1a0732b: `AskChoiceCard` now posts the picked option's `value` verbatim as the user turn, instead of translating it back to the `label`.
+
+  The old behavior assumed `value` was an opaque internal id (e.g. `@amodalai/connection-hubspot`) that shouldn't show in chat. Now that intent routing matches on user messages, the `value` IS the user's effective utterance — agent authors compose it as a readable phrase ("Use HubSpot as the CRM") and the chat reads naturally while the intent layer can regex-match it.
+
+  This unblocks the end-to-end intent flow for `ask_choice` slot picks: clicking a button posts the value verbatim → the intent matcher catches it → deterministic tool work runs in milliseconds, no LLM round-trip needed.
+
+- 1a0732b: Admin agent tools for the conversational setup flow (Onboarding v4 — Phase 4).
+
+  **Five new admin-only tools** (gated by `sessionType === 'admin'`):
+  - `show_preview` — emits an inline `show_preview` SSE event with a curated agent-card snippet. The admin agent leads with this when recommending a template.
+  - `ask_choice` — emits a button-row question; the user's click posts the chosen value as the next user turn (no server round-trip).
+  - `search_packages` — wraps `npm` registry search (`/-/v1/search`) for keyword-based discovery.
+  - `install_package` — adds the package to `amodal.json#packages` and runs `npm install` in the agent repo.
+  - `write_skill` — scaffolds a `skills/<name>/SKILL.md` with frontmatter, trigger, and methodology.
+
+  **SSE event additions:**
+  - `@amodalai/types` — `SSEEventType.AskChoice`, `SSEEventType.ShowPreview` plus matching event interfaces.
+  - `@amodalai/runtime` — runtime mirrors the new event types and routes them through `ai-stream.ts`.
+  - `@amodalai/react` — widget renders `show_preview` events as inline `<AgentCardInlinePreview>` cards and `ask_choice` events as `<AskChoiceCard>` button rows. New `submitAskChoiceResponse` callback on `useChat` posts the chosen value as the next user turn.
+
+  **Tool-context plumbing:**
+  - New `ctx.emit(event)` method on `ToolContext` lets tools push inline SSE events. Per-call `inlineEvents` sink is drained by the executing state and emitted before the `tool_call_result` event so the chat UI can render the card / buttons above the result block.
+
+- 1a0732b: OAuth polish — inline Connect buttons in chat (Onboarding v4 — Phase 6).
+
+  **`start_oauth_connection` admin tool.** Renders an inline Connect button in the chat for an installed connection package; click → `GET /api/oauth/start?package=<name>` (the existing OSS broker on localhost, or the new platform-api shim on cloud) → opens the provider's authorize URL in a popup. The user finishes auth without leaving chat.
+  - New `SSEEventType.StartOAuth` / `SSEStartOAuthEvent` in `@amodalai/types` and the runtime mirror, plus an `ai-stream.ts` mapping.
+  - Routed through `ToolInlineEvent` so the existing `ctx.emit` plumbing in the executing state surfaces it before each `tool_call_result`.
+  - `@amodalai/react` mirrors the type, adds a `StartOAuthBlock` content block + reducer case, and renders the new `<StartOAuthCard>` widget. Existing CSS variables match the rest of the chat surface.
+  - Admin agent prompt updated to mention `start_oauth_connection` and explicitly say "never tell the user to visit `/getting-started`."
+
+- 1a0732b: Add `internal` flag for plumbing tool calls.
+
+  Tools can now declare `"internal": true` in `tool.json` to mark themselves as background plumbing the user shouldn't see by default (state I/O, version checks, internal coordination). The runtime stamps the flag onto `tool_call_start` SSE events; the React widget hides these calls from the chat unless the embedder enables `verboseTools` on the chat theme.
+
+  This keeps the chat surface honest — users see the meaningful steps (`Connected HubSpot`, `Added Slack`, `Tested the connection`) while bookkeeping calls (`read_setup_state`, `update_setup_state`) stay out of the way. Toggling `verboseTools` brings the full machinery back for debugging or demo use.
+  - `@amodalai/types` — `LoadedTool.internal`, `SSEToolCallStartEvent.internal`.
+  - `@amodalai/core` — `ToolJsonSchema.internal: z.boolean().optional()`.
+  - `@amodalai/runtime` — `ToolDefinition.internal`, propagation through `custom-tool-adapter` and `buildToolCallStartEvent`.
+  - `@amodalai/react` — `ToolCallInfo.internal`, reducer pass-through, `MessageList` filter on `verboseTools || !tc.internal`.
+
+  Anything that does _work_ (installs, OAuth, external API calls, file modifications) should leave the flag unset so users can see it. Tool authors only mark internal when the call is purely about coordination and the user-visible signal is conveyed elsewhere.
+
 ## 0.3.49
 
 ## 0.3.48

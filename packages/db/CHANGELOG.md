@@ -1,5 +1,17 @@
 # @amodalai/db
 
+## 0.3.50
+
+### Patch Changes
+
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+  - @amodalai/types@0.3.50
+
 ## 0.3.49
 
 ## 0.3.48

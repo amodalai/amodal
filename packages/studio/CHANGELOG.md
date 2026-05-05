@@ -1,5 +1,118 @@
 # @amodalai/studio
 
+## 0.3.50
+
+### Patch Changes
+
+- 1a0732b: Plumb marketplace card thumbnails (`imageUrl`) end-to-end so the chat-inline preview and the create-flow detail view both render the image when platform-api ships one.
+  - `@amodalai/types` — `AgentCard` gains `imageUrl?: string` and makes `thumbnailConversation?` optional. The marketplace image is the canonical visual; the conversation snippet stays as a fallback for self-hosted/legacy templates.
+  - `@amodalai/runtime` — `SSEShowPreviewEvent.card` mirror gains `imageUrl?` so the inline event carries the URL through unchanged. Drive-by: removed a duplicate `SSEShowPreviewEvent` declaration left over from a prior auto-merge.
+  - `@amodalai/react` — `AgentCardInline` mirror gains `imageUrl?`. `<AgentCardInlinePreview>` renders the image as a small thumbnail when set (180w × 120h, 3:2 aspect — sits inside chat without dominating). The empty `__convo` div is now hidden when there are no thumbnail turns.
+  - `@amodalai/studio` — `useTemplateCatalog` builds the agent card from platform-api fields including `cardImageUrl` (mapped to `card.imageUrl`); also synthesizes a partial `detail` from `longDescription` so the detail view renders real copy instead of a placeholder. `<AgentCard>` (gallery) renders the image as a 3:2 hero when present, falling back to the existing conversation block. `<DetailView>` (`CreateFlowPage`) leads with a hero image when set, plus shows the tagline as a subheading. `<PickerCard>` shows the image in place of the snippet block when present. Backend `template-resolve` route now reads `cardImageUrl` and `cardPlatforms` from platform-api and maps them onto the local `card` shape; the legacy `displayName` field still falls back to `name` so the inline preview no longer renders the slug as the title.
+
+- 1a0732b: Add agent card foundations (Onboarding v4 — Phase 1).
+
+  A template surfaces in the Studio gallery by shipping `card/card.json` (thumbnail) and optionally `card/preview.json` (expanded view) — a curated 2-4 turn conversation snippet that shows what the agent actually says, instead of a feature list.
+  - `@amodalai/types` — `AgentCard`, `AgentCardPreview`, `AgentCardTurn` interfaces.
+  - `@amodalai/core` — Zod schemas (`AgentCardSchema`, `AgentCardPreviewSchema`), parsers (`parseAgentCardJson`, `parseAgentCardPreviewJson`), and loaders (`loadAgentCard`, `loadAgentCardPreview`) that read from `<templateRoot>/card/`. Templates without a `card/` directory load as `null` rather than throwing.
+  - `@amodalai/studio` — `<AgentCard>` presentational component (thumbnail + expanded variants) used by the gallery grid and inline in admin chat.
+
+  No user-visible changes yet. Phase 2 (home screen) wires the renderer into routes and adds the `?featured=true` filter.
+
+- 1a0732b: Add a "Getting started" tab, runtime OAuth broker, and per-connection configure pages.
+
+  **Getting started tab** (`/agents/:agentId/getting-started`) — universal home for first-run agent configuration. Two render modes:
+  - **Templated agent** (`template.json` exists in the repo) — slot-by-slot list with the curated providers from each `template.connections[]` slot.
+  - **No template** — flat list of every connection package the agent has installed.
+
+  Each row shows the package's `amodal.displayName` / icon / description, declared `auth.envVars` with per-var ✓/○, and a Connect button when OAuth is available. Backed by `GET /api/getting-started`.
+
+  **Runtime-hosted OAuth broker** (`/api/oauth/{start,callback}`). When a package declares `amodal.oauth` and the user has set `<APPKEY>_CLIENT_ID` / `_CLIENT_SECRET` in env, the runtime brokers the redirect dance on the localhost loopback — no tunnel, no cloud dependency. Tokens persist to `<repoPath>/.amodal/secrets.env`, get pushed into `process.env`, and reload on every startup.
+
+  **Per-connection configure page** (`/agents/:agentId/connections/:packageName`). Reached by clicking "Configure" on a Getting Started row. Renders different forms based on `auth.type`:
+  - `bearer` / `api-key` → password input per envVar with description
+  - `basic` → username + password (when declared)
+  - OAuth-supported → Connect button + scopes preview alongside paste fallback
+  - Anything else → generic per-envVar paste form
+
+  Saves go through new `POST /api/secrets/:name` (writes to `secrets.env` + `process.env`). Backed by `GET /api/connections/:packageName` which returns the full `amodal.auth` block with `authType` + per-var status.
+
+  Cloud uses the platform-api's broker instead — same protocol, different home.
+
+- 1a0732b: Read marketplace card data straight from platform-api.
+
+  The Studio gallery (home featured row + browse page) now reads card image, tagline, and platforms directly from `${registryUrl}/api/templates`. No more cross-origin GitHub fetch for `card/card.json` per template, no more stub-catalog fallback.
+  - `AgentCard` interface gains `imageUrl?: string` and makes `thumbnailConversation?` optional. The `<AgentCard>` component renders the image when present and falls back to the legacy conversation block for self-hosted/legacy templates that still ship `card.json`.
+  - `useTemplateCatalog` builds cards from the catalog response in one round-trip — no GitHub raw fetches, no stub fallback. Templates without an image still render (text-only card layout); empty registry surfaces honestly via the error string.
+  - `<PickerCard>` renders the marketplace image when present; the snippet block is the fallback for image-less cards.
+  - Deleted: `stub-catalog.ts` (~700 lines of in-memory marketplace data) and `template-card-fetcher.ts` (GitHub raw fetcher). The `parseCard` helper moved inline into `TemplateUpdatePage` (only remaining consumer — reads the installed package's local `card.json` for the update-diff page).
+
+  Operationally requires platform-api at `api.amodalai.com` (or the configured `registryUrl`) to serve `cardImageUrl` for templates that have one. Templates without an image still appear in the picker; their cards render with title + tagline + platforms only.
+
+- 1a0732b: Admin agent tools for the conversational setup flow (Onboarding v4 — Phase 4).
+
+  **Five new admin-only tools** (gated by `sessionType === 'admin'`):
+  - `show_preview` — emits an inline `show_preview` SSE event with a curated agent-card snippet. The admin agent leads with this when recommending a template.
+  - `ask_choice` — emits a button-row question; the user's click posts the chosen value as the next user turn (no server round-trip).
+  - `search_packages` — wraps `npm` registry search (`/-/v1/search`) for keyword-based discovery.
+  - `install_package` — adds the package to `amodal.json#packages` and runs `npm install` in the agent repo.
+  - `write_skill` — scaffolds a `skills/<name>/SKILL.md` with frontmatter, trigger, and methodology.
+
+  **SSE event additions:**
+  - `@amodalai/types` — `SSEEventType.AskChoice`, `SSEEventType.ShowPreview` plus matching event interfaces.
+  - `@amodalai/runtime` — runtime mirrors the new event types and routes them through `ai-stream.ts`.
+  - `@amodalai/react` — widget renders `show_preview` events as inline `<AgentCardInlinePreview>` cards and `ask_choice` events as `<AskChoiceCard>` button rows. New `submitAskChoiceResponse` callback on `useChat` posts the chosen value as the next user turn.
+
+  **Tool-context plumbing:**
+  - New `ctx.emit(event)` method on `ToolContext` lets tools push inline SSE events. Per-call `inlineEvents` sink is drained by the executing state and emitted before the `tool_call_result` event so the chat UI can render the card / buttons above the result block.
+
+- 1a0732b: Studio home screen (Onboarding v4 — Phase 2).
+
+  The agent index route (`/agents/:agentId/`) now opens to a home screen with three zones — featured agents, admin chat, and a "Browse all →" link to the gallery — instead of the model-pricing dashboard. The dashboard is still reachable at `/agents/:agentId/overview`.
+  - New `<HomePage>` page in `src/pages/HomePage.tsx`.
+  - New `useFeaturedAgents()` hook fetches `${registryUrl}/api/templates?featured=true` and resolves each template's `card/card.json` from GitHub raw. Templates without a card are silently dropped.
+  - New `registryUrl` field on `StudioConfig`, defaulting to `https://api.amodalai.com`. Self-hosted instances override via `REGISTRY_URL`.
+  - Sidebar gains a "Home" entry; the existing "Overview" link points at the dashboard.
+  - Clicking "Use this →" on a card seeds the admin chat with `Set me up with the "<title>" template.` Phase 3 will replace this with an expanded preview page.
+
+- 1a0732b: Lifecycle + power-user surfaces (Onboarding v4 — Phase 5).
+
+  **View config toggle.** New toggle in `SystemPage` (localStorage-backed, off by default). When on, the sidebar surfaces the GettingStarted form and per-connection configure pages — the v4 home-first flow stays the user-facing default; ISVs and power users flip the bit when they need the underlying config UI back.
+
+  **Template update notifications.**
+  - New runtime endpoint `GET /api/package-updates` walks `amodal.json#packages`, reads each installed version from `node_modules/<pkg>/package.json`, runs `npm view <pkg> version` for the latest, and returns `{name, installed, latest, hasUpdate}` per package. Results are cached in-memory for 24 hours.
+  - New `POST /api/package-updates/install` runs `npm install <pkg>@latest` and invalidates the cache.
+  - New `GET /api/package-card?name=…` reads the installed `node_modules/<pkg>/card/card.json` for the diff page.
+  - Studio polls on home-screen mount via `usePackageUpdates`. When any package has an update, an inline banner above the popular-agents row links to the diff page.
+
+  **See-what-changed page** at `/agents/:agentId/updates/:slug`. Shows the package's currently-installed `card.json`, the version delta (installed → latest), and an "Update" button that POSTs the install. After install, the user is told to reload Studio to see the new card.
+
+- 1a0732b: Studio template gallery (Onboarding v4 — Phase 3).
+
+  Two new routes under `/agents/:agentId/`:
+  - **`/browse`** — full marketplace gallery. Free-text search over title, tagline, platforms, and tags; category tabs derived from the catalog. Click a card to drill in.
+  - **`/browse/:slug`** — template detail page. Two-column layout with the expanded preview (lazy-loaded from `card/preview.json`) on the left and the admin chat on the right. The chat is auto-seeded with `Set me up with the "<title>" template.` on mount so the user lands mid-conversation.
+
+  Powered by a new `useTemplateCatalog()` hook that fetches the full marketplace and resolves each template's `card/card.json` from GitHub raw, mirroring the featured-only path. Card-fetch logic is now factored into `template-card-fetcher.ts` and shared with `useFeaturedAgents`.
+
+  The chat seed is a placeholder — Phase 4 will replace it with a richer first config question once the admin agent has a `show_preview` tool.
+
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+- Updated dependencies [1a0732b]
+  - @amodalai/types@0.3.50
+  - @amodalai/runtime@0.3.50
+  - @amodalai/react@0.3.50
+  - @amodalai/core@0.3.50
+  - @amodalai/db@0.3.50
+
 ## 0.3.49
 
 ### Patch Changes
