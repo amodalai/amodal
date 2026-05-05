@@ -54,7 +54,6 @@ interface NavItemDef extends NavItem {
 }
 
 const NAV_ITEMS: readonly NavItemDef[] = [
-  { href: '/getting-started', label: 'Getting started', icon: Sparkles, powerUserOnly: true },
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/cost', label: 'Cost', icon: DollarSign },
   { href: `/${CONNECTIONS_PATH}`, label: 'Connections', icon: Plug },

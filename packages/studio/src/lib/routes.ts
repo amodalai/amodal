@@ -18,7 +18,6 @@ import { studioApiUrl } from './api';
 export const STORES_PATH = '/stores';
 export const COST_PATH = 'cost';
 export const SESSIONS_PATH = 'sessions';
-export const GETTING_STARTED_PATH = 'getting-started';
 export const CONNECTIONS_PATH = 'connections';
 
 export function sessionPath(sessionId: string): string {

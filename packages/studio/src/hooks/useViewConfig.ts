@@ -8,9 +8,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 /**
  * "View config" power-user toggle. When OFF (default), Studio hides the
- * GettingStarted form and per-connection configure pages from the sidebar —
- * the user-facing v4 onboarding is meant to be card- and chat-driven.
- * Power users / ISVs flip the toggle to bring the config surface back.
+ * lower-level configuration surfaces from the sidebar. Power users / ISVs
+ * flip the toggle to bring the config surface back.
  *
  * State lives in localStorage so it survives reloads. A storage event
  * listener keeps multiple tabs in sync.

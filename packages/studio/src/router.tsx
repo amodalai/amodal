@@ -12,7 +12,6 @@ import { CreateFlowPage } from './pages/CreateFlowPage';
 import { TemplateUpdatePage } from './pages/TemplateUpdatePage';
 import { SessionsPage } from './pages/SessionsPage';
 import { SessionDetailPage } from './pages/SessionDetailPage';
-import { GettingStartedPage } from './pages/GettingStartedPage';
 import { ConnectionsPage } from './pages/ConnectionsPage';
 import { ConnectionConfigPage } from './pages/ConnectionConfigPage';
 import { AgentPage } from './pages/AgentPage';
@@ -47,7 +46,6 @@ const agentRoutes = [
   { index: true, element: <IndexPage /> },
   { path: 'setup', element: <CreateFlowPage /> },
   { path: 'updates/:slug', element: <TemplateUpdatePage /> },
-  { path: 'getting-started', element: <GettingStartedPage /> },
   { path: 'connections', element: <ConnectionsPage /> },
   { path: 'connections/:packageName', element: <ConnectionConfigPage /> },
   { path: 'sessions', element: <SessionsPage /> },

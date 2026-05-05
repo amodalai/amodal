@@ -36,7 +36,7 @@ import {
   trendDeltaPercent,
 } from '../lib/cost-analytics';
 import {formatTokens} from '../lib/format';
-import {COST_PATH, GETTING_STARTED_PATH, SESSIONS_PATH, sessionPath} from '../lib/routes';
+import {CONNECTIONS_PATH, COST_PATH, SESSIONS_PATH, sessionPath} from '../lib/routes';
 
 const RECENT_ACTIVITY_LIMIT = 5;
 const STALE_SESSION_DAYS = 7;
@@ -96,7 +96,7 @@ function buildActionItems({
       label: 'Connection setup is incomplete',
       detail: `${String(connectionGaps)} package${connectionGaps === 1 ? '' : 's'} missing credentials`,
       tone: 'warning',
-      link: GETTING_STARTED_PATH,
+      link: CONNECTIONS_PATH,
     });
   }
   if (unknownCostSessions > 0) {
@@ -215,7 +215,7 @@ export function OverviewPage() {
           label="Connections"
           value={connTotal > 0 ? `${String(connFulfilled)}/${String(connTotal)}` : '0'}
           detail={connTotal > 0 ? connectionDetail(connGaps) : 'No packages installed'}
-          link={GETTING_STARTED_PATH}
+          link={CONNECTIONS_PATH}
         />
         <SummaryCard
           icon={Cpu}
