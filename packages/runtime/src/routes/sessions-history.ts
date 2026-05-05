@@ -25,7 +25,7 @@ import {asyncHandler} from './route-helpers.js';
 interface HistoryMessage {
   role: string;
   text: string;
-  toolCalls?: Array<{toolId: string; toolName: string; parameters: Record<string, unknown>}>;
+  toolCalls?: Array<{toolId: string; toolName: string; parameters: Record<string, unknown>; result?: unknown}>;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,6 +53,14 @@ function isToolCallPart(part: unknown): part is {
     part['type'] === 'tool-call' &&
     typeof part['toolCallId'] === 'string' &&
     typeof part['toolName'] === 'string'
+  );
+}
+
+function isToolResultPart(part: unknown): part is {type: 'tool-result'; toolCallId: string; output?: unknown} {
+  return (
+    isRecord(part) &&
+    part['type'] === 'tool-result' &&
+    typeof part['toolCallId'] === 'string'
   );
 }
 
@@ -112,6 +120,28 @@ function flattenModelMessage(raw: unknown): HistoryMessage | null {
   return null;
 }
 
+function attachToolResults(messages: HistoryMessage[], rawMessages: readonly unknown[]): HistoryMessage[] {
+  const callsById = new Map<string, NonNullable<HistoryMessage['toolCalls']>[number]>();
+  for (const msg of messages) {
+    for (const call of msg.toolCalls ?? []) {
+      callsById.set(call.toolId, call);
+    }
+  }
+
+  for (const raw of rawMessages) {
+    if (getMessageRole(raw) !== 'tool') continue;
+    const content = getMessageContent(raw);
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      if (!isToolResultPart(part)) continue;
+      const call = callsById.get(part.toolCallId);
+      if (call) call.result = part.output;
+    }
+  }
+
+  return messages;
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -138,6 +168,7 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
       return {
         id: s.id,
         app_id: meta.appId ?? appId,
+        scope_id: s.scopeId,
         title: meta.title ?? extractFirstUserText(s.messages) ?? 'Untitled',
         tags: extractStringArray(meta['tags']),
         status: 'active',
@@ -164,10 +195,15 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
       return;
     }
     const meta = persisted.metadata;
+    if ((meta.appId ?? appId) !== appId) {
+      res.status(404).json({error: 'Session not found'});
+      return;
+    }
     const rawMessages = persisted.messages.map(flattenModelMessage).filter((m) => m !== null);
-    const messages = rawMessages.map((m) => ({
+    const messages = attachToolResults(rawMessages, persisted.messages).map((m, index) => ({
+      role: m.role,
       type: m.role === 'user' ? 'user' : 'assistant_text',
-      id: `hist-${Math.random().toString(36).slice(2)}`,
+      id: `hist-${String(index)}`,
       text: m.text,
       timestamp: persisted.updatedAt.toISOString(),
       ...(m.toolCalls ? {toolCalls: m.toolCalls} : {}),
@@ -175,6 +211,7 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
     res.json({
       id: persisted.id,
       app_id: meta.appId ?? appId,
+      scope_id: persisted.scopeId,
       title: meta.title ?? extractFirstUserText(persisted.messages) ?? 'Untitled',
       tags: extractStringArray(meta['tags']),
       status: 'active',
@@ -186,6 +223,7 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
       },
       model: meta.model ?? null,
       provider: meta.provider ?? null,
+      metadata: meta,
       created_at: persisted.createdAt.toISOString(),
       updated_at: persisted.updatedAt.toISOString(),
       messages,

@@ -19,6 +19,7 @@ export interface ModelMeta {
 export const MODEL_META: Record<string, ModelMeta> = {
   'claude-opus-4-6':              { input: 15,    output: 75,   cachedInput: 1.50,  context: '1M' },
   'claude-sonnet-4-6':            { input: 3,     output: 15,   cachedInput: 0.30,  context: '1M' },
+  'claude-sonnet-4-20250514':      { input: 3,     output: 15,   cachedInput: 0.30,  context: '1M' },
   'claude-haiku-4-5-20251001':    { input: 0.80,  output: 4,    cachedInput: 0.08,  context: '200K' },
   'gpt-4o':                       { input: 2.50,  output: 10,   context: '128K' },
   'gpt-4o-mini':                  { input: 0.15,  output: 0.60, context: '128K' },
