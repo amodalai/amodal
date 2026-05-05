@@ -71,6 +71,46 @@ describe('GET /sessions/history/:id', () => {
     expect(res.body).toEqual({error: 'Session not found'});
   });
 
+  it('returns backend-computed cost snapshot when pricing is known', async () => {
+    const app = createApp(makeSession({
+      tokenUsage: {
+        inputTokens: 118_913,
+        outputTokens: 111,
+        cachedInputTokens: 118_424,
+        cacheCreationInputTokens: 181,
+        totalTokens: 119_024,
+      },
+      metadata: {
+        appId: 'app-1',
+        model: 'claude-sonnet-4-20250514',
+        provider: 'anthropic',
+      },
+    }));
+
+    const res = await request(app).get('/sessions/history/sess-1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.cost).toMatchObject({
+      currency: 'USD',
+      estimatedCostMicros: 38_795,
+      inputTokens: 118_913,
+      outputTokens: 111,
+      totalTokens: 119_024,
+      billableInputTokens: 308,
+      cacheReadInputTokens: 118_424,
+      cacheCreationInputTokens: 181,
+      pricing: {
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-20250514',
+        inputPerMToken: 3_000_000,
+        outputPerMToken: 15_000_000,
+        cacheReadPerMToken: 300_000,
+        cacheWritePerMToken: 3_750_000,
+        source: 'amodal-core-model-pricing',
+      },
+    });
+  });
+
   it('attaches persisted tool results to replayed assistant tool calls', async () => {
     const messages = [
       {role: 'user', content: 'Look up the latest deployment.'},

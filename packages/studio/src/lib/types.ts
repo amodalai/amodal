@@ -120,6 +120,29 @@ export interface SessionHistoryRow {
   token_usage: {input_tokens: number; output_tokens: number; total_tokens: number};
   model: string | null;
   provider: string | null;
+  cost: SessionCostSnapshot | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SessionCostSnapshot {
+  currency: 'USD';
+  estimatedCostMicros: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  billableInputTokens: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  estimatedCostNoCacheMicros?: number;
+  pricing: {
+    provider: string;
+    model: string;
+    inputPerMToken: number;
+    outputPerMToken: number;
+    cacheReadPerMToken?: number;
+    cacheWritePerMToken?: number;
+    source: string;
+  };
+  computedAt: string;
 }

@@ -5,7 +5,6 @@
  */
 
 import type {SessionHistoryRow} from './types';
-import {estimateCost} from './model-pricing';
 
 export interface CostGroup {
   key: string;
@@ -38,9 +37,7 @@ export interface CostSummary {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function sessionCost(session: SessionHistoryRow): number | null {
-  return session.model
-    ? estimateCost(session.model, session.token_usage.input_tokens, session.token_usage.output_tokens)
-    : null;
+  return session.cost ? session.cost.estimatedCostMicros / 1_000_000 : null;
 }
 
 export function summarizeCost(sessions: SessionHistoryRow[]): CostSummary {

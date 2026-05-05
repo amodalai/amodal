@@ -15,6 +15,7 @@ import {Router} from 'express';
 import type {Request, Response} from 'express';
 import type {SessionStore} from '../session/store.js';
 import type {StandaloneSessionManager} from '../session/manager.js';
+import {estimateSessionCostSnapshot, isSessionCostSnapshot} from '../session/cost.js';
 import type {RuntimeEventBus} from '../events/event-bus.js';
 import {asyncHandler} from './route-helpers.js';
 
@@ -155,6 +156,17 @@ export interface SessionsHistoryRouterOptions {
 
 const SESSION_LIST_LIMIT = 500;
 
+function sessionCostFromMetadata(
+  meta: Record<string, unknown>,
+  provider: string | null,
+  model: string | null,
+  usage: {inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens?: number; cacheCreationInputTokens?: number},
+) {
+  if (isSessionCostSnapshot(meta['cost'])) return meta['cost'];
+  if (!provider || !model) return null;
+  return estimateSessionCostSnapshot(provider, model, usage);
+}
+
 export function createSessionsHistoryRouter(options: SessionsHistoryRouterOptions): Router {
   const {sessionStore, sessionManager, eventBus, appId} = options;
   const router = Router();
@@ -165,6 +177,8 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
     const {sessions: rows} = await sessionStore.list({limit: SESSION_LIST_LIMIT, filter});
     const items = rows.map((s) => {
       const meta = s.metadata;
+      const model = meta.model ?? null;
+      const provider = meta.provider ?? null;
       return {
         id: s.id,
         app_id: meta.appId ?? appId,
@@ -178,8 +192,9 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
           output_tokens: s.tokenUsage.outputTokens,
           total_tokens: s.tokenUsage.totalTokens,
         },
-        model: meta.model ?? null,
-        provider: meta.provider ?? null,
+        model,
+        provider,
+        cost: sessionCostFromMetadata(meta, provider, model, s.tokenUsage),
         created_at: s.createdAt.toISOString(),
         updated_at: s.updatedAt.toISOString(),
       };
@@ -195,6 +210,8 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
       return;
     }
     const meta = persisted.metadata;
+    const model = meta.model ?? null;
+    const provider = meta.provider ?? null;
     if ((meta.appId ?? appId) !== appId) {
       res.status(404).json({error: 'Session not found'});
       return;
@@ -221,8 +238,9 @@ export function createSessionsHistoryRouter(options: SessionsHistoryRouterOption
         output_tokens: persisted.tokenUsage.outputTokens,
         total_tokens: persisted.tokenUsage.totalTokens,
       },
-      model: meta.model ?? null,
-      provider: meta.provider ?? null,
+      model,
+      provider,
+      cost: sessionCostFromMetadata(meta, provider, model, persisted.tokenUsage),
       metadata: meta,
       created_at: persisted.createdAt.toISOString(),
       updated_at: persisted.updatedAt.toISOString(),

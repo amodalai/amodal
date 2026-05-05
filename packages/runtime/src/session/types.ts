@@ -127,7 +127,30 @@ export interface SessionMetadata {
   provider?: string;
   appId?: string;
   automationName?: string;
+  cost?: SessionCostSnapshot;
   [key: string]: unknown;
+}
+
+export interface SessionCostSnapshot {
+  currency: 'USD';
+  estimatedCostMicros: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  billableInputTokens: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  estimatedCostNoCacheMicros?: number;
+  pricing: {
+    provider: string;
+    model: string;
+    inputPerMToken: number;
+    outputPerMToken: number;
+    cacheReadPerMToken?: number;
+    cacheWritePerMToken?: number;
+    source: 'amodal-core-model-pricing';
+  };
+  computedAt: string;
 }
 
 // ---------------------------------------------------------------------------

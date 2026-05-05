@@ -13,7 +13,6 @@ import type {SessionHistoryRow} from '../hooks/useSessionHistory';
 import {
   PROVIDER_COLORS,
   modelToProvider,
-  estimateCost,
   modelDisplayName,
 } from '../lib/model-pricing';
 import {formatShortDateTime, formatTokens} from '@/lib/format';
@@ -72,9 +71,7 @@ function providerLabel(model: string | null, provider: string | null): string {
 }
 
 function sessionCost(session: SessionRow): number | null {
-  return session.model
-    ? estimateCost(session.model, session.token_usage.input_tokens, session.token_usage.output_tokens)
-    : null;
+  return session.cost ? session.cost.estimatedCostMicros / 1_000_000 : null;
 }
 
 function compareNullableNumber(a: number | null, b: number | null): number {

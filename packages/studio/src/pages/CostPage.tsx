@@ -75,8 +75,7 @@ export function CostPage() {
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold text-foreground">Cost & Usage</h1>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            Estimated model spend from persisted session token usage. Costs are calculated
-            from Studio&apos;s pricing table and exclude platform fees.
+            Estimated model spend from runtime session cost snapshots. Costs exclude platform fees.
           </p>
         </div>
         <div className="text-left md:text-right">

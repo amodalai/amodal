@@ -9,7 +9,7 @@ import { AgentOffline } from '@/components/AgentOffline';
 import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
 import { useStats } from '../hooks/useStats';
 import { useGettingStarted } from '../hooks/useGettingStarted';
-import { MODEL_META, PROVIDER_COLORS, modelToProvider, estimateCost, formatPrice } from '../lib/model-pricing';
+import { MODEL_META, PROVIDER_COLORS, modelDisplayName, modelToProvider, formatPrice } from '../lib/model-pricing';
 import { useSessionHistory } from '../hooks/useSessionHistory';
 import { dailyCostBuckets, groupSessions, percentOf, scopeLabel, summarizeCost, trendDeltaPercent } from '../lib/cost-analytics';
 import { formatTokens } from '../lib/format';
@@ -34,13 +34,16 @@ export function OverviewPage() {
   if (configError) return <AgentOffline page="dashboard" detail={configError} />;
   if (configLoading || !config) return null;
 
-  const totalCost = stats?.topModels.reduce((sum, m) => {
-    const cost = estimateCost(m.model, m.inputTokens, m.outputTokens);
-    return sum + (cost ?? 0);
-  }, 0) ?? 0;
   const sessionCostSummary = sessions ? summarizeCost(sessions) : null;
   const costBuckets = sessions ? dailyCostBuckets(sessions, 14) : [];
   const costTrend = costBuckets.length > 0 ? trendDeltaPercent(costBuckets) : null;
+  const costByModel = sessions
+    ? groupSessions(
+      sessions,
+      (session) => session.model ?? 'unknown',
+      (session) => session.model ?? 'Unknown model',
+    )
+    : [];
   const topScope = sessions
     ? groupSessions(
       sessions,
@@ -65,7 +68,7 @@ export function OverviewPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryCard
           label="Estimated Spend"
-          value={sessionCostSummary ? formatPrice(sessionCostSummary.totalCost) : totalCost > 0 ? `$${totalCost.toFixed(2)}` : '$0.00'}
+          value={sessionCostSummary ? formatPrice(sessionCostSummary.totalCost) : '$0.00'}
           detail={costTrend == null ? 'Estimated model cost' : `${formatOverviewTrend(costTrend)} vs prior period`}
           link="cost"
         />
@@ -124,21 +127,20 @@ export function OverviewPage() {
       )}
 
       {/* Cost breakdown by model */}
-      {stats && stats.topModels.length > 0 && (
+      {costByModel.length > 0 && (
         <div className="bg-card border border-border rounded-lg p-4">
           <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
             Usage by Model
           </h2>
           <div className="space-y-2">
-            {stats.topModels.map((m) => {
-              const cost = estimateCost(m.model, m.inputTokens, m.outputTokens);
-              const meta = MODEL_META[m.model];
-              const colors = PROVIDER_COLORS[modelToProvider(m.model)];
+            {costByModel.map((m) => {
+              const meta = MODEL_META[m.key];
+              const colors = PROVIDER_COLORS[modelToProvider(m.key)];
               return (
-                <div key={m.model} className="flex items-center justify-between text-sm">
+                <div key={m.key} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     {colors && <span className={`w-2 h-2 rounded-full ${colors.dot}`} />}
-                    <span className="text-foreground font-mono text-xs">{m.model}</span>
+                    <span className="text-foreground text-xs">{modelDisplayName(m.key)}</span>
                     {meta && (
                       <span className="text-[10px] text-muted-foreground">{meta.context} ctx</span>
                     )}
@@ -146,9 +148,7 @@ export function OverviewPage() {
                   <div className="flex items-center gap-4 text-xs">
                     <span className="text-muted-foreground">{m.sessions} sessions</span>
                     <span className="text-muted-foreground">{formatTokens(m.totalTokens)} tokens</span>
-                    {cost != null && (
-                      <span className="font-mono text-foreground">{formatPrice(cost)}</span>
-                    )}
+                    <span className="font-mono text-foreground">{formatPrice(m.cost)}</span>
                   </div>
                 </div>
               );
