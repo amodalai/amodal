@@ -22,6 +22,7 @@
       "import": "./dist-server/src/lib/index.js"
     },
     "./server": {
+      "types": "./dist-server/src/server/studio-server.d.ts",
       "import": "./dist-server/studio-server.js"
     },
     "./app": "./src/App.tsx",
