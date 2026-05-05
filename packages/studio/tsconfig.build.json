@@ -8,7 +8,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "declaration": true,
-    "sourceMap": true,
+    "emitDeclarationOnly": true,
+    "sourceMap": false,
     "composite": true,
     "allowSyntheticDefaultImports": true,
     "lib": ["ES2023"],
@@ -19,7 +20,7 @@
     "outDir": "dist-server",
     "types": ["node"]
   },
-  "include": ["src/lib/**/*.ts"],
+  "include": ["src/lib/**/*.ts", "src/server/**/*.ts"],
   "exclude": ["node_modules", "dist", "dist-server", "src/**/*.test.ts"],
   "references": [{ "path": "../db" }]
 }
