@@ -1,5 +1,11 @@
 # @amodalai/react
 
+## 0.3.52
+
+### Patch Changes
+
+- b0e3a05: Reuse the React widget chat renderer for Studio session replay, show persisted tool results in widget tool-call details, and make Studio session table headers sortable.
+
 ## 0.3.51
 
 ## 0.3.50

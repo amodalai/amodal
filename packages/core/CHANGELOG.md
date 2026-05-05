@@ -1,5 +1,12 @@
 # @amodalai/core
 
+## 0.3.52
+
+### Patch Changes
+
+- 2b49403: Add a Cost & Usage page with estimated spend by model, scope, and session.
+  - @amodalai/types@0.3.52
+
 ## 0.3.51
 
 ### Patch Changes
