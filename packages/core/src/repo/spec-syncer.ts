@@ -64,7 +64,7 @@ export async function buildSyncPlan(connection: LoadedConnection): Promise<SyncP
         header: connection.spec.auth.header ?? 'Authorization',
         value: `${connection.spec.auth.prefix ?? 'Bearer'} ${token}`,
       };
-    } else if (connection.spec.auth.type === 'api-key') {
+    } else if (connection.spec.auth.type === 'api_key' || connection.spec.auth.type === 'api-key') {
       auth = {
         header: connection.spec.auth.header ?? 'X-API-Key',
         value: token,
@@ -105,7 +105,7 @@ async function buildGraphQLSyncPlan(connection: LoadedConnection): Promise<SyncP
         header: connection.spec.auth.header ?? 'Authorization',
         value: `${connection.spec.auth.prefix ?? 'Bearer'} ${token}`,
       };
-    } else if (connection.spec.auth.type === 'api-key') {
+    } else if (connection.spec.auth.type === 'api_key' || connection.spec.auth.type === 'api-key') {
       auth = {
         header: connection.spec.auth.header ?? 'X-API-Key',
         value: token,

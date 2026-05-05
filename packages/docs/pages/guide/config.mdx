@@ -164,10 +164,12 @@ The `stores` block configures the database backend used for **both** agent docum
 | `proactive` | object | Webhook URL for external triggers (automation webhooks, third-party integrations). |
 | `mcp` | object | MCP server connections. Each server exposes additional tools to the agent. |
 | `webTools` | object | Enables `web_search` + `fetch_url` built-in tools via Gemini grounding. See [Web Tools](/guide/tools#web-tools). |
-| `packages` | string[] | Installed npm packages to load (content type detected from package structure). |
+| `packages` | string[] | Installed agent packages to load. This is the canonical field for connection, skill, knowledge, tool, channel, and page packages. |
 | `memory` | object | Persistent memory across sessions. See [Memory](#memory). |
 | `fileTools` | boolean or object | Enable built-in file tools for reading/writing agent repo files. Set to `true` for defaults, or pass `{allowedDirs, blockedFiles}` to customize. Used by the admin agent. |
 | `scope` | object | Per-user isolation for multi-tenant deployments. See [Scope](#scope). |
+
+`packages` is the only runtime package declaration field. Use it for marketplace or npm packages that ship connections, skills, tools, knowledge, pages, stores, automations, or channels. Standard npm `dependencies` belong in `package.json`; they are not read from `amodal.json`.
 
 ## ModelConfig
 

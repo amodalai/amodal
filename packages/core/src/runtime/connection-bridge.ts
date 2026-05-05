@@ -114,7 +114,7 @@ function buildAuthHeaders(
     return [{header, value_template: `${prefix} ${token}`}];
   }
 
-  if (specAuth.type === 'api-key') {
+  if (specAuth.type === 'api_key' || specAuth.type === 'api-key') {
     const header = specAuth.header ?? 'X-API-Key';
     return [{header, value_template: token}];
   }
