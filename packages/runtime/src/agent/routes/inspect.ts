@@ -6,6 +6,8 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
+import {readdir, readFile} from 'node:fs/promises';
+import path from 'node:path';
 import type {AgentBundle} from '@amodalai/types';
 import type {McpManager} from '@amodalai/core';
 import {asyncHandler} from '../../routes/route-helpers.js';
@@ -38,6 +40,62 @@ async function checkRestHealth(baseUrl: string, testPath?: string): Promise<{ok:
   }
 }
 
+interface ConnectionFileSummary {
+  name: string;
+  path: string;
+  files: string[];
+  hasSpec: boolean;
+  hasSurface: boolean;
+  surfaceCount: number;
+}
+
+function parseSurfaceEndpoints(markdown: string): Array<{method: string; path: string; description: string}> {
+  return markdown
+    .split('\n')
+    .map((line) => line.match(/^###\s+([A-Z]+)\s+(\S+)(?:\s+(.+))?$/))
+    .filter((match): match is RegExpMatchArray => !!match)
+    .map((match) => ({
+      method: match[1] ?? 'GET',
+      path: match[2] ?? '/',
+      description: (match[3] ?? '').trim(),
+    }));
+}
+
+async function listConnectionFiles(repoPath: string): Promise<ConnectionFileSummary[]> {
+  const root = path.join(repoPath, 'connections');
+  let entries;
+  try {
+    entries = await readdir(root, {withFileTypes: true});
+  } catch {
+    return [];
+  }
+
+  const summaries = await Promise.all(entries
+    .filter((entry) => entry.isDirectory())
+    .map(async (entry) => {
+      const dir = path.join(root, entry.name);
+      const files = (await readdir(dir, {withFileTypes: true}).catch(() => []))
+        .filter((file) => file.isFile())
+        .map((file) => file.name)
+        .sort((a, b) => a.localeCompare(b));
+      let surfaceCount = 0;
+      if (files.includes('surface.md')) {
+        const surface = await readFile(path.join(dir, 'surface.md'), 'utf-8').catch(() => '');
+        surfaceCount = parseSurfaceEndpoints(surface).length;
+      }
+      return {
+        name: entry.name,
+        path: `connections/${entry.name}`,
+        files,
+        hasSpec: files.includes('spec.json'),
+        hasSurface: files.includes('surface.md'),
+        surfaceCount,
+      };
+    }));
+
+  return summaries.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function createInspectRouter(options: InspectRouterOptions): Router {
   const router = Router();
 
@@ -60,17 +118,22 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
           }))
         : [];
 
-      // Check connection health in parallel (REST only — MCP health checked via McpManager)
+      // Check connection health in parallel. MCP connections report the
+      // persistent MCP manager status when available.
       const connectionEntries = Array.from(repo.connections.entries());
       const healthChecks = await Promise.allSettled(
         connectionEntries.map(async ([name, conn]: [string, { spec: { protocol?: string; baseUrl?: string; testPath?: string } }]) => {
-          if (conn.spec.protocol === 'mcp' || !conn.spec.baseUrl) {
+          if (conn.spec.protocol === 'mcp') {
+            const info = mcpServers.find((server) => server.name === name);
+            if (info) return {name, status: info.status, error: info.error};
             return {name, status: 'connected' as const, error: undefined};
           }
+          if (!conn.spec.baseUrl) return {name, status: 'connected' as const, error: undefined};
           const health = await checkRestHealth(conn.spec.baseUrl, conn.spec.testPath);
           return {name, status: health.ok ? 'connected' as const : 'error' as const, error: health.error};
         }),
       );
+      const connectionFiles = await listConnectionFiles(options.repoPath);
 
       const connections = connectionEntries.map(([name]: [string, unknown], i: number) => {
         const result = healthChecks[i];
@@ -199,6 +262,7 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
         token_usage: tokenUsage,
         contributions,
         connections,
+        connectionFiles,
         mcpServers,
         skills: repo.skills.map((s: { name: string }) => s.name),
         automations: repo.automations.map((a: { name: string }) => a.name),
@@ -223,7 +287,24 @@ export function createInspectRouter(options: InspectRouterOptions): Router {
     const conn = repo.connections.get(connName);
 
     if (!conn) {
-      res.status(404).json({error: {code: 'NOT_FOUND', message: 'Connection not found'}});
+      const files = await listConnectionFiles(options.repoPath);
+      const summary = files.find((file) => file.name === connName);
+      if (!summary) {
+        res.status(404).json({error: {code: 'NOT_FOUND', message: 'Connection not found'}});
+        return;
+      }
+      const surfacePath = path.join(options.repoPath, summary.path, 'surface.md');
+      const surface = summary.hasSurface
+        ? parseSurfaceEndpoints(await readFile(surfacePath, 'utf-8').catch(() => ''))
+        : [];
+      res.json({
+        name: connName,
+        kind: 'files',
+        status: 'not loaded',
+        files: summary.files,
+        surface,
+        location: path.join(options.repoPath, summary.path),
+      });
       return;
     }
 

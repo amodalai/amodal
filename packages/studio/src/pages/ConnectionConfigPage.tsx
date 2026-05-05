@@ -8,6 +8,7 @@ import { Link, useParams } from 'react-router-dom';
 import { AgentOffline } from '@/components/AgentOffline';
 import { ConnectionConfigForm } from '@/components/ConnectionConfigForm';
 import { useConnectionDetail } from '../hooks/useConnectionDetail';
+import { CONNECTIONS_PATH } from '../lib/routes';
 
 /**
  * Per-connection configure page — `/agents/:agentId/connections/:packageName`.
@@ -31,15 +32,15 @@ export function ConnectionConfigPage() {
   if (error) return <AgentOffline page="connection" detail={error} />;
   if (loading || !data) return null;
 
-  const fulfilled = data.envVars.length > 0 && data.envVars.every((v) => v.set);
+  const fulfilled = data.envVars.every((v) => v.set);
 
   return (
     <div className="space-y-6 max-w-3xl">
       <Link
-        to="../getting-started"
+        to={`../${CONNECTIONS_PATH}`}
         className="text-xs text-muted-foreground hover:text-foreground"
       >
-        ← Back to getting started
+        Back to Connections
       </Link>
 
       <header className="flex items-start gap-4">
@@ -57,7 +58,7 @@ export function ConnectionConfigPage() {
         </div>
         {fulfilled && (
           <span className="text-xs text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded bg-emerald-500/10 whitespace-nowrap">
-            ✓ Configured
+            Configured
           </span>
         )}
       </header>

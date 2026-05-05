@@ -7,17 +7,13 @@
 import {useEffect, useMemo, useState} from 'react';
 import type {ReactNode} from 'react';
 import {Link} from 'react-router-dom';
-import {Activity, AlertCircle, CheckCircle2, ExternalLink, KeyRound, Plug, RefreshCw} from 'lucide-react';
+import {Activity, AlertCircle, ChevronDown, ChevronRight, ExternalLink, FileCode, KeyRound, Plug, RefreshCw} from 'lucide-react';
 import type {LucideIcon} from 'lucide-react';
 import {AgentOffline} from '@/components/AgentOffline';
 import {runtimeApiUrl} from '@/lib/api';
 import {useGettingStarted} from '../hooks/useGettingStarted';
 import type {GettingStartedPackage} from '../hooks/useGettingStarted';
-import {
-  connectionConfigPath,
-  connectionInspectPath,
-  GETTING_STARTED_PATH,
-} from '../lib/routes';
+import {connectionConfigPath, connectionInspectPath} from '../lib/routes';
 import {useDraftWorkspace} from '../hooks/useDraftWorkspace';
 
 interface InspectConnectionStatus {
@@ -26,8 +22,18 @@ interface InspectConnectionStatus {
   error?: string;
 }
 
+interface ConnectionFileSummary {
+  name: string;
+  path: string;
+  files: string[];
+  hasSpec: boolean;
+  hasSurface: boolean;
+  surfaceCount: number;
+}
+
 interface InspectContextResponse {
   connections?: InspectConnectionStatus[];
+  connectionFiles?: ConnectionFileSummary[];
 }
 
 interface ConnectionEndpoint {
@@ -65,7 +71,25 @@ interface McpConnectionDetail {
   location?: string;
 }
 
-type ConnectionDetail = RestConnectionDetail | McpConnectionDetail;
+interface FileOnlyConnectionDetail {
+  name: string;
+  kind: 'files';
+  status: string;
+  files: string[];
+  surface: ConnectionEndpoint[];
+  location?: string;
+}
+
+type ConnectionDetail = RestConnectionDetail | McpConnectionDetail | FileOnlyConnectionDetail;
+
+interface ConnectionRow {
+  name: string;
+  status: string;
+  error?: string;
+  loaded: boolean;
+  file?: ConnectionFileSummary;
+  pkg?: GettingStartedPackage;
+}
 
 interface InspectContextState {
   data: InspectContextResponse | null;
@@ -100,11 +124,7 @@ function loadConnectionDetail(name: string, signal?: AbortSignal): Promise<Conne
 }
 
 function useInspectContext(refreshKey: number): InspectContextState {
-  const [state, setState] = useState<InspectContextState>({
-    data: null,
-    error: null,
-    loading: true,
-  });
+  const [state, setState] = useState<InspectContextState>({data: null, error: null, loading: true});
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,11 +133,7 @@ function useInspectContext(refreshKey: number): InspectContextState {
       .then((data) => setState({data, error: null, loading: false}))
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
-        setState({
-          data: null,
-          error: err instanceof Error ? err.message : String(err),
-          loading: false,
-        });
+        setState({data: null, error: err instanceof Error ? err.message : String(err), loading: false});
       });
     return () => controller.abort();
   }, [refreshKey]);
@@ -126,11 +142,7 @@ function useInspectContext(refreshKey: number): InspectContextState {
 }
 
 function useConnectionDetail(name: string | null, refreshKey: number): ConnectionDetailState {
-  const [state, setState] = useState<ConnectionDetailState>({
-    data: null,
-    error: null,
-    loading: false,
-  });
+  const [state, setState] = useState<ConnectionDetailState>({data: null, error: null, loading: false});
 
   useEffect(() => {
     if (!name) {
@@ -143,11 +155,7 @@ function useConnectionDetail(name: string | null, refreshKey: number): Connectio
       .then((data) => setState({data, error: null, loading: false}))
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
-        setState({
-          data: null,
-          error: err instanceof Error ? err.message : String(err),
-          loading: false,
-        });
+        setState({data: null, error: err instanceof Error ? err.message : String(err), loading: false});
       });
     return () => controller.abort();
   }, [name, refreshKey]);
@@ -158,6 +166,7 @@ function useConnectionDetail(name: string | null, refreshKey: number): Connectio
 export function ConnectionsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [expandedName, setExpandedName] = useState<string | null>(null);
   const [testingName, setTestingName] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{name: string; status: string; error?: string} | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -167,20 +176,29 @@ export function ConnectionsPage() {
   const workspace = useDraftWorkspace();
   const inspectContext = useInspectContext(refreshKey);
 
-  const loadedConnections = useMemo(
-    () => [...(inspectContext.data?.connections ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-    [inspectContext.data],
-  );
-  const packages = useMemo(
-    () => [...(gettingStarted.data?.packages ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName)),
-    [gettingStarted.data],
-  );
+  const connections = useMemo(() => {
+    const byName = new Map<string, ConnectionRow>();
+    for (const file of inspectContext.data?.connectionFiles ?? []) {
+      byName.set(file.name, {name: file.name, status: file.hasSpec ? 'not loaded' : 'incomplete', loaded: false, file});
+    }
+    for (const pkg of gettingStarted.data?.packages ?? []) {
+      const current = byName.get(pkg.name) ?? {name: pkg.name, status: 'not loaded', loaded: false};
+      byName.set(pkg.name, {...current, pkg});
+    }
+    for (const runtime of inspectContext.data?.connections ?? []) {
+      const current = byName.get(runtime.name) ?? {name: runtime.name, status: runtime.status, loaded: true};
+      byName.set(runtime.name, {...current, status: runtime.status, error: runtime.error, loaded: true});
+    }
+    return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [gettingStarted.data, inspectContext.data]);
 
   useEffect(() => {
-    if (!selectedName && loadedConnections.length > 0) {
-      setSelectedName(loadedConnections[0]?.name ?? null);
+    if (!selectedName && connections.length > 0) {
+      const first = connections[0]?.name ?? null;
+      setSelectedName(first);
+      setExpandedName(first);
     }
-  }, [loadedConnections, selectedName]);
+  }, [connections, selectedName]);
 
   const detail = useConnectionDetail(selectedName, refreshKey);
 
@@ -188,9 +206,10 @@ export function ConnectionsPage() {
     return <AgentOffline page="connections" detail={inspectContext.error} />;
   }
 
-  const missingCredentialPackages = packages.filter((pkg) => !pkg.isFulfilled);
-  const unhealthyConnections = loadedConnections.filter((conn) => conn.status !== 'connected');
-  const configuredPackages = packages.length - missingCredentialPackages.length;
+  const loadedCount = connections.filter((conn) => conn.loaded).length;
+  const missingCredentialCount = connections.filter((conn) => conn.pkg && !conn.pkg.isFulfilled).length;
+  const incompleteCount = connections.filter((conn) => conn.file && !conn.file.hasSpec).length;
+  const unhealthyCount = connections.filter((conn) => conn.loaded && conn.status !== 'connected').length;
 
   async function refreshAll(): Promise<void> {
     gettingStarted.refetch();
@@ -207,15 +226,11 @@ export function ConnectionsPage() {
       setRefreshKey((key) => key + 1);
       setTestResult({
         name,
-        status: connection?.status ?? 'unknown',
+        status: connection?.status ?? 'not loaded',
         ...(connection?.error ? {error: connection.error} : {}),
       });
     } catch (err: unknown) {
-      setTestResult({
-        name,
-        status: 'error',
-        error: err instanceof Error ? err.message : String(err),
-      });
+      setTestResult({name, status: 'error', error: err instanceof Error ? err.message : String(err)});
     } finally {
       setTestingName(null);
     }
@@ -227,16 +242,10 @@ export function ConnectionsPage() {
         <div>
           <h1 className="text-xl font-semibold text-foreground">Connections</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Credential readiness, runtime health, and exposed API surface for this agent.
+            External systems this agent can use, the credentials they need, and the files that define their surface.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            to={`../${GETTING_STARTED_PATH}`}
-            className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Setup
-          </Link>
           <button
             type="button"
             onClick={() => {
@@ -244,7 +253,7 @@ export function ConnectionsPage() {
               setCreateError(null);
               setCreateResult(null);
             }}
-            className="rounded-md bg-primary-solid px-3 py-2 text-xs font-medium text-white hover:opacity-90"
+            className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
           >
             New connection
           </button>
@@ -283,30 +292,10 @@ export function ConnectionsPage() {
       )}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard
-          icon={Plug}
-          label="Loaded"
-          value={String(loadedConnections.length)}
-          detail={loadedConnections.length === 1 ? 'runtime connection' : 'runtime connections'}
-        />
-        <SummaryCard
-          icon={KeyRound}
-          label="Credentials"
-          value={packages.length > 0 ? `${String(configuredPackages)}/${String(packages.length)}` : '0'}
-          detail={missingCredentialPackages.length === 0 ? 'All configured' : `${String(missingCredentialPackages.length)} need setup`}
-        />
-        <SummaryCard
-          icon={Activity}
-          label="Health"
-          value={unhealthyConnections.length === 0 ? 'OK' : String(unhealthyConnections.length)}
-          detail={unhealthyConnections.length === 0 ? 'No runtime errors' : 'connections failing health check'}
-        />
-        <SummaryCard
-          icon={CheckCircle2}
-          label="Surface"
-          value={detail.data ? surfaceCount(detail.data) : '-'}
-          detail={selectedName ? `selected: ${selectedName}` : 'No connection selected'}
-        />
+        <SummaryCard icon={Plug} label="Connections" value={String(connections.length)} detail={`${String(loadedCount)} loaded at runtime`} />
+        <SummaryCard icon={KeyRound} label="Credentials" value={missingCredentialCount === 0 ? 'OK' : String(missingCredentialCount)} detail={missingCredentialCount === 0 ? 'No missing secrets' : 'connections need secrets'} />
+        <SummaryCard icon={Activity} label="Health" value={unhealthyCount === 0 ? 'OK' : String(unhealthyCount)} detail={unhealthyCount === 0 ? 'Loaded connections healthy' : 'runtime issues'} />
+        <SummaryCard icon={FileCode} label="Files" value={incompleteCount === 0 ? 'OK' : String(incompleteCount)} detail={incompleteCount === 0 ? 'Specs present' : 'missing spec files'} />
       </section>
 
       {testResult && (
@@ -320,102 +309,265 @@ export function ConnectionsPage() {
         </div>
       )}
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <Panel title="Installed Packages">
-          <PackageList packages={packages} loading={gettingStarted.loading} />
-        </Panel>
-
-        <Panel title="Runtime Connections">
-          <RuntimeConnectionList
-            connections={loadedConnections}
-            loading={inspectContext.loading}
-            selectedName={selectedName}
-            testingName={testingName}
-            onSelect={setSelectedName}
-            onTest={(name) => void testConnection(name)}
-          />
-        </Panel>
-      </section>
-
-      <Panel
-        title="Connection Detail"
-        action={
-          selectedName ? (
-            <Link
-              to={`../${connectionInspectPath(selectedName)}`}
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Inspect <ExternalLink className="h-3 w-3" />
-            </Link>
-          ) : null
-        }
-      >
-        <ConnectionDetailView selectedName={selectedName} state={detail} />
+      <Panel title="Connection Inventory">
+        <ConnectionInventory
+          connections={connections}
+          loading={inspectContext.loading || gettingStarted.loading}
+          expandedName={expandedName}
+          selectedName={selectedName}
+          detail={detail}
+          testingName={testingName}
+          onToggle={(name) => {
+            setSelectedName(name);
+            setExpandedName((current) => current === name ? null : name);
+          }}
+          onTest={(name) => void testConnection(name)}
+        />
       </Panel>
     </div>
   );
 }
 
-function PackageList({packages, loading}: {packages: GettingStartedPackage[]; loading: boolean}) {
-  if (loading) return <EmptyPanelText>Loading packages</EmptyPanelText>;
-  if (packages.length === 0) return <EmptyPanelText>No connection packages installed</EmptyPanelText>;
+function ConnectionInventory({
+  connections,
+  loading,
+  expandedName,
+  selectedName,
+  detail,
+  testingName,
+  onToggle,
+  onTest,
+}: {
+  connections: ConnectionRow[];
+  loading: boolean;
+  expandedName: string | null;
+  selectedName: string | null;
+  detail: ConnectionDetailState;
+  testingName: string | null;
+  onToggle: (name: string) => void;
+  onTest: (name: string) => void;
+}) {
+  if (loading) return <EmptyPanelText>Loading connections</EmptyPanelText>;
+  if (connections.length === 0) return <EmptyPanelText>No connections found in this agent</EmptyPanelText>;
+
   return (
     <div className="divide-y divide-border">
-      {packages.map((pkg) => {
-        const envTotal = pkg.envVars.length;
-        const envSet = pkg.envVars.filter((envVar) => envVar.set).length;
+      {connections.map((connection) => {
+        const expanded = expandedName === connection.name;
+        const credentialText = credentialSummary(connection.pkg);
+        const capabilityText = capabilitySummary(connection, selectedName === connection.name ? detail.data : null);
         return (
-          <div key={pkg.name} className="grid gap-3 py-3 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-2">
-                {pkg.icon ? (
-                  <img src={pkg.icon} alt="" className="h-5 w-5 shrink-0 rounded" />
-                ) : (
-                  <Plug className="h-4 w-4 shrink-0 text-muted-foreground" />
-                )}
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">{pkg.displayName}</p>
-                  <p className="truncate font-mono text-xs text-muted-foreground">{pkg.name}</p>
-                </div>
-              </div>
-              {pkg.description && (
-                <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{pkg.description}</p>
-              )}
-              {envTotal > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {pkg.envVars.map((envVar) => (
-                    <span
-                      key={envVar.name}
-                      className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
-                        envVar.set
-                          ? 'bg-emerald-500/10 text-emerald-600'
-                          : 'bg-amber-500/10 text-amber-700'
-                      }`}
-                      title={envVar.description}
-                    >
-                      {envVar.set ? 'set ' : 'missing '}
-                      {envVar.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex items-start gap-2 md:justify-end">
-              <StatusBadge tone={pkg.isFulfilled ? 'success' : 'warning'}>
-                {envTotal === 0 ? 'No secrets' : `${String(envSet)}/${String(envTotal)} set`}
-              </StatusBadge>
-              <Link
-                to={`../${connectionConfigPath(pkg.name)}`}
-                className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+          <div key={connection.name} className="py-3 first:pt-0 last:pb-0">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_0.7fr_0.8fr_0.9fr_auto] lg:items-center">
+              <button
+                type="button"
+                onClick={() => onToggle(connection.name)}
+                className="flex min-w-0 items-start gap-2 rounded-md px-2 py-1 text-left hover:bg-muted/60"
               >
-                Configure
-              </Link>
+                {expanded ? <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <StatusDot tone={connectionTone(connection)} />
+                    <p className="truncate font-mono text-sm font-medium text-foreground">{connection.name}</p>
+                  </div>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">{connection.file?.path ?? 'loaded from package metadata'}</p>
+                </div>
+              </button>
+              <StatusBadge tone={connectionTone(connection)}>{connectionStatusLabel(connection)}</StatusBadge>
+              <span className="text-xs text-muted-foreground">{credentialText}</span>
+              <span className="text-xs text-muted-foreground">{capabilityText}</span>
+              <div className="flex items-center gap-2 lg:justify-end">
+                {connection.pkg && (
+                  <Link
+                    to={`../${connectionConfigPath(connection.pkg.name)}`}
+                    className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Configure
+                  </Link>
+                )}
+                {connection.loaded && (
+                  <button
+                    type="button"
+                    onClick={() => onTest(connection.name)}
+                    disabled={testingName !== null}
+                    className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  >
+                    {testingName === connection.name ? 'Testing...' : 'Test'}
+                  </button>
+                )}
+              </div>
             </div>
+
+            {expanded && (
+              <div className="mt-3 rounded-lg border border-border bg-background p-4">
+                <ConnectionExpanded connection={connection} state={selectedName === connection.name ? detail : {data: null, error: null, loading: false}} />
+              </div>
+            )}
           </div>
         );
       })}
     </div>
   );
+}
+
+function ConnectionExpanded({connection, state}: {connection: ConnectionRow; state: ConnectionDetailState}) {
+  return (
+    <div className="space-y-4">
+      {connection.error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4" />
+          {connection.error}
+        </div>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <DetailBlock label="Runtime" value={connection.loaded ? connection.status : 'not loaded'} />
+        <DetailBlock label="Credentials" value={credentialSummary(connection.pkg)} />
+        <DetailBlock label="Files" value={fileSummary(connection.file)} />
+      </div>
+
+      {connection.file && !connection.file.hasSpec && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+          This directory has connection documentation but no <span className="font-mono">spec.json</span>, so the runtime cannot load it yet.
+        </div>
+      )}
+
+      {state.loading && <EmptyPanelText>Loading details</EmptyPanelText>}
+      {state.error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4" />
+          {state.error}
+        </div>
+      )}
+      {state.data && <ConnectionDetailView data={state.data} />}
+
+      <div className="flex flex-wrap gap-2">
+        {connection.file && (
+          <Link
+            to={`../files?path=${encodeURIComponent(connection.file.path)}`}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Files <ExternalLink className="h-3 w-3" />
+          </Link>
+        )}
+        {connection.loaded && (
+          <Link
+            to={`../${connectionInspectPath(connection.name)}`}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Inspect <ExternalLink className="h-3 w-3" />
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConnectionDetailView({data}: {data: ConnectionDetail}) {
+  if (data.kind === 'mcp') return <McpDetail data={data} />;
+  if (data.kind === 'files') return <SurfaceList endpoints={data.surface} empty="No endpoints documented in surface.md" />;
+  return <RestDetail data={data} />;
+}
+
+function RestDetail({data}: {data: RestConnectionDetail}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <StatusBadge tone="neutral">REST</StatusBadge>
+        {data.spec?.format && <StatusBadge tone="neutral">{data.spec.format}</StatusBadge>}
+        {data.spec?.authType && <StatusBadge tone="neutral">auth: {data.spec.authType}</StatusBadge>}
+        {data.spec?.baseUrl && <CodePill>{data.spec.baseUrl}</CodePill>}
+      </div>
+      <SurfaceList endpoints={data.surface ?? []} empty="No curated endpoints exposed" />
+    </div>
+  );
+}
+
+function McpDetail({data}: {data: McpConnectionDetail}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <StatusBadge tone={data.status === 'connected' ? 'success' : 'warning'}>{data.status}</StatusBadge>
+        <StatusBadge tone="neutral">MCP</StatusBadge>
+        <StatusBadge tone="neutral">{data.transport}</StatusBadge>
+        {data.url && <CodePill>{data.url}</CodePill>}
+      </div>
+      {data.error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {data.error}
+        </div>
+      )}
+      {data.tools.length > 0 ? (
+        <div className="grid gap-2 md:grid-cols-2">
+          {data.tools.map((tool) => (
+            <div key={tool.qualifiedName} className="rounded-lg border border-border bg-card px-3 py-2">
+              <p className="font-mono text-sm font-medium text-foreground">{tool.name}</p>
+              {tool.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{tool.description}</p>}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyPanelText>No MCP tools discovered</EmptyPanelText>
+      )}
+    </div>
+  );
+}
+
+function SurfaceList({endpoints, empty}: {endpoints: ConnectionEndpoint[]; empty: string}) {
+  if (endpoints.length === 0) return <EmptyPanelText>{empty}</EmptyPanelText>;
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-card">
+            <th className="w-20 px-3 py-2 text-left text-xs font-medium text-muted-foreground">Method</th>
+            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Path</th>
+            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {endpoints.map((endpoint) => (
+            <tr key={`${endpoint.method}:${endpoint.path}`} className="border-b border-border last:border-0">
+              <td className="px-3 py-2"><MethodBadge method={endpoint.method} /></td>
+              <td className="px-3 py-2 font-mono text-xs text-foreground">{endpoint.path}</td>
+              <td className="px-3 py-2 text-xs text-muted-foreground">{endpoint.description || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function credentialSummary(pkg: GettingStartedPackage | undefined): string {
+  if (!pkg) return 'No credential metadata';
+  if (pkg.envVars.length === 0) return 'No secrets required';
+  const setCount = pkg.envVars.filter((envVar) => envVar.set).length;
+  return `${String(setCount)}/${String(pkg.envVars.length)} secrets set`;
+}
+
+function capabilitySummary(connection: ConnectionRow, detail: ConnectionDetail | null): string {
+  if (detail?.kind === 'mcp') return `${String(detail.tools.length)} tools`;
+  if (detail?.kind === 'rest') return `${String(detail.surface?.length ?? 0)} endpoints`;
+  if (connection.file?.hasSurface) return `${String(connection.file.surfaceCount)} documented endpoints`;
+  return 'No surface file';
+}
+
+function fileSummary(file: ConnectionFileSummary | undefined): string {
+  if (!file) return 'No local files';
+  return file.files.join(', ') || 'Empty directory';
+}
+
+function connectionStatusLabel(connection: ConnectionRow): string {
+  if (connection.loaded) return connection.status;
+  if (connection.file && !connection.file.hasSpec) return 'missing spec';
+  return 'not loaded';
+}
+
+function connectionTone(connection: ConnectionRow): 'success' | 'warning' | 'neutral' {
+  if (connection.loaded && connection.status === 'connected' && connection.pkg?.isFulfilled !== false) return 'success';
+  if (!connection.loaded || connection.status !== 'connected' || connection.pkg?.isFulfilled === false) return 'warning';
+  return 'neutral';
 }
 
 interface NewConnectionInput {
@@ -426,11 +578,7 @@ interface NewConnectionInput {
 }
 
 function normalizeConnectionName(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 function normalizeEnvName(value: string): string {
@@ -459,31 +607,8 @@ function buildConnectionDrafts(input: NewConnectionInput): Array<{path: string; 
   return [
     {path: `${root}/spec.json`, content: `${JSON.stringify(spec, null, 2)}\n`},
     {path: `${root}/access.json`, content: `${JSON.stringify({endpoints: {}}, null, 2)}\n`},
-    {
-      path: `${root}/surface.md`,
-      content: [
-        `# ${input.name}`,
-        '',
-        'Add curated endpoints here after confirming the API surface.',
-        '',
-        '## Example',
-        '',
-        '### GET /health',
-        '',
-        'Checks whether the upstream API is reachable.',
-        '',
-      ].join('\n'),
-    },
-    {
-      path: `${root}/rules.md`,
-      content: [
-        `# ${input.name} rules`,
-        '',
-        '- Keep destructive operations behind confirmation.',
-        '- Do not request fields the agent does not need.',
-        '',
-      ].join('\n'),
-    },
+    {path: `${root}/surface.md`, content: `# ${input.name}\n\nAdd curated endpoints here after confirming the API surface.\n`},
+    {path: `${root}/rules.md`, content: `# ${input.name} rules\n\n- Keep destructive operations behind confirmation.\n`},
   ];
 }
 
@@ -512,88 +637,24 @@ function NewConnectionPanel({
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-foreground">New REST connection</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Creates connection files as drafts. Publish the draft when the spec is ready.
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Creates connection files as drafts. Publish the draft when the spec is ready.</p>
         </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          Close
-        </button>
+        <button type="button" onClick={onCancel} className="text-xs text-muted-foreground hover:text-foreground">Close</button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">Name</span>
-          <input
-            type="text"
-            value={nameDraft}
-            onChange={(event) => setNameDraft(event.target.value)}
-            placeholder="booking-api"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          {name && <span className="font-mono text-[11px] text-muted-foreground">connections/{name}</span>}
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">Base URL</span>
-          <input
-            type="url"
-            value={baseUrl}
-            onChange={(event) => setBaseUrl(event.target.value)}
-            placeholder="https://api.example.com"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">Health path</span>
-          <input
-            type="text"
-            value={testPath}
-            onChange={(event) => setTestPath(event.target.value)}
-            placeholder="/health"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">Bearer token env var</span>
-          <input
-            type="text"
-            value={authEnvVar}
-            onChange={(event) => setAuthEnvVar(event.target.value)}
-            placeholder="BOOKING_API_TOKEN"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </label>
+        <ConnectionInput label="Name" value={nameDraft} onChange={setNameDraft} placeholder="booking-api" hint={name ? `connections/${name}` : undefined} />
+        <ConnectionInput label="Base URL" value={baseUrl} onChange={setBaseUrl} placeholder="https://api.example.com" />
+        <ConnectionInput label="Health path" value={testPath} onChange={setTestPath} placeholder="/health" />
+        <ConnectionInput label="Bearer token env var" value={authEnvVar} onChange={setAuthEnvVar} placeholder="BOOKING_API_TOKEN" />
       </div>
 
-      {error && (
-        <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-      {result && (
-        <div className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">
-          Created {result.paths.length} draft files for <span className="font-mono">{result.name}</span>.
-        </div>
-      )}
+      {error && <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</div>}
+      {result && <div className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">Created {result.paths.length} draft files for <span className="font-mono">{result.name}</span>.</div>}
 
       <div className="mt-4 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={!canCreate}
-          onClick={() => void onCreate({name, baseUrl, testPath, authEnvVar})}
-          className="rounded-md bg-primary-solid px-3 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-        >
+        <button type="button" onClick={onCancel} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+        <button type="button" disabled={!canCreate} onClick={() => void onCreate({name, baseUrl, testPath, authEnvVar})} className="rounded-md bg-primary-solid px-3 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50">
           {saving ? 'Creating...' : 'Create drafts'}
         </button>
       </div>
@@ -601,194 +662,23 @@ function NewConnectionPanel({
   );
 }
 
-function RuntimeConnectionList({
-  connections,
-  loading,
-  selectedName,
-  testingName,
-  onSelect,
-  onTest,
-}: {
-  connections: InspectConnectionStatus[];
-  loading: boolean;
-  selectedName: string | null;
-  testingName: string | null;
-  onSelect: (name: string) => void;
-  onTest: (name: string) => void;
-}) {
-  if (loading) return <EmptyPanelText>Checking runtime connections</EmptyPanelText>;
-  if (connections.length === 0) return <EmptyPanelText>No runtime connections loaded</EmptyPanelText>;
+function ConnectionInput({label, value, onChange, placeholder, hint}: {label: string; value: string; onChange: (value: string) => void; placeholder: string; hint?: string}) {
   return (
-    <div className="divide-y divide-border">
-      {connections.map((connection) => {
-        const active = selectedName === connection.name;
-        return (
-          <div key={connection.name} className="grid gap-3 py-3 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_auto]">
-            <button
-              type="button"
-              onClick={() => onSelect(connection.name)}
-              className={`min-w-0 rounded-md px-2 py-1 text-left ${
-                active ? 'bg-sidebar-active ring-1 ring-border/70' : 'hover:bg-muted/60'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <StatusDot ok={connection.status === 'connected'} />
-                <p className="truncate font-mono text-sm font-medium text-foreground">{connection.name}</p>
-              </div>
-              <p className="mt-1 truncate text-xs text-muted-foreground">
-                {connection.status}
-                {connection.error ? ` - ${connection.error}` : ''}
-              </p>
-            </button>
-            <div className="flex items-start gap-2 md:justify-end">
-              <button
-                type="button"
-                onClick={() => onTest(connection.name)}
-                disabled={testingName !== null}
-                className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
-              >
-                {testingName === connection.name ? 'Testing...' : 'Test'}
-              </button>
-              <Link
-                to={`../${connectionInspectPath(connection.name)}`}
-                className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-              >
-                Inspect
-              </Link>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <label className="space-y-1">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      {hint && <span className="font-mono text-[11px] text-muted-foreground">{hint}</span>}
+    </label>
   );
 }
 
-function ConnectionDetailView({selectedName, state}: {selectedName: string | null; state: ConnectionDetailState}) {
-  if (!selectedName) return <EmptyPanelText>Select a runtime connection to inspect its surface</EmptyPanelText>;
-  if (state.loading) return <EmptyPanelText>Loading {selectedName}</EmptyPanelText>;
-  if (state.error) {
-    return (
-      <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-        <AlertCircle className="mt-0.5 h-4 w-4" />
-        {state.error}
-      </div>
-    );
-  }
-  if (!state.data) return <EmptyPanelText>No detail loaded</EmptyPanelText>;
-
-  if (state.data.kind === 'mcp') {
-    return <McpDetail data={state.data} />;
-  }
-  return <RestDetail data={state.data} />;
-}
-
-function RestDetail({data}: {data: RestConnectionDetail}) {
-  const endpoints = data.surface ?? [];
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <StatusBadge tone="neutral">REST</StatusBadge>
-        {data.spec?.format && <StatusBadge tone="neutral">{data.spec.format}</StatusBadge>}
-        {data.spec?.authType && <StatusBadge tone="neutral">auth: {data.spec.authType}</StatusBadge>}
-        {data.spec?.baseUrl && (
-          <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-            {data.spec.baseUrl}
-          </span>
-        )}
-      </div>
-
-      {endpoints.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-card">
-                <th className="w-20 px-3 py-2 text-left text-xs font-medium text-muted-foreground">Method</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Path</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              {endpoints.map((endpoint) => (
-                <tr key={`${endpoint.method}:${endpoint.path}`} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2">
-                    <MethodBadge method={endpoint.method} />
-                  </td>
-                  <td className="px-3 py-2 font-mono text-xs text-foreground">{endpoint.path}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{endpoint.description ?? '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <EmptyPanelText>No curated endpoints exposed</EmptyPanelText>
-      )}
-
-      {data.location && (
-        <p className="font-mono text-xs text-muted-foreground">{data.location}</p>
-      )}
-    </div>
-  );
-}
-
-function McpDetail({data}: {data: McpConnectionDetail}) {
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <StatusBadge tone={data.status === 'connected' ? 'success' : 'warning'}>
-          {data.status}
-        </StatusBadge>
-        <StatusBadge tone="neutral">{data.transport}</StatusBadge>
-        {data.command && (
-          <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-            {data.command}
-          </span>
-        )}
-        {data.url && (
-          <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-            {data.url}
-          </span>
-        )}
-      </div>
-      {data.error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {data.error}
-        </div>
-      )}
-      {data.tools.length > 0 ? (
-        <div className="grid gap-2 md:grid-cols-2">
-          {data.tools.map((tool) => (
-            <div key={tool.qualifiedName} className="rounded-lg border border-border bg-background px-3 py-2">
-              <p className="font-mono text-sm font-medium text-foreground">{tool.name}</p>
-              {tool.description && (
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{tool.description}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyPanelText>No MCP tools discovered</EmptyPanelText>
-      )}
-    </div>
-  );
-}
-
-function surfaceCount(detail: ConnectionDetail): string {
-  if (detail.kind === 'mcp') return String(detail.tools.length);
-  return String(detail.surface?.length ?? 0);
-}
-
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  detail: string;
-}) {
+function SummaryCard({icon: Icon, label, value, detail}: {icon: LucideIcon; label: string; value: string; detail: string}) {
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-3">
@@ -801,14 +691,20 @@ function SummaryCard({
   );
 }
 
-function Panel({title, action, children}: {title: string; action?: ReactNode; children: ReactNode}) {
+function Panel({title, children}: {title: string; children: ReactNode}) {
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
-        {action}
-      </div>
+      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
       {children}
+    </div>
+  );
+}
+
+function DetailBlock({label, value}: {label: string; value: string}) {
+  return (
+    <div className="rounded-md border border-border bg-card px-3 py-2">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 break-words text-sm text-foreground">{value}</p>
     </div>
   );
 }
@@ -819,11 +715,16 @@ function StatusBadge({tone, children}: {tone: 'success' | 'warning' | 'neutral';
     : tone === 'warning'
       ? 'bg-amber-500/10 text-amber-700'
       : 'bg-muted text-muted-foreground';
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{children}</span>;
+  return <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{children}</span>;
 }
 
-function StatusDot({ok}: {ok: boolean}) {
-  return <span className={`h-2 w-2 rounded-full ${ok ? 'bg-emerald-500' : 'bg-amber-500'}`} />;
+function StatusDot({tone}: {tone: 'success' | 'warning' | 'neutral'}) {
+  const cls = tone === 'success' ? 'bg-emerald-500' : tone === 'warning' ? 'bg-amber-500' : 'bg-muted-foreground';
+  return <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${cls}`} />;
+}
+
+function CodePill({children}: {children: ReactNode}) {
+  return <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">{children}</span>;
 }
 
 function MethodBadge({method}: {method: string}) {
@@ -831,7 +732,7 @@ function MethodBadge({method}: {method: string}) {
     ? 'text-blue-500'
     : method === 'POST'
       ? 'text-emerald-500'
-      : method === 'PUT'
+      : method === 'PUT' || method === 'PATCH'
         ? 'text-amber-500'
         : method === 'DELETE'
           ? 'text-red-500'

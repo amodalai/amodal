@@ -1160,7 +1160,11 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
   app.use(createTaskRouter({sessionManager, createTaskSession: createTaskSessionComponents}));
 
   // Inspect
-  app.use(createInspectRouter({getBundle, repoPath: config.repoPath}));
+  app.use(createInspectRouter({
+    getBundle,
+    repoPath: config.repoPath,
+    getMcpManager: async () => mcpManager ?? undefined,
+  }));
 
   // Package updates (npm view + cache)
   app.use(createPackageUpdatesRouter({repoPath: config.repoPath, logger: log}));
