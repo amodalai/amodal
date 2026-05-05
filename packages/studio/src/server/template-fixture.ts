@@ -11,10 +11,11 @@
  *   - The cloud registry is unreachable, OR
  *   - Returns 404 for a slug we ship locally (typical local dev).
  *
- * Keep parity with `packages/studio/src/hooks/stub-catalog.ts` —
- * the picker (frontend) reads from there, the resolve_template
- * tool (backend → admin agent) reads from here. Both should describe
- * the same template the same way.
+ * The frontend picker (`useTemplateCatalog`) now reads catalog metadata
+ * straight from platform-api with no local fallback; this fixture is
+ * kept only for the backend resolve flow used by the admin agent's
+ * `resolve_template` custom tool. Drop once the resolve flow is also
+ * routed exclusively through platform-api.
  */
 
 export interface TemplateFixture {

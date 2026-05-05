@@ -21,7 +21,18 @@ export interface AgentCardTurn {
 
 /**
  * Thumbnail card shown in the home screen popular row, gallery grid, and
- * inline in admin chat. Source: `card/card.json` in the template package.
+ * inline in admin chat.
+ *
+ * Source: marketplace metadata served by platform-api at
+ * `${registryUrl}/api/templates`. The author publishes a card image +
+ * tagline + platforms via the marketplace publish UI; the OSS gallery
+ * reads them straight off the catalog response.
+ *
+ * Legacy: templates without a marketplace listing can still ship a
+ * `card/card.json` in their repo; the component renders a conversation
+ * snippet fallback when `imageUrl` is absent. Kept optional so the
+ * gradual migration off conversation-snippet cards doesn't break old
+ * templates.
  */
 export interface AgentCard {
   /** Display title (e.g. "Monday Marketing Digest"). */
@@ -30,8 +41,18 @@ export interface AgentCard {
   tagline: string;
   /** Connected platforms / services to surface as chips. */
   platforms: string[];
-  /** 2-4 turn snippet rendered inside the card body. */
-  thumbnailConversation: AgentCardTurn[];
+  /**
+   * Marketplace card thumbnail URL (R2-hosted, 1200x800 JPEG).
+   * Preferred when present; the component renders this and skips
+   * the conversation snippet entirely.
+   */
+  imageUrl?: string;
+  /**
+   * Curated 2-4 turn agent-output snippet. Legacy path — used when
+   * `imageUrl` is unset and the template ships a `card/card.json`
+   * with the conversation shape. New templates should ship an image.
+   */
+  thumbnailConversation?: AgentCardTurn[];
   /**
    * Optional 3-4 line compressed sample of the agent's output, used by the
    * create-flow picker. Each line typically starts with an emoji and is

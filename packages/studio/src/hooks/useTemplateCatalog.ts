@@ -7,8 +7,6 @@
 import { useEffect, useState } from 'react';
 import type { AgentCard } from '@amodalai/types';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
-import { fetchAgentCard } from './template-card-fetcher';
-import { STUB_CATALOG_AGENTS } from './stub-catalog';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,6 +23,12 @@ interface CatalogEntry {
   defaultBranch: string;
   tags?: string[];
   featured?: boolean;
+  /** Marketplace tagline (subheading shown under name on cards). */
+  tagline?: string;
+  /** R2-hosted card thumbnail URL. */
+  cardImageUrl?: string;
+  /** Service badges shown on the card. */
+  cardPlatforms?: string[];
 }
 
 interface CatalogResponse {
@@ -149,10 +153,13 @@ export interface UseTemplateCatalogResult {
 const CATALOG_TIMEOUT_MS = 5_000;
 
 /**
- * Fetches the full published marketplace and resolves each template's
- * `card/card.json` from GitHub raw. Drives the create-flow picker and the
- * BrowsePage gallery. Templates without a curated card are silently
- * dropped — Phase 7 backfills cards for the rest.
+ * Fetches the full published marketplace from platform-api and renders each
+ * template's card straight from the API response — no GitHub round-trip,
+ * no stub fallback. Drives the create-flow picker and the BrowsePage gallery.
+ *
+ * Cards without an `imageUrl` still render (the AgentCard component handles
+ * the image-less case with a synthesized layout); they're not dropped.
+ * Empty registry → empty picker, surfaced honestly via the error string.
  */
 export function useTemplateCatalog(): UseTemplateCatalogResult {
   const { registryUrl } = useStudioConfig();
@@ -176,49 +183,45 @@ export function useTemplateCatalog(): UseTemplateCatalogResult {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing registry response
         const catalog = (await catalogRes.json()) as CatalogResponse;
 
-        const agents = await Promise.all(
-          catalog.templates.map(async (entry) => {
-            const card = await fetchAgentCard(entry.githubRepo, entry.defaultBranch);
-            if (!card) return null;
-            const result: CatalogAgent = {
-              slug: entry.slug,
-              category: entry.category,
-              tags: entry.tags ?? [],
-              githubRepo: entry.githubRepo,
-              defaultBranch: entry.defaultBranch,
-              featured: entry.featured === true,
-              author: entry.author,
-              verified: entry.verified,
-              card,
-            };
-            return result;
-          }),
-        );
+        const agents = catalog.templates.map((entry): CatalogAgent => {
+          const card: AgentCard = {
+            title: entry.name,
+            // Tagline > description > slug. Marketplace authors are encouraged
+            // to write a punchy tagline ("Weekly metrics → Slack"); description
+            // is the longer one-liner used as a fallback so the card never
+            // renders an empty subheading.
+            tagline: entry.tagline ?? entry.description,
+            platforms: entry.cardPlatforms ?? [],
+            ...(entry.cardImageUrl ? { imageUrl: entry.cardImageUrl } : {}),
+          };
+          return {
+            slug: entry.slug,
+            category: entry.category,
+            tags: entry.tags ?? [],
+            githubRepo: entry.githubRepo,
+            defaultBranch: entry.defaultBranch,
+            featured: entry.featured === true,
+            author: entry.author,
+            verified: entry.verified,
+            card,
+          };
+        });
 
         if (!cancelled) {
-          const resolved = agents.filter((a): a is CatalogAgent => a !== null);
-          // Local-dev / first-run fallback: if the registry returned nothing
-          // we surface a stub catalog so the picker still renders real-looking
-          // cards. Drop `STUB_CATALOG_AGENTS` once production has live
-          // templates and this branch will never hit.
           setState({
-            agents: resolved.length > 0 ? resolved : [...STUB_CATALOG_AGENTS],
+            agents,
             loading: false,
             error: null,
           });
         }
       } catch (err) {
         if (!cancelled) {
-          // Same fallback as above — when the catalog is unreachable, stub
-          // in real-looking cards rather than leaving the picker empty.
-          // Suppress the error banner when stubs are taking over: the picker
-          // is showing valid cards, just not from the registry.
           // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- error normalization at module boundary
           const errorMessage = (err as Error).message ?? 'Failed to load template catalog';
           setState({
-            agents: [...STUB_CATALOG_AGENTS],
+            agents: [],
             loading: false,
-            error: STUB_CATALOG_AGENTS.length > 0 ? null : errorMessage,
+            error: errorMessage,
           });
         }
       }

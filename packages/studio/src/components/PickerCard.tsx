@@ -31,7 +31,7 @@ interface PickerCardProps {
  * defaults to the muted card surface when the category is unknown.
  */
 export function PickerCard({ card, category, author, verified, onClick, className }: PickerCardProps) {
-  const snippet = card.snippet ?? deriveSnippet(card.thumbnailConversation);
+  const snippet = card.snippet ?? deriveSnippet(card.thumbnailConversation ?? []);
   const usesLabel = formatUses(card.uses);
   const tintClass = categoryTint(category);
 
@@ -46,14 +46,29 @@ export function PickerCard({ card, category, author, verified, onClick, classNam
         className,
       )}
     >
-      <div className={cn('px-3 py-2.5 min-h-[80px]', tintClass)}>
-        <div
-          className="font-mono text-[10px] leading-5 text-foreground/80 whitespace-pre-line line-clamp-4"
-          style={{ overflowWrap: 'anywhere' }}
-        >
-          {snippet}
+      {/*
+       * Visual zone: image-first when the marketplace ships one, otherwise
+       * the legacy snippet block on a category-tinted background.
+       */}
+      {card.imageUrl ? (
+        <div className="aspect-[3/2] w-full overflow-hidden bg-muted/30">
+          <img
+            src={card.imageUrl}
+            alt={card.title}
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
         </div>
-      </div>
+      ) : (
+        <div className={cn('px-3 py-2.5 min-h-[80px]', tintClass)}>
+          <div
+            className="font-mono text-[10px] leading-5 text-foreground/80 whitespace-pre-line line-clamp-4"
+            style={{ overflowWrap: 'anywhere' }}
+          >
+            {snippet}
+          </div>
+        </div>
+      )}
       <div className="px-3 pt-2 pb-2.5 flex flex-col gap-0.5">
         <div className="text-[12px] font-semibold text-foreground leading-tight">
           {card.title}

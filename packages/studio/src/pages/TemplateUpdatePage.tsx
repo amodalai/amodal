@@ -7,11 +7,47 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';
-import type { AgentCard } from '@amodalai/types';
+import type { AgentCard, AgentCardTurn } from '@amodalai/types';
 import { AgentCard as AgentCardRenderer } from '@/components/AgentCard';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { usePackageUpdates, type PackageUpdate } from '../hooks/usePackageUpdates';
-import { parseCard } from '../hooks/template-card-fetcher';
+
+/**
+ * Lightweight shape check for the installed package's `card.json`.
+ * Inlined here (the marketplace path no longer fetches card.json from
+ * GitHub, so the shared helper was deleted). The update-diff page is
+ * the only remaining consumer of the local-card format.
+ */
+function parseCard(raw: unknown): AgentCard | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON from runtime
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.title !== 'string' || obj.title === '') return null;
+  if (typeof obj.tagline !== 'string' || obj.tagline === '') return null;
+
+  const platforms = Array.isArray(obj.platforms)
+    ? obj.platforms.filter((v): v is string => typeof v === 'string')
+    : [];
+
+  const turns: AgentCardTurn[] = [];
+  if (Array.isArray(obj.thumbnailConversation)) {
+    for (const t of obj.thumbnailConversation) {
+      if (typeof t !== 'object' || t === null) return null;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
+      const turn = t as Record<string, unknown>;
+      if (turn.role !== 'user' && turn.role !== 'agent') return null;
+      if (typeof turn.content !== 'string' || turn.content === '') return null;
+      turns.push({ role: turn.role, content: turn.content });
+    }
+  }
+
+  return {
+    title: obj.title,
+    tagline: obj.tagline,
+    platforms,
+    ...(turns.length > 0 ? { thumbnailConversation: turns } : {}),
+  };
+}
 
 /**
  * `/agents/:agentId/updates/:slug`
