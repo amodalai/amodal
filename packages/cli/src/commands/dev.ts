@@ -315,10 +315,12 @@ function spawnStudio(opts: {
     ...(opts.adminAgentUrl ? {ADMIN_AGENT_URL: opts.adminAgentUrl} : {}),
   };
 
-  // Pre-built server (npm install): dist-server/studio-server.js
-  // Source mode (monorepo dev): src/server/studio-server.ts via tsx
-  const prebuiltEntry = path.join(studioDir, 'dist-server', 'studio-server.js');
-  const sourceEntry = path.join(studioDir, 'src', 'server', 'studio-server.ts');
+  // Pre-built server (npm install): dist-server/bin.js (the library entry
+  // dist-server/studio-server.js has no side effects on import — only the
+  // bin runner binds a port and starts LISTEN).
+  // Source mode (monorepo dev): src/server/bin.ts via tsx.
+  const prebuiltEntry = path.join(studioDir, 'dist-server', 'bin.js');
+  const sourceEntry = path.join(studioDir, 'src', 'server', 'bin.ts');
 
   let spawnArgs: string[];
 
