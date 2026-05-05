@@ -5,19 +5,16 @@
  */
 
 /**
- * In-chat connection panel renderer — Phase H.3 of the admin-setup
- * build plan. Replaces the deprecated `<StartOAuthCard>` flow.
+ * In-chat connection panel renderer.
  *
- * Renders the four states stamped on a `connection_panel` block:
+ * Renders the states stamped on a `connection_panel` block:
  *   - `idle` — Configure / Later (Later only when `skippable: true`)
  *   - `success` — ✓ Configured + optional inline data point
  *   - `skipped` — "Later" pill + Configure to reopen
  *   - `error` — error message + Configure to retry
  *
- * `state` is a cache that the H.10 reconciliation effect overwrites
- * on every chat mount; only `userSkipped` survives reload. This
- * renderer never trusts `state` blind — but reads it for the visible
- * pill since reconciliation has already run by render time.
+ * `state` is a cache refreshed when the chat mounts; only `userSkipped`
+ * survives reload. This renderer reads it only for the visible pill.
  *
  * Click Configure → opens `<ConnectionConfigModal>` which fetches
  * the package's auth metadata, renders the OAuth/paste/basic form

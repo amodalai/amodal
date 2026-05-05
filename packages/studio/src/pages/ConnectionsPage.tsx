@@ -11,10 +11,9 @@ import {Activity, AlertCircle, ChevronDown, ChevronRight, ExternalLink, FileCode
 import type {LucideIcon} from 'lucide-react';
 import {AgentOffline} from '@/components/AgentOffline';
 import {runtimeApiUrl} from '@/lib/api';
-import {useGettingStarted} from '../hooks/useGettingStarted';
-import type {GettingStartedPackage} from '../hooks/useGettingStarted';
+import {useConnectionPackages} from '../hooks/useConnectionPackages';
+import type {ConnectionPackage} from '../hooks/useConnectionPackages';
 import {connectionConfigPath, connectionInspectPath} from '../lib/routes';
-import {useDraftWorkspace} from '../hooks/useDraftWorkspace';
 
 interface InspectConnectionStatus {
   name: string;
@@ -88,7 +87,7 @@ interface ConnectionRow {
   error?: string;
   loaded: boolean;
   file?: ConnectionFileSummary;
-  pkg?: GettingStartedPackage;
+  pkg?: ConnectionPackage;
 }
 
 interface InspectContextState {
@@ -169,11 +168,7 @@ export function ConnectionsPage() {
   const [expandedName, setExpandedName] = useState<string | null>(null);
   const [testingName, setTestingName] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{name: string; status: string; error?: string} | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createResult, setCreateResult] = useState<{name: string; paths: string[]} | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const gettingStarted = useGettingStarted();
-  const workspace = useDraftWorkspace();
+  const connectionPackages = useConnectionPackages();
   const inspectContext = useInspectContext(refreshKey);
 
   const connections = useMemo(() => {
@@ -181,7 +176,7 @@ export function ConnectionsPage() {
     for (const file of inspectContext.data?.connectionFiles ?? []) {
       byName.set(file.name, {name: file.name, status: file.hasSpec ? 'not loaded' : 'incomplete', loaded: false, file});
     }
-    for (const pkg of gettingStarted.data?.packages ?? []) {
+    for (const pkg of connectionPackages.data?.packages ?? []) {
       const current = byName.get(pkg.connectionName) ?? {name: pkg.connectionName, status: 'not loaded', loaded: false};
       byName.set(pkg.connectionName, {...current, pkg});
     }
@@ -190,7 +185,7 @@ export function ConnectionsPage() {
       byName.set(runtime.name, {...current, status: runtime.status, error: runtime.error, loaded: true});
     }
     return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [gettingStarted.data, inspectContext.data]);
+  }, [connectionPackages.data, inspectContext.data]);
 
   useEffect(() => {
     if (!selectedName && connections.length > 0) {
@@ -202,7 +197,7 @@ export function ConnectionsPage() {
 
   const detail = useConnectionDetail(selectedName, refreshKey);
 
-  if (inspectContext.error && gettingStarted.error) {
+  if (inspectContext.error && connectionPackages.error) {
     return <AgentOffline page="connections" detail={inspectContext.error} />;
   }
 
@@ -212,7 +207,7 @@ export function ConnectionsPage() {
   const unhealthyCount = connections.filter((conn) => conn.loaded && conn.status !== 'connected').length;
 
   async function refreshAll(): Promise<void> {
-    gettingStarted.refetch();
+    connectionPackages.refetch();
     setRefreshKey((key) => key + 1);
   }
 
@@ -248,17 +243,6 @@ export function ConnectionsPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              setCreateOpen((open) => !open);
-              setCreateError(null);
-              setCreateResult(null);
-            }}
-            className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            New connection
-          </button>
-          <button
-            type="button"
             onClick={() => void refreshAll()}
             className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
           >
@@ -267,29 +251,6 @@ export function ConnectionsPage() {
           </button>
         </div>
       </header>
-
-      {createOpen && (
-        <NewConnectionPanel
-          saving={workspace.isLoading}
-          error={createError}
-          result={createResult}
-          onCancel={() => setCreateOpen(false)}
-          onCreate={async (input) => {
-            setCreateError(null);
-            setCreateResult(null);
-            const files = buildConnectionDrafts(input);
-            for (const file of files) {
-              await workspace.saveDraft(file.path, file.content);
-              const latestError = workspace.getLatestError();
-              if (latestError) {
-                setCreateError(latestError.message);
-                return;
-              }
-            }
-            setCreateResult({name: input.name, paths: files.map((file) => file.path)});
-          }}
-        />
-      )}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryCard icon={Plug} label="Connections" value={String(connections.length)} detail={`${String(loadedCount)} loaded at runtime`} />
@@ -312,7 +273,7 @@ export function ConnectionsPage() {
       <Panel title="Connection Inventory">
         <ConnectionInventory
           connections={connections}
-          loading={inspectContext.loading || gettingStarted.loading}
+          loading={inspectContext.loading || connectionPackages.loading}
           expandedName={expandedName}
           selectedName={selectedName}
           detail={detail}
@@ -539,7 +500,7 @@ function SurfaceList({endpoints, empty}: {endpoints: ConnectionEndpoint[]; empty
   );
 }
 
-function credentialSummary(pkg: GettingStartedPackage | undefined): string {
+function credentialSummary(pkg: ConnectionPackage | undefined): string {
   if (!pkg) return 'No credential metadata';
   if (pkg.envVars.length === 0) return 'No secrets required';
   const setCount = pkg.envVars.filter((envVar) => envVar.set).length;
@@ -568,114 +529,6 @@ function connectionTone(connection: ConnectionRow): 'success' | 'warning' | 'neu
   if (connection.loaded && connection.status === 'connected' && connection.pkg?.isFulfilled !== false) return 'success';
   if (!connection.loaded || connection.status !== 'connected' || connection.pkg?.isFulfilled === false) return 'warning';
   return 'neutral';
-}
-
-interface NewConnectionInput {
-  name: string;
-  baseUrl: string;
-  testPath: string;
-  authEnvVar: string;
-}
-
-function normalizeConnectionName(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-function normalizeEnvName(value: string): string {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
-}
-
-function buildConnectionDrafts(input: NewConnectionInput): Array<{path: string; content: string}> {
-  const envVar = normalizeEnvName(input.authEnvVar);
-  const spec = {
-    protocol: 'rest',
-    baseUrl: input.baseUrl.trim(),
-    format: 'rest',
-    ...(input.testPath.trim() ? {testPath: input.testPath.trim()} : {}),
-    ...(envVar
-      ? {
-          auth: {
-            type: 'bearer',
-            token: `env:${envVar}`,
-            header: 'Authorization',
-            prefix: 'Bearer',
-          },
-        }
-      : {}),
-  };
-  const root = `connections/${input.name}`;
-  return [
-    {path: `${root}/spec.json`, content: `${JSON.stringify(spec, null, 2)}\n`},
-    {path: `${root}/access.json`, content: `${JSON.stringify({endpoints: {}}, null, 2)}\n`},
-    {path: `${root}/surface.md`, content: `# ${input.name}\n\nAdd curated endpoints here after confirming the API surface.\n`},
-    {path: `${root}/rules.md`, content: `# ${input.name} rules\n\n- Keep destructive operations behind confirmation.\n`},
-  ];
-}
-
-function NewConnectionPanel({
-  saving,
-  error,
-  result,
-  onCancel,
-  onCreate,
-}: {
-  saving: boolean;
-  error: string | null;
-  result: {name: string; paths: string[]} | null;
-  onCancel: () => void;
-  onCreate: (input: NewConnectionInput) => Promise<void>;
-}) {
-  const [nameDraft, setNameDraft] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [testPath, setTestPath] = useState('/health');
-  const [authEnvVar, setAuthEnvVar] = useState('');
-  const name = normalizeConnectionName(nameDraft);
-  const canCreate = name.length > 0 && baseUrl.trim().length > 0 && !saving;
-
-  return (
-    <section className="rounded-lg border border-border bg-card p-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">New REST connection</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Creates connection files as drafts. Publish the draft when the spec is ready.</p>
-        </div>
-        <button type="button" onClick={onCancel} className="text-xs text-muted-foreground hover:text-foreground">Close</button>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <ConnectionInput label="Name" value={nameDraft} onChange={setNameDraft} placeholder="booking-api" hint={name ? `connections/${name}` : undefined} />
-        <ConnectionInput label="Base URL" value={baseUrl} onChange={setBaseUrl} placeholder="https://api.example.com" />
-        <ConnectionInput label="Health path" value={testPath} onChange={setTestPath} placeholder="/health" />
-        <ConnectionInput label="Bearer token env var" value={authEnvVar} onChange={setAuthEnvVar} placeholder="BOOKING_API_TOKEN" />
-      </div>
-
-      {error && <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</div>}
-      {result && <div className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">Created {result.paths.length} draft files for <span className="font-mono">{result.name}</span>.</div>}
-
-      <div className="mt-4 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground">Cancel</button>
-        <button type="button" disabled={!canCreate} onClick={() => void onCreate({name, baseUrl, testPath, authEnvVar})} className="rounded-md bg-primary-solid px-3 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50">
-          {saving ? 'Creating...' : 'Create drafts'}
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function ConnectionInput({label, value, onChange, placeholder, hint}: {label: string; value: string; onChange: (value: string) => void; placeholder: string; hint?: string}) {
-  return (
-    <label className="space-y-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <input
-        type="text"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-      />
-      {hint && <span className="font-mono text-[11px] text-muted-foreground">{hint}</span>}
-    </label>
-  );
 }
 
 function SummaryCard({icon: Icon, label, value, detail}: {icon: LucideIcon; label: string; value: string; detail: string}) {

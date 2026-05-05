@@ -23,7 +23,7 @@ import {randomUUID} from 'node:crypto';
 
 /**
  * Walk upward from a file path until we find the directory containing
- * package.json. Used by /api/getting-started to map a connection's
+ * package.json. Used by /api/connection-packages to map a connection's
  * `location` (which points at `…/connections/<name>/`) back to its npm
  * package root so we can read its amodal block.
  */
@@ -565,7 +565,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     createdAt: number;
   };
   const pendingOauth = new Map<string, PendingOauth>();
-  const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const CONNECTION_PACKAGES_API_PATH = '/api/connection-packages';
 
   function reapExpiredOauthStates(): void {
     const now = Date.now();
@@ -953,19 +954,14 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
   // ---- end OAuth broker --------------------------------------------------
 
-  // Getting Started endpoint — returns per-package auth requirements
-  // (displayName/description/icon/envVars) plus the template manifest if
-  // the repo has a template.json. The studio's Getting Started tab
-  // renders either the slot view (when template is present) or a flat
-  // package list (when not).
-  app.get('/api/getting-started', (_req, res) => {
+  // Connection package metadata for each loaded runtime connection.
+  app.get(CONNECTION_PACKAGES_API_PATH, (_req, res) => {
     void (async () => {
       const bundleData = getBundle();
       const repoPath = config.repoPath;
 
       // Walk each loaded connection's `location` upward to find the
-      // containing package.json, read its amodal block. Cache by package
-      // name so multi-connection packages only get read once.
+      // containing package.json and read its amodal block.
       type OauthStatus = {
         appKey: string;
         available: boolean;
@@ -1014,7 +1010,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
             };
           };
           if (!pkg.name || !pkg.amodal) continue;
-          if (packageMap.has(pkg.name)) continue;
+          if (packageMap.has(conn.name)) continue;
           const envVarsRaw = pkg.amodal.auth?.envVars ?? {};
           const envVars: EnvVarStatus[] = Object.entries(envVarsRaw).map(([name, description]) => ({
             name,
@@ -1036,7 +1032,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
               ? { appKey: oauthMeta.appKey, available: true }
               : { appKey: oauthMeta.appKey, available: false, reason: 'no_credentials' };
           }
-          packageMap.set(pkg.name, {
+          packageMap.set(conn.name, {
             connectionName: conn.name,
             name: pkg.name,
             displayName: pkg.amodal.displayName ?? pkg.amodal.name ?? pkg.name,

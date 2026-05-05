@@ -12,6 +12,8 @@ import {createLocalServer} from './local-server.js';
 
 // Use a real temp dir for the test repo path.
 const TEST_REPO = mkdtempSync(join(tmpdir(), 'amodal-server-test-'));
+const CONNECTION_PACKAGES_API_PATH = '/api/connection-packages';
+const REMOVED_GETTING_STARTED_API_PATH = '/api/getting-started';
 afterAll(() => { rmSync(TEST_REPO, {recursive: true, force: true}); });
 
 // Use vi.hoisted so mocks survive vi.restoreAllMocks() from global test-setup
@@ -212,7 +214,7 @@ describe('createLocalServer', () => {
     });
 
     const {default: request} = await import('supertest');
-    const started = await request(server.app).get('/api/getting-started');
+    const started = await request(server.app).get(CONNECTION_PACKAGES_API_PATH);
     expect(started.status).toBe(200);
     expect(started.body.packages).toEqual([
       expect.objectContaining({
@@ -275,7 +277,7 @@ describe('createLocalServer', () => {
     });
 
     const {default: request} = await import('supertest');
-    const started = await request(server.app).get('/api/getting-started');
+    const started = await request(server.app).get(CONNECTION_PACKAGES_API_PATH);
 
     expect(started.status).toBe(200);
     expect(started.body.packages).toEqual([
@@ -286,6 +288,18 @@ describe('createLocalServer', () => {
         isFulfilled: true,
       }),
     ]);
+  });
+
+  it('does not expose the old getting-started metadata route', async () => {
+    const server = await createLocalServer({
+      repoPath: TEST_REPO,
+      port: 0,
+    });
+
+    const {default: request} = await import('supertest');
+    const res = await request(server.app).get(REMOVED_GETTING_STARTED_API_PATH);
+
+    expect(res.status).toBe(404);
   });
 
   it('GET /api/me returns ops by default in amodal dev', async () => {

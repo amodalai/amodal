@@ -5,10 +5,7 @@
  */
 
 /**
- * Confirm + warning modals for the "Finish setup" button. Phase E.6 of
- * the admin-setup build plan.
- *
- * Two modal shapes:
+ * Confirm and warning modals for the "Finish setup" button.
  *
  * - `<ConfirmCompletionModal>` — readiness check passed. Shows a
  *   short "Finish setup? Your agent will start running. You can edit

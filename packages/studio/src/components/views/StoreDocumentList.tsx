@@ -13,7 +13,7 @@
 import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStudioEvents } from '@/contexts/StudioEventsContext';
-import { apiStoreDocumentsPath, documentPath, STORES_PATH } from '@/lib/routes';
+import { apiStoreDocumentsPath, documentPathSegment } from '@/lib/routes';
 import { createBrowserLogger } from '@/lib/browser-logger';
 
 const log = createBrowserLogger('StoreDocumentList');
@@ -113,7 +113,7 @@ export function StoreDocumentList({
     <div>
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-        <Link to={STORES_PATH} className="hover:text-foreground transition-colors">
+        <Link to=".." className="hover:text-foreground transition-colors">
           Stores
         </Link>
         <span>/</span>
@@ -137,7 +137,7 @@ export function StoreDocumentList({
             return (
               <div
                 key={doc.key}
-                onClick={() => void navigate(documentPath(storeName, doc.key))}
+                onClick={() => void navigate(documentPathSegment(doc.key))}
                 className="border border-border rounded-xl p-4 cursor-pointer hover:bg-muted transition-colors"
               >
                 <div className="flex items-start justify-between gap-3">

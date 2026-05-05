@@ -5,23 +5,15 @@
  */
 
 /**
- * Shared connection auth-form rendering — Phase H.5 of the
- * admin-setup build plan. Used by:
+ * Shared connection auth form for page and modal configuration flows.
  *
- *   - `<ConnectionConfigPage>` (power-user flow at
- *     `/agents/:id/connections/:packageName`)
- *   - `<ConnectionConfigModal>` (Phase H.4 — opened by
- *     `<StudioConnectionPanel>` from chat)
- *
- * Renders one of three layouts based on `auth.type`:
+ * Renders layouts based on `auth.type`:
  *   - `bearer` / `api-key` — paste fields per envVar
  *   - `basic` — username + password split fields
  *   - everything else — generic per-envVar paste rows
  *
- * Plus an OAuth section (Connect button + scope preview) when
- * `amodal.oauth` is declared and credentials are set in env. The
- * page wraps this with surrounding chrome (back link, header,
- * footer); the modal wraps it with its own header/close button.
+ * OAuth connections also render a Connect button when `amodal.oauth`
+ * is declared and the local broker has client credentials.
  */
 
 import { useState } from 'react';

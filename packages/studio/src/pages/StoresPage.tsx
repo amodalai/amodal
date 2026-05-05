@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { Database } from 'lucide-react';
 import { AgentOffline } from '@/components/AgentOffline';
 import { studioApiUrl } from '@/lib/api';
-import { storePath } from '@/lib/routes';
+import { storePathSegment } from '@/lib/routes';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,7 +53,7 @@ export function StoresPage() {
         {stores.map((store) => (
           <Link
             key={store.store}
-            to={storePath(store.store)}
+            to={storePathSegment(store.store)}
             className="block p-4 bg-card border border-border rounded-lg hover:bg-muted transition-colors"
           >
             <div className="font-medium text-foreground">{store.store}</div>

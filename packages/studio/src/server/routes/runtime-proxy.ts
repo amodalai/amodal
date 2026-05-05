@@ -19,6 +19,8 @@ import { extractWildcard } from './route-utils.js';
 
 const PROXY_TIMEOUT_MS = 10_000;
 const LONG_PROXY_TIMEOUT_MS = 300_000; // evals, chat
+const STUDIO_RUNTIME_CONNECTION_PACKAGES_PATH = '/api/runtime/connection-packages';
+const RUNTIME_CONNECTION_PACKAGES_PATH = '/api/connection-packages';
 
 export const runtimeProxyRoutes = new Hono();
 
@@ -137,7 +139,7 @@ runtimeProxyRoutes.get('/api/runtime/files/*', (c) => {
 });
 runtimeProxyRoutes.get('/api/runtime/config', (c) => proxyGet(c, '/api/config'));
 runtimeProxyRoutes.get('/api/runtime/stats', (c) => proxyGet(c, '/api/stats'));
-runtimeProxyRoutes.get('/api/runtime/getting-started', (c) => proxyGet(c, '/api/getting-started'));
+runtimeProxyRoutes.get(STUDIO_RUNTIME_CONNECTION_PACKAGES_PATH, (c) => proxyGet(c, RUNTIME_CONNECTION_PACKAGES_PATH));
 runtimeProxyRoutes.get('/api/runtime/connections/:packageName', (c) => proxyGet(c, `/api/connections/${encodeURIComponent(c.req.param('packageName'))}`));
 runtimeProxyRoutes.get('/api/runtime/oauth/start', (c) => {
   const qs = new URL(c.req.url).search;

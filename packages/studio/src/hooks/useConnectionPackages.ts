@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { runtimeApiUrl } from '@/lib/api';
+import { RUNTIME_CONNECTION_PACKAGES_PATH } from '@/lib/routes';
 
 export interface EnvVarStatus {
   name: string;
@@ -21,7 +22,7 @@ export interface PackageOauthStatus {
   reason?: 'no_metadata' | 'no_credentials';
 }
 
-export interface GettingStartedPackage {
+export interface ConnectionPackage {
   connectionName: string;
   name: string;
   displayName: string;
@@ -49,37 +50,37 @@ export interface TemplateManifest {
   knowledge?: Array<{ id: string; label: string; description?: string }>;
 }
 
-export interface GettingStartedData {
+export interface ConnectionPackagesData {
   template: TemplateManifest | null;
-  packages: GettingStartedPackage[];
+  packages: ConnectionPackage[];
 }
 
-export interface GettingStartedResult {
-  data: GettingStartedData | null;
+export interface ConnectionPackagesResult {
+  data: ConnectionPackagesData | null;
   error: string | null;
   loading: boolean;
   refetch: () => void;
 }
 
 /**
- * Calls the runtime's `/api/getting-started` endpoint, which scans the
+ * Calls the runtime's `/api/connection-packages` endpoint, which scans the
  * agent's loaded connection packages, projects each one's amodal block
  * (displayName/description/icon/envVars/fulfilled?), and bundles the
  * optional template.json from the agent repo.
  */
-export function useGettingStarted(): GettingStartedResult {
-  const [data, setData] = useState<GettingStartedData | null>(null);
+export function useConnectionPackages(): ConnectionPackagesResult {
+  const [data, setData] = useState<ConnectionPackagesData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     setData(null);
     setError(null);
-    fetch(runtimeApiUrl('/api/getting-started'), { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl(RUNTIME_CONNECTION_PACKAGES_PATH), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
         if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
-        return r.json() as Promise<GettingStartedData>;
+        return r.json() as Promise<ConnectionPackagesData>;
       })
       .then(setData)
       .catch((err: unknown) => {

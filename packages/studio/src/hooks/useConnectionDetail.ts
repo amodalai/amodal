@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { runtimeApiUrl } from '@/lib/api';
-import type { EnvVarStatus } from './useGettingStarted';
+import type { EnvVarStatus } from './useConnectionPackages';
 
 // Studio backend endpoint that reads node_modules/<pkg>/package.json
 // directly. Works during setup before the runtime has booted (i.e.
