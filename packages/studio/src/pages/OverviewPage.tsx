@@ -229,7 +229,10 @@ function formatOverviewTrend(delta: number): string {
 function MiniCostBars({buckets}: {buckets: Array<{key: string; label: string; cost: number; sessions: number}>}) {
   const maxCost = Math.max(...buckets.map((bucket) => bucket.cost), 0);
   return (
-    <div className="mt-4 grid h-24 grid-cols-14 items-end gap-1.5">
+    <div
+      className="mt-4 grid h-24 items-end gap-1.5"
+      style={{gridTemplateColumns: `repeat(${String(buckets.length)}, minmax(0, 1fr))`}}
+    >
       {buckets.map((bucket) => {
         const height = maxCost <= 0 ? 2 : percentOf(bucket.cost, maxCost);
         return (

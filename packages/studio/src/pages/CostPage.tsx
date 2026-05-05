@@ -215,7 +215,10 @@ function formatTrend(delta: number | null): string {
 function CostBars({buckets}: {buckets: CostBucket[]}) {
   const maxCost = Math.max(...buckets.map((bucket) => bucket.cost), 0);
   return (
-    <div className="mt-5 grid h-44 grid-cols-14 items-end gap-2">
+    <div
+      className="mt-5 grid h-44 items-end gap-2"
+      style={{gridTemplateColumns: `repeat(${String(buckets.length)}, minmax(0, 1fr))`}}
+    >
       {buckets.map((bucket) => {
         const height = maxCost <= 0 ? 2 : Math.max(2, Math.round((bucket.cost / maxCost) * 100));
         return (
