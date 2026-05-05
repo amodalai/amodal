@@ -1,5 +1,26 @@
 # @amodalai/studio
 
+## 0.3.52
+
+### Patch Changes
+
+- 2b49403: Add a Cost & Usage page with estimated spend by model, scope, and session.
+- ce306ff: Add `setStudioDbProvider` and `disableEventBridge` hooks for serverless deployments.
+
+  External deployments (e.g. cloud-studio on Vercel) can now inject a custom Drizzle db (e.g. neon-http-backed) instead of the default pg.Pool, and opt out of the Postgres LISTEN/NOTIFY real-time bridge in favor of their own pipeline (e.g. Pusher). `getStudioDb()` now uses the injected provider when present and falls back to the legacy pg.Pool + `ensureSchema` path otherwise. Routes that previously called `getDb()` directly (`admin-chat`, `repo-state`) now go through `getStudioDb()` so they also benefit from injection.
+
+- b0e3a05: Refine Studio session list styling with a contrasted sidebar surface, page description copy, softer table chrome, compact model metadata, and subtler sortable headers.
+- b0e3a05: Improve Studio session replay with clickable session rows, richer transcript rendering, session metadata, estimated cost, and persisted tool result details.
+- b0e3a05: Reuse the React widget chat renderer for Studio session replay, show persisted tool results in widget tool-call details, and make Studio session table headers sortable.
+- Updated dependencies [2b49403]
+- Updated dependencies [b0e3a05]
+- Updated dependencies [b0e3a05]
+  - @amodalai/runtime@0.3.52
+  - @amodalai/core@0.3.52
+  - @amodalai/react@0.3.52
+  - @amodalai/types@0.3.52
+  - @amodalai/db@0.3.52
+
 ## 0.3.51
 
 ### Patch Changes

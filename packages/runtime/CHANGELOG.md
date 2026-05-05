@@ -1,5 +1,16 @@
 # @amodalai/runtime
 
+## 0.3.52
+
+### Patch Changes
+
+- 2b49403: Add a Cost & Usage page with estimated spend by model, scope, and session.
+- b0e3a05: Improve Studio session replay with clickable session rows, richer transcript rendering, session metadata, estimated cost, and persisted tool result details.
+- Updated dependencies [2b49403]
+  - @amodalai/core@0.3.52
+  - @amodalai/types@0.3.52
+  - @amodalai/db@0.3.52
+
 ## 0.3.51
 
 ### Patch Changes
