@@ -112,7 +112,7 @@ export function OverviewPage() {
               />
               <AttentionRow
                 label="Unpriced sessions"
-                value={sessionCostSummary ? String(sessionCostSummary.unknownCostSessions) : '0'}
+                value={sessionCostSummary && sessionCostSummary.unknownCostSessions > 0 ? String(sessionCostSummary.unknownCostSessions) : 'All priced'}
               />
               <AttentionRow
                 label="Connection gaps"
@@ -237,7 +237,7 @@ function MiniCostBars({buckets}: {buckets: Array<{key: string; label: string; co
         const height = maxCost <= 0 ? 2 : percentOf(bucket.cost, maxCost);
         return (
           <div key={bucket.key} className="group relative flex h-full items-end">
-            <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-40 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-left text-xs shadow-lg group-hover:block">
+            <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-40 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-left text-xs text-card-foreground shadow-lg group-hover:block">
               <div className="font-medium text-foreground">{bucket.label}</div>
               <div className="mt-1 font-mono text-foreground">{formatPrice(bucket.cost)}</div>
               <div className="mt-1 text-muted-foreground">

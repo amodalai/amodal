@@ -82,7 +82,7 @@ export function CostPage() {
             <p className="mt-1 text-xs text-muted-foreground">Daily estimated model spend from session activity.</p>
           </div>
           <div className="text-right text-xs text-muted-foreground">
-            Last 14 days · {summary.unknownCostSessions} sessions missing pricing
+            Last 14 days{summary.unknownCostSessions > 0 ? ` · ${String(summary.unknownCostSessions)} sessions missing pricing` : ''}
           </div>
         </div>
         <CostBars buckets={buckets} />
@@ -223,7 +223,7 @@ function CostBars({buckets}: {buckets: CostBucket[]}) {
         const height = maxCost <= 0 ? 2 : Math.max(2, Math.round((bucket.cost / maxCost) * 100));
         return (
           <div key={bucket.key} className="group relative flex h-full min-w-0 flex-col justify-end gap-2">
-            <div className="pointer-events-none absolute bottom-8 left-1/2 z-10 hidden w-40 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-left text-xs shadow-lg group-hover:block">
+            <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-40 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-left text-xs text-card-foreground shadow-lg group-hover:block">
               <div className="font-medium text-foreground">{bucket.label}</div>
               <div className="mt-1 font-mono text-foreground">{formatPrice(bucket.cost)}</div>
               <div className="mt-1 text-muted-foreground">
