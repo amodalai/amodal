@@ -37,14 +37,17 @@ export interface EvalSuiteFromRuntime extends ParsedEval {
 export function useEvalSuites(): {
   suites: EvalSuiteFromRuntime[];
   loading: boolean;
+  error: string | null;
   refresh: () => void;
 } {
   const { agentId } = useStudioConfig();
   const [suites, setSuites] = useState<EvalSuiteFromRuntime[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchSuites = useCallback(() => {
     setLoading(true);
+    setError(null);
 
     fetch(runtimeApiUrl('/api/files'), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
@@ -95,7 +98,8 @@ export function useEvalSuites(): {
           setLoading(false);
         });
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err));
         setSuites([]);
         setLoading(false);
       });
@@ -105,5 +109,5 @@ export function useEvalSuites(): {
     fetchSuites();
   }, [fetchSuites]);
 
-  return { suites, loading, refresh: fetchSuites };
+  return { suites, loading, error, refresh: fetchSuites };
 }

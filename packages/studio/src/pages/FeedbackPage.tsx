@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { studioApiUrl } from '@/lib/api';
+import { AgentOffline } from '@/components/AgentOffline';
 import { FeedbackView } from '@/components/views/FeedbackView';
 
 // ---------------------------------------------------------------------------
@@ -38,9 +39,11 @@ export function FeedbackPage() {
   const [entries, setEntries] = useState<FeedbackEntry[]>([]);
   const [summary, setSummary] = useState<FeedbackSummary>({ up: 0, down: 0, total: 0 });
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
     const encodedId = encodeURIComponent(agentId);
+    setError(null);
     Promise.all([
       fetch(studioApiUrl(`/api/feedback?agentId=${encodedId}`), {
         signal: AbortSignal.timeout(5_000),
@@ -61,8 +64,8 @@ export function FeedbackPage() {
         setEntries(entriesData.entries);
         setSummary(summaryData);
       })
-      .catch(() => {
-        // Leave defaults
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => setLoaded(true));
   }, [agentId]);
@@ -72,6 +75,7 @@ export function FeedbackPage() {
   }, [fetchData]);
 
   if (!loaded) return null;
+  if (error) return <AgentOffline page="feedback" detail={error} />;
 
   return (
     <div>

@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { studioApiUrl } from '@/lib/api';
+import { AgentOffline } from '@/components/AgentOffline';
 import { useEvalSuites } from '@/hooks/useEvalSuites';
 import {
   EvalCard,
@@ -15,7 +16,7 @@ import {
 } from '@/components/views/EvalCard';
 
 export function EvalsPage() {
-  const { suites: rawSuites, loading } = useEvalSuites();
+  const { suites: rawSuites, loading, error } = useEvalSuites();
   const [models, setModels] = useState<AvailableModel[]>([]);
   const [historyMap, setHistoryMap] = useState<Record<string, EvalHistoryEntry[]>>({});
 
@@ -67,6 +68,7 @@ export function EvalsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- suites derived from rawSuites, using rawSuites as dep
   }, [rawSuites]);
 
+  if (error) return <AgentOffline page="evals" detail={error} />;
   if (loading) return null;
 
   return (
