@@ -1,5 +1,16 @@
 # @amodalai/studio
 
+## 0.3.51
+
+### Patch Changes
+
+- 427bd23: Fix Skip-onboarding button — navigate back to the agent root after `init-repo` succeeds so IndexPage's `useRepoState` probe re-fires and routes to OverviewPage. Previously the button posted `init-repo` successfully but left the user stranded on `/setup` because the polling that would have swapped to OverviewPage doesn't run from that route post-v4.
+  - @amodalai/types@0.3.51
+  - @amodalai/core@0.3.51
+  - @amodalai/runtime@0.3.51
+  - @amodalai/react@0.3.51
+  - @amodalai/db@0.3.51
+
 ## 0.3.50
 
 ### Patch Changes
