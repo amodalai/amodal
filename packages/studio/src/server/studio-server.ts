@@ -189,8 +189,30 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
-main().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  logger.error('studio_server_fatal', { error: message });
-  process.exit(1);
-});
+// Only run the local-dev server when this file is invoked directly
+// (e.g. `node dist-server/studio-server.js`). When imported as a library
+// — for instance by cloud-studio on Vercel — `main()` must not auto-run,
+// because:
+//   1. it tries to bind a TCP port (no-op or noisy in serverless);
+//   2. it calls `initEventBridge()` which opens a Postgres LISTEN, which
+//      can't be cancelled by `disableEventBridge()` from a downstream
+//      module since LISTEN starts before that module's body runs;
+//   3. on failure it `process.exit(1)`s, killing the function.
+const isMain = (() => {
+  try {
+    const entry = process.argv[1];
+    if (!entry) return false;
+    const entryUrl = new URL(`file://${entry}`).href;
+    return import.meta.url === entryUrl;
+  } catch {
+    return false;
+  }
+})();
+
+if (isMain) {
+  main().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error('studio_server_fatal', { error: message });
+    process.exit(1);
+  });
+}
