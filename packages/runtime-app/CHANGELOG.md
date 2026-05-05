@@ -1,5 +1,12 @@
 # @amodalai/runtime-app
 
+## 0.3.53
+
+### Patch Changes
+
+- @amodalai/types@0.3.53
+- @amodalai/react@0.3.53
+
 ## 0.3.52
 
 ### Patch Changes
