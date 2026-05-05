@@ -16,6 +16,13 @@ import { studioApiUrl } from './api';
 // ---------------------------------------------------------------------------
 
 export const STORES_PATH = '/stores';
+export const COST_PATH = 'cost';
+export const SESSIONS_PATH = 'sessions';
+export const GETTING_STARTED_PATH = 'getting-started';
+
+export function sessionPath(sessionId: string): string {
+  return `${SESSIONS_PATH}/${encodeURIComponent(sessionId)}`;
+}
 
 export function storePath(storeName: string): string {
   return `${STORES_PATH}/${encodeURIComponent(storeName)}`;
