@@ -4,7 +4,7 @@ description: Connections give the agent API access, documentation, and security 
 
 # Connections
 
-Each connection is a directory in `connections/` containing a spec, access rules, and optional documentation. Pre-built plugins come with everything maintained — you just provide credentials.
+Each connection gives the runtime enough structure to make API calls and gives the model enough context to choose the right calls. You can define a connection locally in `connections/`, or install a package and list it in `amodal.json#packages`.
 
 ```bash
 amodal pkg connect slack          # install a plugin
@@ -15,12 +15,36 @@ amodal pkg sync --from <url>      # sync from OpenAPI/GraphQL
 
 ```
 connections/my-api/
-├── spec.json       ← API source, auth, entities, sync config
-├── access.json     ← field restrictions, action tiers, row scoping
-├── surface.md      ← (optional) endpoint documentation
+├── spec.json       ← protocol, base URL, auth, health check
+├── access.json     ← endpoint permissions, confirmations, field restrictions
+├── surface.md      ← endpoint capabilities and model-facing usage notes
 ├── entities.md     ← (optional) entity definitions
 └── rules.md        ← (optional) business rules
 ```
+
+For a local REST connection, `spec.json` and `surface.md` are the important files:
+
+- `spec.json` is the machine contract. The runtime uses it to build `ctx.request()` and the `request` tool.
+- `surface.md` is the model contract. It tells the LLM which endpoints exist and when to use them.
+- `access.json` is optional for simple APIs. When present, it tightens permissions and confirmation behavior.
+- `entities.md` and `rules.md` are optional context for complex APIs.
+
+Installed packages can provide all of these files. A local `connections/<name>/surface.md`, `access.json`, `entities.md`, or `rules.md` can customize a packaged connection while continuing to use the package's `spec.json`.
+
+## Installed Packages
+
+Runtime content packages are declared in `amodal.json#packages`:
+
+```json
+{
+  "packages": [
+    "@amodalai/connection-typefully",
+    "@amodalai/connection-devto"
+  ]
+}
+```
+
+The `packages` array is the source of truth for package content. Do not use `dependencies` in `amodal.json` to load agent packages.
 
 ## spec.json
 

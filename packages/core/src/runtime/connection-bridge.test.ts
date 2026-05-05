@@ -95,12 +95,12 @@ describe('buildConnectionsMap', () => {
     expect(auth[0]['value_template']).toBe('Token tok');
   });
 
-  it('configures api-key auth correctly', () => {
+  it('configures api_key auth correctly', () => {
     const connections = new Map([
       [
         'api',
         makeConnection('api', {
-          auth: {type: 'api-key', token: 'sk-123'},
+          auth: {type: 'api_key', token: 'sk-123'},
         }),
       ],
     ]);

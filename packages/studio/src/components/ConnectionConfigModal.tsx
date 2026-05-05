@@ -5,13 +5,7 @@
  */
 
 /**
- * In-chat Configure modal — Phase H.4 of the admin-setup build plan.
- *
- * Opened by `<StudioConnectionPanel>` when the user clicks Configure.
- * Fetches the package's auth metadata via `useConnectionDetail` and
- * renders the shared `<ConnectionConfigForm>` (Phase H.5) inside a
- * modal frame. On success — every required envVar set — the modal
- * dismisses itself and reports back to the panel via `onConfigured`.
+ * In-chat Configure modal for connection credentials.
  *
  * OAuth flow: when the user clicks Connect, the form opens a popup
  * to the runtime's authorize URL. The modal polls `popup.closed`

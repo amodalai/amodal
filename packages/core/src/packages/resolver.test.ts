@@ -54,6 +54,19 @@ async function setupConnectionPackage(
   }
 }
 
+async function setupAmodalPackageConnection(
+  repoPath: string,
+  npmName: string,
+  connName: string,
+  files: Record<string, string>,
+): Promise<void> {
+  const connDir = path.join(repoPath, 'amodal_packages', '.npm', 'node_modules', ...npmName.split('/'), 'connections', connName);
+  await fs.mkdir(connDir, {recursive: true});
+  for (const [fname, content] of Object.entries(files)) {
+    await fs.writeFile(path.join(connDir, fname), content);
+  }
+}
+
 /**
  * Set up a skill package in node_modules with nested layout:
  * node_modules/@scope/<name>/skills/<skillName>/SKILL.md
@@ -211,6 +224,70 @@ describe('resolveAllPackages', () => {
     expect(result.connections.size).toBe(2);
     expect(result.connections.has('salesforce')).toBe(true);
     expect(result.connections.has('stripe')).toBe(true);
+  });
+
+  it('resolves package declarations from amodal_packages', async () => {
+    await setupAmodalPackageConnection(tmpDir, '@amodalai/connection-typefully', 'typefully', {
+      'spec.json': makeSpec({
+        baseUrl: 'https://api.typefully.com/v2',
+        auth: {type: 'bearer', token: 'env:TYPEFULLY_API_KEY'},
+      }),
+      'access.json': makeAccess(),
+      'surface.md': '## Included\n\n### GET /me\nGet current user',
+    });
+
+    const result = await resolveAllPackages({
+      repoPath: tmpDir,
+      config: makeConfig({
+        packages: ['@amodalai/connection-typefully'],
+      }),
+    });
+
+    expect(result.connections.size).toBe(1);
+    expect(result.connections.get('typefully')?.spec.baseUrl).toBe('https://api.typefully.com/v2');
+  });
+
+  it('allows connection packages without access.json', async () => {
+    await setupConnectionPackage(tmpDir, '@amodalai/connection-devto', 'devto', {
+      'spec.json': makeSpec({
+        baseUrl: 'https://dev.to/api',
+        auth: {type: 'api_key', token: 'env:DEVTO_API_KEY', header: 'api-key'},
+      }),
+      'surface.md': '## Included\n\n### GET /articles\nList public articles',
+    });
+
+    const result = await resolveAllPackages({
+      repoPath: tmpDir,
+      config: makeConfig({packages: ['@amodalai/connection-devto']}),
+    });
+
+    expect(result.connections.get('devto')?.access.endpoints).toEqual({});
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('merges package specs with local surface overrides', async () => {
+    await setupConnectionPackage(tmpDir, '@amodalai/connection-typefully', 'typefully', {
+      'spec.json': makeSpec({baseUrl: 'https://api.typefully.com/v2'}),
+      'access.json': makeAccess(),
+      'surface.md': '## Included\n\n### GET /social-sets\nPackage description',
+    });
+    await writeRepoFiles(tmpDir, 'connections', 'typefully', {
+      'surface.md': '## Included\n\n### GET /social-sets\nLocal guidance\n\n### GET /social-sets/:id/queue\nLocal-only endpoint',
+    });
+
+    const result = await resolveAllPackages({
+      repoPath: tmpDir,
+      config: makeConfig({packages: ['@amodalai/connection-typefully']}),
+    });
+
+    const conn = result.connections.get('typefully');
+    expect(conn?.spec.baseUrl).toBe('https://api.typefully.com/v2');
+    expect(conn?.surface.map((endpoint) => `${endpoint.method} ${endpoint.path}`)).toEqual([
+      'GET /social-sets',
+      'GET /social-sets/:id/queue',
+    ]);
+    expect(conn?.surface[0].description).toContain('Local guidance');
+    expect(result.warnings).toEqual([]);
   });
 
   it('returns warnings array', async () => {

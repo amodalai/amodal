@@ -10,6 +10,23 @@ import { useTheme } from './ThemeProvider';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { AdminChat } from './views/AdminChat';
 import {
+  ARENA_PATH,
+  AUTOMATIONS_PATH,
+  CONNECTIONS_PATH,
+  COST_PATH,
+  EVALS_PATH,
+  FEEDBACK_PATH,
+  FILES_PATH,
+  MEMORY_PATH,
+  MODELS_PATH,
+  OVERVIEW_PATH,
+  PROMPT_PATH,
+  SECRETS_PATH,
+  SESSIONS_PATH,
+  STORES_PATH,
+  SYSTEM_PATH,
+} from '../lib/routes';
+import {
   LayoutDashboard,
   FileCode,
   Database,
@@ -20,22 +37,17 @@ import {
   KeyRound,
   Cpu,
   Settings,
+  Clock,
   Moon,
   Sun,
   ExternalLink,
-  Sparkles,
-  BookOpen,
   Plug,
-  FileText,
   PanelRightOpen,
   PanelRightClose,
   Brain,
   DollarSign,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useAgentInventory } from '../hooks/useAgentInventory';
-import { useViewConfig } from '../hooks/useViewConfig';
-import { CollapsibleSection } from './studio/CollapsibleSection';
 
 interface Props {
   children: React.ReactNode;
@@ -47,27 +59,28 @@ interface NavItem {
   readonly icon: LucideIcon;
 }
 
-interface NavItemDef extends NavItem {
-  /** When true, only render when the "View config" toggle is on. */
-  readonly powerUserOnly?: boolean;
-}
-
-const NAV_ITEMS: readonly NavItemDef[] = [
-  { href: '/getting-started', label: 'Getting started', icon: Sparkles, powerUserOnly: true },
-  { href: '/', label: 'Overview', icon: LayoutDashboard },
-  { href: '/cost', label: 'Cost', icon: DollarSign },
-  { href: '/files', label: 'Files', icon: FileCode },
-  { href: '/evals', label: 'Evals', icon: FlaskConical },
-  { href: '/arena', label: 'Arena', icon: FlaskConical },
-  { href: '/feedback', label: 'Feedback', icon: MessageSquare },
-  { href: '/memory', label: 'Memory', icon: Brain },
+const NAV_ITEMS: readonly NavItem[] = [
+  { href: OVERVIEW_PATH, label: 'Overview', icon: LayoutDashboard },
+  { href: SESSIONS_PATH, label: 'Sessions', icon: Clock },
+  { href: COST_PATH, label: 'Cost', icon: DollarSign },
+  { href: CONNECTIONS_PATH, label: 'Connections', icon: Plug },
+  { href: STORES_PATH, label: 'Stores', icon: Database },
+  { href: AUTOMATIONS_PATH, label: 'Automations', icon: Zap },
 ];
 
-const SECONDARY_NAV: readonly NavItem[] = [
-  { href: '/prompt', label: 'Prompt', icon: ScrollText },
-  { href: '/secrets', label: 'Secrets', icon: KeyRound },
-  { href: '/models', label: 'Models', icon: Cpu },
-  { href: '/system', label: 'System', icon: Settings },
+const WORKBENCH_NAV: readonly NavItem[] = [
+  { href: FILES_PATH, label: 'Files', icon: FileCode },
+  { href: EVALS_PATH, label: 'Evals', icon: FlaskConical },
+  { href: ARENA_PATH, label: 'Arena', icon: FlaskConical },
+  { href: FEEDBACK_PATH, label: 'Feedback', icon: MessageSquare },
+  { href: MEMORY_PATH, label: 'Memory', icon: Brain },
+];
+
+const CONFIG_NAV: readonly NavItem[] = [
+  { href: PROMPT_PATH, label: 'Prompt', icon: ScrollText },
+  { href: SECRETS_PATH, label: 'Secrets', icon: KeyRound },
+  { href: MODELS_PATH, label: 'Models', icon: Cpu },
+  { href: SYSTEM_PATH, label: 'System', icon: Settings },
 ];
 
 function SidebarNavLink({ item, active, to }: { item: NavItem; active: boolean; to: string }) {
@@ -87,43 +100,22 @@ function SidebarNavLink({ item, active, to }: { item: NavItem; active: boolean; 
   );
 }
 
-interface InventorySectionDef {
-  readonly key: 'skills' | 'knowledge' | 'connections' | 'stores' | 'automations' | 'pages';
-  readonly label: string;
-  readonly icon: LucideIcon;
-  readonly iconColor: string;
-  readonly pathPrefix: string;
-}
-
-const INVENTORY_SECTIONS: readonly InventorySectionDef[] = [
-  { key: 'skills', label: 'Skills', icon: Sparkles, iconColor: 'text-amber-500/60', pathPrefix: '/inspect/skills' },
-  { key: 'knowledge', label: 'Knowledge', icon: BookOpen, iconColor: 'text-blue-500/60', pathPrefix: '/inspect/knowledge' },
-  { key: 'connections', label: 'Connections', icon: Plug, iconColor: 'text-emerald-500/60', pathPrefix: '/inspect/connections' },
-  { key: 'stores', label: 'Stores', icon: Database, iconColor: 'text-violet-500/60', pathPrefix: '/stores' },
-  { key: 'automations', label: 'Automations', icon: Zap, iconColor: 'text-orange-500/60', pathPrefix: '/automations' },
-  { key: 'pages', label: 'Pages', icon: FileText, iconColor: 'text-cyan-500/60', pathPrefix: '/pages' },
-];
-
 export function StudioShell({ children }: Props) {
   const { pathname } = useLocation();
   const { agentId } = useParams();
   const { agentName, runtimeUrl } = useStudioConfig();
   const { dark, toggle } = useTheme();
-  const inventory = useAgentInventory();
-  const { viewConfig } = useViewConfig();
   const [chatOpen, setChatOpen] = useState(false);
-
-  const visibleNavItems = NAV_ITEMS.filter((item) => viewConfig || !item.powerUserOnly);
 
   const basePath = `/agents/${agentId ?? 'local'}`;
 
   /** Resolve a nav href to an agent-scoped absolute path */
   const agentPath = (href: string) =>
-    href === '/' ? basePath : `${basePath}${href}`;
+    href === OVERVIEW_PATH ? basePath : `${basePath}/${href}`;
 
   const isActive = (href: string) => {
     const full = agentPath(href);
-    return pathname === full || (href !== '/' && pathname.startsWith(full));
+    return pathname === full || (href !== OVERVIEW_PATH && pathname.startsWith(full));
   };
 
   return (
@@ -146,52 +138,23 @@ export function StudioShell({ children }: Props) {
         {/* Primary nav */}
         <nav className="flex-1 py-2 overflow-y-auto">
           <div className="px-2 space-y-0.5">
-            {visibleNavItems.map((item) => (
+            {NAV_ITEMS.map((item) => (
               <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} to={agentPath(item.href)} />
             ))}
           </div>
 
-          {/* Agent inventory sections */}
-          {!inventory.loading && INVENTORY_SECTIONS.some((s) => inventory[s.key].length > 0) && (
-            <>
-              <div className="my-3 mx-4 border-t border-border" />
-              <div className="px-2 space-y-0.5">
-                {INVENTORY_SECTIONS.map((section) => {
-                  const items = inventory[section.key];
-                  if (items.length === 0) return null;
-                  return (
-                    <CollapsibleSection
-                      key={section.key}
-                      label={section.label}
-                      icon={section.icon}
-                      iconColor={section.iconColor}
-                      count={items.length}
-                    >
-                      {items.map((name) => (
-                        <Link
-                          key={name}
-                          to={agentPath(`${section.pathPrefix}/${name}`)}
-                          className={`flex items-center gap-2 rounded-md px-3 py-1 text-xs transition-colors ${
-                            pathname === agentPath(`${section.pathPrefix}/${name}`)
-                              ? 'bg-sidebar-active text-foreground font-medium shadow-sm ring-1 ring-border/70'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-active/70'
-                          }`}
-                        >
-                          <section.icon className={`w-3 h-3 flex-shrink-0 ${section.iconColor}`} />
-                          {name}
-                        </Link>
-                      ))}
-                    </CollapsibleSection>
-                  );
-                })}
-              </div>
-            </>
-          )}
+          <div className="my-3 mx-4 border-t border-border" />
+
+          <div className="px-2 space-y-0.5">
+            {WORKBENCH_NAV.map((item) => (
+              <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} to={agentPath(item.href)} />
+            ))}
+          </div>
 
           <div className="my-3 mx-4 border-t border-border" />
 
           <div className="px-2 space-y-0.5">
-            {SECONDARY_NAV.map((item) => (
+            {CONFIG_NAV.map((item) => (
               <SidebarNavLink key={item.href} item={item} active={isActive(item.href)} to={agentPath(item.href)} />
             ))}
           </div>

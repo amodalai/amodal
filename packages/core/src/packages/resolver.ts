@@ -18,6 +18,7 @@ import type {LoadedTool} from '../repo/tool-types.js';
 import {loadTools} from '../repo/tool-loader.js';
 import type {AmodalConfig} from '../repo/config-schema.js';
 import {buildSubthingFilter, normalizePackageEntry} from '../repo/config-schema.js';
+import {mergeAccessJson, mergeSurface} from './merge-engine.js';
 
 /**
  * The result of resolving all installed packages + local repo content.
@@ -92,8 +93,16 @@ async function listFiles(dirPath: string, ext?: string): Promise<string[]> {
  * Resolve the directory for an npm package from node_modules.
  * Handles both scoped (@scope/name) and unscoped packages.
  */
-function resolvePackageDir(repoPath: string, npmName: string): string {
-  return path.join(repoPath, 'node_modules', ...npmName.split('/'));
+async function resolvePackageDir(repoPath: string, npmName: string): Promise<string | null> {
+  const segments = npmName.split('/');
+  const candidates = [
+    path.join(repoPath, 'node_modules', ...segments),
+    path.join(repoPath, 'amodal_packages', '.npm', 'node_modules', ...segments),
+  ];
+  for (const candidate of candidates) {
+    if (await dirExists(candidate)) return candidate;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,32 +123,69 @@ async function loadLocalConnections(
     const connPath = path.join(connDir, name);
     const specJson = await readOptionalFile(path.join(connPath, 'spec.json'));
     if (!specJson) {
+      const hasOverrideFile = await readOptionalFile(path.join(connPath, 'surface.md'))
+        ?? await readOptionalFile(path.join(connPath, 'access.json'))
+        ?? await readOptionalFile(path.join(connPath, 'entities.md'))
+        ?? await readOptionalFile(path.join(connPath, 'rules.md'));
+      if (hasOverrideFile) continue;
       warnings.push(`Connection ${name} missing spec.json in ${dir}`);
       continue;
     }
 
-    let isMcp = false;
-    try {
-      const parsed: unknown = JSON.parse(specJson);
-      if (parsed && typeof parsed === 'object' && 'protocol' in parsed) {
-         
-        isMcp = (parsed as Record<string, unknown>)['protocol'] === 'mcp';
-      }
-    } catch {
-      // Will fail properly in parseConnection
-    }
-
     const accessJson = await readOptionalFile(path.join(connPath, 'access.json'));
-    if (!isMcp && !accessJson) {
-      warnings.push(`Connection ${name} missing access.json in ${dir}`);
-      continue;
-    }
-
     const surfaceMd = await readOptionalFile(path.join(connPath, 'surface.md')) ?? undefined;
     const entitiesMd = await readOptionalFile(path.join(connPath, 'entities.md')) ?? undefined;
     const rulesMd = await readOptionalFile(path.join(connPath, 'rules.md')) ?? undefined;
     try {
       const conn = parseConnection(name, {specJson, accessJson: accessJson ?? '{"endpoints":{}}', surfaceMd, entitiesMd, rulesMd}, connPath);
+      existing.set(name, conn);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Failed to parse connection ${name}: ${msg}`);
+    }
+  }
+}
+
+async function loadPackageConnections(
+  pkgDir: string,
+  repoPath: string,
+  existing: Map<string, LoadedConnection>,
+  warnings: string[],
+  accept?: (name: string) => boolean,
+): Promise<void> {
+  const connDir = path.join(pkgDir, 'connections');
+  const subdirs = await listSubdirs(connDir);
+  for (const name of subdirs) {
+    if (accept && !accept(name)) continue;
+    if (existing.has(name)) continue;
+
+    const packageConnPath = path.join(connDir, name);
+    const localConnPath = path.join(repoPath, 'connections', name);
+    const packageSpecJson = await readOptionalFile(path.join(packageConnPath, 'spec.json'));
+    if (!packageSpecJson) {
+      warnings.push(`Connection ${name} missing spec.json in ${pkgDir}`);
+      continue;
+    }
+
+    const packageAccessJson = await readOptionalFile(path.join(packageConnPath, 'access.json'));
+    const localAccessJson = await readOptionalFile(path.join(localConnPath, 'access.json'));
+    const packageSurfaceMd = await readOptionalFile(path.join(packageConnPath, 'surface.md')) ?? undefined;
+    const localSurfaceMd = await readOptionalFile(path.join(localConnPath, 'surface.md')) ?? undefined;
+    const surfaceMd = packageSurfaceMd && localSurfaceMd
+      ? mergeSurface(packageSurfaceMd, localSurfaceMd)
+      : localSurfaceMd ?? packageSurfaceMd;
+    const entitiesMd = await readOptionalFile(path.join(localConnPath, 'entities.md'))
+      ?? await readOptionalFile(path.join(packageConnPath, 'entities.md'))
+      ?? undefined;
+    const rulesMd = await readOptionalFile(path.join(localConnPath, 'rules.md'))
+      ?? await readOptionalFile(path.join(packageConnPath, 'rules.md'))
+      ?? undefined;
+    const accessJson = packageAccessJson && localAccessJson
+      ? JSON.stringify(mergeAccessJson(packageAccessJson, localAccessJson))
+      : localAccessJson ?? packageAccessJson ?? '{"endpoints":{}}';
+
+    try {
+      const conn = parseConnection(name, {specJson: packageSpecJson, accessJson, surfaceMd, entitiesMd, rulesMd}, packageConnPath);
       existing.set(name, conn);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -324,8 +370,8 @@ export async function resolveAllPackages(options: {
   if (declaredPackages && declaredPackages.length > 0) {
     for (const rawEntry of declaredPackages) {
       const {package: npmName, use} = normalizePackageEntry(rawEntry);
-      const pkgDir = resolvePackageDir(repoPath, npmName);
-      if (!(await dirExists(pkgDir))) {
+      const pkgDir = await resolvePackageDir(repoPath, npmName);
+      if (!pkgDir) {
         warnings.push(`Package "${npmName}" declared in amodal.json but not installed. Run: npm install`);
         continue;
       }
@@ -338,7 +384,7 @@ export async function resolveAllPackages(options: {
       const acceptChannel = buildSubthingFilter(use, 'channels');
 
       // Scan package for all content types — same loaders as local repo
-      await loadLocalConnections(pkgDir, connections, warnings, acceptConn);
+      await loadPackageConnections(pkgDir, repoPath, connections, warnings, acceptConn);
       await loadLocalSkills(pkgDir, skillNames, skills, warnings, acceptSkill);
       await loadLocalAutomations(pkgDir, automationNames, automations, warnings, acceptAuto);
       await loadLocalKnowledge(pkgDir, knowledgeNames, knowledge, warnings, acceptKb);

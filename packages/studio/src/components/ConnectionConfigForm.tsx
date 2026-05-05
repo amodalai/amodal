@@ -5,23 +5,15 @@
  */
 
 /**
- * Shared connection auth-form rendering — Phase H.5 of the
- * admin-setup build plan. Used by:
+ * Shared connection auth form for page and modal configuration flows.
  *
- *   - `<ConnectionConfigPage>` (power-user flow at
- *     `/agents/:id/connections/:packageName`)
- *   - `<ConnectionConfigModal>` (Phase H.4 — opened by
- *     `<StudioConnectionPanel>` from chat)
- *
- * Renders one of three layouts based on `auth.type`:
+ * Renders layouts based on `auth.type`:
  *   - `bearer` / `api-key` — paste fields per envVar
  *   - `basic` — username + password split fields
  *   - everything else — generic per-envVar paste rows
  *
- * Plus an OAuth section (Connect button + scope preview) when
- * `amodal.oauth` is declared and credentials are set in env. The
- * page wraps this with surrounding chrome (back link, header,
- * footer); the modal wraps it with its own header/close button.
+ * OAuth connections also render a Connect button when `amodal.oauth`
+ * is declared and the local broker has client credentials.
  */
 
 import { useState } from 'react';
@@ -266,16 +258,17 @@ function PasteSection({
       <div className="space-y-3">
         {envVars.map((v) => {
           const draft = drafts[v.name] ?? '';
+          const editing = !v.set || Object.hasOwn(drafts, v.name);
           return (
             <div key={v.name}>
-              <label className="block text-xs font-mono mb-1">
-                {v.name}
+              <div className="mb-1 flex items-center gap-2">
+                <label className="block font-mono text-xs">{v.name}</label>
                 {v.set && (
-                  <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-sans">✓ Set</span>
+                  <span className="font-sans text-xs text-emerald-600 dark:text-emerald-400">Set</span>
                 )}
-              </label>
+              </div>
               <p className="text-[11px] text-muted-foreground mb-1.5">{v.description}</p>
-              {!v.set && (
+              {editing ? (
                 <div className="flex gap-2">
                   <input
                     type="password"
@@ -292,9 +285,17 @@ function PasteSection({
                     disabled={!draft.trim() || savingName === v.name}
                     className="px-3 py-2 rounded bg-primary-solid text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {savingName === v.name ? 'Saving…' : 'Save'}
+                    {savingName === v.name ? 'Saving...' : v.set ? 'Replace' : 'Save'}
                   </button>
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setDrafts((cur) => ({ ...cur, [v.name]: '' }))}
+                  className="rounded border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Replace secret
+                </button>
               )}
             </div>
           );

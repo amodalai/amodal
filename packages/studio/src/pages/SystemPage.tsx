@@ -6,7 +6,6 @@
 
 import { AgentOffline } from '@/components/AgentOffline';
 import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
-import { useViewConfig } from '../hooks/useViewConfig';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,7 +28,6 @@ function formatUptime(seconds: number): string {
 
 export function SystemPage() {
   const { config, error, loading } = useRuntimeConfig();
-  const { viewConfig, setViewConfig } = useViewConfig();
 
   if (error) return <AgentOffline page="system" detail={error} />;
   if (loading || !config) return null;
@@ -53,20 +51,6 @@ export function SystemPage() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-foreground">System</h1>
 
-      <section className="bg-card border border-border rounded-lg p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-medium text-foreground">View config</h2>
-            <p className="text-xs text-muted-foreground mt-1 max-w-xl">
-              Show power-user surfaces — Getting started form, per-connection
-              configure pages, agent overview dashboard. Off by default; the
-              chat-driven home screen is the user-facing path.
-            </p>
-          </div>
-          <ToggleSwitch checked={viewConfig} onChange={setViewConfig} />
-        </div>
-      </section>
-
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No system information available.</p>
       ) : (
@@ -82,31 +66,5 @@ export function SystemPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function ToggleSwitch({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-        checked ? 'bg-primary-solid' : 'bg-muted'
-      }`}
-    >
-      <span
-        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-5' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
   );
 }

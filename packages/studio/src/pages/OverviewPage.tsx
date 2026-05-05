@@ -21,8 +21,8 @@ import type {ReactNode} from 'react';
 import {AgentOffline} from '@/components/AgentOffline';
 import {useRuntimeConfig} from '../hooks/useRuntimeConfig';
 import {useStats} from '../hooks/useStats';
-import {useGettingStarted} from '../hooks/useGettingStarted';
-import type {GettingStartedPackage} from '../hooks/useGettingStarted';
+import {useConnectionPackages} from '../hooks/useConnectionPackages';
+import type {ConnectionPackage} from '../hooks/useConnectionPackages';
 import {MODEL_META, PROVIDER_COLORS, modelDisplayName, modelToProvider, formatPrice} from '../lib/model-pricing';
 import {useSessionHistory} from '../hooks/useSessionHistory';
 import type {SessionHistoryRow} from '../hooks/useSessionHistory';
@@ -36,7 +36,7 @@ import {
   trendDeltaPercent,
 } from '../lib/cost-analytics';
 import {formatTokens} from '../lib/format';
-import {COST_PATH, GETTING_STARTED_PATH, SESSIONS_PATH, sessionPath} from '../lib/routes';
+import {CONNECTIONS_PATH, COST_PATH, SESSIONS_PATH, sessionPath} from '../lib/routes';
 
 const RECENT_ACTIVITY_LIMIT = 5;
 const STALE_SESSION_DAYS = 7;
@@ -65,7 +65,7 @@ function formatOverviewTrend(delta: number): string {
   return `${rounded > 0 ? '+' : ''}${String(rounded)}%`;
 }
 
-function connectionGapCount(packages: GettingStartedPackage[] | undefined): number {
+function connectionGapCount(packages: ConnectionPackage[] | undefined): number {
   if (!packages) return 0;
   return packages.filter((pkg) => !pkg.isFulfilled).length;
 }
@@ -96,7 +96,7 @@ function buildActionItems({
       label: 'Connection setup is incomplete',
       detail: `${String(connectionGaps)} package${connectionGaps === 1 ? '' : 's'} missing credentials`,
       tone: 'warning',
-      link: GETTING_STARTED_PATH,
+      link: CONNECTIONS_PATH,
     });
   }
   if (unknownCostSessions > 0) {
@@ -132,7 +132,7 @@ function buildActionItems({
 export function OverviewPage() {
   const {config, error: configError, loading: configLoading} = useRuntimeConfig();
   const {data: stats, error: statsError} = useStats();
-  const {data: gettingStarted} = useGettingStarted();
+  const {data: connectionPackages} = useConnectionPackages();
   const {sessions} = useSessionHistory();
 
   if (configError) return <AgentOffline page="dashboard" detail={configError} />;
@@ -161,8 +161,8 @@ export function OverviewPage() {
       .slice(0, RECENT_ACTIVITY_LIMIT)
     : [];
 
-  const connTotal = gettingStarted?.packages.length ?? 0;
-  const connGaps = connectionGapCount(gettingStarted?.packages);
+  const connTotal = connectionPackages?.packages.length ?? 0;
+  const connGaps = connectionGapCount(connectionPackages?.packages);
   const connFulfilled = connTotal - connGaps;
   const providerStatuses = config.providerStatuses ?? [];
   const verifiedProviders = providerStatuses.filter((provider) => provider.verified).length;
@@ -215,7 +215,7 @@ export function OverviewPage() {
           label="Connections"
           value={connTotal > 0 ? `${String(connFulfilled)}/${String(connTotal)}` : '0'}
           detail={connTotal > 0 ? connectionDetail(connGaps) : 'No packages installed'}
-          link={GETTING_STARTED_PATH}
+          link={CONNECTIONS_PATH}
         />
         <SummaryCard
           icon={Cpu}
@@ -251,7 +251,7 @@ export function OverviewPage() {
         </Panel>
 
         <Panel title="Connection Health">
-          <ConnectionHealth packages={gettingStarted?.packages ?? []} providers={providerStatuses} />
+          <ConnectionHealth packages={connectionPackages?.packages ?? []} providers={providerStatuses} />
         </Panel>
       </section>
 
@@ -429,7 +429,7 @@ function ConnectionHealth({
   packages,
   providers,
 }: {
-  packages: GettingStartedPackage[];
+  packages: ConnectionPackage[];
   providers: Array<{provider: string; keySet: boolean; verified: boolean}>;
 }) {
   if (packages.length === 0 && providers.length === 0) {
@@ -479,7 +479,7 @@ function HealthRow({label, detail, ok}: {label: string; detail: string; ok: bool
   );
 }
 
-function missingEnvVarText(pkg: GettingStartedPackage): string {
+function missingEnvVarText(pkg: ConnectionPackage): string {
   const missing = pkg.envVars.filter((envVar) => !envVar.set).length;
   if (missing === 0) return 'Needs setup';
   return `${String(missing)} env var${missing === 1 ? '' : 's'} missing`;

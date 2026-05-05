@@ -14,7 +14,7 @@ import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useStudioEvents } from '@/contexts/StudioEventsContext';
 import { VersionHistory } from '@/components/entity/VersionHistory';
-import { apiDocumentPath, storePath, STORES_PATH } from '@/lib/routes';
+import { apiDocumentPath } from '@/lib/routes';
 import { createBrowserLogger } from '@/lib/browser-logger';
 import type { StoreDocument } from '@/components/types';
 
@@ -150,11 +150,11 @@ export function DocumentView({ document: initialDoc, history: initialHistory, st
     <div className="space-y-5">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link to={STORES_PATH} className="hover:text-foreground transition-colors">
+        <Link to="../.." className="hover:text-foreground transition-colors">
           Stores
         </Link>
         <span>/</span>
-        <Link to={storePath(storeName)} className="hover:text-foreground transition-colors">
+        <Link to=".." className="hover:text-foreground transition-colors">
           {storeName}
         </Link>
         <span>/</span>

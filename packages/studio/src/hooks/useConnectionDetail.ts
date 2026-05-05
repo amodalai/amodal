@@ -5,8 +5,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useStudioConfig } from '../contexts/StudioConfigContext';
-import type { EnvVarStatus } from './useGettingStarted';
+import { runtimeApiUrl } from '@/lib/api';
+import type { EnvVarStatus } from './useConnectionPackages';
 
 // Studio backend endpoint that reads node_modules/<pkg>/package.json
 // directly. Works during setup before the runtime has booted (i.e.
@@ -47,7 +47,6 @@ export interface ConnectionDetailResult {
  * per-connection configure page.
  */
 export function useConnectionDetail(packageName: string): ConnectionDetailResult {
-  const { runtimeUrl } = useStudioConfig();
   const [data, setData] = useState<ConnectionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -69,7 +68,7 @@ export function useConnectionDetail(packageName: string): ConnectionDetailResult
         );
         if (res.status === 404) {
           res = await fetch(
-            `${runtimeUrl}/api/connections/${encodeURIComponent(packageName)}`,
+            runtimeApiUrl(`/api/connections/${encodeURIComponent(packageName)}`),
             { signal: AbortSignal.timeout(5_000) },
           );
         }
@@ -81,7 +80,7 @@ export function useConnectionDetail(packageName: string): ConnectionDetailResult
         setError(err instanceof Error ? err.message : String(err));
       }
     })();
-  }, [runtimeUrl, packageName, tick]);
+  }, [packageName, tick]);
 
   const refetch = useCallback(() => setTick((t) => t + 1), []);
   const saveSecret = useCallback(
