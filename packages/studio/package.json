@@ -36,9 +36,9 @@
     "src"
   ],
   "scripts": {
-    "dev": "tsx src/server/studio-server.ts",
+    "dev": "tsx src/server/bin.ts",
     "build": "vite build && node scripts/build-server.js",
-    "start": "node dist-server/studio-server.js",
+    "start": "node dist-server/bin.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

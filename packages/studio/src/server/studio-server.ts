@@ -4,18 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
+/**
+ * Studio's Hono app factory + library entry. **Importing this module has
+ * no side effects** — it just exposes `createStudioApp` and the named
+ * hooks for embedders (cloud-studio, custom deployments, tests).
+ *
+ * The local-dev runner that binds a port + opens the PG LISTEN bridge
+ * lives separately in `./bin.ts` so that nothing happens at import time.
+ */
+
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import path from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { logger } from '../lib/logger.js';
 import { getAllowedOrigins } from './middleware/cors.js';
 import { handleError } from './middleware/error-handler.js';
-import { initEventBridge } from '../lib/event-bridge.js';
-import { closePgListener } from '../lib/pg-listener.js';
 import { configRoutes } from './routes/config.js';
 import { workspaceRoutes } from './routes/workspace.js';
 import { draftsRoutes } from './routes/drafts.js';
@@ -39,10 +44,8 @@ import { oauthRoutes } from './routes/oauth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const DEFAULT_PORT = 3848;
-
 // ---------------------------------------------------------------------------
-// Re-exports for cloud-studio (so everything is available from ./server)
+// Re-exports for embedders (so everything is available from ./server)
 // ---------------------------------------------------------------------------
 
 export { setAuthProvider, getUser } from '../lib/auth.js';
@@ -76,7 +79,7 @@ export interface CreateStudioAppOptions {
  * Does NOT start a server — the caller is responsible for that.
  *
  * Used by:
- * - `main()` below for local dev (`amodal studio` / `amodal dev`)
+ * - The bin runner in `./bin.ts` for local dev (`amodal studio` / `amodal dev`)
  * - Cloud deployments that need the Hono app as a serverless handler
  */
 export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
@@ -157,62 +160,4 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
   }
 
   return app;
-}
-
-// ---------------------------------------------------------------------------
-// Local dev entry point
-// ---------------------------------------------------------------------------
-
-async function main(): Promise<void> {
-  const port = parseInt(process.env['PORT'] ?? String(DEFAULT_PORT), 10);
-  const app = createStudioApp();
-
-  await initEventBridge();
-
-  const hostname = process.env['HOSTNAME'] ?? 'localhost';
-  const server = serve({ fetch: app.fetch, port, hostname }, () => {
-    logger.info('studio_server_started', { port });
-  });
-
-  // ---------------------------------------------------------------------------
-  // Graceful shutdown
-  // ---------------------------------------------------------------------------
-
-  const shutdown = async (signal: string): Promise<void> => {
-    logger.info('studio_server_shutdown', { signal });
-    await closePgListener();
-    server.close();
-    process.exit(0);
-  };
-
-  process.on('SIGTERM', () => void shutdown('SIGTERM'));
-  process.on('SIGINT', () => void shutdown('SIGINT'));
-}
-
-// Only run the local-dev server when this file is invoked directly
-// (e.g. `node dist-server/studio-server.js`). When imported as a library
-// — for instance by cloud-studio on Vercel — `main()` must not auto-run,
-// because:
-//   1. it tries to bind a TCP port (no-op or noisy in serverless);
-//   2. it calls `initEventBridge()` which opens a Postgres LISTEN, which
-//      can't be cancelled by `disableEventBridge()` from a downstream
-//      module since LISTEN starts before that module's body runs;
-//   3. on failure it `process.exit(1)`s, killing the function.
-const isMain = (() => {
-  try {
-    const entry = process.argv[1];
-    if (!entry) return false;
-    const entryUrl = new URL(`file://${entry}`).href;
-    return import.meta.url === entryUrl;
-  } catch {
-    return false;
-  }
-})();
-
-if (isMain) {
-  main().catch((err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error('studio_server_fatal', { error: message });
-    process.exit(1);
-  });
 }

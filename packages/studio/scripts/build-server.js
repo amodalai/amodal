@@ -15,10 +15,23 @@
 import { build } from 'esbuild';
 import { execSync } from 'node:child_process';
 
-// Bundle the Express server
+// Bundle the library entry (no side effects on import).
 await build({
   entryPoints: ['src/server/studio-server.ts'],
   outfile: 'dist-server/studio-server.js',
+  bundle: true,
+  platform: 'node',
+  target: 'node20',
+  format: 'esm',
+  sourcemap: true,
+  packages: 'external',
+});
+
+// Bundle the local-dev bin runner. Kept separate so importing the
+// library never auto-binds a port or opens the PG LISTEN connection.
+await build({
+  entryPoints: ['src/server/bin.ts'],
+  outfile: 'dist-server/bin.js',
   bundle: true,
   platform: 'node',
   target: 'node20',
