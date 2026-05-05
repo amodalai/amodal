@@ -56,7 +56,7 @@ const RUNTIME_VERSION: string = (() => {
   return '0.0.0';
 })();
 import {loadRepo} from '@amodalai/core';
-import type {AgentBundle} from '@amodalai/types';
+import type {AgentBundle, ConnectionSpec} from '@amodalai/types';
 import {StandaloneSessionManager} from '../session/manager.js';
 import {selectSessionStore} from '../session/session-store-selector.js';
 import {resolveEnvRef} from '../env-ref.js';
@@ -108,6 +108,37 @@ interface ProviderStatus {
   keySet: boolean;
   verified: boolean;
   error?: string;
+}
+
+type EnvVarStatus = { name: string; description: string; set: boolean };
+
+function collectConnectionEnvVars(spec: ConnectionSpec): EnvVarStatus[] {
+  const refs = new Map<string, string>();
+
+  const addEnvRef = (value: string | undefined, description: string): void => {
+    if (!value?.startsWith('env:')) return;
+    const name = value.slice('env:'.length);
+    if (!name || refs.has(name)) return;
+    refs.set(name, description);
+  };
+
+  addEnvRef(spec.baseUrl, 'Base URL');
+  addEnvRef(spec.url, 'MCP URL');
+  addEnvRef(spec.auth?.token, 'Auth token');
+
+  for (const [header, value] of Object.entries(spec.headers ?? {})) {
+    addEnvRef(value, `Header: ${header}`);
+  }
+
+  for (const [name, value] of Object.entries(spec.env ?? {})) {
+    addEnvRef(value, `Environment: ${name}`);
+  }
+
+  return [...refs.entries()].map(([name, description]) => ({
+    name,
+    description,
+    set: !!process.env[name],
+  }));
 }
 
 // Each check must use an endpoint that returns 200 on a valid key and
@@ -848,7 +879,20 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       const bundleData = getBundle();
       for (const conn of bundleData.connections.values()) {
         const pkgDir = findPackageRoot(conn.location);
-        if (!pkgDir) continue;
+        if (!pkgDir) {
+          if (conn.name !== packageName) continue;
+          res.json({
+            name: conn.name,
+            displayName: conn.name,
+            description: null,
+            icon: null,
+            category: 'local',
+            authType: conn.spec.auth?.type ?? conn.spec.protocol,
+            envVars: collectConnectionEnvVars(conn.spec),
+            oauth: null,
+          });
+          return;
+        }
         const pkgJsonPath = path.join(pkgDir, 'package.json');
         if (!existsSync(pkgJsonPath)) continue;
         try {
@@ -922,7 +966,6 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       // Walk each loaded connection's `location` upward to find the
       // containing package.json, read its amodal block. Cache by package
       // name so multi-connection packages only get read once.
-      type EnvVarStatus = { name: string; description: string; set: boolean };
       type OauthStatus = {
         appKey: string;
         available: boolean;
@@ -943,21 +986,13 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
 
         if (!pkgDir) {
           // Directory-based connection (connections/<name>/ in the repo).
-          // Derive env var info from spec.json auth and baseUrl fields.
+          // Derive env var info from the local spec because there is no
+          // package metadata block to declare credential requirements.
           if (packageMap.has(conn.name)) continue;
-          const envVars: EnvVarStatus[] = [];
-          const addEnvRef = (value: string | undefined, description: string) => {
-            if (value?.startsWith('env:')) {
-              const envName = value.slice(4);
-              envVars.push({ name: envName, description, set: !!process.env[envName] });
-            }
-          };
-          addEnvRef(conn.spec.baseUrl, 'Base URL');
-          addEnvRef(conn.spec.auth?.token, 'Auth token');
           packageMap.set(conn.name, {
             name: conn.name,
             displayName: conn.name,
-            envVars,
+            envVars: collectConnectionEnvVars(conn.spec),
           });
           continue;
         }
@@ -1015,7 +1050,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
       // Package is "fulfilled" when every declared envVar is set in process.env.
       const packages = [...packageMap.values()].map((p) => ({
         ...p,
-        isFulfilled: p.envVars.length > 0 && p.envVars.every((v) => v.set),
+        isFulfilled: p.envVars.every((v) => v.set),
       }));
 
       // Read template.json from repo root if present.
@@ -1044,10 +1079,8 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
     // Collect all env:* references from connection specs
     const envRefs: Array<{name: string; connection: string; set: boolean}> = [];
     for (const [connName, conn] of bundleData.connections) {
-      const token = conn.spec.auth?.token;
-      if (token && typeof token === 'string' && token.startsWith('env:')) {
-        const envName = token.slice(4);
-        envRefs.push({name: envName, connection: connName, set: !!process.env[envName]});
+      for (const envVar of collectConnectionEnvVars(conn.spec)) {
+        envRefs.push({name: envVar.name, connection: connName, set: envVar.set});
       }
     }
 

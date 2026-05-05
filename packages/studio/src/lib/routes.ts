@@ -19,9 +19,18 @@ export const STORES_PATH = '/stores';
 export const COST_PATH = 'cost';
 export const SESSIONS_PATH = 'sessions';
 export const GETTING_STARTED_PATH = 'getting-started';
+export const CONNECTIONS_PATH = 'connections';
 
 export function sessionPath(sessionId: string): string {
   return `${SESSIONS_PATH}/${encodeURIComponent(sessionId)}`;
+}
+
+export function connectionConfigPath(packageName: string): string {
+  return `${CONNECTIONS_PATH}/${encodeURIComponent(packageName)}`;
+}
+
+export function connectionInspectPath(connectionName: string): string {
+  return `inspect/connections/${encodeURIComponent(connectionName)}`;
 }
 
 export function storePath(storeName: string): string {

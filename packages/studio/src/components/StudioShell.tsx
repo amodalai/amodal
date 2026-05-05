@@ -9,6 +9,7 @@ import { useLocation, useParams, Link } from 'react-router-dom';
 import { useTheme } from './ThemeProvider';
 import { useStudioConfig } from '../contexts/StudioConfigContext';
 import { AdminChat } from './views/AdminChat';
+import { CONNECTIONS_PATH } from '../lib/routes';
 import {
   LayoutDashboard,
   FileCode,
@@ -56,6 +57,7 @@ const NAV_ITEMS: readonly NavItemDef[] = [
   { href: '/getting-started', label: 'Getting started', icon: Sparkles, powerUserOnly: true },
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/cost', label: 'Cost', icon: DollarSign },
+  { href: `/${CONNECTIONS_PATH}`, label: 'Connections', icon: Plug },
   { href: '/files', label: 'Files', icon: FileCode },
   { href: '/evals', label: 'Evals', icon: FlaskConical },
   { href: '/arena', label: 'Arena', icon: FlaskConical },
@@ -98,7 +100,7 @@ interface InventorySectionDef {
 const INVENTORY_SECTIONS: readonly InventorySectionDef[] = [
   { key: 'skills', label: 'Skills', icon: Sparkles, iconColor: 'text-amber-500/60', pathPrefix: '/inspect/skills' },
   { key: 'knowledge', label: 'Knowledge', icon: BookOpen, iconColor: 'text-blue-500/60', pathPrefix: '/inspect/knowledge' },
-  { key: 'connections', label: 'Connections', icon: Plug, iconColor: 'text-emerald-500/60', pathPrefix: '/inspect/connections' },
+  { key: 'connections', label: 'Connection Files', icon: Plug, iconColor: 'text-emerald-500/60', pathPrefix: '/inspect/connections' },
   { key: 'stores', label: 'Stores', icon: Database, iconColor: 'text-violet-500/60', pathPrefix: '/stores' },
   { key: 'automations', label: 'Automations', icon: Zap, iconColor: 'text-orange-500/60', pathPrefix: '/automations' },
   { key: 'pages', label: 'Pages', icon: FileText, iconColor: 'text-cyan-500/60', pathPrefix: '/pages' },

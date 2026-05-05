@@ -59,6 +59,13 @@ vi.mock('@amodalai/core', async (importOriginal) => {
     generateFieldGuidance: vi.fn(() => ''),
     generateAlternativeLookupGuidance: vi.fn(() => ''),
     getModelContextWindow: vi.fn(() => 200_000),
+    McpManager: class {
+      connectedCount = 0;
+      async startServers() {}
+      getDiscoveredTools() { return []; }
+      getServerInfo() { return []; }
+      async shutdown() {}
+    },
   };
 });
 
@@ -117,6 +124,9 @@ function applyMockImplementations(): void {
 describe('createLocalServer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env['XPOZ_BEARER_TOKEN'];
+    delete process.env['XPOZ_ENV'];
+    MOCK_REPO.connections = new Map();
     applyMockImplementations();
   });
 
@@ -176,6 +186,58 @@ describe('createLocalServer', () => {
     expect(res.body).toHaveProperty('connections');
     expect(res.body).toHaveProperty('skills');
     expect(res.body).toHaveProperty('knowledge');
+  });
+
+  it('reports credential status for directory-based MCP connections', async () => {
+    process.env['XPOZ_BEARER_TOKEN'] = 'test-token';
+    delete process.env['XPOZ_ENV'];
+    MOCK_REPO.connections.set('xpoz-mcp', {
+      name: 'xpoz-mcp',
+      spec: {
+        protocol: 'mcp',
+        transport: 'http',
+        url: 'https://mcp.xpoz.ai/mcp',
+        headers: {Authorization: 'env:XPOZ_BEARER_TOKEN'},
+        env: {XPOZ_RUNTIME_ENV: 'env:XPOZ_ENV'},
+      },
+      access: {endpoints: {}},
+      surface: [],
+      location: join(TEST_REPO, 'connections', 'xpoz-mcp'),
+    });
+
+    const server = await createLocalServer({
+      repoPath: TEST_REPO,
+      port: 0,
+    });
+
+    const {default: request} = await import('supertest');
+    const started = await request(server.app).get('/api/getting-started');
+    expect(started.status).toBe(200);
+    expect(started.body.packages).toEqual([
+      expect.objectContaining({
+        name: 'xpoz-mcp',
+        displayName: 'xpoz-mcp',
+        isFulfilled: false,
+        envVars: [
+          {name: 'XPOZ_BEARER_TOKEN', description: 'Header: Authorization', set: true},
+          {name: 'XPOZ_ENV', description: 'Environment: XPOZ_RUNTIME_ENV', set: false},
+        ],
+      }),
+    ]);
+
+    const detail = await request(server.app).get('/api/connections/xpoz-mcp');
+    expect(detail.status).toBe(200);
+    expect(detail.body).toMatchObject({
+      name: 'xpoz-mcp',
+      displayName: 'xpoz-mcp',
+      category: 'local',
+      authType: 'mcp',
+      oauth: null,
+      envVars: [
+        {name: 'XPOZ_BEARER_TOKEN', description: 'Header: Authorization', set: true},
+        {name: 'XPOZ_ENV', description: 'Environment: XPOZ_RUNTIME_ENV', set: false},
+      ],
+    });
   });
 
   it('GET /api/me returns ops by default in amodal dev', async () => {
