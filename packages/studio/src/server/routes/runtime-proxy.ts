@@ -144,6 +144,7 @@ runtimeProxyRoutes.get('/api/runtime/oauth/start', (c) => {
   return proxyGet(c, `/api/oauth/start${qs}`);
 });
 runtimeProxyRoutes.get('/api/runtime/sessions/history', (c) => proxyGet(c, '/sessions/history'));
+runtimeProxyRoutes.get('/api/runtime/sessions/history/:sessionId', (c) => proxyGet(c, `/sessions/history/${encodeURIComponent(c.req.param('sessionId'))}`));
 runtimeProxyRoutes.get('/api/runtime/inspect/context', (c) => proxyGet(c, '/inspect/context'));
 runtimeProxyRoutes.get('/api/runtime/inspect/:kind/:name', (c) => {
   const kind = c.req.param('kind');

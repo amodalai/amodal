@@ -26,6 +26,11 @@ function labelFor(toolCall: ToolCallInfo): string {
   return toolCall.completedLabel ?? toolCall.runningLabel ?? toolCall.toolName;
 }
 
+function formatPayload(value: unknown): string {
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value, null, 2);
+}
+
 // ---------------------------------------------------------------------------
 // Status icon helper
 // ---------------------------------------------------------------------------
@@ -46,7 +51,7 @@ function StatusIcon({ status }: { status: string }) {
 
 function CompactToolCall({ toolCall }: { toolCall: ToolCallInfo }) {
   const [expanded, setExpanded] = useState(false);
-  const hasDetails = Boolean(toolCall.parameters) || Boolean(toolCall.error);
+  const hasDetails = Boolean(toolCall.parameters) || Boolean(toolCall.result) || Boolean(toolCall.error);
 
   return (
     <div className="pcw-tc-compact">
@@ -64,6 +69,9 @@ function CompactToolCall({ toolCall }: { toolCall: ToolCallInfo }) {
           {toolCall.error && <pre className="pcw-tc-compact__error">{toolCall.error}</pre>}
           {toolCall.parameters && (
             <pre className="pcw-tc-compact__params">{JSON.stringify(toolCall.parameters, null, 2)}</pre>
+          )}
+          {toolCall.result !== undefined && (
+            <pre className="pcw-tc-compact__params">{formatPayload(toolCall.result)}</pre>
           )}
         </div>
       )}
@@ -147,10 +155,21 @@ function VerboseToolCall({ toolCall }: { toolCall: ToolCallInfo }) {
         <span className="pcw-tool-call__name">{summary}</span>
         <span className={statusClass}>{toolCall.status}</span>
       </button>
-      {expanded && toolCall.parameters && (
-        <pre className="pcw-tool-call__details">
-          {JSON.stringify(toolCall.parameters, null, 2)}
-        </pre>
+      {expanded && (
+        <div className="pcw-tool-call__details">
+          {toolCall.parameters && (
+            <>
+              <div className="pcw-tool-call__details-label">Parameters</div>
+              <pre>{JSON.stringify(toolCall.parameters, null, 2)}</pre>
+            </>
+          )}
+          {toolCall.result !== undefined && (
+            <>
+              <div className="pcw-tool-call__details-label">Result</div>
+              <pre>{formatPayload(toolCall.result)}</pre>
+            </>
+          )}
+        </div>
       )}
       {toolCall.error && <p className="pcw-tool-call__error">{toolCall.error}</p>}
     </div>

@@ -73,13 +73,13 @@ function SidebarNavLink({ item, active, to }: { item: NavItem; active: boolean; 
   return (
     <Link
       to={to}
-      className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
+      className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
         active
-          ? 'bg-primary/10 text-primary font-medium'
-          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+          ? 'bg-[hsl(var(--sidebar-active))] text-foreground font-medium shadow-sm ring-1 ring-border/70'
+          : 'text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--sidebar-active))]/70'
       }`}
     >
-      <Icon className="w-4 h-4 flex-shrink-0" />
+      <Icon className={`h-4 w-4 flex-shrink-0 ${active ? 'text-foreground' : ''}`} />
       {item.label}
     </Link>
   );
@@ -127,9 +127,9 @@ export function StudioShell({ children }: Props) {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 border-r border-border bg-card flex flex-col">
+      <aside className="flex w-56 flex-shrink-0 flex-col border-r border-border bg-[hsl(var(--sidebar))]">
         {/* Header */}
-        <div className="px-4 py-3 border-b border-border">
+        <div className="border-b border-border px-4 py-3">
           <h1 className="text-sm font-semibold text-foreground truncate">{agentName}</h1>
           <a
             href={runtimeUrl}
@@ -169,10 +169,10 @@ export function StudioShell({ children }: Props) {
                         <Link
                           key={name}
                           to={agentPath(`${section.pathPrefix}/${name}`)}
-                          className={`flex items-center gap-2 px-3 py-1 rounded text-xs transition-colors ${
+                          className={`flex items-center gap-2 rounded-md px-3 py-1 text-xs transition-colors ${
                             pathname === agentPath(`${section.pathPrefix}/${name}`)
-                              ? 'bg-primary/10 text-primary font-medium'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                              ? 'bg-[hsl(var(--sidebar-active))] text-foreground font-medium shadow-sm ring-1 ring-border/70'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--sidebar-active))]/70'
                           }`}
                         >
                           <section.icon className={`w-3 h-3 flex-shrink-0 ${section.iconColor}`} />
@@ -199,10 +199,10 @@ export function StudioShell({ children }: Props) {
           <div className="px-2">
             <button
               onClick={() => setChatOpen((prev) => !prev)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors w-full ${
+              className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
                 chatOpen
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  ? 'bg-[hsl(var(--sidebar-active))] text-foreground font-medium shadow-sm ring-1 ring-border/70'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--sidebar-active))]/70'
               }`}
             >
               <MessageSquare className="w-4 h-4 flex-shrink-0" />
@@ -229,7 +229,7 @@ export function StudioShell({ children }: Props) {
 
       {/* Content */}
       <main className={`overflow-y-auto bg-background ${chatOpen ? 'w-[60%]' : 'flex-1'}`}>
-        <div className="max-w-5xl mx-auto px-6 py-6">{children}</div>
+        <div className="mx-auto max-w-6xl px-8 py-7">{children}</div>
       </main>
 
       {/* Admin chat panel */}

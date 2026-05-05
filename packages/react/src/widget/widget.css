@@ -383,6 +383,26 @@
   white-space: pre-wrap;
 }
 
+.pcw-tool-call__details-label {
+  margin: 8px 0 4px;
+  font-family: var(--pcw-font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: var(--pcw-text-muted);
+}
+
+.pcw-tool-call__details-label:first-child {
+  margin-top: 0;
+}
+
+.pcw-tool-call__details pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+}
+
 /* Timeline shown when a tool call is expanded. Each entry sits on a
  * vertical rail with a small dot — no background panel, just indented
  * text so it reads as part of the surrounding chat prose. */
@@ -498,7 +518,7 @@
   background: var(--pcw-tool-call-bg, #f9fafb);
   border-radius: 4px;
   padding: 6px 8px;
-  margin: 0;
+  margin: 0 0 6px;
 }
 .pcw-tc-compact__error {
   font-family: monospace;
