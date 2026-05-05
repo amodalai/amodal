@@ -1,5 +1,13 @@
 # @amodalai/runtime
 
+## 0.3.54
+
+### Patch Changes
+
+- @amodalai/types@0.3.54
+- @amodalai/core@0.3.54
+- @amodalai/db@0.3.54
+
 ## 0.3.53
 
 ### Patch Changes
