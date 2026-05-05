@@ -99,7 +99,7 @@ export function CostPage() {
             onClick={() => setRangeDays(option.days)}
             className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
               option.days === rangeDays
-                ? 'bg-[hsl(var(--sidebar-active))] text-foreground shadow-sm ring-1 ring-border/70'
+                ? 'bg-muted text-foreground shadow-sm ring-1 ring-border/70'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
