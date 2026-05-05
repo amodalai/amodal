@@ -5,6 +5,7 @@
  */
 
 import {Link} from 'react-router-dom';
+import {useState} from 'react';
 import {AgentOffline} from '@/components/AgentOffline';
 import {useSessionHistory} from '../hooks/useSessionHistory';
 import {formatShortDateTime, formatTokens} from '../lib/format';
@@ -24,6 +25,14 @@ import {
 } from '../lib/cost-analytics';
 import type {CostBucket, CostGroup} from '../lib/cost-analytics';
 
+type RangeDays = 7 | 30 | 90;
+
+const RANGE_OPTIONS: ReadonlyArray<{days: RangeDays; label: string}> = [
+  {days: 7, label: '7D'},
+  {days: 30, label: '30D'},
+  {days: 90, label: '90D'},
+];
+
 function costPerSession(group: CostGroup): string {
   if (group.sessions === 0) return '—';
   return formatPrice(group.cost / group.sessions);
@@ -31,24 +40,29 @@ function costPerSession(group: CostGroup): string {
 
 export function CostPage() {
   const {sessions, error} = useSessionHistory();
+  const [rangeDays, setRangeDays] = useState<RangeDays>(30);
 
   if (error) return <AgentOffline page="cost" detail={error} />;
   if (!sessions) return null;
 
-  const summary = summarizeCost(sessions);
-  const buckets = dailyCostBuckets(sessions, 14);
+  const rangeStart = new Date();
+  rangeStart.setHours(0, 0, 0, 0);
+  rangeStart.setDate(rangeStart.getDate() - (rangeDays - 1));
+  const rangedSessions = sessions.filter((session) => new Date(session.updated_at) >= rangeStart);
+  const summary = summarizeCost(rangedSessions);
+  const buckets = dailyCostBuckets(rangedSessions, rangeDays);
   const delta = trendDeltaPercent(buckets);
   const byModel = groupSessions(
-    sessions,
+    rangedSessions,
     (session) => session.model ?? 'unknown',
     (session) => session.model ?? 'Unknown model',
   );
   const byScope = groupSessions(
-    sessions,
+    rangedSessions,
     (session) => `${session.app_id}:${session.scope_id || 'agent'}`,
     (session) => scopeLabel(session),
   );
-  const topSessions = [...sessions]
+  const topSessions = [...rangedSessions]
     .sort((a, b) => (sessionCost(b) ?? -1) - (sessionCost(a) ?? -1))
     .slice(0, 6);
 
@@ -64,15 +78,32 @@ export function CostPage() {
         </div>
         <div className="text-left md:text-right">
           <div className="text-3xl font-semibold tracking-tight text-foreground">{formatPrice(summary.totalCost)}</div>
-          <div className="text-xs text-muted-foreground">estimated total in loaded history</div>
+          <div className="text-xs text-muted-foreground">estimated total in selected range</div>
         </div>
       </div>
 
+      <div className="inline-flex rounded-lg border border-border bg-card p-1 shadow-sm">
+        {RANGE_OPTIONS.map((option) => (
+          <button
+            key={option.days}
+            type="button"
+            onClick={() => setRangeDays(option.days)}
+            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+              option.days === rangeDays
+                ? 'bg-[hsl(var(--sidebar-active))] text-foreground shadow-sm ring-1 ring-border/70'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid gap-4 md:grid-cols-4">
-        <MetricCard label="Sessions" value={String(sessions.length)} detail={`${summary.knownCostSessions} priced`} />
+        <MetricCard label="Sessions" value={String(rangedSessions.length)} detail={`${summary.knownCostSessions} priced`} />
         <MetricCard label="Total tokens" value={formatTokens(summary.totalTokens)} detail={`${formatTokens(summary.totalInputTokens)} in / ${formatTokens(summary.totalOutputTokens)} out`} />
         <MetricCard label="Avg cost/session" value={summary.knownCostSessions > 0 ? formatPrice(summary.totalCost / summary.knownCostSessions) : '—'} detail="estimated" />
-        <MetricCard label="14-day trend" value={formatTrend(delta)} detail="current vs prior period" />
+        <MetricCard label={`${String(rangeDays)}-day trend`} value={formatTrend(delta)} detail="current vs prior period" />
       </div>
 
       <section className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
@@ -82,7 +113,7 @@ export function CostPage() {
             <p className="mt-1 text-xs text-muted-foreground">Daily estimated model spend from session activity.</p>
           </div>
           <div className="text-right text-xs text-muted-foreground">
-            Last 14 days{summary.unknownCostSessions > 0 ? ` · ${String(summary.unknownCostSessions)} sessions missing pricing` : ''}
+            Last {String(rangeDays)} days{summary.unknownCostSessions > 0 ? ` · ${String(summary.unknownCostSessions)} sessions missing pricing` : ''}
           </div>
         </div>
         <CostBars buckets={buckets} />
@@ -200,6 +231,9 @@ export function CostPage() {
             })}
           </tbody>
         </table>
+        {topSessions.length === 0 && (
+          <p className="px-4 py-6 text-sm text-muted-foreground">No sessions in this range.</p>
+        )}
       </section>
     </div>
   );
@@ -214,13 +248,15 @@ function formatTrend(delta: number | null): string {
 
 function CostBars({buckets}: {buckets: CostBucket[]}) {
   const maxCost = Math.max(...buckets.map((bucket) => bucket.cost), 0);
+  const labelEvery = buckets.length <= 14 ? 1 : buckets.length <= 30 ? 5 : 15;
   return (
     <div
       className="mt-5 grid h-44 items-end gap-2"
       style={{gridTemplateColumns: `repeat(${String(buckets.length)}, minmax(0, 1fr))`}}
     >
-      {buckets.map((bucket) => {
+      {buckets.map((bucket, index) => {
         const height = maxCost <= 0 ? 2 : Math.max(2, Math.round((bucket.cost / maxCost) * 100));
+        const showLabel = index % labelEvery === 0 || index === buckets.length - 1;
         return (
           <div key={bucket.key} className="group relative flex h-full min-w-0 flex-col justify-end gap-2">
             <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-40 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-left text-xs text-card-foreground shadow-lg group-hover:block">
@@ -236,7 +272,7 @@ function CostBars({buckets}: {buckets: CostBucket[]}) {
                 style={{height: `${height}%`}}
               />
             </div>
-            <div className="truncate text-center text-[10px] text-muted-foreground">{bucket.label}</div>
+            <div className="min-h-3 truncate text-center text-[10px] text-muted-foreground">{showLabel ? bucket.label : ''}</div>
           </div>
         );
       })}
