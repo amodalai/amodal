@@ -187,14 +187,6 @@ export function ConnectionsPage() {
     return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [connectionPackages.data, inspectContext.data]);
 
-  useEffect(() => {
-    if (!selectedName && connections.length > 0) {
-      const first = connections[0]?.name ?? null;
-      setSelectedName(first);
-      setExpandedName(first);
-    }
-  }, [connections, selectedName]);
-
   const detail = useConnectionDetail(selectedName, refreshKey);
 
   if (inspectContext.error && connectionPackages.error) {
