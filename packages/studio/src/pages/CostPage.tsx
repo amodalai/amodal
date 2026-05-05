@@ -65,6 +65,8 @@ export function CostPage() {
   const topSessions = [...rangedSessions]
     .sort((a, b) => (sessionCost(b) ?? -1) - (sessionCost(a) ?? -1))
     .slice(0, 6);
+  const maxTopSessionCost = Math.max(...topSessions.map((session) => sessionCost(session) ?? 0), 0);
+  const hasScopedUsage = byScope.some((group) => group.label !== 'agent scope');
 
   return (
     <div className="space-y-6">
@@ -158,28 +160,43 @@ export function CostPage() {
         </section>
 
         <section className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-foreground">Scope breakdown</h2>
+          <h2 className="text-sm font-semibold text-foreground">Usage by scope</h2>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Scopes are tenant or user boundaries when the embedding app supplies them.
+            App-supplied tenant, user, or workspace IDs used to isolate sessions and memory.
           </p>
           <div className="mt-4 space-y-3">
-            {byScope.slice(0, 6).map((group) => (
-              <div key={group.key} className="space-y-1">
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="truncate font-mono text-foreground">{group.label}</span>
-                  <span className="font-mono text-muted-foreground">{formatPrice(group.cost)}</span>
+            {hasScopedUsage ? (
+              byScope.slice(0, 6).map((group) => (
+                <div key={group.key} className="space-y-1">
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-mono text-foreground">{group.label}</span>
+                      {group.label === 'agent scope' && (
+                        <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                          default
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-mono text-muted-foreground">{formatPrice(group.cost)}</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary-solid"
+                      style={{width: `${percentOf(group.cost, summary.totalCost)}%`}}
+                    />
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {group.sessions} sessions · {formatTokens(group.totalTokens)} tokens
+                  </div>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary-solid"
-                    style={{width: `${percentOf(group.cost, summary.totalCost)}%`}}
-                  />
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  {group.sessions} sessions · {formatTokens(group.totalTokens)} tokens
-                </div>
+              ))
+            ) : (
+              <div className="rounded-md border border-dashed border-border bg-muted/25 px-3 py-4 text-xs leading-5 text-muted-foreground">
+                All sessions are currently in the default agent scope. This panel becomes useful when embedded apps pass a
+                <span className="font-mono text-foreground"> scope_id </span>
+                for each tenant, user, or workspace.
               </div>
-            ))}
+            )}
           </div>
         </section>
       </div>
@@ -191,9 +208,9 @@ export function CostPage() {
         <table className="w-full table-fixed text-sm">
           <colgroup>
             <col />
-            <col className="w-52" />
+            <col className="w-60" />
             <col className="w-32" />
-            <col className="w-28" />
+            <col className="w-36" />
             <col className="w-32" />
           </colgroup>
           <thead>
@@ -208,20 +225,38 @@ export function CostPage() {
           <tbody className="divide-y divide-border/70">
             {topSessions.map((session) => {
               const cost = sessionCost(session);
+              const costPercent = cost == null ? 0 : percentOf(cost, maxTopSessionCost);
+              const colors = session.model ? PROVIDER_COLORS[modelToProvider(session.model)] : null;
               return (
                 <tr key={session.id} className="hover:bg-muted/25">
                   <td className="px-4 py-3">
                     <Link to={`../sessions/${session.id}`} className="block truncate font-medium text-foreground hover:underline">
                       {session.title}
                     </Link>
-                    <div className="mt-1 font-mono text-[11px] text-muted-foreground">{session.id.slice(0, 8)}</div>
+                    <div className="mt-1 flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
+                      <span className="font-mono">{session.id.slice(0, 8)}</span>
+                      <span className="max-w-40 truncate rounded border border-border bg-muted px-1.5 py-0.5 font-mono">
+                        {session.scope_id || 'agent scope'}
+                      </span>
+                    </div>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{session.model ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-muted-foreground">
-                    {formatTokens(session.token_usage.total_tokens)}
+                  <td className="px-4 py-3">
+                    <div className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1">
+                      {colors && <span className={`h-2 w-2 flex-shrink-0 rounded-full ${colors.dot}`} />}
+                      <span className="truncate font-mono text-xs text-muted-foreground">{session.model ?? '—'}</span>
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-foreground">
-                    {cost == null ? '—' : `$${cost.toFixed(3)}`}
+                  <td className="px-4 py-3 text-right">
+                    <div className="font-mono text-xs text-muted-foreground">{formatTokens(session.token_usage.total_tokens)}</div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {formatTokens(session.token_usage.input_tokens)} in / {formatTokens(session.token_usage.output_tokens)} out
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="font-mono text-xs text-foreground">{cost == null ? '—' : `$${cost.toFixed(3)}`}</div>
+                    <div className="mt-1 ml-auto h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-emerald-600" style={{width: `${costPercent}%`}} />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right text-xs text-muted-foreground">
                     {formatShortDateTime(session.updated_at)}
