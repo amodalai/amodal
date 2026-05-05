@@ -95,6 +95,16 @@ export function createPackageUpdatesRouter(deps: RouterDeps): Router {
         res.status(400).json({error: 'invalid_package_name'});
         return;
       }
+      // Allowlist gate: only read card.json for packages declared in
+      // amodal.json#packages. Belt to safeNodeModulesPath's suspenders —
+      // the regex above already blocks traversal characters, but explicit
+      // allowlisting tells static analyzers (CodeQL) that the eventual
+      // path expression depends on a sanitized value, not raw user input.
+      const declared = new Set(readAmodalPackages(deps.repoPath));
+      if (!declared.has(name)) {
+        res.status(404).json({error: 'card_not_found'});
+        return;
+      }
       const cardPath = safeNodeModulesPath(deps.repoPath, name, 'card', 'card.json');
       if (cardPath === null || !existsSync(cardPath)) {
         res.status(404).json({error: 'card_not_found'});

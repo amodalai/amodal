@@ -251,9 +251,9 @@ export function AdminChat({
       return (async function* () {
         for await (const event of upstream) {
           if (event.type === 'setup_cancelled') {
-
-            const reason = (event as { reason?: string }).reason;
-            onSetupCancelledRef.current?.(reason);
+            // event is narrowed to SSESetupCancelledEvent here — `reason`
+            // is `string | undefined` natively, no cast needed.
+            onSetupCancelledRef.current?.(event.reason);
           }
           if (event.type === 'setup_completed') {
             // Setup was committed (amodal.json on disk + completedAt
