@@ -30,6 +30,7 @@ import {
   PanelRightOpen,
   PanelRightClose,
   Brain,
+  DollarSign,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAgentInventory } from '../hooks/useAgentInventory';
@@ -54,6 +55,7 @@ interface NavItemDef extends NavItem {
 const NAV_ITEMS: readonly NavItemDef[] = [
   { href: '/getting-started', label: 'Getting started', icon: Sparkles, powerUserOnly: true },
   { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/cost', label: 'Cost', icon: DollarSign },
   { href: '/files', label: 'Files', icon: FileCode },
   { href: '/evals', label: 'Evals', icon: FlaskConical },
   { href: '/arena', label: 'Arena', icon: FlaskConical },

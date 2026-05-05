@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {Fragment, useMemo, useState, useEffect} from 'react';
+import {Fragment, useMemo, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {AgentOffline} from '@/components/AgentOffline';
 import {runtimeApiUrl} from '@/lib/api';
+import {useSessionHistory} from '../hooks/useSessionHistory';
+import type {SessionHistoryRow} from '../hooks/useSessionHistory';
 import {
   PROVIDER_COLORS,
   modelToProvider,
@@ -24,18 +26,7 @@ import {
   Wrench,
 } from 'lucide-react';
 
-interface SessionRow {
-  id: string;
-  app_id: string;
-  scope_id: string;
-  title: string;
-  message_count: number;
-  token_usage: { input_tokens: number; output_tokens: number; total_tokens: number };
-  model: string | null;
-  provider: string | null;
-  created_at: string;
-  updated_at: string;
-}
+type SessionRow = SessionHistoryRow;
 
 interface ToolCall {
   toolName: string;
@@ -173,25 +164,11 @@ function SortHeader({
 
 export function SessionsPage() {
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const {sessions, error} = useSessionHistory();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, SessionDetail>>({});
   const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
   const [sort, setSort] = useState<SortState>({key: 'updated', direction: 'desc'});
-
-  useEffect(() => {
-    fetch(runtimeApiUrl('/sessions/history'), { signal: AbortSignal.timeout(5_000) })
-      .then((r) => {
-        if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary
-        return r.json() as Promise<SessionRow[]>;
-      })
-      .then(setSessions)
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
-  }, []);
 
   const toggleExpanded = (sessionId: string) => {
     const nextId = expandedId === sessionId ? null : sessionId;

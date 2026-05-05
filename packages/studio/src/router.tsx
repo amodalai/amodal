@@ -30,6 +30,7 @@ import { EvalsPage } from './pages/EvalsPage';
 import { FeedbackPage } from './pages/FeedbackPage';
 import { ArenaPage } from './pages/ArenaPage';
 import { MemoryPage } from './pages/MemoryPage';
+import { CostPage } from './pages/CostPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 function Layout() {
@@ -49,6 +50,7 @@ const agentRoutes = [
   { path: 'connections/:packageName', element: <ConnectionConfigPage /> },
   { path: 'sessions', element: <SessionsPage /> },
   { path: 'sessions/:sessionId', element: <SessionDetailPage /> },
+  { path: 'cost', element: <CostPage /> },
   { path: 'agent', element: <AgentPage /> },
   { path: 'files', element: <FilesPage /> },
   { path: 'stores', element: <StoresPage /> },
