@@ -182,8 +182,8 @@ export function ConnectionsPage() {
       byName.set(file.name, {name: file.name, status: file.hasSpec ? 'not loaded' : 'incomplete', loaded: false, file});
     }
     for (const pkg of gettingStarted.data?.packages ?? []) {
-      const current = byName.get(pkg.name) ?? {name: pkg.name, status: 'not loaded', loaded: false};
-      byName.set(pkg.name, {...current, pkg});
+      const current = byName.get(pkg.connectionName) ?? {name: pkg.connectionName, status: 'not loaded', loaded: false};
+      byName.set(pkg.connectionName, {...current, pkg});
     }
     for (const runtime of inspectContext.data?.connections ?? []) {
       const current = byName.get(runtime.name) ?? {name: runtime.name, status: runtime.status, loaded: true};
@@ -208,7 +208,7 @@ export function ConnectionsPage() {
 
   const loadedCount = connections.filter((conn) => conn.loaded).length;
   const missingCredentialCount = connections.filter((conn) => conn.pkg && !conn.pkg.isFulfilled).length;
-  const incompleteCount = connections.filter((conn) => conn.file && !conn.file.hasSpec).length;
+  const incompleteCount = connections.filter((conn) => !conn.loaded && conn.file && !conn.file.hasSpec).length;
   const unhealthyCount = connections.filter((conn) => conn.loaded && conn.status !== 'connected').length;
 
   async function refreshAll(): Promise<void> {
@@ -426,7 +426,7 @@ function ConnectionExpanded({connection, state}: {connection: ConnectionRow; sta
         <DetailBlock label="Files" value={fileSummary(connection.file)} />
       </div>
 
-      {connection.file && !connection.file.hasSpec && (
+      {connection.file && !connection.loaded && !connection.file.hasSpec && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
           This directory has connection documentation but no <span className="font-mono">spec.json</span>, so the runtime cannot load it yet.
         </div>

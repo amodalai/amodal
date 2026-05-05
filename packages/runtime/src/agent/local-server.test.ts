@@ -5,7 +5,7 @@
  */
 
 import {describe, it, expect, vi, beforeEach, afterAll} from 'vitest';
-import {mkdtempSync, rmSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createLocalServer} from './local-server.js';
@@ -126,6 +126,7 @@ describe('createLocalServer', () => {
     vi.clearAllMocks();
     delete process.env['XPOZ_BEARER_TOKEN'];
     delete process.env['XPOZ_ENV'];
+    delete process.env['TYPEFULLY_API_KEY'];
     MOCK_REPO.connections = new Map();
     applyMockImplementations();
   });
@@ -215,6 +216,7 @@ describe('createLocalServer', () => {
     expect(started.status).toBe(200);
     expect(started.body.packages).toEqual([
       expect.objectContaining({
+        connectionName: 'xpoz-mcp',
         name: 'xpoz-mcp',
         displayName: 'xpoz-mcp',
         isFulfilled: false,
@@ -238,6 +240,52 @@ describe('createLocalServer', () => {
         {name: 'XPOZ_ENV', description: 'Environment: XPOZ_RUNTIME_ENV', set: false},
       ],
     });
+  });
+
+  it('reports package metadata under the runtime connection name', async () => {
+    process.env['TYPEFULLY_API_KEY'] = 'test-token';
+    const packageDir = join(TEST_REPO, 'amodal_packages', '.npm', 'node_modules', '@amodalai', 'connection-typefully');
+    mkdirSync(packageDir, {recursive: true});
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: '@amodalai/connection-typefully',
+      amodal: {
+        displayName: 'Typefully',
+        auth: {
+          envVars: {
+            TYPEFULLY_API_KEY: 'Typefully API key',
+          },
+        },
+      },
+    }));
+    MOCK_REPO.connections.set('typefully', {
+      name: 'typefully',
+      spec: {
+        protocol: 'rest',
+        baseUrl: 'https://api.typefully.com/v2',
+        auth: {type: 'bearer', token: 'env:TYPEFULLY_API_KEY'},
+      },
+      access: {endpoints: {}},
+      surface: [],
+      location: join(packageDir, 'connections', 'typefully'),
+    });
+
+    const server = await createLocalServer({
+      repoPath: TEST_REPO,
+      port: 0,
+    });
+
+    const {default: request} = await import('supertest');
+    const started = await request(server.app).get('/api/getting-started');
+
+    expect(started.status).toBe(200);
+    expect(started.body.packages).toEqual([
+      expect.objectContaining({
+        connectionName: 'typefully',
+        name: '@amodalai/connection-typefully',
+        displayName: 'Typefully',
+        isFulfilled: true,
+      }),
+    ]);
   });
 
   it('GET /api/me returns ops by default in amodal dev', async () => {

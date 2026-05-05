@@ -973,6 +973,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
         reason?: 'no_metadata' | 'no_credentials';
       };
       const packageMap = new Map<string, {
+        connectionName: string;
         name: string;
         displayName: string;
         description?: string;
@@ -990,6 +991,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
           // package metadata block to declare credential requirements.
           if (packageMap.has(conn.name)) continue;
           packageMap.set(conn.name, {
+            connectionName: conn.name,
             name: conn.name,
             displayName: conn.name,
             envVars: collectConnectionEnvVars(conn.spec),
@@ -1035,6 +1037,7 @@ export async function createLocalServer(config: LocalServerConfig): Promise<Serv
               : { appKey: oauthMeta.appKey, available: false, reason: 'no_credentials' };
           }
           packageMap.set(pkg.name, {
+            connectionName: conn.name,
             name: pkg.name,
             displayName: pkg.amodal.displayName ?? pkg.amodal.name ?? pkg.name,
             ...(pkg.amodal.description ? { description: pkg.amodal.description } : {}),

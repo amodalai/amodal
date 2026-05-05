@@ -22,6 +22,7 @@ export interface PackageOauthStatus {
 }
 
 export interface GettingStartedPackage {
+  connectionName: string;
   name: string;
   displayName: string;
   description?: string;
