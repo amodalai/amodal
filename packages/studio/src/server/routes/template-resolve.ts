@@ -57,23 +57,41 @@ async function tryRegistry(slug: string): Promise<TemplateFixture | null> {
     if (!res.ok) return null;
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing registry response
     const raw = (await res.json()) as Partial<TemplateFixture> & {
+      // Platform-api `TemplateCatalogEntry` shape — different field names
+      // than the local `TemplateFixture` ships, so we have to map them
+      // when building the card payload below.
       name?: string;
       tagline?: string;
+      cardImageUrl?: string;
+      cardPlatforms?: string[];
+      // Legacy fields some old clients / fixtures still emit; supported
+      // as fallbacks but platform-api doesn't return these.
       platforms?: string[];
       thumbnailConversation?: Array<{role: 'user' | 'agent'; content: string}>;
     };
     if (typeof raw.slug !== 'string' || typeof raw.githubRepo !== 'string') return null;
+
+    const displayName = raw.displayName ?? raw.name ?? raw.slug;
     return {
       slug: raw.slug,
-      displayName: raw.displayName ?? raw.name ?? raw.slug,
+      displayName,
       description: raw.description ?? '',
       githubRepo: raw.githubRepo,
       defaultBranch: raw.defaultBranch ?? 'main',
       card: raw.card ?? {
-        title: raw.displayName ?? raw.slug,
-        tagline: raw.tagline ?? '',
-        platforms: raw.platforms ?? [],
+        // Title prefers the human-readable name, never the slug.
+        title: displayName,
+        // Tagline → marketplace tagline, falling back to the longer
+        // description so the card never renders an empty subheading.
+        tagline: raw.tagline ?? raw.description ?? '',
+        // Platforms come from `cardPlatforms` on platform-api; legacy
+        // `platforms` is kept as a fallback for older fixtures.
+        platforms: raw.cardPlatforms ?? raw.platforms ?? [],
+        // ThumbnailConversation stays empty when the registry doesn't
+        // provide one — the inline card renders the image (when set)
+        // or just the title + tagline + platforms.
         thumbnailConversation: raw.thumbnailConversation ?? [],
+        ...(raw.cardImageUrl ? { imageUrl: raw.cardImageUrl } : {}),
       },
     };
   } catch (err: unknown) {

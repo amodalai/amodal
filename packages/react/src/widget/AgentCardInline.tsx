@@ -18,13 +18,23 @@ interface Props {
 export function AgentCardInlinePreview({ card }: Props) {
   return (
     <div className="pcw-agent-card">
+      {card.imageUrl && (
+        <img
+          src={card.imageUrl}
+          alt={card.title}
+          loading="lazy"
+          className="pcw-agent-card__image"
+        />
+      )}
       <div className="pcw-agent-card__title">{card.title}</div>
-      <div className="pcw-agent-card__convo">
-        {card.thumbnailConversation.map((turn, i) => (
-          <Turn key={i} turn={turn} />
-        ))}
-      </div>
       {card.tagline && <div className="pcw-agent-card__tagline">{card.tagline}</div>}
+      {card.thumbnailConversation.length > 0 && (
+        <div className="pcw-agent-card__convo">
+          {card.thumbnailConversation.map((turn, i) => (
+            <Turn key={i} turn={turn} />
+          ))}
+        </div>
+      )}
       {card.platforms.length > 0 && (
         <div className="pcw-agent-card__platforms">
           {card.platforms.map((p) => (

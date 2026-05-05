@@ -10,7 +10,7 @@ import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { PickerCard } from '@/components/PickerCard';
 import { AdminChat } from '@/components/views/AdminChat';
-import { useTemplateCatalog, type CatalogAgent, type CatalogAgentDetail } from '../hooks/useTemplateCatalog';
+import { useTemplateCatalog, type CatalogAgent } from '../hooks/useTemplateCatalog';
 import { cn } from '@/lib/utils';
 
 const CHAT_PARAM = 'chat';
@@ -702,22 +702,39 @@ function BrowseView({ onPick }: { onPick: (agent: CatalogAgent) => void }) {
 // Detail view — description, preview, connections, skills, CTA
 // ---------------------------------------------------------------------------
 
-const PLACEHOLDER_DETAIL: CatalogAgentDetail = {
-  description: 'Detail metadata for this template is on its way.',
-  preview: [],
-  connections: { required: [], optional: [] },
-  skills: [],
-  setup: { q: 'What tools do you use for this today?', choices: ['Other'] },
-};
-
 function DetailView({ agent, onSetup }: { agent: CatalogAgent; onSetup: () => void }) {
-  const detail = agent.detail ?? PLACEHOLDER_DETAIL;
+  // `detail` is now synthesized from API metadata in `useTemplateCatalog`,
+  // so it's always present. Sections without data (preview, connections,
+  // skills) hide via the existing conditional rendering below. Falling
+  // back to the card tagline keeps the description block honest if the
+  // agent was hand-constructed without a detail field.
+  const detail = agent.detail ?? {
+    description: agent.card.tagline,
+    preview: [],
+    connections: { required: [], optional: [] },
+    skills: [],
+    setup: { q: '', choices: [] },
+  };
   const usesLabel = formatUsesLabel(agent.card.uses);
   const tintClass = categoryTint(agent.category);
 
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-8 flex flex-col gap-6">
+        {/* Hero thumbnail — the marketplace card image, full-bleed at the
+         * top of the detail view. Skipped when the template has no image
+         * uploaded yet so the page doesn't render an empty placeholder. */}
+        {agent.card.imageUrl && (
+          <div className="aspect-[3/2] w-full overflow-hidden rounded-lg border border-border bg-muted/30">
+            <img
+              src={agent.card.imageUrl}
+              alt={agent.card.title}
+              loading="eager"
+              className="h-full w-full object-cover"
+            />
+          </div>
+        )}
+
         {/* Header */}
         <div>
           <div className="flex items-start justify-between gap-4">
@@ -730,6 +747,11 @@ function DetailView({ agent, onSetup }: { agent: CatalogAgent; onSetup: () => vo
               </span>
             )}
           </div>
+          {agent.card.tagline && (
+            <p className="text-[14px] text-foreground/80 mt-1.5 leading-snug">
+              {agent.card.tagline}
+            </p>
+          )}
           {agent.author && (
             <AuthorBadge
               author={agent.author}

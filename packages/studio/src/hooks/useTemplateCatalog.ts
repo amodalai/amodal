@@ -16,6 +16,8 @@ interface CatalogEntry {
   slug: string;
   name: string;
   description: string;
+  /** Markdown body for the detail page (longer than `description`). */
+  longDescription?: string;
   author: string;
   verified: boolean;
   category: string;
@@ -194,6 +196,19 @@ export function useTemplateCatalog(): UseTemplateCatalogResult {
             platforms: entry.cardPlatforms ?? [],
             ...(entry.cardImageUrl ? { imageUrl: entry.cardImageUrl } : {}),
           };
+          // Synthesize a partial detail from API metadata so the detail
+          // view renders something real instead of the "metadata is on
+          // its way" placeholder. Sections without data (preview, skills,
+          // connections) hide via the existing conditional rendering.
+          // Long-description is preferred for the body copy; short
+          // description is the fallback.
+          const detail: CatalogAgentDetail = {
+            description: entry.longDescription ?? entry.description,
+            preview: [],
+            connections: { required: [], optional: [] },
+            skills: [],
+            setup: { q: '', choices: [] },
+          };
           return {
             slug: entry.slug,
             category: entry.category,
@@ -204,6 +219,7 @@ export function useTemplateCatalog(): UseTemplateCatalogResult {
             author: entry.author,
             verified: entry.verified,
             card,
+            detail,
           };
         });
 

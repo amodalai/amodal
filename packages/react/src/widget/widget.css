@@ -3127,6 +3127,21 @@
   margin: 6px 0;
   background: var(--pcw-panel-tint);
 }
+.pcw-agent-card__image {
+  display: block;
+  width: 100%;
+  /*
+   * Cap the inline preview at 180px wide so it reads as a true
+   * thumbnail. 3:2 aspect → 180w × 120h — small enough that the
+   * conversation flows around it instead of being interrupted by it.
+   */
+  max-width: 180px;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: 6px;
+  margin: -4px 0 10px;
+  background: var(--pcw-muted, rgba(0, 0, 0, 0.04));
+}
 .pcw-agent-card__title {
   font-weight: 600;
   font-size: 14px;

@@ -299,6 +299,12 @@ export interface AgentCardInline {
   tagline: string;
   platforms: string[];
   thumbnailConversation: AgentCardInlineTurn[];
+  /**
+   * Marketplace card thumbnail URL (R2-hosted JPEG). When present, the
+   * inline card renders the image as a hero above the text. Optional —
+   * cards without an image render with title + tagline + platforms only.
+   */
+  imageUrl?: string;
 }
 
 export interface AgentCardInlineTurn {

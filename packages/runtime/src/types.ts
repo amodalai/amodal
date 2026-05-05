@@ -328,6 +328,8 @@ export interface SSEShowPreviewEvent {
     tagline: string;
     platforms: string[];
     thumbnailConversation: Array<{role: 'user' | 'agent'; content: string}>;
+    /** Marketplace card thumbnail URL (R2-hosted JPEG). Optional. */
+    imageUrl?: string;
   };
   timestamp: string;
 }
@@ -484,16 +486,6 @@ export interface SSEAskChoiceEvent {
   timestamp: string;
 }
 
-export interface SSEShowPreviewEvent {
-  type: SSEEventType.ShowPreview;
-  card: {
-    title: string;
-    tagline: string;
-    platforms: string[];
-    thumbnailConversation: Array<{role: 'user' | 'agent'; content: string}>;
-  };
-  timestamp: string;
-}
 
 export interface SSEStartOAuthEvent {
   type: SSEEventType.StartOAuth;

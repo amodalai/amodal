@@ -33,6 +33,8 @@ export interface TemplateFixture {
     tagline: string;
     platforms: string[];
     thumbnailConversation: Array<{role: 'user' | 'agent'; content: string}>;
+    /** Marketplace card thumbnail (R2-hosted JPEG). Optional. */
+    imageUrl?: string;
   };
 }
 
