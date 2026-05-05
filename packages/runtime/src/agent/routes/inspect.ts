@@ -6,11 +6,15 @@
 
 import {Router} from 'express';
 import type {Request, Response} from 'express';
+import rateLimit from 'express-rate-limit';
 import {readdir, readFile} from 'node:fs/promises';
 import path from 'node:path';
 import type {AgentBundle} from '@amodalai/types';
 import type {McpManager} from '@amodalai/core';
 import {asyncHandler} from '../../routes/route-helpers.js';
+
+const INSPECT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const INSPECT_RATE_LIMIT_MAX = 120;
 
 export interface InspectRouterOptions {
   /** Returns the current agent bundle */
@@ -98,6 +102,15 @@ async function listConnectionFiles(repoPath: string): Promise<ConnectionFileSumm
 
 export function createInspectRouter(options: InspectRouterOptions): Router {
   const router = Router();
+  const inspectLimiter = rateLimit({
+    windowMs: INSPECT_RATE_LIMIT_WINDOW_MS,
+    max: INSPECT_RATE_LIMIT_MAX,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: {xForwardedForHeader: false},
+  });
+
+  router.use('/inspect', inspectLimiter);
 
   router.get('/inspect/context', asyncHandler(async (_req: Request, res: Response) => {
     try {
