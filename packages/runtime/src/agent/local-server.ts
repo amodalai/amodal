@@ -1090,6 +1090,7 @@ const CONNECTION_PACKAGES_API_PATH = '/api/connection-packages';
       version: cfg?.version ?? '',
       description: cfg?.description ?? '',
       models: cfg?.models ?? {},
+      embed: cfg?.embed ?? null,
       stores: cfg?.stores ? {...cfg.stores, activeBackend: storeBackendType} : null,
       repoPath: config.repoPath,
       envRefs,

@@ -10,6 +10,7 @@
  */
 
 import { studioApiUrl } from './api';
+import { EMBED_CONFIG_API_PATH } from './embed-config';
 
 // ---------------------------------------------------------------------------
 // Root routes
@@ -30,6 +31,7 @@ export const UPDATES_PATH = 'updates';
 export const CONNECTIONS_PATH = 'connections';
 export const SESSIONS_PATH = 'sessions';
 export const COST_PATH = 'cost';
+export const EMBED_PATH = 'embed';
 export const AGENT_PATH = 'agent';
 export const FILES_PATH = 'files';
 export const STORES_PATH = 'stores';
@@ -77,6 +79,8 @@ export function documentPathSegment(key: string): string {
 // ---------------------------------------------------------------------------
 
 export const API_STORES_BASE = '/api/stores';
+export const API_EMBED_CONFIG_PATH = EMBED_CONFIG_API_PATH;
+export const RUNTIME_CONFIG_API_PATH = '/api/config';
 export const RUNTIME_CONNECTION_PACKAGES_PATH = '/api/connection-packages';
 
 export function apiStoreDocumentsPath(storeName: string): string {

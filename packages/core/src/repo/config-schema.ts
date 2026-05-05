@@ -76,6 +76,26 @@ export interface ModelConfig {
   credentials?: Record<string, string>;
 }
 
+export const EmbedConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  position: z.enum(['floating', 'right', 'bottom', 'inline']).optional(),
+  defaultOpen: z.boolean().optional(),
+  historyEnabled: z.boolean().optional(),
+  showFeedback: z.boolean().optional(),
+  verboseTools: z.boolean().optional(),
+  scopeMode: z.enum(['optional', 'required']).optional(),
+  allowedDomains: z.array(z.string().min(1)).optional(),
+  theme: z
+    .object({
+      headerText: z.string().min(1).optional(),
+      placeholder: z.string().min(1).optional(),
+      emptyStateText: z.string().min(1).optional(),
+      primaryColor: z.string().min(1).optional(),
+      mode: z.enum(['light', 'dark', 'auto']).optional(),
+    })
+    .optional(),
+}).optional();
+
 /**
  * Schema for amodal.json.
  */
@@ -85,6 +105,8 @@ export const AmodalConfigSchema = z.object({
   description: z.string().optional(),
   /** Custom base system prompt. When omitted, the platform default is used. */
   basePrompt: z.string().optional(),
+  /** Embeddable chat widget configuration. */
+  embed: EmbedConfigSchema,
   /** Subagent names to disable (e.g., ['explore', 'plan'] to turn off platform defaults) */
   disabledSubagents: z.array(z.string()).optional(),
   models: z.object({
