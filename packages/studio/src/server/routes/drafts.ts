@@ -16,7 +16,7 @@ export const draftsRoutes = new Hono();
 // List all drafts
 draftsRoutes.get('/api/drafts', async (c) => {
   const user = await getUser(c.req.raw);
-  const backend = await getBackend();
+  const backend = await getBackend(c.req.raw);
   const drafts = await backend.listDrafts(user.userId);
   return c.json({ drafts });
 });
@@ -24,7 +24,7 @@ draftsRoutes.get('/api/drafts', async (c) => {
 // Batch operations — must be before the wildcard routes
 draftsRoutes.post('/api/drafts/batch', async (c) => {
   const user = await getUser(c.req.raw);
-  const backend = await getBackend();
+  const backend = await getBackend(c.req.raw);
   const body = await c.req.json() as unknown;
 
   if (typeof body !== 'object' || body === null || !('changes' in body)) {
@@ -64,7 +64,7 @@ draftsRoutes.get('/api/drafts/*', async (c) => {
   const filePath = extractWildcard(c.req.path, '/api/drafts/');
   const validatedPath = validateDraftPath(filePath);
   const user = await getUser(c.req.raw);
-  const backend = await getBackend();
+  const backend = await getBackend(c.req.raw);
   const draft = await backend.readDraft(user.userId, validatedPath);
 
   if (!draft) {
@@ -79,7 +79,7 @@ draftsRoutes.put('/api/drafts/*', async (c) => {
   const filePath = extractWildcard(c.req.path, '/api/drafts/');
   const validatedPath = validateDraftPath(filePath);
   const user = await getUser(c.req.raw);
-  const backend = await getBackend();
+  const backend = await getBackend(c.req.raw);
 
   const contentType = c.req.header('content-type') ?? '';
   let content: string;
@@ -105,7 +105,7 @@ draftsRoutes.delete('/api/drafts/*', async (c) => {
   const filePath = extractWildcard(c.req.path, '/api/drafts/');
   const validatedPath = validateDraftPath(filePath);
   const user = await getUser(c.req.raw);
-  const backend = await getBackend();
+  const backend = await getBackend(c.req.raw);
   await backend.deleteDraft(user.userId, validatedPath);
   return c.json({ ok: true });
 });

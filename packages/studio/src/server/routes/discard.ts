@@ -12,7 +12,7 @@ export const discardRoutes = new Hono();
 
 discardRoutes.post('/api/discard', async (c) => {
   const user = await getUser(c.req.raw);
-  const backend = await getBackend();
+  const backend = await getBackend(c.req.raw);
   const discarded = await backend.discardAllDrafts(user.userId);
   return c.json({ discarded });
 });
