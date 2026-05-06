@@ -1,5 +1,15 @@
 # @amodalai/runtime
 
+## 0.3.56
+
+### Patch Changes
+
+- 29c1c0f: Add Studio embed widget configuration backed by `amodal.json#embed`, including generated React snippets and runtime config exposure.
+- Updated dependencies [29c1c0f]
+  - @amodalai/core@0.3.56
+  - @amodalai/types@0.3.56
+  - @amodalai/db@0.3.56
+
 ## 0.3.55
 
 ### Patch Changes
