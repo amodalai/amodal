@@ -38,6 +38,7 @@ import { connectionsStatusRoutes } from './routes/connections-status.js';
 import { templateResolveRoutes } from './routes/template-resolve.js';
 import { connectionDetailRoutes } from './routes/connection-detail.js';
 import { embedConfigRoutes } from './routes/embed-config.js';
+import { modelCatalogRoutes } from './routes/model-catalog.js';
 import { repoStateRoutes } from './routes/repo-state.js';
 import { initRepoRoutes } from './routes/init-repo.js';
 import { runtimeProxyRoutes } from './routes/runtime-proxy.js';
@@ -124,6 +125,7 @@ export function createStudioApp(options: CreateStudioAppOptions = {}): Hono {
   app.route('', templateResolveRoutes);
   app.route('', connectionDetailRoutes);
   app.route('', embedConfigRoutes);
+  app.route('', modelCatalogRoutes);
   app.route('', oauthRoutes);
   app.route('', runtimeProxyRoutes);
 

@@ -17,22 +17,34 @@ export interface ModelMeta {
 export const MODEL_META: Record<string, ModelMeta> = {
   'claude-opus-4-6':              {label: 'Opus 4.6', context: '1M'},
   'claude-sonnet-4-6':            {label: 'Sonnet 4.6', context: '1M'},
+  'claude-opus-4-5-20251101':     {label: 'Opus 4.5', context: '1M'},
+  'claude-sonnet-4-5-20250929':   {label: 'Sonnet 4.5', context: '1M'},
+  'claude-opus-4-20250514':       {label: 'Opus 4', context: '1M'},
   'claude-sonnet-4-20250514':      {label: 'Sonnet 4', context: '1M'},
-  'claude-haiku-4-5-20251001':    {label: 'Haiku 4.5', context: '200K'},
+  'claude-sonnet-4-6-20250626':   {label: 'Sonnet 4.6', context: '1M'},
+  'claude-haiku-4-5-20251001':    {label: 'Haiku 4.5', context: '1M'},
+  'claude-haiku-3-5-20241022':    {label: 'Haiku 3.5', context: '200K'},
   'gpt-4o':                       {context: '128K'},
   'gpt-4o-mini':                  {context: '128K'},
   'gpt-4.1':                      {context: '1M'},
   'gpt-4.1-mini':                 {context: '1M'},
+  'gpt-4.1-nano':                 {context: '1M'},
   'gemini-3.1-pro-preview':        {label: 'Gemini 3.1 Pro', context: '1M'},
   'gemini-3-pro-preview':          {label: 'Gemini 3 Pro', context: '1M'},
   'gemini-3-flash-preview':        {label: 'Gemini 3 Flash', context: '1M'},
   'gemini-3.1-flash-lite-preview': {label: 'Gemini 3.1 Flash Lite', context: '1M'},
   'gemini-2.5-pro':               {label: 'Gemini 2.5 Pro', context: '1M'},
   'gemini-2.5-flash':             {label: 'Gemini 2.5 Flash', context: '1M'},
+  'gemini-2.0-flash':             {label: 'Gemini 2.0 Flash', context: '1M'},
   'deepseek-chat':                {context: '64K'},
   'deepseek-reasoner':            {context: '64K'},
   'llama-3.3-70b-versatile':      {context: '128K'},
   'llama-3.1-8b-instant':         {context: '128K'},
+  'mixtral-8x7b-32768':           {label: 'Mixtral 8x7B', context: '32K'},
+  'meta-llama/llama-4-scout-17b-16e-instruct': {label: 'Llama 4 Scout', context: '128K'},
+  'qwen/qwen3-32b':               {label: 'Qwen3 32B', context: '128K'},
+  'moonshotai/kimi-k2-instruct':  {label: 'Kimi K2', context: '128K'},
+  'openai/gpt-oss-120b':          {label: 'GPT OSS 120B', context: '128K'},
   'mistral-large-latest':          {context: '128K'},
   'mistral-small-latest':          {context: '128K'},
   'codestral-latest':              {context: '256K'},
@@ -50,6 +62,14 @@ export const PROVIDER_COLORS: Record<string, {bg: string; text: string; dot: str
   xai:       {bg: 'bg-rose-500/10', text: 'text-rose-600', dot: 'bg-rose-500'},
 };
 
+const MODEL_PROVIDER_OVERRIDES: Record<string, string> = {
+  'mixtral-8x7b-32768': 'groq',
+  'meta-llama/llama-4-scout-17b-16e-instruct': 'groq',
+  'qwen/qwen3-32b': 'groq',
+  'moonshotai/kimi-k2-instruct': 'groq',
+  'openai/gpt-oss-120b': 'groq',
+};
+
 const MODEL_PROVIDER_MAP: Record<string, string> = {
   claude: 'anthropic',
   gpt: 'openai',
@@ -62,6 +82,8 @@ const MODEL_PROVIDER_MAP: Record<string, string> = {
 };
 
 export function modelToProvider(modelName: string): string {
+  const override = MODEL_PROVIDER_OVERRIDES[modelName];
+  if (override) return override;
   for (const [prefix, provider] of Object.entries(MODEL_PROVIDER_MAP)) {
     if (modelName.startsWith(prefix)) return provider;
   }

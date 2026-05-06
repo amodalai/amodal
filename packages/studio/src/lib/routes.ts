@@ -11,6 +11,7 @@
 
 import { studioApiUrl } from './api';
 import { EMBED_CONFIG_API_PATH } from './embed-config';
+import { MODELS_CATALOG_API_PATH } from './model-catalog';
 
 // ---------------------------------------------------------------------------
 // Root routes
@@ -80,6 +81,7 @@ export function documentPathSegment(key: string): string {
 
 export const API_STORES_BASE = '/api/stores';
 export const API_EMBED_CONFIG_PATH = EMBED_CONFIG_API_PATH;
+export const API_MODELS_CATALOG_PATH = MODELS_CATALOG_API_PATH;
 export const RUNTIME_CONFIG_API_PATH = '/api/config';
 export const RUNTIME_CONNECTION_PACKAGES_PATH = '/api/connection-packages';
 

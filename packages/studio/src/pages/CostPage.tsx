@@ -283,32 +283,43 @@ function CostBars({buckets}: {buckets: CostBucket[]}) {
   const maxCost = Math.max(...buckets.map((bucket) => bucket.cost), 0);
   const labelEvery = buckets.length <= 14 ? 1 : buckets.length <= 30 ? 5 : 15;
   return (
-    <div
-      className="mt-5 grid h-44 items-end gap-2"
-      style={{gridTemplateColumns: `repeat(${String(buckets.length)}, minmax(0, 1fr))`}}
-    >
-      {buckets.map((bucket, index) => {
-        const height = maxCost <= 0 ? 2 : Math.max(2, Math.round((bucket.cost / maxCost) * 100));
-        const showLabel = index % labelEvery === 0 || index === buckets.length - 1;
-        return (
-          <div key={bucket.key} className="group relative flex h-full min-w-0 flex-col justify-end gap-2">
-            <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-40 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-left text-xs text-card-foreground shadow-lg group-hover:block">
-              <div className="font-medium text-foreground">{bucket.label}</div>
-              <div className="mt-1 font-mono text-foreground">{formatPrice(bucket.cost)}</div>
-              <div className="mt-1 text-muted-foreground">
-                {bucket.sessions} sessions · {formatTokens(bucket.totalTokens)} tokens
+    <div className="mt-5">
+      <div
+        className="grid h-40 items-end gap-2 border-b border-border/70 pb-1"
+        style={{gridTemplateColumns: `repeat(${String(buckets.length)}, minmax(0, 1fr))`}}
+      >
+        {buckets.map((bucket) => {
+          const height = maxCost <= 0 ? 2 : Math.max(2, Math.round((bucket.cost / maxCost) * 100));
+          return (
+            <div key={bucket.key} className="group relative flex h-full min-w-0 items-end">
+              <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-40 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-left text-xs text-card-foreground shadow-lg group-hover:block">
+                <div className="font-medium text-foreground">{bucket.label}</div>
+                <div className="mt-1 font-mono text-foreground">{formatPrice(bucket.cost)}</div>
+                <div className="mt-1 text-muted-foreground">
+                  {bucket.sessions} sessions · {formatTokens(bucket.totalTokens)} tokens
+                </div>
               </div>
-            </div>
-            <div className="flex flex-1 items-end">
               <div
                 className="w-full rounded-t bg-emerald-600/80 transition-colors hover:bg-emerald-600"
                 style={{height: `${height}%`}}
               />
             </div>
-            <div className="min-h-3 truncate text-center text-[10px] text-muted-foreground">{showLabel ? bucket.label : ''}</div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      <div
+        className="mt-2 grid gap-2"
+        style={{gridTemplateColumns: `repeat(${String(buckets.length)}, minmax(0, 1fr))`}}
+      >
+        {buckets.map((bucket, index) => {
+          const showLabel = index % labelEvery === 0 || index === buckets.length - 1;
+          return (
+            <div key={bucket.key} className="min-h-3 truncate text-center text-[10px] text-muted-foreground">
+              {showLabel ? bucket.label : ''}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
