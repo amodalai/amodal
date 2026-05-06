@@ -1,5 +1,15 @@
 # @amodalai/runtime
 
+## 0.3.55
+
+### Patch Changes
+
+- 9760d98: Add Studio connections management and expose directory-based connection credential metadata through the runtime API.
+- Updated dependencies [9760d98]
+  - @amodalai/core@0.3.55
+  - @amodalai/types@0.3.55
+  - @amodalai/db@0.3.55
+
 ## 0.3.54
 
 ### Patch Changes

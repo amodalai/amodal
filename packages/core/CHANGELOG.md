@@ -1,5 +1,12 @@
 # @amodalai/core
 
+## 0.3.55
+
+### Patch Changes
+
+- 9760d98: Load agent packages from the Amodal package install directory, merge packaged connection specs with local connection overrides, and honor the documented `api_key` auth type.
+  - @amodalai/types@0.3.55
+
 ## 0.3.54
 
 ### Patch Changes
