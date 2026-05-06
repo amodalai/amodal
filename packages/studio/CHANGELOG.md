@@ -1,5 +1,16 @@
 # @amodalai/studio
 
+## 0.3.57
+
+### Patch Changes
+
+- 2e66b0e: Add a model configuration page with provider status, pricing catalog, usage context, and copyable `amodal.json` snippets.
+  - @amodalai/types@0.3.57
+  - @amodalai/core@0.3.57
+  - @amodalai/runtime@0.3.57
+  - @amodalai/react@0.3.57
+  - @amodalai/db@0.3.57
+
 ## 0.3.56
 
 ### Patch Changes
