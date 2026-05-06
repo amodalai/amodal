@@ -1,5 +1,7 @@
 # @amodalai/types
 
+## 0.3.57
+
 ## 0.3.56
 
 ### Patch Changes
