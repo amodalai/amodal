@@ -14,6 +14,7 @@ import {
   AUTOMATIONS_PATH,
   CONNECTIONS_PATH,
   COST_PATH,
+  EMBED_PATH,
   EVALS_PATH,
   FEEDBACK_PATH,
   FILES_PATH,
@@ -46,6 +47,7 @@ import {
   PanelRightClose,
   Brain,
   DollarSign,
+  Code2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -77,6 +79,7 @@ const WORKBENCH_NAV: readonly NavItem[] = [
 ];
 
 const CONFIG_NAV: readonly NavItem[] = [
+  { href: EMBED_PATH, label: 'Embed', icon: Code2 },
   { href: PROMPT_PATH, label: 'Prompt', icon: ScrollText },
   { href: SECRETS_PATH, label: 'Secrets', icon: KeyRound },
   { href: MODELS_PATH, label: 'Models', icon: Cpu },

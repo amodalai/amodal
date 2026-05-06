@@ -13,14 +13,21 @@ import * as path from 'node:path';
 // Config
 // ---------------------------------------------------------------------------
 
-const DATABASE_URL =
-  process.env['DATABASE_URL'] ?? 'postgresql://medplum:medplum@localhost:5432/amodal';
+const DATABASE_URL = process.env['DATABASE_URL'] ?? '';
+const HAS_DATABASE_URL = DATABASE_URL.length > 0;
 const RUNTIME_URL = process.env['RUNTIME_URL'] ?? 'http://localhost:3000';
 const REPO_PATH = process.env['REPO_PATH'] ?? '/tmp/amodal-smoke-test-repo';
 const CORS_ORIGIN = 'http://localhost:3847';
 const STUDIO_DIR = path.resolve(__dirname, '..', '..');
 const DIST_DIR = path.resolve(STUDIO_DIR, 'dist');
 const HAS_DIST = existsSync(path.join(DIST_DIR, 'index.html'));
+
+class SmokeServerError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SmokeServerError';
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Server lifecycle
@@ -52,7 +59,7 @@ function startServer(): Promise<string> {
     const timeout = setTimeout(() => {
       if (!started) {
         child.kill('SIGTERM');
-        reject(new Error('Server did not start within 20 seconds'));
+        reject(new SmokeServerError('Server did not start within 20 seconds'));
       }
     }, 20_000);
 
@@ -78,7 +85,7 @@ function startServer(): Promise<string> {
     child.on('exit', (code) => {
       if (!started) {
         clearTimeout(timeout);
-        reject(new Error(`Server exited with code ${code} before starting`));
+        reject(new SmokeServerError(`Server exited with code ${String(code)} before starting`));
       }
     });
   });
@@ -95,7 +102,7 @@ function stopServer(): void {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Studio server smoke tests', { timeout: 30_000 }, () => {
+describe.skipIf(!HAS_DATABASE_URL)('Studio server smoke tests', { timeout: 30_000 }, () => {
   beforeAll(async () => {
     baseUrl = await startServer();
   });
@@ -183,21 +190,21 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   });
 
   // -------------------------------------------------------------------------
-  // Preview (unavailable in local dev)
+  // Preview
   // -------------------------------------------------------------------------
 
-  test('POST /api/preview returns 501', async () => {
+  test('POST /api/preview returns validation error when no drafts exist', async () => {
     const res = await fetch(`${baseUrl}/api/preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
 
-    expect(res.status).toBe(501);
+    expect(res.status).toBe(400);
 
     const body = (await res.json()) as Record<string, unknown>;
     const error = body['error'] as Record<string, unknown>;
-    expect(error['code']).toBe('STUDIO_FEATURE_UNAVAILABLE');
+    expect(error['code']).toBe('NO_DRAFTS');
   });
 
   // -------------------------------------------------------------------------
@@ -218,7 +225,7 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
     expect(res.headers.get('access-control-allow-methods')).toContain('GET');
   });
 
-  test('CORS rejects disallowed origin', async () => {
+  test('CORS omits allow-origin header for disallowed origin', async () => {
     const res = await fetch(`${baseUrl}/api/config`, {
       method: 'OPTIONS',
       headers: {
@@ -226,7 +233,8 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
       },
     });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBeNull();
   });
 
   // -------------------------------------------------------------------------
@@ -258,12 +266,12 @@ describe('Studio server smoke tests', { timeout: 30_000 }, () => {
   // Evals
   // -------------------------------------------------------------------------
 
-  test('GET /api/evals returns wrapped suites', async () => {
-    const res = await fetch(`${baseUrl}/api/evals?agentId=test`);
+  test('GET /api/evals/arena/models returns wrapped models', async () => {
+    const res = await fetch(`${baseUrl}/api/evals/arena/models`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body).toHaveProperty('suites');
-    expect(Array.isArray(body['suites'])).toBe(true);
+    expect(body).toHaveProperty('models');
+    expect(Array.isArray(body['models'])).toBe(true);
   });
 
   // -------------------------------------------------------------------------

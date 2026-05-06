@@ -71,14 +71,23 @@ vi.mock('@amodalai/core', async (importOriginal) => {
   };
 });
 
+const DEFAULT_MOCK_CONFIG = {
+  name: 'test',
+  version: '1.0.0',
+  models: {main: {provider: 'anthropic', model: 'claude-sonnet-4-20250514'}},
+};
+
+type MockConfig = typeof DEFAULT_MOCK_CONFIG & {
+  embed?: {
+    position: string;
+    allowedDomains: string[];
+  };
+};
+
 const MOCK_REPO = {
   source: 'local',
   origin: TEST_REPO,
-  config: {
-    name: 'test',
-    version: '1.0.0',
-    models: {main: {provider: 'anthropic', model: 'claude-sonnet-4-20250514'}},
-  },
+  config: {...DEFAULT_MOCK_CONFIG} as MockConfig,
   connections: new Map(),
   skills: [],
   agents: {},
@@ -126,6 +135,7 @@ function applyMockImplementations(): void {
 describe('createLocalServer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    MOCK_REPO.config = {...DEFAULT_MOCK_CONFIG};
     delete process.env['XPOZ_BEARER_TOKEN'];
     delete process.env['XPOZ_ENV'];
     delete process.env['TYPEFULLY_API_KEY'];
@@ -159,6 +169,29 @@ describe('createLocalServer', () => {
       status: 'ok',
       mode: 'repo',
       repo_path: TEST_REPO,
+    });
+  });
+
+  it('returns embed config from /api/config', async () => {
+    MOCK_REPO.config = {
+      ...MOCK_REPO.config,
+      embed: {
+        position: 'floating',
+        allowedDomains: ['app.example.com'],
+      },
+    };
+    const server = await createLocalServer({
+      repoPath: TEST_REPO,
+      port: 0,
+    });
+
+    const {default: request} = await import('supertest');
+    const res = await request(server.app).get('/api/config');
+
+    expect(res.status).toBe(200);
+    expect(res.body.embed).toMatchObject({
+      position: 'floating',
+      allowedDomains: ['app.example.com'],
     });
   });
 

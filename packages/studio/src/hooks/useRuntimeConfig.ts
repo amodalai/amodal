@@ -6,10 +6,15 @@
 
 import { useState, useEffect } from 'react';
 import { runtimeApiUrl } from '@/lib/api';
+import { RUNTIME_CONFIG_API_PATH } from '@/lib/routes';
+import type { EmbedConfig } from '@/lib/embed-config';
 
-// ---------------------------------------------------------------------------
-// Types — matches the runtime's GET /api/config response
-// ---------------------------------------------------------------------------
+class RuntimeConfigRequestError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'RuntimeConfigRequestError';
+  }
+}
 
 export interface RuntimeConfig {
   appId?: string;
@@ -18,6 +23,7 @@ export interface RuntimeConfig {
   version?: string;
   description?: string;
   models?: Record<string, { provider: string; model: string }>;
+  embed?: Partial<EmbedConfig>;
   stores?: Record<string, unknown> | null;
   repoPath?: string;
   envRefs?: Array<{ name: string; connection?: string; set: boolean }>;
@@ -43,9 +49,9 @@ export function useRuntimeConfig(): RuntimeConfigResult {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(runtimeApiUrl('/api/config'), { signal: AbortSignal.timeout(5_000) })
+    fetch(runtimeApiUrl(RUNTIME_CONFIG_API_PATH), { signal: AbortSignal.timeout(5_000) })
       .then((r) => {
-        if (!r.ok) throw new Error(`Runtime returned ${String(r.status)}`);
+        if (!r.ok) throw new RuntimeConfigRequestError(`Runtime returned ${String(r.status)}`);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- system boundary: parsing JSON response
         return r.json() as Promise<RuntimeConfig>;
       })

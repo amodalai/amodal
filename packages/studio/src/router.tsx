@@ -31,6 +31,7 @@ import { FeedbackPage } from './pages/FeedbackPage';
 import { ArenaPage } from './pages/ArenaPage';
 import { MemoryPage } from './pages/MemoryPage';
 import { CostPage } from './pages/CostPage';
+import { EmbedPage } from './pages/EmbedPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import {
   AGENT_PATH,
@@ -39,6 +40,7 @@ import {
   AUTOMATIONS_PATH,
   CONNECTIONS_PATH,
   COST_PATH,
+  EMBED_PATH,
   EVALS_PATH,
   FEEDBACK_PATH,
   FILES_PATH,
@@ -75,6 +77,7 @@ const agentRoutes = [
   { path: SESSIONS_PATH, element: <SessionsPage /> },
   { path: `${SESSIONS_PATH}/:sessionId`, element: <SessionDetailPage /> },
   { path: COST_PATH, element: <CostPage /> },
+  { path: EMBED_PATH, element: <EmbedPage /> },
   { path: AGENT_PATH, element: <AgentPage /> },
   { path: FILES_PATH, element: <FilesPage /> },
   { path: STORES_PATH, element: <StoresPage /> },

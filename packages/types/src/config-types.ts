@@ -61,6 +61,26 @@ export interface MemoryConfig {
   readonly sessionSearch?: boolean;
 }
 
+export interface EmbedThemeConfig {
+  headerText?: string;
+  placeholder?: string;
+  emptyStateText?: string;
+  primaryColor?: string;
+  mode?: 'light' | 'dark' | 'auto';
+}
+
+export interface EmbedConfig {
+  enabled?: boolean;
+  position?: 'floating' | 'right' | 'bottom' | 'inline';
+  defaultOpen?: boolean;
+  historyEnabled?: boolean;
+  showFeedback?: boolean;
+  verboseTools?: boolean;
+  scopeMode?: 'optional' | 'required';
+  allowedDomains?: string[];
+  theme?: EmbedThemeConfig;
+}
+
 /**
  * The parsed amodal.json configuration.
  */
@@ -69,6 +89,7 @@ export interface AmodalConfig {
   version: string;
   description?: string;
   basePrompt?: string;
+  embed?: EmbedConfig;
   disabledSubagents?: string[];
   models?: {
     main?: ModelConfig;

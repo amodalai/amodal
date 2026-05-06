@@ -202,6 +202,29 @@ describe('parseConfigJson', () => {
     expect(config.name).toBe('test');
   });
 
+  it('preserves embed widget config', () => {
+    const json = JSON.stringify({
+      name: 'test',
+      version: '1.0.0',
+      embed: {
+        position: 'floating',
+        defaultOpen: true,
+        scopeMode: 'required',
+        allowedDomains: ['app.example.com'],
+        theme: {
+          headerText: 'Support',
+          primaryColor: '#0d9e87',
+          mode: 'auto',
+        },
+      },
+    });
+    const config = parseConfigJson(json);
+    expect(config.embed?.position).toBe('floating');
+    expect(config.embed?.scopeMode).toBe('required');
+    expect(config.embed?.allowedDomains).toEqual(['app.example.com']);
+    expect(config.embed?.theme?.headerText).toBe('Support');
+  });
+
   it('resolves env: values in config', () => {
     process.env['MY_KEY'] = 'secret-key';
     const json = JSON.stringify({
