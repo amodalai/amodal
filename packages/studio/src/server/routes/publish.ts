@@ -12,7 +12,7 @@ export const publishRoutes = new Hono();
 
 publishRoutes.post('/api/publish', async (c) => {
   const user = await getUser(c.req.raw);
-  const backend = await getBackend();
+  const backend = await getBackend(c.req.raw);
   const result = await backend.publishDrafts(user.userId);
   return c.json(result);
 });

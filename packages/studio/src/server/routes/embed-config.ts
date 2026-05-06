@@ -31,8 +31,8 @@ function responseFor(config: EmbedConfig, source: EmbedConfigResponse['source'])
   };
 }
 
-async function readCurrentConfig(userId: string): Promise<EmbedConfigResponse> {
-  const backend = await getBackend();
+async function readCurrentConfig(userId: string, req: Request): Promise<EmbedConfigResponse> {
+  const backend = await getBackend(req);
   const draft = await backend.readDraft(userId, EMBED_CONFIG_FILE_PATH);
   if (draft) {
     return responseFor(readEmbedConfigFromAmodalJson(draft.content), 'draft');
@@ -49,12 +49,12 @@ async function readCurrentConfig(userId: string): Promise<EmbedConfigResponse> {
 
 embedConfigRoutes.get(EMBED_CONFIG_API_PATH, async (c) => {
   const user = await getUser(c.req.raw);
-  return c.json(await readCurrentConfig(user.userId));
+  return c.json(await readCurrentConfig(user.userId, c.req.raw));
 });
 
 embedConfigRoutes.put(EMBED_CONFIG_API_PATH, async (c) => {
   const user = await getUser(c.req.raw);
-  const backend = await getBackend();
+  const backend = await getBackend(c.req.raw);
   const body = await c.req.json() as unknown;
 
   if (typeof body !== 'object' || body === null || !('config' in body)) {
@@ -62,7 +62,7 @@ embedConfigRoutes.put(EMBED_CONFIG_API_PATH, async (c) => {
   }
 
   const config = normalizeEmbedConfig((body as Record<string, unknown>)['config']);
-  const current = await readCurrentConfig(user.userId);
+  const current = await readCurrentConfig(user.userId, c.req.raw);
   const workspace = await backend.getWorkspace();
   const amodalJson = workspace.files.find((file) => file.path === EMBED_CONFIG_FILE_PATH);
   const currentContent = current.source === 'draft'
