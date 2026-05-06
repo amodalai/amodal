@@ -65,6 +65,7 @@ export function adaptOnUsage(
   if (!hooks?.onUsageReport) return undefined;
   return (usage: TurnUsage) => {
     hooks.onUsageReport?.({
+      sessionId: session.id,
       model: session.model,
       taskAgentRuns: 0,
       tokens: {
